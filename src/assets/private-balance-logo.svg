@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="0 0 720 720" role="img" aria-labelledby="title desc">
+  <title id="title">Private Balance</title>
+  <desc id="desc">Shield logo with rising financial chart and Private Balance wordmark.</desc>
+  <defs>
+    <linearGradient id="shieldGradient" x1="180" x2="540" y1="150" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#052b6f"/>
+      <stop offset="0.48" stop-color="#0a4fa3"/>
+      <stop offset="1" stop-color="#43c5ee"/>
+    </linearGradient>
+    <linearGradient id="barGradient" x1="260" x2="470" y1="310" y2="530" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f76c8"/>
+      <stop offset="1" stop-color="#7ee5ff"/>
+    </linearGradient>
+    <linearGradient id="arrowGradient" x1="185" x2="545" y1="260" y2="390" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#dff8ff"/>
+      <stop offset="0.5" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d9f3ff"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#03122d" flood-opacity="0.32"/>
+    </filter>
+    <filter id="textShadow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#03122d" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#softShadow)">
+    <path fill="url(#shieldGradient)" d="M360 111c53 42 104 60 164 67v96c0 136-63 229-164 282-101-53-164-146-164-282v-96c60-7 111-25 164-67Z"/>
+    <path fill="#031e52" fill-opacity="0.28" d="M360 111v445c-101-53-164-146-164-282v-96c60-7 111-25 164-67Z"/>
+    <path fill="#5de2ff" fill-opacity="0.3" d="M362 113c52 41 103 58 160 65v95c0 134-61 224-160 277V113Z"/>
+    <path fill="none" stroke="#87ddff" stroke-opacity="0.35" stroke-width="3" d="M360 111c53 42 104 60 164 67v96c0 136-63 229-164 282-101-53-164-146-164-282v-96c60-7 111-25 164-67Z"/>
+
+    <path fill="url(#barGradient)" d="M270 397h48v125a243 243 0 0 1-48-34V397Z"/>
+    <path fill="url(#barGradient)" d="M350 354h51v187c-13 8-27 15-41 22l-10-5V354Z"/>
+    <path fill="url(#barGradient)" d="M432 318h48v170a240 240 0 0 1-48 35V318Z"/>
+    <path fill="none" stroke="#021c4a" stroke-opacity="0.58" stroke-width="4" d="M270 397h48v125M350 354h51v187M432 318h48v170"/>
+
+    <path fill="#062963" d="m179 387 102-88 78 56 104-98-25-22 90-28-25 91-23-22-119 111-78-56-86 74-18-18Z"/>
+    <path fill="url(#arrowGradient)" d="m169 368 103-89 78 56 104-98-25-22 90-28-25 91-23-22-119 111-78-56-86 74-19-17Z"/>
+  </g>
+
+  <g filter="url(#textShadow)" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-weight="800" text-anchor="middle">
+    <text x="360" y="628" fill="#f8fafc" font-size="74">Private</text>
+    <text x="360" y="694" fill="#1598d3" font-size="72">Balance</text>
+  </g>
+</svg>
