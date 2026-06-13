@@ -65,6 +65,31 @@ npm run android:open
 npm run android:apk
 ```
 
+## Generar iconos de la aplicación
+
+El icono base de la aplicación está en:
+
+```bash
+resources/icon.png
+```
+
+Para cambiar el icono:
+
+1. Reemplaza `resources/icon.png` por un PNG de `1024x1024 px`, sin texto y con el diseño centrado.
+2. Genera los assets de Capacitor:
+
+```bash
+npm run generate:assets
+```
+
+3. Sincroniza Android:
+
+```bash
+npx cap sync android
+```
+
+Los iconos Android se generan en `android/app/src/main/res/`.
+
 ## ✅ Funcionalidades principales
 
 - `Home`: selector de módulos y bienvenida.

@@ -2,13 +2,18 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
 import AppLayout from '../app/AppLayout'
 import { PinGate } from '../components/PinGate'
+import AppointmentFormPage from '../pages/Agenda/AppointmentFormPage'
 import AgendaPage from '../pages/Agenda/AgendaPage'
 import DashboardPage from '../pages/Dashboard/DashboardPage'
+import ExpenseListPage from '../pages/Expenses/ExpenseListPage'
 import ExpensesPage from '../pages/Expenses/ExpensesPage'
 import HomePage from '../pages/Home/HomePage'
+import IncomeListPage from '../pages/Income/IncomeListPage'
 import IncomePage from '../pages/Income/IncomePage'
 import ReportsPage from '../pages/Reports/ReportsPage'
+import SettingsBusinessPage from '../pages/Settings/SettingsBusinessPage'
 import SettingsPage from '../pages/Settings/SettingsPage'
+import SettingsSecurityPage from '../pages/Settings/SettingsSecurityPage'
 import DebugPage from '../pages/Debug/DebugPage'
 
 export function RouterProvider() {
@@ -19,10 +24,20 @@ export function RouterProvider() {
           <Route element={<AppLayout />}>
             <Route index element={<HomePage />} />
             <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="income/list" element={<IncomeListPage />} />
             <Route path="income" element={<IncomePage />} />
+            <Route path="expenses/list" element={<ExpenseListPage />} />
+            <Route path="expenses/:expenseId/editar" element={<ExpensesPage />} />
             <Route path="expenses" element={<ExpensesPage />} />
+            <Route path="agenda/nueva" element={<AppointmentFormPage />} />
+            <Route
+              path="agenda/:appointmentId/editar"
+              element={<AppointmentFormPage />}
+            />
             <Route path="agenda" element={<AgendaPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="settings/business" element={<SettingsBusinessPage />} />
+            <Route path="settings/security" element={<SettingsSecurityPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="debug" element={<DebugPage />} />
           </Route>

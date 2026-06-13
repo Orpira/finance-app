@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Private Balance app icon">
+  <defs>
+    <radialGradient id="backgroundGlow" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#16375f"/>
+      <stop offset="52%" stop-color="#0b1a2f"/>
+      <stop offset="100%" stop-color="#050914"/>
+    </radialGradient>
+    <linearGradient id="shieldFill" x1="252" y1="166" x2="760" y2="846" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1b426c"/>
+      <stop offset="55%" stop-color="#0e253e"/>
+      <stop offset="100%" stop-color="#091323"/>
+    </linearGradient>
+    <linearGradient id="shieldStroke" x1="258" y1="154" x2="748" y2="812" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#9ac7e8"/>
+      <stop offset="55%" stop-color="#3f82b7"/>
+      <stop offset="100%" stop-color="#1c4f7a"/>
+    </linearGradient>
+    <linearGradient id="chartStroke" x1="350" y1="600" x2="704" y2="404" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#75d4ff"/>
+      <stop offset="100%" stop-color="#9fe6c2"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#000814" flood-opacity="0.48"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#backgroundGlow)"/>
+  <circle cx="512" cy="512" r="365" fill="none" stroke="#1d446c" stroke-width="4" opacity="0.2"/>
+  <circle cx="512" cy="512" r="292" fill="none" stroke="#7ab7de" stroke-width="2" opacity="0.08"/>
+
+  <path
+    d="M512 147
+       C596 203 680 225 770 239
+       V439
+       C770 623 672 753 512 841
+       C352 753 254 623 254 439
+       V239
+       C344 225 428 203 512 147Z"
+    fill="url(#shieldFill)"
+    filter="url(#softShadow)"
+  />
+  <path
+    d="M512 147
+       C596 203 680 225 770 239
+       V439
+       C770 623 672 753 512 841
+       C352 753 254 623 254 439
+       V239
+       C344 225 428 203 512 147Z"
+    fill="none"
+    stroke="url(#shieldStroke)"
+    stroke-width="34"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M512 213
+       C575 253 642 274 709 288
+       V436
+       C709 574 637 678 512 753
+       C387 678 315 574 315 436
+       V288
+       C382 274 449 253 512 213Z"
+    fill="none"
+    stroke="#d7eefc"
+    stroke-width="6"
+    stroke-linejoin="round"
+    opacity="0.18"
+  />
+
+  <path
+    d="M355 582
+       L444 516
+       L520 557
+       L675 405"
+    fill="none"
+    stroke="#04101d"
+    stroke-width="54"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.48"
+  />
+  <path
+    d="M355 582
+       L444 516
+       L520 557
+       L675 405"
+    fill="none"
+    stroke="url(#chartStroke)"
+    stroke-width="38"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="355" cy="582" r="23" fill="#75d4ff"/>
+  <circle cx="444" cy="516" r="23" fill="#84dcf1"/>
+  <circle cx="520" cy="557" r="23" fill="#8ae0df"/>
+  <circle cx="675" cy="405" r="25" fill="#9fe6c2"/>
+</svg>

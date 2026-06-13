@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
+import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert'
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
 
 const navItems = [
@@ -76,6 +77,7 @@ export function AppLayout() {
         <Outlet />
       </main>
 
+      <AppointmentReminderAlert />
       <ServiceTimeAlert />
 
       <nav

@@ -118,8 +118,8 @@ export async function completeAppointmentAsIncome(
     actualDuration,
     timerStartedAt,
     timerStoppedAt,
-    country: settings.country,
-    city: settings.city,
+    country: appointment.country ?? settings.country,
+    city: appointment.city ?? settings.city,
   })
 
   await updateAppointment(appointment.id, {

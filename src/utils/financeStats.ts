@@ -146,6 +146,54 @@ export function calculateBestIncomeDay(
   )
 }
 
+export function calculateIncomeDaysRanking(
+  incomes: ServiceIncome[],
+  currency: CurrencyCode,
+) {
+  const totalsByDate = new Map<
+    string,
+    {
+      cities: Set<string>
+      count: number
+      date: string
+      total: number
+    }
+  >()
+
+  incomes.forEach((income) => {
+    const currentDay = totalsByDate.get(income.date) ?? {
+      cities: new Set<string>(),
+      count: 0,
+      date: income.date,
+      total: 0,
+    }
+
+    if (income.city) {
+      currentDay.cities.add(income.city)
+    }
+    currentDay.count += 1
+    currentDay.total += getStoredIncomeValue(income, currency)
+    totalsByDate.set(income.date, currentDay)
+  })
+
+  return Array.from(totalsByDate.values())
+    .map((day) => ({
+      ...day,
+      average: day.count > 0 ? roundMoney(day.total / day.count) : 0,
+      cityNames: Array.from(day.cities).sort((firstCity, secondCity) =>
+        firstCity.localeCompare(secondCity, 'es'),
+      ),
+      total: roundMoney(day.total),
+    }))
+    .sort((firstDay, secondDay) => {
+      if (secondDay.total !== firstDay.total) {
+        return secondDay.total - firstDay.total
+      }
+
+      return secondDay.date.localeCompare(firstDay.date)
+    })
+}
+
 export function calculateTrend(currentValue: number, previousValue: number) {
   if (currentValue === previousValue) {
     return 'flat'

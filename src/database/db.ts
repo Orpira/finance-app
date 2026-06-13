@@ -93,6 +93,45 @@ export class FinanceDB extends Dexie {
             delete appointment.clientName
           }),
       )
+
+    this.version(6)
+      .stores({
+        services: '++id,date,currency,country,status',
+        expenses: '++id,date,category,currency,country',
+        appointments: '++id,dateTime,completed,currency',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      })
+      .upgrade((transaction) =>
+        transaction
+          .table<Appointment, number>('appointments')
+          .toCollection()
+          .modify((appointment) => {
+            appointment.reminders ??= []
+          }),
+      )
+
+    this.version(7)
+      .stores({
+        services: '++id,date,currency,country,status',
+        expenses: '++id,date,category,currency,country',
+        appointments: '++id,dateTime,completed,currency',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      })
+      .upgrade(async (transaction) => {
+        const settings = await transaction
+          .table<AppSettings, AppSettings['id']>('settings')
+          .get(DEFAULT_SETTINGS_ID)
+
+        await transaction
+          .table<Appointment, number>('appointments')
+          .toCollection()
+          .modify((appointment) => {
+            appointment.country ??= settings?.country
+            appointment.city ??= settings?.city
+          })
+      })
   }
 }
 

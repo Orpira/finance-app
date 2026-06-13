@@ -1,5 +1,6 @@
-import { Plus, ReceiptText } from 'lucide-react'
+import { List, Plus } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import {
   convertCurrencyPair,
@@ -7,9 +8,12 @@ import {
   type ExchangeRateResolutionSource,
 } from '../../services/currencyConversionService'
 import { saveExchangeRate } from '../../services/exchangeRateService'
-import { createExpense, listExpenses } from '../../services/expenseService'
+import {
+  createExpense,
+  getExpenseById,
+  updateExpense,
+} from '../../services/expenseService'
 import { getSettings } from '../../services/settingsService'
-import type { Expense } from '../../types/expense'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import {
   EUR_COP_DEFAULT_RATE,
@@ -30,12 +34,17 @@ const expenseCategories = [
 ]
 
 export function ExpensesPage() {
+  const { expenseId } = useParams()
+  const navigate = useNavigate()
+  const parsedExpenseId = expenseId ? Number(expenseId) : null
+  const isEditing = Number.isFinite(parsedExpenseId) && parsedExpenseId !== null
   const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [expenses, setExpenses] = useState<Expense[]>([])
   const [date, setDate] = useState(getTodayInputDate())
   const [category, setCategory] = useState(expenseCategories[0])
   const [amount, setAmount] = useState(0)
   const [currency, setCurrency] = useState<CurrencyCode>('EUR')
+  const [expenseCountry, setExpenseCountry] = useState<string | undefined>()
+  const [expenseCity, setExpenseCity] = useState<string | undefined>()
   const [exchangeRate, setExchangeRate] = useState(EUR_COP_DEFAULT_RATE)
   const [exchangeRateSource, setExchangeRateSource] =
     useState<ExchangeRateResolutionSource>('default')
@@ -51,10 +60,7 @@ export function ExpensesPage() {
     let isMounted = true
 
     async function loadInitialData() {
-      const [currentSettings, currentExpenses] = await Promise.all([
-        getSettings(),
-        listExpenses({ newestFirst: true }),
-      ])
+      const currentSettings = await getSettings()
 
       if (!isMounted) {
         return
@@ -62,7 +68,6 @@ export function ExpensesPage() {
 
       setSettings(currentSettings)
       setCurrency(currentSettings.defaultCurrency)
-      setExpenses(currentExpenses)
     }
 
     loadInitialData()
@@ -70,7 +75,40 @@ export function ExpensesPage() {
     return () => {
       isMounted = false
     }
-  }, [date])
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadExpenseForEdit() {
+      if (!parsedExpenseId || !Number.isFinite(parsedExpenseId)) {
+        return
+      }
+
+      const currentExpense = await getExpenseById(parsedExpenseId)
+
+      if (!isMounted || !currentExpense) {
+        return
+      }
+
+      setDate(currentExpense.date)
+      setCategory(currentExpense.category)
+      setAmount(currentExpense.amount)
+      setCurrency(currentExpense.currency as CurrencyCode)
+      setExpenseCountry(currentExpense.country)
+      setExpenseCity(currentExpense.city)
+
+      if (currentExpense.exchangeRateBaseToSecondary) {
+        setExchangeRate(currentExpense.exchangeRateBaseToSecondary)
+      }
+    }
+
+    loadExpenseForEdit()
+
+    return () => {
+      isMounted = false
+    }
+  }, [parsedExpenseId])
 
   useEffect(() => {
     let isMounted = true
@@ -117,11 +155,6 @@ export function ExpensesPage() {
     }
   }, [amount, currency, date, exchangeRate, settings])
 
-  async function reloadExpenses() {
-    const currentExpenses = await listExpenses({ newestFirst: true })
-    setExpenses(currentExpenses)
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -143,7 +176,7 @@ export function ExpensesPage() {
             : 'manual',
       })
 
-      await createExpense({
+      const expenseInput = {
         date,
         category,
         amount,
@@ -157,15 +190,27 @@ export function ExpensesPage() {
           convertedValues.secondaryCurrencyValue,
         ),
         exchangeRateBaseToSecondary: exchangeRate,
-        country: settings.country,
-        city: settings.city,
-      })
+        country: expenseCountry ?? settings.country,
+        city: expenseCity ?? settings.city,
+      }
+
+      if (isEditing && parsedExpenseId) {
+        await updateExpense(parsedExpenseId, expenseInput)
+      } else {
+        await createExpense(expenseInput)
+      }
+
+      if (isEditing) {
+        navigate('/expenses/list')
+        return
+      }
 
       setAmount(0)
       setDate(getTodayInputDate())
       setCategory(expenseCategories[0])
+      setExpenseCountry(undefined)
+      setExpenseCity(undefined)
       setSaveStatus('saved')
-      await reloadExpenses()
     } catch {
       setSaveStatus('error')
     }
@@ -181,11 +226,20 @@ export function ExpensesPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-emerald-700">Gastos</p>
-        <h1 className="text-2xl font-semibold text-slate-950">
-          Registrar gasto
-        </h1>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-medium text-emerald-700">Gastos</p>
+          <h1 className="text-2xl font-semibold text-slate-950">
+            {isEditing ? 'Modificar gasto' : 'Registrar gasto'}
+          </h1>
+        </div>
+        <Link
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-emerald-200 bg-white px-4 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+          to="/expenses/list"
+        >
+          <List className="size-4" aria-hidden="true" />
+          Ver gastos
+        </Link>
       </header>
 
       <form
@@ -300,7 +354,8 @@ export function ExpensesPage() {
 
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-slate-500" role="status">
-            {saveStatus === 'saved' && 'Gasto guardado'}
+            {saveStatus === 'saved' &&
+              (isEditing ? 'Gasto actualizado' : 'Gasto guardado')}
             {saveStatus === 'error' && 'No se pudo guardar'}
           </p>
 
@@ -310,53 +365,14 @@ export function ExpensesPage() {
             type="submit"
           >
             <Plus className="size-4" aria-hidden="true" />
-            {saveStatus === 'saving' ? 'Guardando' : 'Guardar gasto'}
+            {saveStatus === 'saving'
+              ? 'Guardando'
+              : isEditing
+                ? 'Actualizar gasto'
+                : 'Guardar gasto'}
           </button>
         </div>
       </form>
-
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <ReceiptText className="size-5 text-emerald-700" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-slate-950">
-            Gastos recientes
-          </h2>
-        </div>
-
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          {expenses.length === 0 ? (
-            <p className="p-4 text-sm text-slate-500">
-              Todavía no hay gastos registrados.
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-200">
-              {expenses.slice(0, 6).map((expense) => (
-                <li
-                  className="flex items-center justify-between gap-4 p-4"
-                  key={expense.id}
-                >
-                  <div>
-                    <p className="font-medium text-slate-950">
-                      {expense.category}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {expense.date}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-slate-950">
-                      {formatCurrency(expense.amount, expense.currency as CurrencyCode)}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {formatCurrency(expense.eurValue, 'EUR')}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
     </section>
   )
 }

@@ -1,3 +1,17 @@
+export type AppointmentReminderUnit = 'minutes' | 'hours' | 'days';
+
+export type AppointmentReminderType = 'local' | 'inApp';
+
+export interface AppointmentReminder {
+  id: string;
+
+  amount: number;
+
+  unit: AppointmentReminderUnit;
+
+  type: AppointmentReminderType;
+}
+
 export interface Appointment {
   id?: number;
 
@@ -9,7 +23,13 @@ export interface Appointment {
 
   currency: string;
 
+  country?: string;
+
+  city?: string;
+
   notes?: string;
+
+  reminders: AppointmentReminder[];
 
   completed: boolean;
 

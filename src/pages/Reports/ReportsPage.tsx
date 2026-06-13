@@ -1,20 +1,12 @@
 import {
-  BarChart3,
   CalendarRange,
   Clock,
   Download,
   FileJson,
-  FileSpreadsheet,
-  FileText,
-  MinusCircle,
-  PlusCircle,
-  TrendingUp,
   Upload,
 } from 'lucide-react'
 import {
-  lazy,
   type ChangeEvent,
-  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -29,19 +21,15 @@ import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings } from '../../types/settings'
 import type { CountryCode } from '../../types/settings'
+import { downloadText } from '../../utils/download'
 import {
-  formatCurrency,
   getCurrentMonthRange,
   getCurrentWeekRange,
   getCurrentYearRange,
-  getLastDaysRange,
 } from '../../utils/currency'
 import { countries, getCountryCurrency } from '../../utils/countries'
 import {
-  calculateAverageIncome,
-  calculateBestIncomeDay,
   calculateFinancialTotals,
-  calculateTrend,
   getStoredExpenseValue,
   getStoredIncomeValue,
 } from '../../utils/financeStats'
@@ -53,8 +41,6 @@ const periods: Array<{ value: Period; label: string }> = [
   { value: 'month', label: 'Mes' },
   { value: 'year', label: 'Año' },
 ]
-
-const TrendLineChart = lazy(() => import('./TrendLineChart'))
 
 function getPeriodRange(period: Period) {
   if (period === 'week') {
@@ -73,31 +59,6 @@ function getCountryLabel(code: string): string {
   return country?.label || code
 }
 
-function getNextInputDate(date: string) {
-  const nextDate = new Date(`${date}T00:00`)
-  nextDate.setDate(nextDate.getDate() + 1)
-
-  return nextDate.toISOString().slice(0, 10)
-}
-
-function getDateLabels(from: string, to: string) {
-  const labels: string[] = []
-  let currentDate = from
-
-  while (currentDate <= to) {
-    labels.push(currentDate)
-    currentDate = getNextInputDate(currentDate)
-  }
-
-  return labels
-}
-
-function formatChartDate(date: string) {
-  const [, month, day] = date.split('-')
-
-  return `${day}/${month}`
-}
-
 export function ReportsPage() {
   const [period, setPeriod] = useState<Period>('month')
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL' | null>(
@@ -107,8 +68,6 @@ export function ReportsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [periodIncomes, setPeriodIncomes] = useState<ServiceIncome[]>([])
   const [periodExpenses, setPeriodExpenses] = useState<Expense[]>([])
-  const [last30Incomes, setLast30Incomes] = useState<ServiceIncome[]>([])
-  const [last30Expenses, setLast30Expenses] = useState<Expense[]>([])
   const [exportStatus, setExportStatus] = useState<
     'idle' | 'exporting' | 'success' | 'error'
   >('idle')
@@ -200,31 +159,6 @@ export function ReportsPage() {
     return getCountryCurrency(selectedCountry as CountryCode) ?? primaryCurrencyFromSettings
   }, [selectedCountry, primaryCurrencyFromSettings])
 
-  useEffect(() => {
-    let isMounted = true
-
-    async function loadTrends() {
-      const last30Range = getLastDaysRange(30)
-      const [trendIncomes, trendExpenses] = await Promise.all([
-        listServiceIncomes({ ...last30Range, newestFirst: true }),
-        listExpenses({ ...last30Range, newestFirst: true }),
-      ])
-
-      if (!isMounted) {
-        return
-      }
-
-      setLast30Incomes(trendIncomes)
-      setLast30Expenses(trendExpenses)
-    }
-
-    loadTrends()
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
   const totals = useMemo(
     () =>
       calculateFinancialTotals(
@@ -235,169 +169,50 @@ export function ReportsPage() {
       ),
     [expenses, incomes, primaryCurrency, secondaryCurrency],
   )
-  const averageIncome = useMemo(
-    () => calculateAverageIncome(incomes, primaryCurrency),
-    [incomes, primaryCurrency],
-  )
-  const bestDay = useMemo(
-    () => calculateBestIncomeDay(incomes, primaryCurrency),
-    [incomes, primaryCurrency],
-  )
-  const chartMaxValue = Math.max(totals.primaryIncome, totals.primaryExpenses, 1)
-  const incomeBarWidth = `${Math.round(
-    (totals.primaryIncome / chartMaxValue) * 100,
-  )}%`
-  const expenseBarWidth = `${Math.round(
-    (totals.primaryExpenses / chartMaxValue) * 100,
-  )}%`
-  const trends = useMemo(() => {
-    const midpoint = new Date()
-    midpoint.setDate(midpoint.getDate() - 14)
-    const midpointDate = midpoint.toISOString().slice(0, 10)
-
-    const previousIncomes = last30Incomes.filter(
-      (income) => income.date < midpointDate,
-    )
-    const currentIncomes = last30Incomes.filter(
-      (income) => income.date >= midpointDate,
-    )
-    const previousExpenses = last30Expenses.filter(
-      (expense) => expense.date < midpointDate,
-    )
-    const currentExpenses = last30Expenses.filter(
-      (expense) => expense.date >= midpointDate,
-    )
-    const previousIncomeTotal = previousIncomes.reduce(
-      (total, income) => total + getStoredIncomeValue(income, primaryCurrency),
-      0,
-    )
-    const currentIncomeTotal = currentIncomes.reduce(
-      (total, income) => total + getStoredIncomeValue(income, primaryCurrency),
-      0,
-    )
-    const previousExpenseTotal = previousExpenses.reduce(
-      (total, expense) => total + getStoredExpenseValue(expense, primaryCurrency),
-      0,
-    )
-    const currentExpenseTotal = currentExpenses.reduce(
-      (total, expense) => total + getStoredExpenseValue(expense, primaryCurrency),
-      0,
-    )
-
-    return {
-      expenses: calculateTrend(currentExpenseTotal, previousExpenseTotal),
-      incomeTotal: currentIncomeTotal,
-      incomes: calculateTrend(currentIncomeTotal, previousIncomeTotal),
-    }
-  }, [last30Expenses, last30Incomes, primaryCurrency])
   const workedHours = Math.round((totals.serviceMinutes / 60) * 10) / 10
-  const trendChartData = useMemo(() => {
-    const incomeTotalsByDate = new Map<string, number>()
-    const expenseTotalsByDate = new Map<string, number>()
-
-    incomes.forEach((income) => {
-      incomeTotalsByDate.set(
-        income.date,
-        (incomeTotalsByDate.get(income.date) ?? 0) +
-          getStoredIncomeValue(income, primaryCurrency),
-      )
-    })
-    expenses.forEach((expense) => {
-      expenseTotalsByDate.set(
-        expense.date,
-        (expenseTotalsByDate.get(expense.date) ?? 0) +
-          getStoredExpenseValue(expense, primaryCurrency),
-      )
-    })
-
-    return getDateLabels(range.from, range.to).map((date) => ({
-      date,
-      gastos: Math.round((expenseTotalsByDate.get(date) ?? 0) * 100) / 100,
-      ingresos: Math.round((incomeTotalsByDate.get(date) ?? 0) * 100) / 100,
-      label: formatChartDate(date),
-    }))
-  }, [expenses, incomes, primaryCurrency, range])
-
-  async function getReportData(reportPeriod: Period) {
-    const reportRange = getPeriodRange(reportPeriod)
-    const [reportIncomes, reportExpenses] = await Promise.all([
-      listServiceIncomes({ ...reportRange, newestFirst: true }),
-      listExpenses({ ...reportRange, newestFirst: true }),
-    ])
-
-    return {
-      expenses: reportExpenses,
-      incomes: reportIncomes,
-      label: periods.find((periodOption) => periodOption.value === reportPeriod)
-        ?.label ?? 'Reporte',
-      primaryCurrency,
-      range: reportRange,
-      secondaryCurrency,
-    }
-  }
-
-  async function handleExportPdf(reportPeriod: Period) {
-    setExportStatus('exporting')
-    setExportMessage('')
-
-    try {
-      const { exportReportPdf } = await import(
-        '../../services/reportExportService'
-      )
-
-      exportReportPdf(await getReportData(reportPeriod))
-      setExportStatus('success')
-      setExportMessage('PDF exportado correctamente.')
-    } catch {
-      setExportStatus('error')
-      setExportMessage('No se pudo exportar el PDF.')
-    }
-  }
-
-  async function handleExportXlsx() {
-    setExportStatus('exporting')
-    setExportMessage('')
-
-    try {
-      const { exportReportXlsx } = await import(
-        '../../services/reportExportService'
-      )
-
-      await exportReportXlsx({
-        expenses,
-        incomes,
-        label: periods.find((periodOption) => periodOption.value === period)
-          ?.label ?? 'Reporte',
-        primaryCurrency,
-        range,
-        secondaryCurrency,
-      })
-      setExportStatus('success')
-      setExportMessage('XLSX exportado correctamente.')
-    } catch {
-      setExportStatus('error')
-      setExportMessage('No se pudo exportar el XLSX.')
-    }
-  }
 
   async function handleExportCsv() {
     setExportStatus('exporting')
     setExportMessage('')
 
     try {
-      const { exportReportCsv } = await import(
-        '../../services/reportExportService'
-      )
+      const rows = [
+        ['Tipo', 'Concepto', 'Valor', 'Moneda'],
+        ...incomes.map((income) => [
+          'Ingreso',
+          income.date,
+          getStoredIncomeValue(income, primaryCurrency),
+          primaryCurrency,
+        ]),
+        ...expenses.map((expense) => [
+          'Gasto',
+          `${expense.date} ${expense.category}`,
+          getStoredExpenseValue(expense, primaryCurrency),
+          primaryCurrency,
+        ]),
+      ]
+      const content = rows
+        .map((row) =>
+          row
+            .map((value) => {
+              const text = String(value)
 
-      await exportReportCsv({
-        expenses,
-        incomes,
-        label: periods.find((periodOption) => periodOption.value === period)
-          ?.label ?? 'Reporte',
-        primaryCurrency,
-        range,
-        secondaryCurrency,
-      })
+              return text.includes(',') || text.includes('"') || text.includes('\n')
+                ? `"${text.replaceAll('"', '""')}"`
+                : text
+            })
+            .join(','),
+        )
+        .join('\n')
+      const label =
+        periods.find((periodOption) => periodOption.value === period)?.label ??
+        'reporte'
+
+      await downloadText(
+        content,
+        `reporte-${label.toLowerCase()}.csv`,
+        'text/csv;charset=utf-8',
+      )
       setExportStatus('success')
       setExportMessage('CSV exportado correctamente.')
     } catch {
@@ -494,31 +309,7 @@ export function ReportsPage() {
           Reportes y backup
         </h2>
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <button
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            onClick={() => handleExportPdf('week')}
-            type="button"
-          >
-            <FileText className="size-4" aria-hidden="true" />
-            PDF semanal
-          </button>
-          <button
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            onClick={() => handleExportPdf('month')}
-            type="button"
-          >
-            <FileText className="size-4" aria-hidden="true" />
-            PDF mensual
-          </button>
-          <button
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            onClick={handleExportXlsx}
-            type="button"
-          >
-            <FileSpreadsheet className="size-4" aria-hidden="true" />
-            Exportar XLSX
-          </button>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <button
             className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             onClick={handleExportCsv}
@@ -564,57 +355,7 @@ export function ReportsPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_20rem]">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-slate-500">Ingresos</p>
-              <PlusCircle className="size-5 text-emerald-700" aria-hidden="true" />
-            </div>
-            <p className="mt-3 text-2xl font-semibold text-slate-950">
-              {formatCurrency(totals.primaryIncome, primaryCurrency)}
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              {formatCurrency(totals.secondaryIncome, secondaryCurrency)}
-            </p>
-          </article>
-
-          <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-slate-500">Gastos</p>
-              <MinusCircle className="size-5 text-red-600" aria-hidden="true" />
-            </div>
-            <p className="mt-3 text-2xl font-semibold text-slate-950">
-              {formatCurrency(totals.primaryExpenses, primaryCurrency)}
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              {totals.expenseCount} movimientos
-            </p>
-          </article>
-
-          <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-slate-500">Ganancia neta</p>
-              <TrendingUp className="size-5 text-emerald-700" aria-hidden="true" />
-            </div>
-            <p className="mt-3 text-2xl font-semibold text-slate-950">
-              {formatCurrency(totals.primaryNet, primaryCurrency)}
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              {formatCurrency(totals.secondaryNet, secondaryCurrency)}
-            </p>
-          </article>
-
-          <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-slate-500">Servicios</p>
-              <BarChart3 className="size-5 text-emerald-700" aria-hidden="true" />
-            </div>
-            <p className="mt-3 text-2xl font-semibold text-slate-950">
-              {totals.serviceCount}
-            </p>
-            <p className="mt-1 text-sm text-slate-500">realizados</p>
-          </article>
-
+        <div className="grid gap-3">
           <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-medium text-slate-500">Horas</p>
@@ -626,19 +367,6 @@ export function ReportsPage() {
             <p className="mt-1 text-sm text-slate-500">
               {totals.serviceMinutes} minutos
             </p>
-          </article>
-
-          <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-slate-500">
-                Ticket medio
-              </p>
-              <BarChart3 className="size-5 text-emerald-700" aria-hidden="true" />
-            </div>
-            <p className="mt-3 text-2xl font-semibold text-slate-950">
-              {formatCurrency(averageIncome, primaryCurrency)}
-            </p>
-            <p className="mt-1 text-sm text-slate-500">por servicio</p>
           </article>
         </div>
 
@@ -667,117 +395,6 @@ export function ReportsPage() {
             </div>
           </aside>
         )}
-      </section>
-
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-950">
-              Tendencia ingresos vs gastos
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Evolución diaria en {primaryCurrency}
-            </p>
-          </div>
-          <TrendingUp className="size-5 text-emerald-700" aria-hidden="true" />
-        </div>
-
-        <div className="mt-5 h-72 min-h-72 w-full">
-          <Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center rounded-md bg-slate-50 text-sm font-medium text-slate-500">
-                Cargando gráfica...
-              </div>
-            }
-          >
-            <TrendLineChart
-              data={trendChartData}
-              primaryCurrency={primaryCurrency}
-            />
-          </Suspense>
-        </div>
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-[1fr_20rem]">
-        <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-slate-950">Gráficas</h2>
-            <BarChart3 className="size-5 text-emerald-700" aria-hidden="true" />
-          </div>
-
-          <div className="mt-5 flex flex-col gap-4">
-            <div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-slate-700">Ingresos</span>
-                <span className="text-slate-500">
-                  {formatCurrency(totals.primaryIncome, primaryCurrency)}
-                </span>
-              </div>
-              <div className="mt-2 h-5 overflow-hidden rounded-md bg-slate-100">
-                <div
-                  className="h-full rounded-md bg-emerald-600"
-                  style={{ width: incomeBarWidth }}
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-slate-700">Gastos</span>
-                <span className="text-slate-500">
-                  {formatCurrency(totals.primaryExpenses, primaryCurrency)}
-                </span>
-              </div>
-              <div className="mt-2 h-5 overflow-hidden rounded-md bg-slate-100">
-                <div
-                  className="h-full rounded-md bg-red-500"
-                  style={{ width: expenseBarWidth }}
-                />
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-950">Mejor día</h2>
-          <p className="mt-4 text-2xl font-semibold text-slate-950">
-            {bestDay.count > 0 ? bestDay.weekday : '-'}
-          </p>
-          <p className="mt-1 text-sm text-slate-500">Promedio</p>
-          <p className="mt-2 text-xl font-semibold text-emerald-700">
-            {formatCurrency(bestDay.average, primaryCurrency)}
-          </p>
-        </article>
-      </section>
-
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-950">Tendencias</h2>
-            <p className="mt-1 text-sm text-slate-500">Últimos 30 días</p>
-          </div>
-          <TrendingUp className="size-5 text-emerald-700" aria-hidden="true" />
-        </div>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-slate-200 p-4">
-            <p className="text-sm font-medium text-slate-500">Ingresos</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-950">
-              {trends.incomes === 'up' && '↑'}
-              {trends.incomes === 'down' && '↓'}
-              {trends.incomes === 'flat' && '→'}
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 p-4">
-            <p className="text-sm font-medium text-slate-500">Gastos</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-950">
-              {trends.expenses === 'up' && '↑'}
-              {trends.expenses === 'down' && '↓'}
-              {trends.expenses === 'flat' && '→'}
-            </p>
-          </div>
-        </div>
       </section>
     </section>
   )
