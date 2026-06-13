@@ -1,5 +1,9 @@
-import { CalendarDays, CircleDollarSign, MinusCircle, PlusCircle } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import {
+  CalendarDays,
+  CircleDollarSign,
+  MinusCircle,
+  PlusCircle,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { listExpenses } from '../../services/expenseService'
@@ -12,12 +16,51 @@ import type { CountryCode } from '../../types/settings'
 import { formatCurrency, getCurrentMonthRange } from '../../utils/currency'
 import { getCountryCurrency, countries } from '../../utils/countries'
 import { calculateFinancialTotals } from '../../utils/financeStats'
+import { getPaymentTypeLabel } from '../../utils/paymentTypes'
+
+function getAvailableCountriesFromData(
+  incomes: ServiceIncome[],
+  expenses: Expense[],
+) {
+  const countriesFromData = new Set<CountryCode>()
+
+  incomes.forEach((income) => {
+    if (income.country) {
+      countriesFromData.add(income.country as CountryCode)
+    }
+  })
+  expenses.forEach((expense) => {
+    if (expense.country) {
+      countriesFromData.add(expense.country as CountryCode)
+    }
+  })
+
+  return Array.from(countriesFromData).sort()
+}
+
+function getIncomeTime(income: ServiceIncome) {
+  const dateTime = income.createdAt ?? income.timerStoppedAt ?? income.timerStartedAt
+
+  if (!dateTime) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(dateTime))
+}
 
 export function DashboardPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [monthlyIncomes, setMonthlyIncomes] = useState<ServiceIncome[]>([])
+  const [monthlyExpenses, setMonthlyExpenses] = useState<Expense[]>([])
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL' | null>(null)
+  const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL')
+  const [selectedPaymentType, setSelectedPaymentType] =
+    useState<string | 'ALL'>('ALL')
   const [availableCountries, setAvailableCountries] = useState<CountryCode[]>([])
 
   const monthRange = useMemo(() => getCurrentMonthRange(), [])
@@ -39,17 +82,12 @@ export function DashboardPage() {
 
       setSettings(currentSettings)
       setSelectedCountry(currentSettings?.country ?? 'ALL')
+      setMonthlyIncomes(currentIncomes)
+      setMonthlyExpenses(currentExpenses)
       
-      // Calculate available countries from all incomes and expenses
-      const countriesFromData = new Set<CountryCode>()
-      currentIncomes.forEach(inc => {
-        if (inc.country) countriesFromData.add(inc.country as CountryCode)
-      })
-      currentExpenses.forEach(exp => {
-        if (exp.country) countriesFromData.add(exp.country as CountryCode)
-      })
-      
-      setAvailableCountries(Array.from(countriesFromData).sort())
+      setAvailableCountries(
+        getAvailableCountriesFromData(currentIncomes, currentExpenses),
+      )
     }
 
     loadDashboard()
@@ -59,15 +97,74 @@ export function DashboardPage() {
     }
   }, [monthRange])
 
-  // Load data filtered by selected country
+  const availableCities = useMemo(() => {
+    const citiesFromData = new Set<string>()
+    const data = [...monthlyIncomes, ...monthlyExpenses]
+
+    data.forEach((item) => {
+      if (
+        item.city &&
+        (selectedCountry === 'ALL' || item.country === selectedCountry)
+      ) {
+        citiesFromData.add(item.city)
+      }
+    })
+
+    return Array.from(citiesFromData).sort((firstCity, secondCity) =>
+      firstCity.localeCompare(secondCity, 'es'),
+    )
+  }, [monthlyExpenses, monthlyIncomes, selectedCountry])
+
+  const availablePaymentTypes = useMemo(() => {
+    const paymentTypesFromData = new Set<string>()
+
+    monthlyIncomes.forEach((income) => {
+      const matchesCountry =
+        selectedCountry === 'ALL' || income.country === selectedCountry
+      const matchesCity = selectedCity === 'ALL' || income.city === selectedCity
+
+      if (income.paymentType && matchesCountry && matchesCity) {
+        paymentTypesFromData.add(income.paymentType)
+      }
+    })
+
+    return Array.from(paymentTypesFromData).sort((firstType, secondType) =>
+      getPaymentTypeLabel(firstType).localeCompare(
+        getPaymentTypeLabel(secondType),
+        'es',
+      ),
+    )
+  }, [monthlyIncomes, selectedCity, selectedCountry])
+
+  const activeSelectedPaymentType =
+    selectedPaymentType !== 'ALL' &&
+    availablePaymentTypes.includes(selectedPaymentType)
+      ? selectedPaymentType
+      : 'ALL'
+
+  // Load data filtered by selected country, city and payment type
   useEffect(() => {
     let isMounted = true
 
     async function loadFilteredData() {
       const countryParam = selectedCountry === 'ALL' ? undefined : (selectedCountry as CountryCode)
+      const cityParam = selectedCity === 'ALL' ? undefined : selectedCity
+      const paymentTypeParam =
+        activeSelectedPaymentType === 'ALL' ? undefined : activeSelectedPaymentType
       const [currentIncomes, currentExpenses] = await Promise.all([
-        listServiceIncomes({ ...monthRange, newestFirst: true, country: countryParam }),
-        listExpenses({ ...monthRange, newestFirst: true, country: countryParam }),
+        listServiceIncomes({
+          ...monthRange,
+          newestFirst: true,
+          country: countryParam,
+          city: cityParam,
+          paymentType: paymentTypeParam,
+        }),
+        listExpenses({
+          ...monthRange,
+          newestFirst: true,
+          country: countryParam,
+          city: cityParam,
+        }),
       ])
 
       if (!isMounted) {
@@ -85,7 +182,7 @@ export function DashboardPage() {
     return () => {
       isMounted = false
     }
-  }, [monthRange, selectedCountry])
+  }, [activeSelectedPaymentType, monthRange, selectedCity, selectedCountry])
 
   const primaryCurrencyFromSettings = settings?.defaultCurrency ?? 'EUR'
   const secondaryCurrency = settings?.secondaryCurrency ?? 'COP'
@@ -105,7 +202,6 @@ export function DashboardPage() {
       ),
     [expenses, incomes, primaryCurrency, secondaryCurrency],
   )
-
   if (!settings) {
     return (
       <section className="flex min-h-[60dvh] items-center justify-center">
@@ -123,6 +219,17 @@ export function DashboardPage() {
   const getCountryLabel = (code: string): string => {
     const country = countries.find((c) => c.value === code)
     return country?.label || code
+  }
+
+  function handleCountryFilterChange(country: string) {
+    setSelectedCountry(country || 'ALL')
+    setSelectedCity('ALL')
+    setSelectedPaymentType('ALL')
+  }
+
+  function handleCityFilterChange(city: string) {
+    setSelectedCity(city || 'ALL')
+    setSelectedPaymentType('ALL')
   }
 
   return (
@@ -219,12 +326,6 @@ export function DashboardPage() {
             <h2 className="text-lg font-semibold text-slate-950">
               Ingresos recientes
             </h2>
-            <Link
-              className="text-sm font-semibold text-emerald-700 hover:text-emerald-800"
-              to="/income?country=GB"
-            >
-              Añadir
-            </Link>
           </div>
 
           {incomes.length === 0 ? (
@@ -238,13 +339,21 @@ export function DashboardPage() {
                   className="flex items-center justify-between gap-4 p-4"
                   key={income.id}
                 >
-                  <div>
-                    <p className="font-medium text-slate-950">{income.date}</p>
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-950">
+                      {[
+                        income.id ? `#${income.id}` : undefined,
+                        income.date,
+                        getIncomeTime(income),
+                        income.city,
+                      ].filter(Boolean).join(' · ')}
+                    </p>
                     <p className="mt-1 text-sm text-slate-500">
-                      {income.duration} min · {income.percentage}%
+                      {income.duration} min · {income.percentage}% ·{' '}
+                      {getPaymentTypeLabel(income.paymentType)}
                     </p>
                   </div>
-                  <div className="text-right">
+                  <div className="shrink-0 text-right">
                     <p className="font-semibold text-slate-950">
                       {formatCurrency(income.eurValue, 'EUR')}
                     </p>
@@ -301,13 +410,57 @@ export function DashboardPage() {
               <select
                 id="country-select"
                 value={selectedCountry || 'ALL'}
-                onChange={(e) => setSelectedCountry(e.target.value || 'ALL')}
+                onChange={(e) => handleCountryFilterChange(e.target.value)}
                 className="mt-2 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
               >
                 <option value="ALL">Todos los países</option>
                 {availableCountries.map((country) => (
                   <option key={country} value={country}>
                     {getCountryLabel(country)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {availableCities.length > 0 && (
+            <div className="mt-4 border-t border-slate-200 pt-4">
+              <label htmlFor="city-select" className="text-sm font-medium text-slate-600">
+                Filtrar por ciudad
+              </label>
+              <select
+                id="city-select"
+                value={selectedCity}
+                onChange={(event) => handleCityFilterChange(event.target.value)}
+                className="mt-2 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="ALL">Todas las ciudades</option>
+                {availableCities.map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {availablePaymentTypes.length > 0 && (
+            <div className="mt-4 border-t border-slate-200 pt-4">
+              <label htmlFor="payment-type-select" className="text-sm font-medium text-slate-600">
+                Filtrar por tipo de pago
+              </label>
+              <select
+                id="payment-type-select"
+                value={activeSelectedPaymentType}
+                onChange={(event) =>
+                  setSelectedPaymentType(event.target.value || 'ALL')
+                }
+                className="mt-2 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="ALL">Todos los tipos</option>
+                {availablePaymentTypes.map((paymentType) => (
+                  <option key={paymentType} value={paymentType}>
+                    {getPaymentTypeLabel(paymentType)}
                   </option>
                 ))}
               </select>

@@ -6,6 +6,7 @@ import type { CountryCode } from '../types/settings'
 export interface ExpenseListOptions extends DateRangeListOptions {
   category?: string
   country?: CountryCode
+  city?: string
 }
 
 export type CreateExpenseInput = Omit<Expense, 'id'>
@@ -20,7 +21,7 @@ export async function getExpenseById(id: number) {
 }
 
 export async function listExpenses(options: ExpenseListOptions = {}) {
-  const { from, to, category, country, newestFirst = true } = options
+  const { from, to, category, country, city, newestFirst = true } = options
   const lowerBound = from ?? ''
   const upperBound = to ?? '\uffff'
   const collection =
@@ -42,6 +43,10 @@ export async function listExpenses(options: ExpenseListOptions = {}) {
   
   if (country) {
     filtered = filtered.filter((expense) => expense.country === country)
+  }
+
+  if (city) {
+    filtered = filtered.filter((expense) => expense.city === city)
   }
   
   return filtered

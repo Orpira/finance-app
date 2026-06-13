@@ -1,8 +1,6 @@
 export interface Appointment {
   id?: number;
 
-  clientName?: string;
-
   dateTime: string;
 
   duration: number;

@@ -101,6 +101,7 @@ export async function completeAppointmentAsIncome(
 
   await createServiceIncome({
     date: serviceDate,
+    status: 'FINALIZADO',
     duration: actualDuration,
     totalAmount: appointment.expectedAmount,
     currency: appointment.currency,
@@ -118,6 +119,7 @@ export async function completeAppointmentAsIncome(
     timerStartedAt,
     timerStoppedAt,
     country: settings.country,
+    city: settings.city,
   })
 
   await updateAppointment(appointment.id, {

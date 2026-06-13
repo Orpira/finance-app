@@ -8,10 +8,16 @@ export type UpdateServiceIncomeInput = Partial<CreateServiceIncomeInput>
 
 export interface ServiceIncomeListOptions extends DateRangeListOptions {
   country?: CountryCode
+  city?: string
+  paymentType?: string
 }
 
 export async function createServiceIncome(input: CreateServiceIncomeInput) {
-  return db.services.add(input)
+  return db.services.add({
+    createdAt: new Date().toISOString(),
+    status: 'PENDIENTE',
+    ...input,
+  })
 }
 
 export async function getServiceIncomeById(id: number) {
@@ -19,7 +25,7 @@ export async function getServiceIncomeById(id: number) {
 }
 
 export async function listServiceIncomes(options: ServiceIncomeListOptions = {}) {
-  const { from, to, newestFirst = true, country } = options
+  const { from, to, newestFirst = true, country, city, paymentType } = options
   const lowerBound = from ?? ''
   const upperBound = to ?? '\uffff'
   const collection =
@@ -34,11 +40,21 @@ export async function listServiceIncomes(options: ServiceIncomeListOptions = {})
   const items = await collection.toArray()
   
   // Filter by country if specified
+  let filtered = items
+
   if (country) {
-    return items.filter(item => item.country === country)
+    filtered = filtered.filter((item) => item.country === country)
   }
-  
-  return items
+
+  if (city) {
+    filtered = filtered.filter((item) => item.city === city)
+  }
+
+  if (paymentType) {
+    filtered = filtered.filter((item) => item.paymentType === paymentType)
+  }
+
+  return filtered
 }
 
 export async function updateServiceIncome(

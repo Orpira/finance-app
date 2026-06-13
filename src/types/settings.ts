@@ -1,4 +1,5 @@
 export type CurrencyCode =
+  | 'ARS'
   | 'BGN'
   | 'COP'
   | 'CZK'
@@ -6,11 +7,13 @@ export type CurrencyCode =
   | 'EUR'
   | 'GBP'
   | 'HUF'
+  | 'MXN'
   | 'PLN'
   | 'RON'
   | 'SEK'
   | 'USD'
 export type CountryCode =
+  | 'AR'
   | 'AT'
   | 'BE'
   | 'BG'
@@ -33,6 +36,7 @@ export type CountryCode =
   | 'LU'
   | 'LV'
   | 'MT'
+  | 'MX'
   | 'NL'
   | 'PL'
   | 'PT'
@@ -47,6 +51,7 @@ export interface AppSettings {
   id: 'app'
   businessName: string
   country: CountryCode
+  city: string
   defaultCurrency: CurrencyCode
   secondaryCurrency: CurrencyCode
   incomePercentage: number

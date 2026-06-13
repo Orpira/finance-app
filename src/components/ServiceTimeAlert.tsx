@@ -285,9 +285,8 @@ export function ServiceTimeAlert() {
               Tiempo previsto cumplido
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              {activeAppointment.clientName || 'Esta cita'} alcanzó{' '}
-              {activeAppointment.duration} minutos. Decide si continúas o
-              finalizas el servicio ahora.
+              Esta cita alcanzó {activeAppointment.duration} minutos. Decide si
+              continúas o finalizas el servicio ahora.
             </p>
           </div>
         </div>

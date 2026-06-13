@@ -8,6 +8,7 @@ import type { CurrencyCode } from '../types/settings'
 const FRANKFURTER_API_BASE_URL = 'https://api.frankfurter.dev/v2/rate'
 
 const currencyUnitsPerEur: Record<CurrencyCode, number> = {
+  ARS: 1200,
   BGN: 1.95583,
   COP: EUR_COP_DEFAULT_RATE,
   CZK: 25,
@@ -15,6 +16,7 @@ const currencyUnitsPerEur: Record<CurrencyCode, number> = {
   EUR: 1,
   GBP: 0.86,
   HUF: 390,
+  MXN: 19.8,
   PLN: 4.3,
   RON: 5,
   SEK: 11.2,

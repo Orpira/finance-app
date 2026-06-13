@@ -158,6 +158,7 @@ export function ExpensesPage() {
         ),
         exchangeRateBaseToSecondary: exchangeRate,
         country: settings.country,
+        city: settings.city,
       })
 
       setAmount(0)

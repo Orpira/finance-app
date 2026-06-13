@@ -25,13 +25,38 @@ import {
   updateAppointment,
 } from '../../services/appointmentService'
 import { completeAppointmentAsIncome } from '../../services/appointmentCompletionService'
+import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import type { Appointment } from '../../types/appointment'
+import type { ServiceIncome, ServiceIncomeStatus } from '../../types/service'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { formatCurrency, getTodayInputDate } from '../../utils/currency'
 import { currencies } from '../../utils/countries'
+import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+const incomeStatusLabels: Record<ServiceIncomeStatus, string> = {
+  PENDIENTE: 'Pendiente',
+  EJECUCION: 'En ejecución',
+  FINALIZADO: 'Finalizado',
+}
+
+function getIncomeStatus(income: ServiceIncome): ServiceIncomeStatus {
+  return income.status ?? 'PENDIENTE'
+}
+
+function getIncomeStatusClass(status: ServiceIncomeStatus) {
+  if (status === 'FINALIZADO') {
+    return 'bg-emerald-100 text-emerald-800'
+  }
+
+  if (status === 'EJECUCION') {
+    return 'bg-amber-100 text-amber-800'
+  }
+
+  return 'bg-slate-100 text-slate-700'
+}
 
 function formatInputDate(date: Date) {
   const year = date.getFullYear()
@@ -76,6 +101,19 @@ function getTimeFromDateTime(dateTime: string) {
 
 function getDateFromDateTime(dateTime: string) {
   return dateTime.slice(0, 10)
+}
+
+function getIncomeTime(income: ServiceIncome) {
+  const dateTime = income.timerStartedAt ?? income.createdAt
+
+  if (!dateTime) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(dateTime))
 }
 
 function sortAppointments(appointments: Appointment[]) {
@@ -131,7 +169,7 @@ function getTimerLabel(appointment: Appointment, now: Date) {
   }
 
   if (appointment.timerMode === 'manualPending') {
-    return 'Cliente retrasado: esperando inicio manual'
+    return 'Inicio retrasado: esperando inicio manual'
   }
 
   return `Inicio automático a las ${getTimeFromDateTime(appointment.dateTime)}`
@@ -140,10 +178,10 @@ function getTimerLabel(appointment: Appointment, now: Date) {
 export function AgendaPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [editingAppointment, setEditingAppointment] =
     useState<Appointment | null>(null)
-  const [clientName, setClientName] = useState('')
   const [date, setDate] = useState(getTodayInputDate())
   const [time, setTime] = useState('15:00')
   const [duration, setDuration] = useState(90)
@@ -162,13 +200,19 @@ export function AgendaPage() {
     setAppointments(currentAppointments)
   }, [])
 
+  const reloadIncomes = useCallback(async () => {
+    const currentIncomes = await listServiceIncomes()
+    setIncomes(currentIncomes)
+  }, [])
+
   useEffect(() => {
     let isMounted = true
 
     async function loadInitialData() {
-      const [currentSettings, currentAppointments] = await Promise.all([
+      const [currentSettings, currentAppointments, currentIncomes] = await Promise.all([
         getSettings(),
         listAppointments(),
+        listServiceIncomes(),
       ])
 
       if (!isMounted) {
@@ -178,6 +222,7 @@ export function AgendaPage() {
       setSettings(currentSettings)
       setCurrency(currentSettings.defaultCurrency)
       setAppointments(currentAppointments)
+      setIncomes(currentIncomes)
     }
 
     loadInitialData()
@@ -251,12 +296,17 @@ export function AgendaPage() {
     [appointments, selectedDateInput],
   )
 
+  const selectedIncomes = useMemo(
+    () =>
+      incomes.filter((income) => income.date === selectedDateInput),
+    [incomes, selectedDateInput],
+  )
+
   function resetForm(nextDate = selectedDateInput) {
     const nextTime =
       nextDate === formatInputDate(new Date()) ? formatInputTime(new Date()) : '15:00'
 
     setEditingAppointment(null)
-    setClientName('')
     setDate(nextDate)
     setTime(nextTime)
     setDuration(90)
@@ -289,7 +339,6 @@ export function AgendaPage() {
 
   function startEditing(appointment: Appointment) {
     setEditingAppointment(appointment)
-    setClientName(appointment.clientName ?? '')
     setDate(getDateFromDateTime(appointment.dateTime))
     setTime(getTimeFromDateTime(appointment.dateTime))
     setDuration(appointment.duration)
@@ -310,7 +359,6 @@ export function AgendaPage() {
     setSaveStatus('saving')
 
     const input = {
-      clientName: clientName.trim(),
       dateTime: `${date}T${time}`,
       duration,
       expectedAmount,
@@ -379,7 +427,7 @@ export function AgendaPage() {
     }
 
     await completeAppointmentAsIncome(appointment, settings, now)
-    await reloadAppointments()
+    await Promise.all([reloadAppointments(), reloadIncomes()])
   }
 
   if (!settings) {
@@ -431,19 +479,6 @@ export function AgendaPage() {
                 </button>
               )}
             </div>
-
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-700">
-                Cliente
-              </span>
-              <input
-                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                onChange={(event) => setClientName(event.target.value)}
-                placeholder="Ana"
-                type="text"
-                value={clientName}
-              />
-            </label>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="flex flex-col gap-2">
@@ -567,7 +602,7 @@ export function AgendaPage() {
           </div>
 
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-            {selectedAppointments.length === 0 ? (
+            {selectedAppointments.length === 0 && selectedIncomes.length === 0 ? (
               <p className="p-4 text-sm text-slate-500">
                 No hay citas para esta fecha.
               </p>
@@ -597,7 +632,7 @@ export function AgendaPage() {
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <p className="font-semibold text-slate-950">
-                            {appointment.clientName || 'Sin cliente'}
+                            Cita #{appointment.id ?? '-'}
                           </p>
                           <p className="mt-1 text-sm text-slate-500">
                             {getTimeFromDateTime(appointment.dateTime)} ·{' '}
@@ -670,7 +705,7 @@ export function AgendaPage() {
                                 }
                                 type="button"
                               >
-                                Cliente retrasado
+                                Inicio retrasado
                               </button>
                             )}
 
@@ -700,6 +735,58 @@ export function AgendaPage() {
                           </button>
                         </div>
                       )}
+                    </li>
+                  )
+                })}
+                {selectedIncomes.map((income) => {
+                  const status = getIncomeStatus(income)
+
+                  return (
+                    <li className="flex flex-col gap-3 p-4" key={`income-${income.id}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-slate-950">
+                              Ingreso #{income.id ?? '-'}
+                            </p>
+                            <span
+                              className={[
+                                'inline-flex rounded-md px-2 py-0.5 text-xs font-semibold',
+                                getIncomeStatusClass(status),
+                              ].join(' ')}
+                            >
+                              {incomeStatusLabels[status]}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {[getIncomeTime(income), income.city]
+                              .filter(Boolean)
+                              .join(' · ')}
+                            {getIncomeTime(income) || income.city ? ' · ' : ''}
+                            {income.actualDuration ?? income.duration} minutos ·{' '}
+                            {getPaymentTypeLabel(income.paymentType)}
+                          </p>
+                          <p className="mt-2 text-sm font-semibold text-emerald-700">
+                            Servicio registrado ·{' '}
+                            {formatCurrency(
+                              income.realGain,
+                              income.currency as CurrencyCode,
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="shrink-0 text-right">
+                          <p className="font-semibold text-slate-950">
+                            {formatCurrency(
+                              income.totalAmount,
+                              income.currency as CurrencyCode,
+                            )}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            Total
+                          </p>
+                        </div>
+                      </div>
                     </li>
                   )
                 })}

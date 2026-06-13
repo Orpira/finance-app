@@ -9,7 +9,7 @@ export async function exportBackup() {
   const snapshot = await exportDatabaseSnapshot()
   const content = JSON.stringify(snapshot, null, 2)
 
-  downloadText(content, 'backup.json', 'application/json')
+  await downloadText(content, 'backup.json', 'application/json')
 }
 
 export async function importBackup(file: File) {

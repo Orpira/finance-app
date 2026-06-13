@@ -11,16 +11,19 @@ import {
   getSettings,
   updateSettings,
 } from '../../services/settingsService'
+import { listCityOptions } from '../../services/locationService'
 import type {
   AppSettings,
-  CountryCode,
   CurrencyCode,
   RateMode,
   ThemeMode,
 } from '../../types/settings'
 import {
+  type CityOption,
   countries,
   currencies,
+  fallbackCityOptions,
+  getCityOption,
   getCountryCurrency,
 } from '../../utils/countries'
 import { isValidPin } from '../../utils/pin'
@@ -47,15 +50,28 @@ export function SettingsPage() {
   const [confirmPin, setConfirmPin] = useState('')
   const [pinStatus, setPinStatus] = useState<PinStatus>('idle')
   const [pinMessage, setPinMessage] = useState('')
+  const [cityOptions, setCityOptions] =
+    useState<CityOption[]>(fallbackCityOptions)
+  const [isLoadingCities, setIsLoadingCities] = useState(false)
 
   useEffect(() => {
     let isMounted = true
 
-    getSettings().then((currentSettings) => {
+    async function loadInitialData() {
+      const [currentSettings, currentCityOptions] = await Promise.all([
+        getSettings(),
+        listCityOptions(),
+      ])
+
       if (isMounted) {
         setSettings(currentSettings)
+        setCityOptions(currentCityOptions)
+        setIsLoadingCities(false)
       }
-    })
+    }
+
+    setIsLoadingCities(true)
+    loadInitialData()
 
     return () => {
       isMounted = false
@@ -75,6 +91,7 @@ export function SettingsPage() {
       const updatedSettings = await updateSettings({
         businessName: settings.businessName.trim(),
         country: settings.country,
+        city: settings.city.trim(),
         defaultCurrency: settings.defaultCurrency,
         secondaryCurrency: settings.secondaryCurrency,
         incomePercentage: settings.incomePercentage,
@@ -100,11 +117,21 @@ export function SettingsPage() {
     setSaveStatus('idle')
   }
 
-  function handleCountryChange(countryCode: CountryCode) {
+  function handleCityChange(city: string) {
+    const selectedCity = getCityOption(city, cityOptions)
+
+    if (!selectedCity) {
+      updateLocalSettings({ city })
+      return
+    }
+
     updateLocalSettings({
-      country: countryCode,
+      city: selectedCity.value,
+      country: selectedCity.country,
       defaultCurrency:
-        getCountryCurrency(countryCode) ?? settings?.defaultCurrency ?? 'EUR',
+        getCountryCurrency(selectedCity.country) ??
+        settings?.defaultCurrency ??
+        'EUR',
     })
   }
 
@@ -218,12 +245,35 @@ export function SettingsPage() {
           </label>
 
           <label className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-slate-700">Ciudad</span>
+            <input
+              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              list="city-options"
+              onChange={(event) => handleCityChange(event.target.value)}
+              placeholder={
+                isLoadingCities ? 'Cargando ciudades...' : 'Busca una ciudad'
+              }
+              type="text"
+              value={settings.city}
+            />
+            <datalist id="city-options">
+              {cityOptions.map((city) => (
+                <option
+                  key={`${city.country}:${city.value}`}
+                  label={`${countries.find((country) => country.value === city.country)?.label ?? city.country} - ${getCountryCurrency(city.country)}`}
+                  value={city.value}
+                />
+              ))}
+            </datalist>
+          </label>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">País</span>
             <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) =>
-                handleCountryChange(event.target.value as CountryCode)
-              }
+              className="h-11 rounded-md border border-slate-300 bg-slate-50 px-3 text-base text-slate-950 outline-none"
+              disabled
               value={settings.country}
             >
               {countries.map((country) => (
@@ -233,20 +283,14 @@ export function SettingsPage() {
               ))}
             </select>
           </label>
-        </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
               Moneda base
             </span>
             <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) =>
-                updateLocalSettings({
-                  defaultCurrency: event.target.value as CurrencyCode,
-                })
-              }
+              className="h-11 rounded-md border border-slate-300 bg-slate-50 px-3 text-base text-slate-950 outline-none"
+              disabled
               value={settings.defaultCurrency}
             >
               {currencies.map((currency) => (

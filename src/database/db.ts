@@ -15,6 +15,7 @@ export function createDefaultSettings(): AppSettings {
     id: DEFAULT_SETTINGS_ID,
     businessName: '',
     country: 'ES',
+    city: '',
     defaultCurrency: 'EUR',
     secondaryCurrency: 'COP',
     incomePercentage: 50,
@@ -58,6 +59,40 @@ export class FinanceDB extends Dexie {
       settings: 'id',
       exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
     })
+
+    this.version(4)
+      .stores({
+        services: '++id,date,currency,country,status',
+        expenses: '++id,date,category,currency,country',
+        appointments: '++id,dateTime,completed,currency',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      })
+      .upgrade((transaction) =>
+        transaction
+          .table<ServiceIncome, number>('services')
+          .toCollection()
+          .modify((service) => {
+            service.status ??= 'PENDIENTE'
+          }),
+      )
+
+    this.version(5)
+      .stores({
+        services: '++id,date,currency,country,status',
+        expenses: '++id,date,category,currency,country',
+        appointments: '++id,dateTime,completed,currency',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      })
+      .upgrade((transaction) =>
+        transaction
+          .table<Appointment & { clientName?: string }, number>('appointments')
+          .toCollection()
+          .modify((appointment) => {
+            delete appointment.clientName
+          }),
+      )
   }
 }
 

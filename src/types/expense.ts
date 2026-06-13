@@ -24,4 +24,6 @@ export interface Expense {
   exchangeRateBaseToSecondary?: number;
 
   country?: string;
+
+  city?: string;
 }

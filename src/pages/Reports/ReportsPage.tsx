@@ -11,16 +11,19 @@ import {
   TrendingUp,
   Upload,
 } from 'lucide-react'
-import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  lazy,
+  type ChangeEvent,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import { exportBackup, importBackup } from '../../services/backupService'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
-import {
-  exportReportCsv,
-  exportReportPdf,
-  exportReportXlsx,
-} from '../../services/reportExportService'
 import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
@@ -51,6 +54,8 @@ const periods: Array<{ value: Period; label: string }> = [
   { value: 'year', label: 'Año' },
 ]
 
+const TrendLineChart = lazy(() => import('./TrendLineChart'))
+
 function getPeriodRange(period: Period) {
   if (period === 'week') {
     return getCurrentWeekRange()
@@ -68,15 +73,47 @@ function getCountryLabel(code: string): string {
   return country?.label || code
 }
 
+function getNextInputDate(date: string) {
+  const nextDate = new Date(`${date}T00:00`)
+  nextDate.setDate(nextDate.getDate() + 1)
+
+  return nextDate.toISOString().slice(0, 10)
+}
+
+function getDateLabels(from: string, to: string) {
+  const labels: string[] = []
+  let currentDate = from
+
+  while (currentDate <= to) {
+    labels.push(currentDate)
+    currentDate = getNextInputDate(currentDate)
+  }
+
+  return labels
+}
+
+function formatChartDate(date: string) {
+  const [, month, day] = date.split('-')
+
+  return `${day}/${month}`
+}
+
 export function ReportsPage() {
   const [period, setPeriod] = useState<Period>('month')
-  const [selectedCountry, setSelectedCountry] = useState<string | 'ALL' | null>(null)
+  const [selectedCountry, setSelectedCountry] = useState<string | 'ALL' | null>(
+    null,
+  )
   const [availableCountries, setAvailableCountries] = useState<CountryCode[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [incomes, setIncomes] = useState<ServiceIncome[]>([])
-  const [expenses, setExpenses] = useState<Expense[]>([])
+  const [periodIncomes, setPeriodIncomes] = useState<ServiceIncome[]>([])
+  const [periodExpenses, setPeriodExpenses] = useState<Expense[]>([])
   const [last30Incomes, setLast30Incomes] = useState<ServiceIncome[]>([])
   const [last30Expenses, setLast30Expenses] = useState<Expense[]>([])
+  const [exportStatus, setExportStatus] = useState<
+    'idle' | 'exporting' | 'success' | 'error'
+  >('idle')
+  const [exportMessage, setExportMessage] = useState('')
+  const [loadError, setLoadError] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const range = useMemo(() => getPeriodRange(period), [period])
@@ -85,30 +122,48 @@ export function ReportsPage() {
     let isMounted = true
 
     async function loadReports() {
-      const [currentSettings, currentIncomes, currentExpenses] =
-        await Promise.all([
-          getSettings(),
-          listServiceIncomes({ ...range, newestFirst: true }),
-          listExpenses({ ...range, newestFirst: true }),
-        ])
+      try {
+        setLoadError('')
+        const [currentSettings, currentIncomes, currentExpenses] =
+          await Promise.all([
+            getSettings(),
+            listServiceIncomes({ ...range, newestFirst: true }),
+            listExpenses({ ...range, newestFirst: true }),
+          ])
 
-      if (!isMounted) {
-        return
+        if (!isMounted) {
+          return
+        }
+
+        setSettings(currentSettings)
+        setPeriodIncomes(currentIncomes)
+        setPeriodExpenses(currentExpenses)
+        setSelectedCountry((currentSelectedCountry) => {
+          if (currentSelectedCountry !== null) {
+            return currentSelectedCountry
+          }
+
+          return currentSettings?.country ?? 'ALL'
+        })
+
+        const countriesFromData = new Set<CountryCode>()
+        currentIncomes.forEach((income) => {
+          if (income.country) {
+            countriesFromData.add(income.country as CountryCode)
+          }
+        })
+        currentExpenses.forEach((expense) => {
+          if (expense.country) {
+            countriesFromData.add(expense.country as CountryCode)
+          }
+        })
+
+        setAvailableCountries(Array.from(countriesFromData).sort())
+      } catch {
+        if (isMounted) {
+          setLoadError('No se pudieron cargar los reportes.')
+        }
       }
-
-      setSettings(currentSettings)
-      setSelectedCountry(currentSettings?.country ?? 'ALL')
-      
-      // Calculate available countries from all incomes and expenses
-      const countriesFromData = new Set<CountryCode>()
-      currentIncomes.forEach(inc => {
-        if (inc.country) countriesFromData.add(inc.country as CountryCode)
-      })
-      currentExpenses.forEach(exp => {
-        if (exp.country) countriesFromData.add(exp.country as CountryCode)
-      })
-      
-      setAvailableCountries(Array.from(countriesFromData).sort())
     }
 
     loadReports()
@@ -118,39 +173,30 @@ export function ReportsPage() {
     }
   }, [range])
 
-  // Load data filtered by selected country
-  useEffect(() => {
-    let isMounted = true
-
-    async function loadFilteredData() {
-      const countryParam = selectedCountry === 'ALL' ? undefined : (selectedCountry as CountryCode)
-      const [currentIncomes, currentExpenses] = await Promise.all([
-        listServiceIncomes({ ...range, newestFirst: true, country: countryParam }),
-        listExpenses({ ...range, newestFirst: true, country: countryParam }),
-      ])
-
-      if (!isMounted) {
-        return
-      }
-
-      setIncomes(currentIncomes)
-      setExpenses(currentExpenses)
+  const incomes = useMemo(() => {
+    if (!selectedCountry || selectedCountry === 'ALL') {
+      return periodIncomes
     }
 
-    if (selectedCountry !== null) {
-      loadFilteredData()
+    return periodIncomes.filter((income) => income.country === selectedCountry)
+  }, [periodIncomes, selectedCountry])
+
+  const expenses = useMemo(() => {
+    if (!selectedCountry || selectedCountry === 'ALL') {
+      return periodExpenses
     }
 
-    return () => {
-      isMounted = false
-    }
-  }, [range, selectedCountry])
+    return periodExpenses.filter((expense) => expense.country === selectedCountry)
+  }, [periodExpenses, selectedCountry])
 
   const primaryCurrencyFromSettings = settings?.defaultCurrency ?? 'EUR'
   const secondaryCurrency = settings?.secondaryCurrency ?? 'COP'
 
   const primaryCurrency = useMemo(() => {
-    if (!selectedCountry || selectedCountry === 'ALL') return primaryCurrencyFromSettings
+    if (!selectedCountry || selectedCountry === 'ALL') {
+      return primaryCurrencyFromSettings
+    }
+
     return getCountryCurrency(selectedCountry as CountryCode) ?? primaryCurrencyFromSettings
   }, [selectedCountry, primaryCurrencyFromSettings])
 
@@ -245,6 +291,32 @@ export function ReportsPage() {
     }
   }, [last30Expenses, last30Incomes, primaryCurrency])
   const workedHours = Math.round((totals.serviceMinutes / 60) * 10) / 10
+  const trendChartData = useMemo(() => {
+    const incomeTotalsByDate = new Map<string, number>()
+    const expenseTotalsByDate = new Map<string, number>()
+
+    incomes.forEach((income) => {
+      incomeTotalsByDate.set(
+        income.date,
+        (incomeTotalsByDate.get(income.date) ?? 0) +
+          getStoredIncomeValue(income, primaryCurrency),
+      )
+    })
+    expenses.forEach((expense) => {
+      expenseTotalsByDate.set(
+        expense.date,
+        (expenseTotalsByDate.get(expense.date) ?? 0) +
+          getStoredExpenseValue(expense, primaryCurrency),
+      )
+    })
+
+    return getDateLabels(range.from, range.to).map((date) => ({
+      date,
+      gastos: Math.round((expenseTotalsByDate.get(date) ?? 0) * 100) / 100,
+      ingresos: Math.round((incomeTotalsByDate.get(date) ?? 0) * 100) / 100,
+      label: formatChartDate(date),
+    }))
+  }, [expenses, incomes, primaryCurrency, range])
 
   async function getReportData(reportPeriod: Period) {
     const reportRange = getPeriodRange(reportPeriod)
@@ -265,31 +337,87 @@ export function ReportsPage() {
   }
 
   async function handleExportPdf(reportPeriod: Period) {
-    exportReportPdf(await getReportData(reportPeriod))
+    setExportStatus('exporting')
+    setExportMessage('')
+
+    try {
+      const { exportReportPdf } = await import(
+        '../../services/reportExportService'
+      )
+
+      exportReportPdf(await getReportData(reportPeriod))
+      setExportStatus('success')
+      setExportMessage('PDF exportado correctamente.')
+    } catch {
+      setExportStatus('error')
+      setExportMessage('No se pudo exportar el PDF.')
+    }
   }
 
   async function handleExportXlsx() {
-    await exportReportXlsx({
-      expenses,
-      incomes,
-      label: periods.find((periodOption) => periodOption.value === period)
-        ?.label ?? 'Reporte',
-      primaryCurrency,
-      range,
-      secondaryCurrency,
-    })
+    setExportStatus('exporting')
+    setExportMessage('')
+
+    try {
+      const { exportReportXlsx } = await import(
+        '../../services/reportExportService'
+      )
+
+      await exportReportXlsx({
+        expenses,
+        incomes,
+        label: periods.find((periodOption) => periodOption.value === period)
+          ?.label ?? 'Reporte',
+        primaryCurrency,
+        range,
+        secondaryCurrency,
+      })
+      setExportStatus('success')
+      setExportMessage('XLSX exportado correctamente.')
+    } catch {
+      setExportStatus('error')
+      setExportMessage('No se pudo exportar el XLSX.')
+    }
   }
 
-  function handleExportCsv() {
-    exportReportCsv({
-      expenses,
-      incomes,
-      label: periods.find((periodOption) => periodOption.value === period)
-        ?.label ?? 'Reporte',
-      primaryCurrency,
-      range,
-      secondaryCurrency,
-    })
+  async function handleExportCsv() {
+    setExportStatus('exporting')
+    setExportMessage('')
+
+    try {
+      const { exportReportCsv } = await import(
+        '../../services/reportExportService'
+      )
+
+      await exportReportCsv({
+        expenses,
+        incomes,
+        label: periods.find((periodOption) => periodOption.value === period)
+          ?.label ?? 'Reporte',
+        primaryCurrency,
+        range,
+        secondaryCurrency,
+      })
+      setExportStatus('success')
+      setExportMessage('CSV exportado correctamente.')
+    } catch {
+      setExportStatus('error')
+      setExportMessage('No se pudo exportar el CSV.')
+    }
+  }
+
+  async function handleExportBackup() {
+    setExportStatus('exporting')
+    setExportMessage('')
+
+    try {
+      await exportBackup()
+      setExportStatus('success')
+      setExportMessage('Backup exportado correctamente.')
+    } catch {
+      setExportStatus('error')
+      setExportMessage('No se pudo exportar el backup.')
+    }
   }
 
   async function handleImportBackup(event: ChangeEvent<HTMLInputElement>) {
@@ -301,6 +429,20 @@ export function ReportsPage() {
 
     await importBackup(file)
     window.location.reload()
+  }
+
+  if (loadError) {
+    return (
+      <section className="flex min-h-[60dvh] items-center justify-center">
+        <div className="max-w-md rounded-lg border border-rose-200 bg-rose-50 p-4 text-center shadow-sm">
+          <p className="text-sm font-semibold text-rose-700">{loadError}</p>
+          <p className="mt-2 text-sm text-rose-600">
+            Intenta entrar nuevamente o revisa si hay un respaldo/importación en
+            proceso.
+          </p>
+        </div>
+      </section>
+    )
   }
 
   if (!settings) {
@@ -387,7 +529,7 @@ export function ReportsPage() {
           </button>
           <button
             className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            onClick={exportBackup}
+            onClick={handleExportBackup}
             type="button"
           >
             <FileJson className="size-4" aria-hidden="true" />
@@ -409,6 +551,16 @@ export function ReportsPage() {
             type="file"
           />
         </div>
+        {exportMessage ? (
+          <p
+            className={[
+              'mt-3 text-sm font-medium',
+              exportStatus === 'error' ? 'text-rose-600' : 'text-emerald-700',
+            ].join(' ')}
+          >
+            {exportMessage}
+          </p>
+        ) : null}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_20rem]">
@@ -515,6 +667,35 @@ export function ReportsPage() {
             </div>
           </aside>
         )}
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">
+              Tendencia ingresos vs gastos
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Evolución diaria en {primaryCurrency}
+            </p>
+          </div>
+          <TrendingUp className="size-5 text-emerald-700" aria-hidden="true" />
+        </div>
+
+        <div className="mt-5 h-72 min-h-72 w-full">
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center rounded-md bg-slate-50 text-sm font-medium text-slate-500">
+                Cargando gráfica...
+              </div>
+            }
+          >
+            <TrendLineChart
+              data={trendChartData}
+              primaryCurrency={primaryCurrency}
+            />
+          </Suspense>
+        </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_20rem]">

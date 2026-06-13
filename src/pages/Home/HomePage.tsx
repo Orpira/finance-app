@@ -3,6 +3,7 @@ import {
   ChartNoAxesCombined,
   CircleDollarSign,
   LayoutDashboard,
+  MapPin,
   ReceiptText,
   Settings,
 } from 'lucide-react'
@@ -10,8 +11,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import privateBalanceLogo from '../../assets/private-balance-logo.svg'
-import { getSettings } from '../../services/settingsService'
-import type { AppSettings } from '../../types/settings'
+import { getSettings, updateSettings } from '../../services/settingsService'
+import type { AppSettings, CountryCode } from '../../types/settings'
+import { countries, getCountryCurrency } from '../../utils/countries'
 
 const mainActions = [
   {
@@ -64,8 +66,68 @@ const mainActions = [
   },
 ]
 
+const LOCATION_CONTEXT_DISMISSAL_KEY =
+  'finance-app:dismissed-location-context'
+
+interface DetectedLocation {
+  country: CountryCode
+  city: string
+}
+
+const timezoneLocationMap: Record<string, DetectedLocation> = {
+  'America/Argentina/Buenos_Aires': { country: 'AR', city: 'Buenos Aires' },
+  'America/Bogota': { country: 'CO', city: 'Bogotá' },
+  'America/Mexico_City': { country: 'MX', city: 'Ciudad de México' },
+  'Atlantic/Canary': { country: 'ES', city: 'Las Palmas de Gran Canaria' },
+  'Europe/Madrid': { country: 'ES', city: 'Madrid' },
+  'Europe/London': { country: 'GB', city: 'Londres' },
+}
+
+function getCountryLabel(countryCode: CountryCode) {
+  return (
+    countries.find((country) => country.value === countryCode)?.label ??
+    countryCode
+  )
+}
+
+function isSupportedCountry(countryCode: string): countryCode is CountryCode {
+  return countries.some((country) => country.value === countryCode)
+}
+
+function getLocationLabel(countryCode: CountryCode, city?: string) {
+  const countryLabel = getCountryLabel(countryCode)
+  const normalizedCity = city?.trim()
+
+  return normalizedCity ? `${countryLabel}, ${normalizedCity}` : countryLabel
+}
+
+function getDetectedLocation() {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const timezoneLocation = timezone ? timezoneLocationMap[timezone] : undefined
+
+  if (timezoneLocation) {
+    return timezoneLocation
+  }
+
+  const browserLanguages =
+    navigator.languages.length > 0 ? navigator.languages : [navigator.language]
+
+  for (const language of browserLanguages) {
+    const countryCode = language.split('-').at(-1)?.toUpperCase()
+
+    if (countryCode && isSupportedCountry(countryCode)) {
+      return { country: countryCode, city: '' }
+    }
+  }
+
+  return null
+}
+
 export function HomePage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [detectedLocation, setDetectedLocation] = useState<DetectedLocation | null>(
+    null,
+  )
 
   useEffect(() => {
     let isMounted = true
@@ -73,6 +135,7 @@ export function HomePage() {
     getSettings().then((currentSettings) => {
       if (isMounted) {
         setSettings(currentSettings)
+        setDetectedLocation(getDetectedLocation())
       }
     })
 
@@ -81,8 +144,119 @@ export function HomePage() {
     }
   }, [])
 
+  const currentLocationKey = settings
+    ? `${settings.country}:${settings.city.trim()}`
+    : ''
+  const detectedLocationKey = detectedLocation
+    ? `${detectedLocation.country}:${detectedLocation.city.trim()}`
+    : ''
+  const hasLocationChange =
+    settings &&
+    detectedLocation &&
+    (detectedLocation.country !== settings.country ||
+      (detectedLocation.city.trim() !== '' &&
+        detectedLocation.city.trim() !== settings.city.trim()))
+  const shouldShowLocationContextAlert =
+    hasLocationChange &&
+    localStorage.getItem(LOCATION_CONTEXT_DISMISSAL_KEY) !==
+      `${currentLocationKey}:${detectedLocationKey}`
+
+  function handleKeepCurrentCountry() {
+    if (!settings || !detectedLocation) {
+      return
+    }
+
+    localStorage.setItem(
+      LOCATION_CONTEXT_DISMISSAL_KEY,
+      `${currentLocationKey}:${detectedLocationKey}`,
+    )
+    setDetectedLocation(null)
+  }
+
+  async function handleChangeCountry() {
+    if (!detectedLocation) {
+      return
+    }
+
+    const updatedSettings = await updateSettings({
+      country: detectedLocation.country,
+      city: detectedLocation.city,
+      defaultCurrency:
+        getCountryCurrency(detectedLocation.country) ?? settings?.defaultCurrency,
+    })
+
+    setSettings(updatedSettings)
+    setDetectedLocation(null)
+  }
+
   return (
     <section className="mx-auto flex min-h-[calc(100dvh-7rem)] w-full max-w-4xl flex-col justify-center gap-8">
+      {shouldShowLocationContextAlert ? (
+        <aside
+          aria-live="polite"
+          className="flex flex-col gap-4 rounded-lg border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-950 sm:flex-row sm:items-start sm:justify-between"
+        >
+          <div className="flex gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200">
+              <MapPin className="size-5" aria-hidden="true" />
+            </span>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <p className="text-base font-semibold text-slate-950">
+                  Se detectó un cambio de ubicación.
+                </p>
+              </div>
+              <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="font-medium text-slate-500">
+                    País actual configurado:
+                  </dt>
+                  <dd className="font-semibold text-slate-950">
+                    {getLocationLabel(settings.country, settings.city)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-slate-500">
+                    País detectado:
+                  </dt>
+                  <dd className="font-semibold text-slate-950">
+                    {getLocationLabel(
+                      detectedLocation.country,
+                      detectedLocation.city,
+                    )}
+                  </dd>
+                </div>
+              </dl>
+              <p className="text-sm font-medium text-slate-600">
+                ¿Deseas cambiar el contexto de trabajo?
+              </p>
+              <p className="text-sm leading-5 text-slate-500">
+                Los registros anteriores conservarán su país y ciudad. Los
+                nuevos se guardarán con el contexto elegido desde ahora.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:min-w-52">
+            <button
+              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+              onClick={handleKeepCurrentCountry}
+              type="button"
+            >
+              Mantener {getLocationLabel(settings.country, settings.city)}
+            </button>
+            <button
+              className="h-10 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
+              onClick={handleChangeCountry}
+              type="button"
+            >
+              Cambiar a{' '}
+              {getLocationLabel(detectedLocation.country, detectedLocation.city)}
+            </button>
+          </div>
+        </aside>
+      ) : null}
+
       <header className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:text-left">
         <img
           alt="Private Balance"

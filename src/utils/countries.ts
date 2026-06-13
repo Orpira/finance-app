@@ -11,7 +11,14 @@ export interface CurrencyOption {
   label: string
 }
 
+export interface CityOption {
+  value: string
+  label: string
+  country: CountryCode
+}
+
 export const currencies: CurrencyOption[] = [
+  { value: 'ARS', label: 'ARS - Peso argentino' },
   { value: 'EUR', label: 'EUR - Euro' },
   { value: 'GBP', label: 'GBP - Libra esterlina' },
   { value: 'BGN', label: 'BGN - Lev búlgaro' },
@@ -22,10 +29,12 @@ export const currencies: CurrencyOption[] = [
   { value: 'RON', label: 'RON - Leu rumano' },
   { value: 'SEK', label: 'SEK - Corona sueca' },
   { value: 'COP', label: 'COP - Peso colombiano' },
+  { value: 'MXN', label: 'MXN - Peso mexicano' },
   { value: 'USD', label: 'USD - Dólar estadounidense' },
 ]
 
 export const countries: CountryOption[] = [
+  { value: 'AR', label: 'Argentina', currency: 'ARS' },
   { value: 'DE', label: 'Alemania', currency: 'EUR' },
   { value: 'AT', label: 'Austria', currency: 'EUR' },
   { value: 'BE', label: 'Bélgica', currency: 'EUR' },
@@ -47,6 +56,7 @@ export const countries: CountryOption[] = [
   { value: 'LT', label: 'Lituania', currency: 'EUR' },
   { value: 'LU', label: 'Luxemburgo', currency: 'EUR' },
   { value: 'MT', label: 'Malta', currency: 'EUR' },
+  { value: 'MX', label: 'México', currency: 'MXN' },
   { value: 'NL', label: 'Países Bajos', currency: 'EUR' },
   { value: 'PL', label: 'Polonia', currency: 'PLN' },
   { value: 'PT', label: 'Portugal', currency: 'EUR' },
@@ -57,6 +67,26 @@ export const countries: CountryOption[] = [
   { value: 'CO', label: 'Colombia', currency: 'COP' },
 ]
 
+export const fallbackCityOptions: CityOption[] = [
+  { value: 'Bilbao', label: 'Bilbao', country: 'ES' },
+  { value: 'Madrid', label: 'Madrid', country: 'ES' },
+  { value: 'Barcelona', label: 'Barcelona', country: 'ES' },
+  {
+    value: 'Las Palmas de Gran Canaria',
+    label: 'Las Palmas de Gran Canaria',
+    country: 'ES',
+  },
+  { value: 'Bogotá', label: 'Bogotá', country: 'CO' },
+  { value: 'Medellín', label: 'Medellín', country: 'CO' },
+  { value: 'Ciudad de México', label: 'Ciudad de México', country: 'MX' },
+  { value: 'Buenos Aires', label: 'Buenos Aires', country: 'AR' },
+  { value: 'Londres', label: 'Londres', country: 'GB' },
+]
+
 export function getCountryCurrency(countryCode: CountryCode) {
   return countries.find((country) => country.value === countryCode)?.currency
+}
+
+export function getCityOption(city: string, options = fallbackCityOptions) {
+  return options.find((option) => option.value === city)
 }

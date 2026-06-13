@@ -1,5 +1,13 @@
+export type ServiceIncomeStatus = 'PENDIENTE' | 'EJECUCION' | 'FINALIZADO';
+
 export interface ServiceIncome {
   id?: number;
+
+  createdAt?: string;
+
+  status?: ServiceIncomeStatus;
+
+  paymentType?: string;
 
   date: string;
 
@@ -36,4 +44,6 @@ export interface ServiceIncome {
   actualDuration?: number;
 
   country?: string;
+
+  city?: string;
 }

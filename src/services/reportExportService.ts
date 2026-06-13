@@ -133,7 +133,7 @@ export async function exportReportXlsx(input: ReportExportInput) {
 
   const buffer = await workbook.xlsx.writeBuffer()
 
-  downloadBlob(
+  await downloadBlob(
     new Blob([buffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     }),
@@ -141,7 +141,7 @@ export async function exportReportXlsx(input: ReportExportInput) {
   )
 }
 
-export function exportReportCsv(input: ReportExportInput) {
+export async function exportReportCsv(input: ReportExportInput) {
   const { bestDay, totals } = buildSummary(input)
   const rows = [
     ['Tipo', 'Concepto', 'Valor', 'Moneda'],
@@ -168,5 +168,9 @@ export function exportReportCsv(input: ReportExportInput) {
     .map((row) => row.map((value) => escapeCsvValue(value)).join(','))
     .join('\n')
 
-  downloadText(content, `reporte-${input.label.toLowerCase()}.csv`, 'text/csv')
+  await downloadText(
+    content,
+    `reporte-${input.label.toLowerCase()}.csv`,
+    'text/csv;charset=utf-8',
+  )
 }
