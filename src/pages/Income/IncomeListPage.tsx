@@ -2,6 +2,8 @@ import { ChevronLeft, ChevronRight, Plus, ReceiptText, Trash2 } from 'lucide-rea
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
+import { PageHeader } from '../../components/layout/PageHeader'
 import {
   deleteServiceIncome,
   listServiceIncomes,
@@ -218,13 +220,12 @@ export function IncomeListPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-emerald-700">Ingresos</p>
-          <h1 className="text-2xl font-semibold text-slate-950">
-            Registros de ingresos
-          </h1>
-        </div>
+      <PageHeader
+        backLabel="Ingresos"
+        backTo="/income"
+        eyebrow="Ingresos"
+        title="Registros de ingresos"
+      >
         <Link
           className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
           to="/income"
@@ -232,11 +233,10 @@ export function IncomeListPage() {
           <Plus className="size-4" aria-hidden="true" />
           Nuevo ingreso
         </Link>
-      </header>
+      </PageHeader>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-950">Filtros</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <CollapsibleFilters title="Filtros" storageKey="filters-open-income">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-600">
               Fecha desde
@@ -315,7 +315,7 @@ export function IncomeListPage() {
             </select>
           </label>
         </div>
-      </section>
+      </CollapsibleFilters>
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-2">

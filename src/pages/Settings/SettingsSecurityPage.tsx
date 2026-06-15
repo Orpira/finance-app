@@ -1,7 +1,7 @@
-import { ArrowLeft, LockKeyhole, ShieldOff } from 'lucide-react'
+import { LockKeyhole, ShieldOff } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 
+import { PageHeader } from '../../components/layout/PageHeader'
 import {
   changePin,
   removePin,
@@ -121,21 +121,12 @@ export function SettingsSecurityPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <header className="flex flex-col gap-3">
-        <Link
-          className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-emerald-700 transition hover:text-emerald-800"
-          to="/settings"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Configuración
-        </Link>
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-emerald-700">Seguridad</p>
-          <h1 className="text-2xl font-semibold text-slate-950">
-            Acceso con PIN
-          </h1>
-        </div>
-      </header>
+      <PageHeader
+        backLabel="Configuración"
+        backTo="/settings"
+        eyebrow="Seguridad"
+        title="Acceso con PIN"
+      />
 
       <form
         className="flex flex-col gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"

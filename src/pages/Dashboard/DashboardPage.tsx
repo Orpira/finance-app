@@ -1,12 +1,14 @@
 import {
   CalendarDays,
   CircleDollarSign,
+  Clock,
   MinusCircle,
   PlusCircle,
-  Trophy,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
+import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
+import { PageHeader } from '../../components/layout/PageHeader'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
@@ -196,7 +198,6 @@ export function DashboardPage() {
     () => calculateIncomeDaysRanking(incomes, primaryCurrency),
     [incomes, primaryCurrency],
   )
-  const bestDay = incomeDaysRanking[0]
   if (!settings) {
     return (
       <section className="flex min-h-[60dvh] items-center justify-center">
@@ -210,6 +211,7 @@ export function DashboardPage() {
   const primaryExpenses = totals.primaryExpenses
   const netProfit = totals.primaryNet
   const profitWithPercentage = (primaryIncome * settings.incomePercentage) / 100
+  const workedHours = Math.round((totals.serviceMinutes / 60) * 10) / 10
 
   const getCountryLabel = (code: string): string => {
     const country = countries.find((countryOption) => countryOption.value === code)
@@ -230,18 +232,15 @@ export function DashboardPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-emerald-700">
-          {settings.businessName || 'Dashboard'}
-        </p>
-        <h1 className="text-2xl font-semibold text-slate-950">
-          Resumen del mes
-        </h1>
-      </header>
+      <PageHeader
+        backLabel="Inicio"
+        backTo="/"
+        eyebrow={settings.businessName || 'Dashboard'}
+        title="DASHBOARD"
+      />
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-950">Filtros</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <CollapsibleFilters title="Filtros" storageKey="filters-open-dashboard">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-600">
               Fecha desde
@@ -320,7 +319,7 @@ export function DashboardPage() {
             </select>
           </label>
         </div>
-      </section>
+      </CollapsibleFilters>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -400,23 +399,17 @@ export function DashboardPage() {
 
         <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-slate-500">Mejor día</p>
-            <Trophy className="size-5 text-amber-600" aria-hidden="true" />
+            <p className="text-sm font-medium text-slate-500">Horas</p>
+            <Clock className="size-5 text-emerald-700" aria-hidden="true" />
           </div>
           <p className="mt-3 text-2xl font-semibold text-slate-950">
-            {bestDay ? formatIncomeDayDate(bestDay.date) : '-'}
+            {workedHours}
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            {bestDay
-              ? `${formatCurrency(bestDay.total, primaryCurrency)} recibidos`
-              : 'Sin ingresos registrados'}
+            {totals.serviceMinutes} minutos
           </p>
-          {bestDay ? (
-            <p className="mt-1 text-sm text-slate-500">
-              Ciudad: {formatIncomeDayCities(bestDay.cityNames)}
-            </p>
-          ) : null}
         </article>
+
       </div>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_20rem]">

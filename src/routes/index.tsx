@@ -10,7 +10,9 @@ import ExpensesPage from '../pages/Expenses/ExpensesPage'
 import HomePage from '../pages/Home/HomePage'
 import IncomeListPage from '../pages/Income/IncomeListPage'
 import IncomePage from '../pages/Income/IncomePage'
+import ReportPreviewPage from '../pages/Reports/ReportPreviewPage'
 import ReportsPage from '../pages/Reports/ReportsPage'
+import SettingsBackupPage from '../pages/Settings/SettingsBackupPage'
 import SettingsBusinessPage from '../pages/Settings/SettingsBusinessPage'
 import SettingsPage from '../pages/Settings/SettingsPage'
 import SettingsSecurityPage from '../pages/Settings/SettingsSecurityPage'
@@ -35,7 +37,9 @@ export function RouterProvider() {
               element={<AppointmentFormPage />}
             />
             <Route path="agenda" element={<AgendaPage />} />
+            <Route path="reports/preview" element={<ReportPreviewPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="settings/backup" element={<SettingsBackupPage />} />
             <Route path="settings/business" element={<SettingsBusinessPage />} />
             <Route path="settings/security" element={<SettingsSecurityPage />} />
             <Route path="settings" element={<SettingsPage />} />

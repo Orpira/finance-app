@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   CalendarDays,
   ChartNoAxesCombined,
   CircleDollarSign,
@@ -7,7 +6,7 @@ import {
   ReceiptText,
   Settings,
 } from 'lucide-react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 
 import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert'
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
@@ -46,34 +45,9 @@ const navItems = [
 ]
 
 export function AppLayout() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const isHome = location.pathname === '/'
-
-  function handleBack() {
-    if (window.history.length > 1) {
-      navigate(-1)
-      return
-    }
-
-    navigate('/')
-  }
-
   return (
     <div className="min-h-dvh bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
-      <main className="mx-auto min-h-dvh w-full max-w-5xl px-4 pb-24 pt-4">
-        {!isHome && (
-          <div className="mb-4 flex items-center">
-            <button
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-              onClick={handleBack}
-              type="button"
-            >
-              <ArrowLeft className="size-4" aria-hidden="true" />
-              Volver
-            </button>
-          </div>
-        )}
+      <main className="mx-auto min-h-dvh w-full max-w-5xl px-4 pb-24">
         <Outlet />
       </main>
 

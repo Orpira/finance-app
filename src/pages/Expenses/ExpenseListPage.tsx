@@ -9,6 +9,8 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
+import { PageHeader } from '../../components/layout/PageHeader'
 import { deleteExpense, listExpenses } from '../../services/expenseService'
 import type { Expense } from '../../types/expense'
 import type { CountryCode, CurrencyCode } from '../../types/settings'
@@ -194,13 +196,12 @@ export function ExpenseListPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-emerald-700">Gastos</p>
-          <h1 className="text-2xl font-semibold text-slate-950">
-            Registros de gastos
-          </h1>
-        </div>
+      <PageHeader
+        backLabel="Gastos"
+        backTo="/expenses"
+        eyebrow="Gastos"
+        title="Registros de gastos"
+      >
         <Link
           className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
           to="/expenses"
@@ -208,11 +209,10 @@ export function ExpenseListPage() {
           <Plus className="size-4" aria-hidden="true" />
           Nuevo gasto
         </Link>
-      </header>
+      </PageHeader>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-950">Filtros</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <CollapsibleFilters title="Filtros" storageKey="filters-open-expenses">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-600">
               Fecha desde
@@ -291,7 +291,7 @@ export function ExpenseListPage() {
             </select>
           </label>
         </div>
-      </section>
+      </CollapsibleFilters>
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-2">

@@ -1,7 +1,7 @@
-import { ArrowLeft, Save } from 'lucide-react'
+import { Save } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 
+import { PageHeader } from '../../components/layout/PageHeader'
 import {
   applyTheme,
   getSettings,
@@ -133,23 +133,12 @@ export function SettingsBusinessPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <header className="flex flex-col gap-3">
-        <Link
-          className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-emerald-700 transition hover:text-emerald-800"
-          to="/settings"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Configuración
-        </Link>
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-emerald-700">
-            Negocio y moneda
-          </p>
-          <h1 className="text-2xl font-semibold text-slate-950">
-            Datos generales
-          </h1>
-        </div>
-      </header>
+      <PageHeader
+        backLabel="Configuración"
+        backTo="/settings"
+        eyebrow="Negocio y moneda"
+        title="Datos generales"
+      />
 
       <form
         className="flex flex-col gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"

@@ -2,6 +2,7 @@ import { List, Plus } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import { PageHeader } from '../../components/layout/PageHeader'
 import {
   convertCurrencyPair,
   convertCurrencyToEurCop,
@@ -226,13 +227,12 @@ export function ExpensesPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-emerald-700">Gastos</p>
-          <h1 className="text-2xl font-semibold text-slate-950">
-            {isEditing ? 'Modificar gasto' : 'Registrar gasto'}
-          </h1>
-        </div>
+      <PageHeader
+        backLabel={isEditing ? 'Gastos' : 'Inicio'}
+        backTo={isEditing ? '/expenses/list' : '/'}
+        eyebrow="Gastos"
+        title={isEditing ? 'Modificar gasto' : 'Registrar gasto'}
+      >
         <Link
           className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-emerald-200 bg-white px-4 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
           to="/expenses/list"
@@ -240,7 +240,7 @@ export function ExpensesPage() {
           <List className="size-4" aria-hidden="true" />
           Ver gastos
         </Link>
-      </header>
+      </PageHeader>
 
       <form
         className="flex flex-col gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"

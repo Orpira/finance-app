@@ -1,4 +1,6 @@
 import { useState } from 'react'
+
+import { PageHeader } from '../../components/layout/PageHeader'
 import { backfillCountries } from '../../database/migrations/backfillCountry'
 
 export default function DebugPage() {
@@ -20,11 +22,13 @@ export default function DebugPage() {
   }
 
   return (
-    <section className="mx-auto max-w-3xl">
-      <header className="mb-4">
-        <h1 className="text-2xl font-semibold">Debug / Migraciones</h1>
-        <p className="text-sm text-slate-500">Herramientas de mantenimiento</p>
-      </header>
+    <section className="mx-auto flex max-w-3xl flex-col gap-4">
+      <PageHeader
+        backLabel="Inicio"
+        backTo="/"
+        eyebrow="Herramientas de mantenimiento"
+        title="Debug / Migraciones"
+      />
 
       <div className="flex gap-3">
         <button

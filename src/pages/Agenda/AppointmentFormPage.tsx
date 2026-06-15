@@ -2,6 +2,7 @@ import { Bell, CalendarPlus, Plus, Save, Trash2 } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
+import { PageHeader } from '../../components/layout/PageHeader'
 import {
   createAppointment,
   getAppointmentById,
@@ -261,7 +262,12 @@ export function AppointmentFormPage() {
   if (loadError) {
     return (
       <section className="mx-auto flex w-full max-w-2xl flex-col gap-4">
-        <h1 className="text-2xl font-semibold text-slate-950">{pageTitle}</h1>
+        <PageHeader
+          backLabel="Agenda"
+          backTo={returnToAgenda}
+          eyebrow="Agenda"
+          title={pageTitle}
+        />
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
           {loadError}
         </div>
@@ -278,10 +284,12 @@ export function AppointmentFormPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-emerald-700">Agenda</p>
-        <h1 className="text-2xl font-semibold text-slate-950">{pageTitle}</h1>
-      </header>
+      <PageHeader
+        backLabel="Agenda"
+        backTo={returnToAgenda}
+        eyebrow="Agenda"
+        title={pageTitle}
+      />
 
       <form
         className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"

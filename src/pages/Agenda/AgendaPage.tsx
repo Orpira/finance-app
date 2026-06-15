@@ -14,6 +14,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Calendar from 'react-calendar'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
+import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
+import { PageHeader } from '../../components/layout/PageHeader'
 import {
   deleteAppointment,
   listAppointments,
@@ -302,13 +304,12 @@ export function AgendaPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-emerald-700">Agenda</p>
-          <h1 className="text-2xl font-semibold text-slate-950">
-            Citas y servicios
-          </h1>
-        </div>
+      <PageHeader
+        backLabel="Inicio"
+        backTo="/"
+        eyebrow="Agenda"
+        title="Citas y servicios"
+      >
         <button
           className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
           onClick={openCreateAppointment}
@@ -317,11 +318,14 @@ export function AgendaPage() {
           <Plus className="size-4" aria-hidden="true" />
           Nueva cita
         </button>
-      </header>
+      </PageHeader>
 
       <div className="grid gap-4 lg:grid-cols-[22rem_1fr]">
         <section className="flex flex-col gap-4">
-          <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+          <CollapsibleFilters
+            title="Calendario"
+            storageKey="filters-open-agenda"
+          >
             <Calendar
               className="w-full border-none text-sm"
               minDate={getStartOfDay(now)}
@@ -331,7 +335,7 @@ export function AgendaPage() {
               }
               value={visibleSelectedDate}
             />
-          </div>
+          </CollapsibleFilters>
         </section>
 
         <section className="flex flex-col gap-3">
