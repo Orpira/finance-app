@@ -31,6 +31,7 @@ import {
   reminderTypeLabels,
 } from '../../utils/appointmentReminders'
 import { formatCurrency } from '../../utils/currency'
+import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 
 function formatInputDate(date: Date) {
   const year = date.getFullYear()
@@ -383,6 +384,10 @@ export function AgendaPage() {
                   )
                   const isHighlighted =
                     String(appointment.id) === highlightedAppointmentId
+                  const isClosedSeason = isLocationSeasonClosed(
+                    appointment,
+                    settings.closedLocationSeasons,
+                  )
 
                   return (
                     <li
@@ -452,6 +457,12 @@ export function AgendaPage() {
                         </div>
 
                         <div className="flex gap-2">
+                          {isClosedSeason ? (
+                            <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-500">
+                              Solo consulta
+                            </span>
+                          ) : (
+                            <>
                           <button
                             className="inline-flex size-10 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:bg-slate-50"
                             onClick={() => openEditAppointment(appointment)}
@@ -470,10 +481,12 @@ export function AgendaPage() {
                             <Trash2 className="size-4" aria-hidden="true" />
                             <span className="sr-only">Eliminar cita</span>
                           </button>
+                            </>
+                          )}
                         </div>
                       </div>
 
-                      {!appointment.completed && (
+                      {!appointment.completed && !isClosedSeason && (
                         <div className="grid gap-2 sm:grid-cols-3">
                           {!hasTimerStarted &&
                             appointment.timerMode !== 'manualPending' && (

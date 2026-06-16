@@ -23,6 +23,7 @@ import {
   roundMoney,
 } from '../../utils/currency'
 import { currencies } from '../../utils/countries'
+import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -86,9 +87,25 @@ export function ExpensesPage() {
         return
       }
 
-      const currentExpense = await getExpenseById(parsedExpenseId)
+      const [currentExpense, currentSettings] = await Promise.all([
+        getExpenseById(parsedExpenseId),
+        getSettings(),
+      ])
 
       if (!isMounted || !currentExpense) {
+        return
+      }
+
+      if (
+        isLocationSeasonClosed(
+          currentExpense,
+          currentSettings.closedLocationSeasons,
+        )
+      ) {
+        window.alert(
+          'Este gasto pertenece a una temporada cerrada. Solo puede consultarse desde el historial y usarse en reportes.',
+        )
+        navigate('/expenses/list', { replace: true })
         return
       }
 
@@ -109,7 +126,7 @@ export function ExpensesPage() {
     return () => {
       isMounted = false
     }
-  }, [parsedExpenseId])
+  }, [navigate, parsedExpenseId])
 
   useEffect(() => {
     let isMounted = true

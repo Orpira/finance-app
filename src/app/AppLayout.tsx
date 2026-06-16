@@ -6,10 +6,13 @@ import {
   ReceiptText,
   Settings,
 } from 'lucide-react'
+import { useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 
 import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert'
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
+import { runAutomaticDriveBackupIfNeeded } from '../services/backupService'
+import { generateDueCutoffReports } from '../services/cutoffReportService'
 
 const navItems = [
   {
@@ -44,7 +47,47 @@ const navItems = [
   },
 ]
 
+let automaticBackupCheckStarted = false
+let automaticCutoffCheckStarted = false
+
 export function AppLayout() {
+  useEffect(() => {
+    if (!automaticBackupCheckStarted) {
+      automaticBackupCheckStarted = true
+
+      runAutomaticDriveBackupIfNeeded().catch((error) => {
+        console.warn('No se pudo ejecutar el backup automático.', error)
+      })
+    }
+
+    if (!automaticCutoffCheckStarted) {
+      automaticCutoffCheckStarted = true
+
+      generateDueCutoffReports().catch((error) => {
+        console.warn('No se pudieron generar los cortes automáticos.', error)
+      })
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState !== 'hidden') {
+        return
+      }
+
+      runAutomaticDriveBackupIfNeeded().catch((error) => {
+        console.warn('No se pudo ejecutar el backup automático.', error)
+      })
+      generateDueCutoffReports().catch((error) => {
+        console.warn('No se pudieron generar los cortes automáticos.', error)
+      })
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
+
   return (
     <div className="min-h-dvh bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
       <main className="mx-auto min-h-dvh w-full max-w-5xl px-4 pb-24">

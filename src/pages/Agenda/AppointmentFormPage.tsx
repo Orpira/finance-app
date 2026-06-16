@@ -23,6 +23,7 @@ import {
 } from '../../utils/appointmentReminders'
 import { getTodayInputDate } from '../../utils/currency'
 import { currencies } from '../../utils/countries'
+import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -142,6 +143,19 @@ export function AppointmentFormPage() {
 
       if (!appointment) {
         setLoadError('No se encontró la cita.')
+        return
+      }
+
+      if (
+        isLocationSeasonClosed(
+          appointment,
+          currentSettings.closedLocationSeasons,
+        )
+      ) {
+        setDate(getDateFromDateTime(appointment.dateTime))
+        setLoadError(
+          'Esta cita pertenece a una temporada cerrada. Solo puede consultarse desde la agenda y usarse en reportes.',
+        )
         return
       }
 

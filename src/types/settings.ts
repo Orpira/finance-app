@@ -46,6 +46,15 @@ export type CountryCode =
   | 'SK'
 export type RateMode = 'automatic' | 'manual'
 export type ThemeMode = 'system' | 'light' | 'dark'
+export type BackupFrequency = 'daily'
+export type CutoffFrequency = 'weekly' | 'biweekly' | 'monthly'
+export type WeekStartDay = 0 | 1 | 2 | 3 | 4 | 5 | 6
+
+export interface ClosedLocationSeason {
+  city: string
+  closedAt: string
+  country: CountryCode
+}
 
 export interface AppSettings {
   id: 'app'
@@ -59,6 +68,17 @@ export interface AppSettings {
   theme: ThemeMode
   pinEnabled: boolean
   pinHash?: string
+  backupEncryptionKey: string
+  driveBackupEnabled: boolean
+  driveBackupFrequency: BackupFrequency
+  cutoffFrequency: CutoffFrequency
+  cutoffWeekStart: WeekStartDay
+  cutoffAnchorDate: string
+  googleDriveClientId: string
+  googleDriveConnected: boolean
+  googleDriveLastBackupAt?: string
+  googleDriveLastBackupStatus?: string
+  closedLocationSeasons: ClosedLocationSeason[]
   createdAt: string
   updatedAt: string
 }

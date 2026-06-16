@@ -109,6 +109,90 @@ Los datos se almacenan localmente usando IndexedDB con Dexie. La configuración 
 
 La función de PIN protege el ingreso a la aplicación. Se habilita o deshabilita desde `Settings`.
 
+## Backup cifrado con Google Drive App Folder
+
+La app puede generar backups cifrados de IndexedDB/Dexie y guardarlos en el espacio privado de aplicación de Google Drive. Usa únicamente el scope limitado:
+
+```text
+https://www.googleapis.com/auth/drive.appdata
+```
+
+Ese permiso no da acceso al Drive completo de la usuaria. La app solo puede crear, listar y leer archivos dentro de `appDataFolder`, el espacio privado asociado a la aplicación.
+
+El JSON plano nunca se sube a Google Drive: antes de salir del dispositivo, la app cifra el backup con Web Crypto API usando AES-GCM y una clave local configurada por el usuario.
+
+El backup incluye:
+
+```json
+{
+  "version": "2",
+  "generatedAt": "2026-06-15T10:00:00.000Z",
+  "appName": "Private Balance",
+  "services": [],
+  "expenses": [],
+  "appointments": [],
+  "settings": {},
+  "exchangeRates": []
+}
+```
+
+Desde `Configuración > Backup` se pueden configurar:
+
+- Google OAuth Client ID.
+- Conectar o desconectar Google Drive.
+- Estado de conexión.
+- Activar backup automático.
+- Frecuencia diaria.
+- Último backup realizado y último estado.
+- Subir backup ahora.
+- Restaurar último backup.
+- Exportar backup cifrado local.
+- Importar backup cifrado local con la misma clave.
+- Exportar backup JSON sin cifrar solo para migraciones controladas.
+
+Al abrir la app, si Google Drive está conectado, el backup automático está activo y pasaron 24 horas desde el último envío, la app intenta generar un backup cifrado y subirlo a `appDataFolder`. También intenta ejecutarlo cuando la app pasa a segundo plano mediante `visibilitychange`; Android puede limitar este comportamiento si el proceso se suspende.
+
+La subida usa Drive API v3 con carga multipart:
+
+```text
+POST https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart
+```
+
+Metadata:
+
+```json
+{
+  "name": "private-balance-backup-YYYY-MM-DD-HH-mm.json.enc",
+  "parents": ["appDataFolder"]
+}
+```
+
+Para listar backups se usa:
+
+```text
+GET https://www.googleapis.com/drive/v3/files?spaces=appDataFolder
+```
+
+Para configurar credenciales OAuth en Google Cloud Console:
+
+1. Crea o selecciona un proyecto.
+2. Habilita Google Drive API.
+3. Configura la pantalla de consentimiento OAuth.
+4. Crea un Client ID OAuth compatible con el flujo que uses para la app.
+5. Añade el Client ID en `Configuración > Backup`.
+6. Verifica que solo se solicite el scope `drive.appdata`.
+
+Para probar en Android:
+
+```bash
+npm run build
+npx cap sync android
+```
+
+La restauración desde Google Drive descarga el último `.json.enc`, solicita confirmación destructiva, descifra con la clave local y reemplaza IndexedDB/Dexie si el backup es válido.
+
+Para restaurar un backup local cifrado, ve a `Configuración > Backup`, introduce la misma clave de cifrado usada al exportar y selecciona `Importar backup cifrado`. Si la clave no coincide, el descifrado fallará y los datos no se restaurarán.
+
 ## 🛠️ Mantenimiento
 
 Para restaurar o respaldar datos, usa las funciones de exportación e importación en la sección de reportes.

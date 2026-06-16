@@ -10,9 +10,12 @@ import {
 import { listCityOptions } from '../../services/locationService'
 import type {
   AppSettings,
+  CountryCode,
+  CutoffFrequency,
   CurrencyCode,
   RateMode,
   ThemeMode,
+  WeekStartDay,
 } from '../../types/settings'
 import {
   type CityOption,
@@ -22,6 +25,7 @@ import {
   getCityOption,
   getCountryCurrency,
 } from '../../utils/countries'
+import { getTodayInputDate } from '../../utils/currency'
 
 const rateModes: Array<{ value: RateMode; label: string }> = [
   { value: 'automatic', label: 'Automático' },
@@ -32,6 +36,22 @@ const themes: Array<{ value: ThemeMode; label: string }> = [
   { value: 'system', label: 'Sistema' },
   { value: 'light', label: 'Claro' },
   { value: 'dark', label: 'Oscuro' },
+]
+
+const cutoffFrequencies: Array<{ value: CutoffFrequency; label: string }> = [
+  { value: 'weekly', label: 'Semanal' },
+  { value: 'biweekly', label: 'Quincenal' },
+  { value: 'monthly', label: 'Mensual' },
+]
+
+const weekStartDays: Array<{ value: WeekStartDay; label: string }> = [
+  { value: 1, label: 'Lunes' },
+  { value: 2, label: 'Martes' },
+  { value: 3, label: 'Miércoles' },
+  { value: 4, label: 'Jueves' },
+  { value: 5, label: 'Viernes' },
+  { value: 6, label: 'Sábado' },
+  { value: 0, label: 'Domingo' },
 ]
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -85,6 +105,9 @@ export function SettingsBusinessPage() {
         incomePercentage: settings.incomePercentage,
         rateMode: settings.rateMode,
         theme: settings.theme,
+        cutoffFrequency: settings.cutoffFrequency,
+        cutoffWeekStart: settings.cutoffWeekStart,
+        cutoffAnchorDate: settings.cutoffAnchorDate || getTodayInputDate(),
       })
 
       setSettings(updatedSettings)
@@ -120,6 +143,20 @@ export function SettingsBusinessPage() {
         getCountryCurrency(selectedCity.country) ??
         settings?.defaultCurrency ??
         'EUR',
+    })
+  }
+
+  function handleCountryChange(country: CountryCode) {
+    const cityBelongsToCountry = cityOptions.some(
+      (cityOption) =>
+        cityOption.country === country && cityOption.value === settings?.city,
+    )
+
+    updateLocalSettings({
+      country,
+      city: cityBelongsToCountry ? settings?.city ?? '' : '',
+      defaultCurrency:
+        getCountryCurrency(country) ?? settings?.defaultCurrency ?? 'EUR',
     })
   }
 
@@ -188,8 +225,10 @@ export function SettingsBusinessPage() {
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">País</span>
             <select
-              className="h-11 rounded-md border border-slate-300 bg-slate-50 px-3 text-base text-slate-950 outline-none"
-              disabled
+              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              onChange={(event) =>
+                handleCountryChange(event.target.value as CountryCode)
+              }
               value={settings.country}
             >
               {countries.map((country) => (
@@ -281,6 +320,70 @@ export function SettingsBusinessPage() {
                 {rateMode.label}
               </label>
             ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-3">
+          <legend className="text-sm font-medium text-slate-700">
+            Fechas de corte
+          </legend>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                Periodicidad
+              </span>
+              <select
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                onChange={(event) =>
+                  updateLocalSettings({
+                    cutoffFrequency: event.target.value as CutoffFrequency,
+                  })
+                }
+                value={settings.cutoffFrequency}
+              >
+                {cutoffFrequencies.map((frequency) => (
+                  <option key={frequency.value} value={frequency.value}>
+                    {frequency.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                Inicio de semana
+              </span>
+              <select
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                onChange={(event) =>
+                  updateLocalSettings({
+                    cutoffWeekStart: Number(event.target.value) as WeekStartDay,
+                  })
+                }
+                value={settings.cutoffWeekStart}
+              >
+                {weekStartDays.map((day) => (
+                  <option key={day.value} value={day.value}>
+                    {day.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                Fecha base
+              </span>
+              <input
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                onChange={(event) =>
+                  updateLocalSettings({ cutoffAnchorDate: event.target.value })
+                }
+                required
+                type="date"
+                value={settings.cutoffAnchorDate}
+              />
+            </label>
           </div>
         </fieldset>
 

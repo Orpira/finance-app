@@ -71,6 +71,7 @@ export const fallbackCityOptions: CityOption[] = [
   { value: 'Bilbao', label: 'Bilbao', country: 'ES' },
   { value: 'Madrid', label: 'Madrid', country: 'ES' },
   { value: 'Barcelona', label: 'Barcelona', country: 'ES' },
+  { value: 'Sevilla', label: 'Sevilla', country: 'ES' },
   {
     value: 'Las Palmas de Gran Canaria',
     label: 'Las Palmas de Gran Canaria',
@@ -88,5 +89,21 @@ export function getCountryCurrency(countryCode: CountryCode) {
 }
 
 export function getCityOption(city: string, options = fallbackCityOptions) {
-  return options.find((option) => option.value === city)
+  const normalizedCity = city.trim().toLocaleLowerCase('es')
+
+  if (!normalizedCity) {
+    return undefined
+  }
+
+  const localOption = fallbackCityOptions.find(
+    (option) => option.value.toLocaleLowerCase('es') === normalizedCity,
+  )
+
+  if (localOption) {
+    return localOption
+  }
+
+  return options.find(
+    (option) => option.value.toLocaleLowerCase('es') === normalizedCity,
+  )
 }

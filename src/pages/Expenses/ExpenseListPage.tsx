@@ -12,16 +12,19 @@ import { Link } from 'react-router-dom'
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { deleteExpense, listExpenses } from '../../services/expenseService'
+import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
-import type { CountryCode, CurrencyCode } from '../../types/settings'
+import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
 import { getExpenseDisplayName } from '../../utils/activityLabels'
 import { countries } from '../../utils/countries'
 import { formatCurrency } from '../../utils/currency'
+import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 
 const EXPENSES_PER_PAGE = 10
 
 export function ExpenseListPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [settings, setSettings] = useState<AppSettings | null>(null)
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
   const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL')
   const [selectedCategory, setSelectedCategory] = useState<string | 'ALL'>('ALL')
@@ -124,13 +127,17 @@ export function ExpenseListPage() {
     let isMounted = true
 
     async function loadInitialData() {
-      const currentExpenses = await listExpenses({ newestFirst: true })
+      const [currentExpenses, currentSettings] = await Promise.all([
+        listExpenses({ newestFirst: true }),
+        getSettings(),
+      ])
 
       if (!isMounted) {
         return
       }
 
       setExpenses(currentExpenses)
+      setSettings(currentSettings)
       setIsLoading(false)
     }
 
@@ -308,7 +315,13 @@ export function ExpenseListPage() {
             </p>
           ) : (
             <ul className="divide-y divide-slate-200">
-              {paginatedExpenses.map((expense) => (
+              {paginatedExpenses.map((expense) => {
+                const isClosedSeason = isLocationSeasonClosed(
+                  expense,
+                  settings?.closedLocationSeasons,
+                )
+
+                return (
                 <li className="flex flex-col gap-3 p-4" key={expense.id}>
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -333,6 +346,12 @@ export function ExpenseListPage() {
                   </div>
 
                   <div className="flex flex-wrap justify-start gap-2">
+                    {isClosedSeason ? (
+                      <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-500">
+                        Solo consulta
+                      </span>
+                    ) : (
+                      <>
                     <Link
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                       to={`/expenses/${expense.id}/editar`}
@@ -348,9 +367,12 @@ export function ExpenseListPage() {
                       <Trash2 className="size-4" aria-hidden="true" />
                       Eliminar
                     </button>
+                      </>
+                    )}
                   </div>
                 </li>
-              ))}
+                )
+              })}
             </ul>
           )}
         </div>

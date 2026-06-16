@@ -8,11 +8,13 @@ import {
   deleteServiceIncome,
   listServiceIncomes,
 } from '../../services/incomeService'
+import { getSettings } from '../../services/settingsService'
 import type { ServiceIncome, ServiceIncomeStatus } from '../../types/service'
-import type { CountryCode, CurrencyCode } from '../../types/settings'
+import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
 import { getIncomeDisplayName } from '../../utils/activityLabels'
 import { countries } from '../../utils/countries'
 import { formatCurrency } from '../../utils/currency'
+import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 
 const INCOMES_PER_PAGE = 10
@@ -41,6 +43,7 @@ function getIncomeStatusClass(status: ServiceIncomeStatus) {
 
 export function IncomeListPage() {
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
+  const [settings, setSettings] = useState<AppSettings | null>(null)
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
   const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL')
   const [selectedPaymentType, setSelectedPaymentType] =
@@ -148,13 +151,17 @@ export function IncomeListPage() {
     let isMounted = true
 
     async function loadInitialData() {
-      const currentIncomes = await listServiceIncomes({ newestFirst: true })
+      const [currentIncomes, currentSettings] = await Promise.all([
+        listServiceIncomes({ newestFirst: true }),
+        getSettings(),
+      ])
 
       if (!isMounted) {
         return
       }
 
       setIncomes(currentIncomes)
+      setSettings(currentSettings)
       setIsLoading(false)
     }
 
@@ -334,6 +341,10 @@ export function IncomeListPage() {
             <ul className="divide-y divide-slate-200">
               {paginatedIncomes.map((income) => {
                 const status = getIncomeStatus(income)
+                const isClosedSeason = isLocationSeasonClosed(
+                  income,
+                  settings?.closedLocationSeasons,
+                )
 
                 return (
                   <li className="flex flex-col gap-3 p-4" key={income.id}>
@@ -372,6 +383,11 @@ export function IncomeListPage() {
                     </div>
 
                     <div className="flex justify-start">
+                      {isClosedSeason ? (
+                        <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-500">
+                          Solo consulta
+                        </span>
+                      ) : (
                       <button
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
                         onClick={() => handleDeleteIncome(income)}
@@ -380,6 +396,7 @@ export function IncomeListPage() {
                         <Trash2 className="size-4" aria-hidden="true" />
                         Eliminar
                       </button>
+                      )}
                     </div>
                   </li>
                 )

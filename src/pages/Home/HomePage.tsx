@@ -160,6 +160,9 @@ export function HomePage() {
     hasLocationChange &&
     localStorage.getItem(LOCATION_CONTEXT_DISMISSAL_KEY) !==
       `${currentLocationKey}:${detectedLocationKey}`
+  const activeLocationLabel = settings
+    ? getLocationLabel(settings.country, settings.city)
+    : ''
 
   function handleKeepCurrentCountry() {
     if (!settings || !detectedLocation) {
@@ -173,12 +176,27 @@ export function HomePage() {
     setDetectedLocation(null)
   }
 
-  async function handleChangeCountry() {
-    if (!detectedLocation) {
+  async function handleFinishSeasonAndChangeLocation() {
+    if (!settings || !detectedLocation) {
       return
     }
 
     const updatedSettings = await updateSettings({
+      closedLocationSeasons: [
+        ...settings.closedLocationSeasons.filter(
+          (season) =>
+            !(
+              season.country === settings.country &&
+              season.city.trim().toLocaleLowerCase('es') ===
+                settings.city.trim().toLocaleLowerCase('es')
+            ),
+        ),
+        {
+          city: settings.city,
+          closedAt: new Date().toISOString(),
+          country: settings.country,
+        },
+      ],
       country: detectedLocation.country,
       city: detectedLocation.city,
       defaultCurrency:
@@ -203,13 +221,13 @@ export function HomePage() {
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
                 <p className="text-base font-semibold text-slate-950">
-                  Se detectó un cambio de ubicación.
+                  Se detectó una ubicación diferente.
                 </p>
               </div>
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
                 <div>
                   <dt className="font-medium text-slate-500">
-                    País actual configurado:
+                    Temporada actual:
                   </dt>
                   <dd className="font-semibold text-slate-950">
                     {getLocationLabel(settings.country, settings.city)}
@@ -217,7 +235,7 @@ export function HomePage() {
                 </div>
                 <div>
                   <dt className="font-medium text-slate-500">
-                    País detectado:
+                    Nueva ubicación detectada:
                   </dt>
                   <dd className="font-semibold text-slate-950">
                     {getLocationLabel(
@@ -228,11 +246,14 @@ export function HomePage() {
                 </div>
               </dl>
               <p className="text-sm font-medium text-slate-600">
-                ¿Deseas cambiar el contexto de trabajo?
+                ¿Deseas finalizar la temporada en{' '}
+                {getLocationLabel(settings.country, settings.city)} y empezar a
+                registrar desde la nueva ubicación?
               </p>
               <p className="text-sm leading-5 text-slate-500">
-                Los registros anteriores conservarán su país y ciudad. Los
-                nuevos se guardarán con el contexto elegido desde ahora.
+                Los registros anteriores conservarán su país y ciudad. Si
+                aceptas, la configuración se actualizará automáticamente y los
+                nuevos registros usarán la ubicación detectada desde ahora.
               </p>
             </div>
           </div>
@@ -243,14 +264,14 @@ export function HomePage() {
               onClick={handleKeepCurrentCountry}
               type="button"
             >
-              Mantener {getLocationLabel(settings.country, settings.city)}
+              Continuar temporada actual
             </button>
             <button
               className="h-10 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
-              onClick={handleChangeCountry}
+              onClick={handleFinishSeasonAndChangeLocation}
               type="button"
             >
-              Cambiar a{' '}
+              Finalizar y cambiar a{' '}
               {getLocationLabel(detectedLocation.country, detectedLocation.city)}
             </button>
           </div>
@@ -263,19 +284,30 @@ export function HomePage() {
           className="h-44 w-44 shrink-0 object-contain sm:h-52 sm:w-52"
           src={privateBalanceLogo}
         />
-        <div className="flex max-w-2xl flex-col gap-2">
-          <p className="text-sm font-medium text-emerald-700">
-            {settings?.businessName
-              ? `Bienvenida · ${settings.businessName}`
-              : 'Bienvenida'}
-          </p>
+        <div className="flex max-w-2xl flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+            <span className="rounded-md bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+              Bienvenida
+            </span>
+            {settings?.businessName ? (
+              <span className="rounded-md border border-slate-200 bg-white px-3 py-1 text-sm font-medium text-slate-600">
+                {settings.businessName}
+              </span>
+            ) : null}
+          </div>
           <h1 className="text-3xl font-semibold text-slate-950">
-            Tu espacio privado de organización
+            Tu espacio privado para organizar el día
           </h1>
           <p className="text-sm leading-6 text-slate-500">
-            Lleva el control de tu actividad diaria, tus finanzas y tu agenda de
-            forma sencilla, segura y totalmente privada.
+            Controla ingresos, gastos y citas desde un lugar sencillo, privado y
+            pensado para tu ritmo de trabajo.
           </p>
+          {activeLocationLabel ? (
+            <p className="inline-flex w-fit items-center gap-2 self-center rounded-md border border-emerald-100 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm sm:self-start">
+              <MapPin className="size-4 text-emerald-700" aria-hidden="true" />
+              Temporada activa: {activeLocationLabel}
+            </p>
+          ) : null}
         </div>
       </header>
 
