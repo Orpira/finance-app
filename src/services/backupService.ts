@@ -6,6 +6,7 @@ import {
 } from '../database/db'
 import type { Appointment } from '../types/appointment'
 import type { CutoffReport } from '../types/cutoffReport'
+import type { EarningPeriod } from '../types/earningPeriod'
 import type { ExchangeRate } from '../types/exchangeRate'
 import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
@@ -32,6 +33,7 @@ export interface BackupData {
   settings: Awaited<ReturnType<typeof getSettings>>
   exchangeRates: ExchangeRate[]
   cutoffReports?: CutoffReport[]
+  earningPeriods?: EarningPeriod[]
 }
 
 export interface EncryptedBackupFile {
@@ -95,6 +97,7 @@ function backupDataToSnapshot(backupData: BackupData): DatabaseSnapshot {
     services: backupData.services ?? [],
     settings: backupData.settings ? [backupData.settings] : [],
     cutoffReports: backupData.cutoffReports ?? [],
+    earningPeriods: backupData.earningPeriods ?? [],
   }
 }
 
@@ -106,6 +109,7 @@ export async function generateBackupData(): Promise<BackupData> {
     settings,
     exchangeRates,
     cutoffReports,
+    earningPeriods,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -114,6 +118,7 @@ export async function generateBackupData(): Promise<BackupData> {
       getSettings(),
       db.exchangeRates.toArray(),
       db.cutoffReports.toArray(),
+      db.earningPeriods.toArray(),
     ])
 
   return {
@@ -126,6 +131,7 @@ export async function generateBackupData(): Promise<BackupData> {
     settings,
     exchangeRates,
     cutoffReports,
+    earningPeriods,
   }
 }
 

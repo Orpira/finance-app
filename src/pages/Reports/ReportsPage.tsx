@@ -968,8 +968,8 @@ export function ReportsPage() {
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <PageHeader
-        backLabel="Inicio"
-        backTo="/"
+        backLabel="Más"
+        backTo="/more"
         eyebrow="Reportes"
         title="Generación de PDF"
       >

@@ -1,21 +1,25 @@
-import { List, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { currencies } from '../../utils/countries'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import {
   createServiceIncome,
+  getServiceIncomeById,
   listServiceIncomes,
+  updateServiceIncome,
 } from '../../services/incomeService'
 import { saveExchangeRate } from '../../services/exchangeRateService'
 import { getSettings } from '../../services/settingsService'
+import { ensureActiveEarningPeriod } from '../../services/earningPeriodService'
 import {
   convertCurrencyPair,
   convertCurrencyToEurCop,
   type ExchangeRateResolutionSource,
 } from '../../services/currencyConversionService'
 import type { ServiceIncome } from '../../types/service'
+import type { EarningPeriod } from '../../types/earningPeriod'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import {
   EUR_COP_DEFAULT_RATE,
@@ -24,8 +28,9 @@ import {
   roundMoney,
 } from '../../utils/currency'
 import { paymentTypes } from '../../utils/paymentTypes'
+import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'duplicateHour'
+type SaveStatus = 'idle' | 'saving' | 'error' | 'duplicateHour'
 
 function getTimeFromDateTime(dateTime: string | undefined) {
   if (!dateTime) {
@@ -78,8 +83,14 @@ function hasIncomeAtSameDateTime(
 }
 
 export function IncomePage() {
+  const { incomeId } = useParams()
+  const navigate = useNavigate()
+  const parsedIncomeId = incomeId ? Number(incomeId) : null
+  const isEditing = Number.isFinite(parsedIncomeId) && parsedIncomeId !== null
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
+  const [editingIncome, setEditingIncome] = useState<ServiceIncome | null>(null)
   const [date, setDate] = useState(getTodayInputDate())
   const [time, setTime] = useState(() => formatInputTime(new Date()))
   const [duration, setDuration] = useState(60)
@@ -102,19 +113,58 @@ export function IncomePage() {
     let isMounted = true
 
     async function loadInitialData() {
-      const [currentSettings, currentIncomes] = await Promise.all([
+      const [currentSettings, currentIncomes, currentIncome] = await Promise.all([
         getSettings(),
         listServiceIncomes({ newestFirst: true }),
+        parsedIncomeId ? getServiceIncomeById(parsedIncomeId) : undefined,
       ])
+      const currentPeriod = await ensureActiveEarningPeriod(currentSettings)
 
       if (!isMounted) {
         return
       }
 
       setSettings(currentSettings)
-      setPercentage(currentSettings.incomePercentage)
-      setCurrency(currentSettings.defaultCurrency)
+      setActivePeriod(currentPeriod)
       setIncomes(currentIncomes)
+
+      if (currentIncome) {
+        if (
+          isLocationSeasonClosed(
+            currentIncome,
+            currentSettings.closedLocationSeasons,
+          )
+        ) {
+          window.alert(
+            'Este ingreso pertenece a una temporada cerrada. Solo puede consultarse desde el historial y usarse en reportes.',
+          )
+          navigate('/income', { replace: true })
+          return
+        }
+
+        setEditingIncome(currentIncome)
+        setDate(currentIncome.date)
+        setTime(
+          getTimeFromDateTime(
+            currentIncome.timerStartedAt ??
+              currentIncome.createdAt ??
+              currentIncome.timerStoppedAt,
+          ) ?? formatInputTime(new Date()),
+        )
+        setDuration(currentIncome.actualDuration ?? currentIncome.duration)
+        setTotalAmount(currentIncome.totalAmount)
+        setCurrency(currentIncome.currency as CurrencyCode)
+        setPaymentType(currentIncome.paymentType ?? paymentTypes[0].value)
+        setPercentage(currentIncome.percentage)
+        setExchangeRate(
+          currentIncome.exchangeRateBaseToSecondary ??
+            currentIncome.exchangeRateUsed ??
+            EUR_COP_DEFAULT_RATE,
+        )
+      } else {
+        setPercentage(currentPeriod.percentage)
+        setCurrency(currentSettings.defaultCurrency)
+      }
     }
 
     loadInitialData()
@@ -122,7 +172,7 @@ export function IncomePage() {
     return () => {
       isMounted = false
     }
-  }, [date])
+  }, [navigate, parsedIncomeId])
 
   const realGain = useMemo(
     () => roundMoney((totalAmount * percentage) / 100),
@@ -174,11 +224,6 @@ export function IncomePage() {
     }
   }, [currency, date, exchangeRate, realGain, settings])
 
-  async function reloadIncomes() {
-    const currentIncomes = await listServiceIncomes({ newestFirst: true })
-    setIncomes(currentIncomes)
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -191,7 +236,14 @@ export function IncomePage() {
     try {
       const registrationDateTime = `${date}T${time}`
 
-      if (hasIncomeAtSameDateTime(incomes, date, registrationDateTime)) {
+      if (
+        hasIncomeAtSameDateTime(
+          incomes,
+          date,
+          registrationDateTime,
+          parsedIncomeId ?? undefined,
+        )
+      ) {
         setSaveStatus('duplicateHour')
         return
       }
@@ -207,14 +259,20 @@ export function IncomePage() {
             : 'manual',
       })
 
-      await createServiceIncome({
+      const incomeInput = {
         createdAt: registrationDateTime,
         date,
-        status: 'FINALIZADO',
+        status: editingIncome?.status ?? 'FINALIZADO',
         paymentType,
         duration,
         totalAmount,
         currency,
+        earningPeriodId: editingIncome?.earningPeriodId ?? activePeriod?.id,
+        earningPercentage:
+          editingIncome?.earningPercentage ??
+          editingIncome?.percentage ??
+          activePeriod?.percentage ??
+          percentage,
         percentage,
         realGain,
         eurValue: roundMoney(convertedValues.eurValue),
@@ -228,17 +286,18 @@ export function IncomePage() {
         ),
         exchangeRateBaseToSecondary: exchangeRate,
         actualDuration: duration,
-        country: settings.country,
-        city: settings.city,
-      })
+        country: editingIncome?.country ?? settings.country,
+        city: editingIncome?.city ?? settings.city,
+      }
 
-      setTotalAmount(0)
-      setPaymentType(paymentTypes[0].value)
-      setDuration(60)
-      setDate(getTodayInputDate())
-      setTime(formatInputTime(new Date()))
-      setSaveStatus('saved')
-      await reloadIncomes()
+      if (isEditing && parsedIncomeId) {
+        await updateServiceIncome(parsedIncomeId, incomeInput)
+        navigate('/income')
+        return
+      }
+
+      await createServiceIncome(incomeInput)
+      navigate('/income')
     } catch {
       setSaveStatus('error')
     }
@@ -255,19 +314,11 @@ export function IncomePage() {
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHeader
-        backLabel="Inicio"
-        backTo="/"
+        backLabel="Ingresos"
+        backTo="/income"
         eyebrow="Ingresos"
-        title="Registrar ingreso"
-      >
-        <Link
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-emerald-200 bg-white px-4 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
-          to="/income/list"
-        >
-          <List className="size-4" aria-hidden="true" />
-          Ver ingresos
-        </Link>
-      </PageHeader>
+        title={isEditing ? 'Modificar ingreso' : 'Registrar ingreso'}
+      />
 
       <form
         className="flex flex-col gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
@@ -368,15 +419,18 @@ export function IncomePage() {
             </span>
             <div className="flex items-center gap-3">
               <input
-                className="h-11 w-28 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                className="h-11 w-28 rounded-md border border-slate-300 bg-slate-50 px-3 text-base text-slate-950 outline-none"
+                disabled
                 max={100}
                 min={0}
-                onChange={(event) => setPercentage(Number(event.target.value))}
                 type="number"
                 value={percentage}
               />
               <span className="text-sm font-medium text-slate-500">%</span>
             </div>
+            <span className="text-xs font-medium text-slate-500">
+              Período activo: {activePeriod?.name ?? 'Actual'}
+            </span>
           </label>
 
           <label className="flex flex-col gap-2">
@@ -436,7 +490,6 @@ export function IncomePage() {
 
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-slate-500" role="status">
-            {saveStatus === 'saved' && 'Ingreso guardado'}
             {saveStatus === 'duplicateHour' &&
               'Ya existe un ingreso registrado en esa misma fecha y hora'}
             {saveStatus === 'error' && 'No se pudo guardar'}
@@ -448,7 +501,11 @@ export function IncomePage() {
             type="submit"
           >
             <Plus className="size-4" aria-hidden="true" />
-            {saveStatus === 'saving' ? 'Guardando' : 'Guardar ingreso'}
+            {saveStatus === 'saving'
+              ? 'Guardando'
+              : isEditing
+                ? 'Actualizar ingreso'
+                : 'Guardar ingreso'}
           </button>
         </div>
       </form>

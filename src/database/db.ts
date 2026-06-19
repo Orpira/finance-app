@@ -2,6 +2,7 @@ import Dexie, { type Table } from 'dexie'
 
 import type { Appointment } from '../types/appointment'
 import type { CutoffReport } from '../types/cutoffReport'
+import type { EarningPeriod } from '../types/earningPeriod'
 import type { ExchangeRate } from '../types/exchangeRate'
 import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
@@ -46,6 +47,7 @@ export class FinanceDB extends Dexie {
   settings!: Table<AppSettings, AppSettings['id']>
   exchangeRates!: Table<ExchangeRate, number>
   cutoffReports!: Table<CutoffReport, number>
+  earningPeriods!: Table<EarningPeriod, number>
 
   constructor() {
     super('finance-app')
@@ -155,6 +157,17 @@ export class FinanceDB extends Dexie {
       cutoffReports:
         '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
     })
+
+    this.version(9).stores({
+      services: '++id,date,currency,country,status,earningPeriodId',
+      expenses: '++id,date,category,currency,country',
+      appointments: '++id,dateTime,completed,currency',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+    })
   }
 }
 
@@ -178,6 +191,7 @@ export async function resetDatabase() {
       db.settings,
       db.exchangeRates,
       db.cutoffReports,
+      db.earningPeriods,
     ],
     async () => {
       await Promise.all([
@@ -187,6 +201,7 @@ export async function resetDatabase() {
         db.settings.clear(),
         db.exchangeRates.clear(),
         db.cutoffReports.clear(),
+        db.earningPeriods.clear(),
       ])
 
       await db.settings.put(createDefaultSettings())
@@ -202,6 +217,7 @@ export async function exportDatabaseSnapshot() {
     settings,
     exchangeRates,
     cutoffReports,
+    earningPeriods,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -210,6 +226,7 @@ export async function exportDatabaseSnapshot() {
       db.settings.toArray(),
       db.exchangeRates.toArray(),
       db.cutoffReports.toArray(),
+      db.earningPeriods.toArray(),
     ])
 
   return {
@@ -219,6 +236,7 @@ export async function exportDatabaseSnapshot() {
     settings,
     exchangeRates,
     cutoffReports,
+    earningPeriods,
     exportedAt: new Date().toISOString(),
   }
 }
@@ -235,6 +253,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
       db.settings,
       db.exchangeRates,
       db.cutoffReports,
+      db.earningPeriods,
     ],
     async () => {
       await Promise.all([
@@ -244,6 +263,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.settings.clear(),
         db.exchangeRates.clear(),
         db.cutoffReports.clear(),
+        db.earningPeriods.clear(),
       ])
 
       await Promise.all([
@@ -253,6 +273,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.settings.bulkPut(snapshot.settings ?? []),
         db.exchangeRates.bulkPut(snapshot.exchangeRates ?? []),
         db.cutoffReports.bulkPut(snapshot.cutoffReports ?? []),
+        db.earningPeriods.bulkPut(snapshot.earningPeriods ?? []),
       ])
 
       if (!snapshot.settings?.length) {

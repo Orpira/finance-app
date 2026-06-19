@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Plus, ReceiptText, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Pencil, ReceiptText, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -228,17 +228,16 @@ export function IncomeListPage() {
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHeader
-        backLabel="Ingresos"
-        backTo="/income"
+        backLabel="Inicio"
+        backTo="/dashboard"
         eyebrow="Ingresos"
         title="Registros de ingresos"
       >
         <Link
           className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
-          to="/income"
+          to="/income/nuevo"
         >
-          <Plus className="size-4" aria-hidden="true" />
-          Nuevo ingreso
+          + Nuevo Ingreso
         </Link>
       </PageHeader>
 
@@ -382,12 +381,20 @@ export function IncomeListPage() {
                       </div>
                     </div>
 
-                    <div className="flex justify-start">
+                    <div className="flex flex-wrap justify-start gap-2">
                       {isClosedSeason ? (
                         <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-500">
                           Solo consulta
                         </span>
                       ) : (
+                      <>
+                      <Link
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                        to={`/income/${income.id}/editar`}
+                      >
+                        <Pencil className="size-4" aria-hidden="true" />
+                        Modificar
+                      </Link>
                       <button
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
                         onClick={() => handleDeleteIncome(income)}
@@ -396,6 +403,7 @@ export function IncomeListPage() {
                         <Trash2 className="size-4" aria-hidden="true" />
                         Eliminar
                       </button>
+                      </>
                       )}
                     </div>
                   </li>

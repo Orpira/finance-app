@@ -2,24 +2,28 @@ import {
   CalendarDays,
   CircleDollarSign,
   Clock,
+  ExternalLink,
   MinusCircle,
   PlusCircle,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { listExpenses } from '../../services/expenseService'
+import { ensureActiveEarningPeriod } from '../../services/earningPeriodService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
+import type { EarningPeriod } from '../../types/earningPeriod'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CountryCode } from '../../types/settings'
 import { formatCurrency, getCurrentMonthRange } from '../../utils/currency'
 import { countries, getCountryCurrency } from '../../utils/countries'
 import {
   calculateFinancialTotals,
-  calculateIncomeDaysRanking,
+  calculateBestIncomeWeekday,
 } from '../../utils/financeStats'
 import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 
@@ -27,27 +31,9 @@ function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
-function formatIncomeDayDate(date: string) {
-  return capitalize(
-    new Intl.DateTimeFormat('es-ES', {
-      day: 'numeric',
-      month: 'long',
-      weekday: 'long',
-      year: 'numeric',
-    }).format(new Date(`${date}T00:00`)),
-  )
-}
-
-function formatIncomeDayCities(cityNames: string[]) {
-  if (cityNames.length === 0) {
-    return 'Sin ciudad'
-  }
-
-  return cityNames.join(', ')
-}
-
 export function DashboardPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
   const monthRange = useMemo(() => getCurrentMonthRange(), [])
   const [dateFrom, setDateFrom] = useState(monthRange.from)
   const [dateTo, setDateTo] = useState(monthRange.to)
@@ -66,18 +52,25 @@ export function DashboardPage() {
         from: dateFrom || undefined,
         to: dateTo || undefined,
       }
-      const [currentSettings, currentIncomes, currentExpenses] =
+      const [currentSettings, currentExpenses] =
         await Promise.all([
           getSettings(),
-          listServiceIncomes({ ...range, newestFirst: true }),
           listExpenses({ ...range, newestFirst: true }),
         ])
+      const currentPeriod = await ensureActiveEarningPeriod(currentSettings)
+      const currentIncomes = currentPeriod.id
+        ? await listServiceIncomes({
+            earningPeriodId: currentPeriod.id,
+            newestFirst: true,
+          })
+        : []
 
       if (!isMounted) {
         return
       }
 
       setSettings(currentSettings)
+      setActivePeriod(currentPeriod)
       setAllIncomes(currentIncomes)
       setAllExpenses(currentExpenses)
     }
@@ -194,8 +187,8 @@ export function DashboardPage() {
       ),
     [expenses, incomes, primaryCurrency, secondaryCurrency],
   )
-  const incomeDaysRanking = useMemo(
-    () => calculateIncomeDaysRanking(incomes, primaryCurrency),
+  const bestIncomeWeekday = useMemo(
+    () => calculateBestIncomeWeekday(incomes, primaryCurrency),
     [incomes, primaryCurrency],
   )
   if (!settings) {
@@ -210,7 +203,7 @@ export function DashboardPage() {
   const secondaryIncome = totals.secondaryIncome
   const primaryExpenses = totals.primaryExpenses
   const netProfit = totals.primaryNet
-  const profitWithPercentage = (primaryIncome * settings.incomePercentage) / 100
+  const activePercentage = activePeriod?.percentage ?? settings.incomePercentage
   const workedHours = Math.round((totals.serviceMinutes / 60) * 10) / 10
 
   const getCountryLabel = (code: string): string => {
@@ -369,7 +362,7 @@ export function DashboardPage() {
         <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium text-slate-500">
-              Ganancia {settings.incomePercentage}%
+              Ganancia {activePercentage}%
             </p>
             <CircleDollarSign
               className="size-5 text-amber-600"
@@ -377,10 +370,10 @@ export function DashboardPage() {
             />
           </div>
           <p className="mt-3 text-2xl font-semibold text-slate-950">
-            {formatCurrency(profitWithPercentage, primaryCurrency)}
+            {formatCurrency(primaryIncome, primaryCurrency)}
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            {settings.incomePercentage}% de ingresos
+            período activo: {activePeriod?.name ?? 'Actual'}
           </p>
         </article>
 
@@ -416,85 +409,43 @@ export function DashboardPage() {
         <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 p-4">
             <h2 className="text-lg font-semibold text-slate-950">
-              Mejores días de ingresos
+              Mejor día del período activo
             </h2>
+            <Link
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-emerald-200 bg-white px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+              to="/dashboard/best-days-history"
+            >
+              <ExternalLink className="size-4" aria-hidden="true" />
+              Ver historial de mejores días
+            </Link>
           </div>
 
-          {incomeDaysRanking.length === 0 ? (
-            <p className="p-4 text-sm text-slate-500">
-              Registra tu primer ingreso para activar el ranking.
-            </p>
+          {!bestIncomeWeekday ? (
+            <div className="p-4">
+              <p className="text-sm text-slate-500">
+                Aún no hay datos suficientes para calcular el mejor día.
+              </p>
+            </div>
           ) : (
-            <ul className="divide-y divide-slate-200">
-              {incomeDaysRanking.map((day, index) => (
-                <li
-                  className="flex items-center justify-between gap-4 p-4"
-                  key={day.date}
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-sm font-semibold text-emerald-700">
-                      {index + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="font-medium text-slate-950">
-                        {formatIncomeDayDate(day.date)}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {day.count} ingreso{day.count === 1 ? '' : 's'} · promedio{' '}
-                        {formatCurrency(day.average, primaryCurrency)}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Ciudad: {formatIncomeDayCities(day.cityNames)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="font-semibold text-slate-950">
-                      {formatCurrency(day.total, primaryCurrency)}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div className="p-4">
+              <p className="text-sm font-medium text-emerald-700">
+                {capitalize(bestIncomeWeekday.weekday)}
+              </p>
+              <p className="mt-2 text-3xl font-semibold text-slate-950">
+                {bestIncomeWeekday.weekday}
+              </p>
+              <p className="mt-2 text-sm text-slate-500">
+                Promedio:{' '}
+                {formatCurrency(bestIncomeWeekday.average, primaryCurrency)}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                {bestIncomeWeekday.count} ingreso
+                {bestIncomeWeekday.count === 1 ? '' : 's'} del período activo
+              </p>
+            </div>
           )}
         </div>
 
-        <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-950">
-            Conversión activa
-          </h2>
-          <dl className="mt-4 flex flex-col gap-3">
-            <div>
-              <dt className="text-sm text-slate-500">Moneda principal</dt>
-              <dd className="mt-1 font-semibold text-slate-950">
-                {primaryCurrency}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm text-slate-500">Moneda secundaria</dt>
-              <dd className="mt-1 font-semibold text-slate-950">
-                {secondaryCurrency}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm text-slate-500">
-                Ingresos {primaryCurrency}
-              </dt>
-              <dd className="mt-1 font-semibold text-slate-950">
-                {formatCurrency(totals.primaryIncome, primaryCurrency)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm text-slate-500">
-                Ingresos {secondaryCurrency}
-              </dt>
-              <dd className="mt-1 font-semibold text-slate-950">
-                {formatCurrency(totals.secondaryIncome, secondaryCurrency)}
-              </dd>
-            </div>
-          </dl>
-
-        </aside>
       </section>
     </section>
   )

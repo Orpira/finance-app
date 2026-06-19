@@ -9,6 +9,7 @@ import {
 } from './currencyConversionService'
 import { saveExchangeRate } from './exchangeRateService'
 import { createServiceIncome } from './incomeService'
+import { ensureActiveEarningPeriod } from './earningPeriodService'
 
 function getDateFromDateTime(dateTime: string) {
   return dateTime.slice(0, 10)
@@ -70,8 +71,9 @@ export async function completeAppointmentAsIncome(
     date: serviceDate,
     useApi: settings.rateMode === 'automatic',
   }
+  const activePeriod = await ensureActiveEarningPeriod(settings)
   const realGain = roundMoney(
-    (appointment.expectedAmount * settings.incomePercentage) / 100,
+    (appointment.expectedAmount * activePeriod.percentage) / 100,
   )
   const [convertedPairValues, convertedEurCopValues, eurCopRate] =
     await Promise.all([
@@ -105,7 +107,9 @@ export async function completeAppointmentAsIncome(
     duration: actualDuration,
     totalAmount: appointment.expectedAmount,
     currency: appointment.currency,
-    percentage: settings.incomePercentage,
+    earningPeriodId: activePeriod.id,
+    earningPercentage: activePeriod.percentage,
+    percentage: activePeriod.percentage,
     realGain,
     eurValue: roundMoney(convertedEurCopValues.eurValue),
     copValue: roundMoney(convertedEurCopValues.copValue),

@@ -19,6 +19,10 @@ export interface ServiceIncome {
 
   percentage: number;
 
+  earningPeriodId?: number;
+
+  earningPercentage?: number;
+
   realGain: number;
 
   eurValue: number;

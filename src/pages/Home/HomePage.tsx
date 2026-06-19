@@ -10,7 +10,6 @@ import {
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import privateBalanceLogo from '../../assets/private-balance-logo.svg'
 import { getSettings, updateSettings } from '../../services/settingsService'
 import type { AppSettings, CountryCode } from '../../types/settings'
 import { countries, getCountryCurrency } from '../../utils/countries'
@@ -33,7 +32,7 @@ const mainActions = [
     icon: CircleDollarSign,
   },
   {
-    label: 'Gastos',
+    label: 'Egresos',
     title: 'Control de egresos',
     description:
       'Registra gastos operativos y realiza seguimiento detallado de tus costos diarios.',
@@ -282,7 +281,7 @@ export function HomePage() {
         <img
           alt="Private Balance"
           className="h-44 w-44 shrink-0 object-contain sm:h-52 sm:w-52"
-          src={privateBalanceLogo}
+          src="/favicon.svg"
         />
         <div className="flex max-w-2xl flex-col gap-3">
           <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">

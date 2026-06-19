@@ -2,6 +2,7 @@ import { db } from '../database/db'
 import type { DateRangeListOptions } from '../types/dataAccess'
 import type { ServiceIncome } from '../types/service'
 import type { CountryCode } from '../types/settings'
+import { ensureActiveEarningPeriod } from './earningPeriodService'
 
 export type CreateServiceIncomeInput = Omit<ServiceIncome, 'id'>
 export type UpdateServiceIncomeInput = Partial<CreateServiceIncomeInput>
@@ -9,14 +10,24 @@ export type UpdateServiceIncomeInput = Partial<CreateServiceIncomeInput>
 export interface ServiceIncomeListOptions extends DateRangeListOptions {
   country?: CountryCode
   city?: string
+  earningPeriodId?: number
   paymentType?: string
 }
 
 export async function createServiceIncome(input: CreateServiceIncomeInput) {
+  const earningPeriod =
+    input.earningPeriodId === undefined
+      ? await ensureActiveEarningPeriod()
+      : undefined
+
   return db.services.add({
     createdAt: new Date().toISOString(),
     status: 'PENDIENTE',
     ...input,
+    earningPeriodId: earningPeriod?.id ?? input.earningPeriodId,
+    earningPercentage:
+      earningPeriod?.percentage ?? input.earningPercentage ?? input.percentage,
+    percentage: earningPeriod?.percentage ?? input.percentage,
   })
 }
 
@@ -25,7 +36,15 @@ export async function getServiceIncomeById(id: number) {
 }
 
 export async function listServiceIncomes(options: ServiceIncomeListOptions = {}) {
-  const { from, to, newestFirst = true, country, city, paymentType } = options
+  const {
+    from,
+    to,
+    newestFirst = true,
+    country,
+    city,
+    earningPeriodId,
+    paymentType,
+  } = options
   const lowerBound = from ?? ''
   const upperBound = to ?? '\uffff'
   const collection =
@@ -48,6 +67,10 @@ export async function listServiceIncomes(options: ServiceIncomeListOptions = {})
 
   if (city) {
     filtered = filtered.filter((item) => item.city === city)
+  }
+
+  if (earningPeriodId !== undefined) {
+    filtered = filtered.filter((item) => item.earningPeriodId === earningPeriodId)
   }
 
   if (paymentType) {

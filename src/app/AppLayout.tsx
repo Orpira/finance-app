@@ -1,22 +1,22 @@
 import {
   CalendarDays,
-  ChartNoAxesCombined,
   CircleDollarSign,
   LayoutDashboard,
+  MoreHorizontal,
   ReceiptText,
-  Settings,
 } from 'lucide-react'
 import { useEffect } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert'
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
 import { runAutomaticDriveBackupIfNeeded } from '../services/backupService'
 import { generateDueCutoffReports } from '../services/cutoffReportService'
+import { ensureActiveEarningPeriod } from '../services/earningPeriodService'
 
 const navItems = [
   {
-    label: 'Dashboard',
+    label: 'Inicio',
     path: '/dashboard',
     icon: LayoutDashboard,
   },
@@ -26,7 +26,7 @@ const navItems = [
     icon: CircleDollarSign,
   },
   {
-    label: 'Gastos',
+    label: 'Egresos',
     path: '/expenses',
     icon: ReceiptText,
   },
@@ -36,21 +36,23 @@ const navItems = [
     icon: CalendarDays,
   },
   {
-    label: 'Reportes',
-    path: '/reports',
-    icon: ChartNoAxesCombined,
-  },
-  {
-    label: 'Configuración',
-    path: '/settings',
-    icon: Settings,
+    label: 'Más',
+    path: '/more',
+    icon: MoreHorizontal,
   },
 ]
 
 let automaticBackupCheckStarted = false
 let automaticCutoffCheckStarted = false
+let earningPeriodCheckStarted = false
 
 export function AppLayout() {
+  const location = useLocation()
+  const isMoreSection = ['/more', '/reports', '/settings', '/debug'].some(
+    (path) =>
+      location.pathname === path || location.pathname.startsWith(`${path}/`),
+  )
+
   useEffect(() => {
     if (!automaticBackupCheckStarted) {
       automaticBackupCheckStarted = true
@@ -65,6 +67,14 @@ export function AppLayout() {
 
       generateDueCutoffReports().catch((error) => {
         console.warn('No se pudieron generar los cortes automáticos.', error)
+      })
+    }
+
+    if (!earningPeriodCheckStarted) {
+      earningPeriodCheckStarted = true
+
+      ensureActiveEarningPeriod().catch((error) => {
+        console.warn('No se pudo inicializar el período de ganancia.', error)
       })
     }
 
@@ -101,7 +111,7 @@ export function AppLayout() {
         aria-label="Navegación principal"
         className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 md:hidden"
       >
-        <ul className="mx-auto grid max-w-5xl grid-cols-6 gap-1">
+        <ul className="mx-auto grid max-w-5xl grid-cols-5 gap-1">
           {navItems.map(({ label, path, icon: Icon }) => (
             <li key={path}>
               <NavLink
@@ -110,7 +120,7 @@ export function AppLayout() {
                 className={({ isActive }) =>
                   [
                     'flex min-h-14 flex-col items-center justify-center rounded-md px-1 text-[0.65rem] font-medium leading-tight transition-colors',
-                    isActive
+                    isActive || (path === '/more' && isMoreSection)
                       ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                       : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100',
                   ].join(' ')

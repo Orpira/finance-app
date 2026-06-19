@@ -4,12 +4,17 @@ import {
   db,
 } from '../database/db'
 import type { AppSettings } from '../types/settings'
+import { closeActiveEarningPeriodAndCreateNext } from './earningPeriodService'
 
 const SETTINGS_STORAGE_KEY = 'finance-app:settings'
 
 export type UpdateSettingsInput = Partial<
   Omit<AppSettings, 'id' | 'createdAt' | 'updatedAt'>
 >
+
+export interface UpdateSettingsOptions {
+  nextEarningPeriodName?: string
+}
 
 function syncSettingsToLocalStorage(settings: AppSettings) {
   localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
@@ -77,12 +82,26 @@ export async function getSettings() {
   return defaultSettings
 }
 
-export async function updateSettings(updates: UpdateSettingsInput) {
+export async function updateSettings(
+  updates: UpdateSettingsInput,
+  options: UpdateSettingsOptions = {},
+) {
   const currentSettings = await getSettings()
   const nextSettings: AppSettings = {
     ...currentSettings,
     ...updates,
     updatedAt: new Date().toISOString(),
+  }
+  const incomePercentageChanged =
+    updates.incomePercentage !== undefined &&
+    updates.incomePercentage !== currentSettings.incomePercentage
+
+  if (incomePercentageChanged) {
+    await closeActiveEarningPeriodAndCreateNext(
+      nextSettings,
+      updates.incomePercentage as number,
+      options.nextEarningPeriodName,
+    )
   }
 
   await db.settings.put(nextSettings)

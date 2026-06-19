@@ -2,7 +2,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Pencil,
-  Plus,
   ReceiptText,
   Trash2,
 } from 'lucide-react'
@@ -204,17 +203,16 @@ export function ExpenseListPage() {
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHeader
-        backLabel="Gastos"
-        backTo="/expenses"
-        eyebrow="Gastos"
-        title="Registros de gastos"
+        backLabel="Inicio"
+        backTo="/dashboard"
+        eyebrow="Egresos"
+        title="Registros de egresos"
       >
         <Link
           className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
-          to="/expenses"
+          to="/expenses/nuevo"
         >
-          <Plus className="size-4" aria-hidden="true" />
-          Nuevo gasto
+          + Nuevo Egreso
         </Link>
       </PageHeader>
 
@@ -304,14 +302,14 @@ export function ExpenseListPage() {
         <div className="flex items-center gap-2">
           <ReceiptText className="size-5 text-emerald-700" aria-hidden="true" />
           <h2 className="text-lg font-semibold text-slate-950">
-            Gastos recientes
+            Egresos recientes
           </h2>
         </div>
 
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           {filteredExpenses.length === 0 ? (
             <p className="p-4 text-sm text-slate-500">
-              No hay gastos con los filtros seleccionados.
+              No hay egresos con los filtros seleccionados.
             </p>
           ) : (
             <ul className="divide-y divide-slate-200">

@@ -96,19 +96,55 @@ export function SettingsBusinessPage() {
     setSaveStatus('saving')
 
     try {
-      const updatedSettings = await updateSettings({
-        businessName: settings.businessName.trim(),
-        country: settings.country,
-        city: settings.city.trim(),
-        defaultCurrency: settings.defaultCurrency,
-        secondaryCurrency: settings.secondaryCurrency,
-        incomePercentage: settings.incomePercentage,
-        rateMode: settings.rateMode,
-        theme: settings.theme,
-        cutoffFrequency: settings.cutoffFrequency,
-        cutoffWeekStart: settings.cutoffWeekStart,
-        cutoffAnchorDate: settings.cutoffAnchorDate || getTodayInputDate(),
-      })
+      const currentSettings = await getSettings()
+      const incomePercentageChanged =
+        settings.incomePercentage !== currentSettings.incomePercentage
+      let nextEarningPeriodName: string | undefined
+
+      if (
+        incomePercentageChanged &&
+        !window.confirm(
+          'Cambiar el porcentaje cerrará el período activo actual y creará un nuevo período. Los registros anteriores conservarán su porcentaje original.\n¿Deseas continuar?',
+        )
+      ) {
+        setSettings(currentSettings)
+        setSaveStatus('idle')
+        return
+      }
+
+      if (incomePercentageChanged) {
+        const periodName = window.prompt(
+          'Nombre del nuevo período de ganancia',
+          `Periodo ${new Date().toLocaleDateString('es-ES')}`,
+        )
+
+        if (periodName === null) {
+          setSettings(currentSettings)
+          setSaveStatus('idle')
+          return
+        }
+
+        nextEarningPeriodName = periodName.trim() || undefined
+      }
+
+      const updatedSettings = await updateSettings(
+        {
+          businessName: settings.businessName.trim(),
+          country: settings.country,
+          city: settings.city.trim(),
+          defaultCurrency: settings.defaultCurrency,
+          secondaryCurrency: settings.secondaryCurrency,
+          incomePercentage: settings.incomePercentage,
+          rateMode: settings.rateMode,
+          theme: settings.theme,
+          cutoffFrequency: settings.cutoffFrequency,
+          cutoffWeekStart: settings.cutoffWeekStart,
+          cutoffAnchorDate: settings.cutoffAnchorDate || getTodayInputDate(),
+        },
+        {
+          nextEarningPeriodName,
+        },
+      )
 
       setSettings(updatedSettings)
       setSaveStatus('saved')

@@ -1,4 +1,4 @@
-import { Building2, ChevronRight, DatabaseBackup, LockKeyhole } from 'lucide-react'
+import { Building2, ChevronRight, LockKeyhole } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -16,20 +16,14 @@ const settingsLinks = [
     icon: LockKeyhole,
     label: 'Seguridad',
   },
-  {
-    description: 'Exportar o importar un respaldo local de tus datos.',
-    href: '/settings/backup',
-    icon: DatabaseBackup,
-    label: 'Backup',
-  },
 ]
 
 export function SettingsPage() {
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <PageHeader
-        backLabel="Inicio"
-        backTo="/"
+        backLabel="Más"
+        backTo="/more"
         eyebrow="Configuración"
         title="Opciones de la aplicación"
       />

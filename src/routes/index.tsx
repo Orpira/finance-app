@@ -4,12 +4,14 @@ import AppLayout from '../app/AppLayout'
 import { PinGate } from '../components/PinGate'
 import AppointmentFormPage from '../pages/Agenda/AppointmentFormPage'
 import AgendaPage from '../pages/Agenda/AgendaPage'
+import BestDaysHistoryPage from '../pages/Dashboard/BestDaysHistoryPage'
 import DashboardPage from '../pages/Dashboard/DashboardPage'
 import ExpenseListPage from '../pages/Expenses/ExpenseListPage'
 import ExpensesPage from '../pages/Expenses/ExpensesPage'
 import HomePage from '../pages/Home/HomePage'
 import IncomeListPage from '../pages/Income/IncomeListPage'
 import IncomePage from '../pages/Income/IncomePage'
+import MorePage from '../pages/More/MorePage'
 import ReportPreviewPage from '../pages/Reports/ReportPreviewPage'
 import ReportsPage from '../pages/Reports/ReportsPage'
 import SettingsBackupPage from '../pages/Settings/SettingsBackupPage'
@@ -26,11 +28,18 @@ export function RouterProvider() {
           <Route element={<AppLayout />}>
             <Route index element={<HomePage />} />
             <Route path="dashboard" element={<DashboardPage />} />
+            <Route
+              path="dashboard/best-days-history"
+              element={<BestDaysHistoryPage />}
+            />
+            <Route path="income/nuevo" element={<IncomePage />} />
+            <Route path="income/:incomeId/editar" element={<IncomePage />} />
             <Route path="income/list" element={<IncomeListPage />} />
-            <Route path="income" element={<IncomePage />} />
+            <Route path="income" element={<IncomeListPage />} />
             <Route path="expenses/list" element={<ExpenseListPage />} />
             <Route path="expenses/:expenseId/editar" element={<ExpensesPage />} />
-            <Route path="expenses" element={<ExpensesPage />} />
+            <Route path="expenses/nuevo" element={<ExpensesPage />} />
+            <Route path="expenses" element={<ExpenseListPage />} />
             <Route path="agenda/nueva" element={<AppointmentFormPage />} />
             <Route
               path="agenda/:appointmentId/editar"
@@ -43,6 +52,7 @@ export function RouterProvider() {
             <Route path="settings/business" element={<SettingsBusinessPage />} />
             <Route path="settings/security" element={<SettingsSecurityPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="more" element={<MorePage />} />
             <Route path="debug" element={<DebugPage />} />
           </Route>
         </Routes>

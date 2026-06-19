@@ -1,6 +1,6 @@
-import { List, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import {
@@ -25,7 +25,7 @@ import {
 import { currencies } from '../../utils/countries'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+type SaveStatus = 'idle' | 'saving' | 'error'
 
 const expenseCategories = [
   'Transporte',
@@ -105,7 +105,7 @@ export function ExpensesPage() {
         window.alert(
           'Este gasto pertenece a una temporada cerrada. Solo puede consultarse desde el historial y usarse en reportes.',
         )
-        navigate('/expenses/list', { replace: true })
+        navigate('/expenses', { replace: true })
         return
       }
 
@@ -218,17 +218,7 @@ export function ExpensesPage() {
         await createExpense(expenseInput)
       }
 
-      if (isEditing) {
-        navigate('/expenses/list')
-        return
-      }
-
-      setAmount(0)
-      setDate(getTodayInputDate())
-      setCategory(expenseCategories[0])
-      setExpenseCountry(undefined)
-      setExpenseCity(undefined)
-      setSaveStatus('saved')
+      navigate('/expenses')
     } catch {
       setSaveStatus('error')
     }
@@ -245,19 +235,11 @@ export function ExpensesPage() {
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHeader
-        backLabel={isEditing ? 'Gastos' : 'Inicio'}
-        backTo={isEditing ? '/expenses/list' : '/'}
-        eyebrow="Gastos"
-        title={isEditing ? 'Modificar gasto' : 'Registrar gasto'}
-      >
-        <Link
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-emerald-200 bg-white px-4 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
-          to="/expenses/list"
-        >
-          <List className="size-4" aria-hidden="true" />
-          Ver gastos
-        </Link>
-      </PageHeader>
+        backLabel="Egresos"
+        backTo="/expenses"
+        eyebrow="Egresos"
+        title={isEditing ? 'Modificar egreso' : 'Registrar egreso'}
+      />
 
       <form
         className="flex flex-col gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
@@ -371,8 +353,6 @@ export function ExpensesPage() {
 
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-slate-500" role="status">
-            {saveStatus === 'saved' &&
-              (isEditing ? 'Gasto actualizado' : 'Gasto guardado')}
             {saveStatus === 'error' && 'No se pudo guardar'}
           </p>
 
