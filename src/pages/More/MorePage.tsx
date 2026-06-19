@@ -34,7 +34,7 @@ export function MorePage() {
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <PageHeader
         backLabel="Inicio"
-        backTo="/dashboard"
+        backTo="/"
         eyebrow="Más"
         title="Otras opciones"
       />

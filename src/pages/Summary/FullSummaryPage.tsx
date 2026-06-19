@@ -5,11 +5,15 @@ import {
   ExternalLink,
   MinusCircle,
   PlusCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
+import { SensitiveAmount } from '../../components/SensitiveAmount'
+import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { listExpenses } from '../../services/expenseService'
 import { ensureActiveEarningPeriod } from '../../services/earningPeriodService'
@@ -31,7 +35,8 @@ function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
-export function DashboardPage() {
+export function FullSummaryPage() {
+  const { hidden, toggle } = useSensitiveValues()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
   const monthRange = useMemo(() => getCurrentMonthRange(), [])
@@ -47,7 +52,7 @@ export function DashboardPage() {
   useEffect(() => {
     let isMounted = true
 
-    async function loadDashboard() {
+    async function loadFullSummary() {
       const range = {
         from: dateFrom || undefined,
         to: dateTo || undefined,
@@ -75,7 +80,7 @@ export function DashboardPage() {
       setAllExpenses(currentExpenses)
     }
 
-    loadDashboard()
+    loadFullSummary()
 
     return () => {
       isMounted = false
@@ -228,11 +233,20 @@ export function DashboardPage() {
       <PageHeader
         backLabel="Inicio"
         backTo="/"
-        eyebrow={settings.businessName || 'Dashboard'}
-        title="DASHBOARD"
-      />
+        eyebrow={settings.businessName || 'Inicio'}
+        title="Resumen completo"
+      >
+        <button
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
+          onClick={toggle}
+          type="button"
+        >
+          {hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          {hidden ? 'Mostrar importes' : 'Ocultar importes'}
+        </button>
+      </PageHeader>
 
-      <CollapsibleFilters title="Filtros" storageKey="filters-open-dashboard">
+      <CollapsibleFilters title="Filtros" storageKey="filters-open-full-summary">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-600">
@@ -321,10 +335,10 @@ export function DashboardPage() {
             <PlusCircle className="size-5 text-emerald-700" aria-hidden="true" />
           </div>
           <p className="mt-3 text-2xl font-semibold text-slate-950">
-            {formatCurrency(primaryIncome, primaryCurrency)}
+            <SensitiveAmount hidden={hidden} value={formatCurrency(primaryIncome, primaryCurrency)} />
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            {formatCurrency(secondaryIncome, secondaryCurrency)}
+            <SensitiveAmount hidden={hidden} value={formatCurrency(secondaryIncome, secondaryCurrency)} />
           </p>
         </article>
 
@@ -352,7 +366,7 @@ export function DashboardPage() {
             />
           </div>
           <p className="mt-3 text-2xl font-semibold text-slate-950">
-            {formatCurrency(netProfit, primaryCurrency)}
+            <SensitiveAmount hidden={hidden} value={formatCurrency(netProfit, primaryCurrency)} />
           </p>
           <p className="mt-1 text-sm text-slate-500">
             ganancia real menos gastos
@@ -370,7 +384,7 @@ export function DashboardPage() {
             />
           </div>
           <p className="mt-3 text-2xl font-semibold text-slate-950">
-            {formatCurrency(primaryIncome, primaryCurrency)}
+            <SensitiveAmount hidden={hidden} value={formatCurrency(primaryIncome, primaryCurrency)} />
           </p>
           <p className="mt-1 text-sm text-slate-500">
             período activo: {activePeriod?.name ?? 'Actual'}
@@ -413,7 +427,7 @@ export function DashboardPage() {
             </h2>
             <Link
               className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-emerald-200 bg-white px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
-              to="/dashboard/best-days-history"
+              to="/resumen-completo/historial-mejores-dias"
             >
               <ExternalLink className="size-4" aria-hidden="true" />
               Ver historial de mejores días
@@ -436,7 +450,7 @@ export function DashboardPage() {
               </p>
               <p className="mt-2 text-sm text-slate-500">
                 Promedio:{' '}
-                {formatCurrency(bestIncomeWeekday.average, primaryCurrency)}
+                <SensitiveAmount hidden={hidden} value={formatCurrency(bestIncomeWeekday.average, primaryCurrency)} />
               </p>
               <p className="mt-1 text-sm text-slate-500">
                 {bestIncomeWeekday.count} ingreso
@@ -451,4 +465,4 @@ export function DashboardPage() {
   )
 }
 
-export default DashboardPage
+export default FullSummaryPage

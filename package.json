@@ -16,8 +16,10 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",
+    "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.4.0",
     "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/local-notifications": "^8.2.0",
     "@capacitor/share": "^8.0.1",
     "@hookform/resolvers": "^5.4.0",
     "@tailwindcss/vite": "^4.3.0",

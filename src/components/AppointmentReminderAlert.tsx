@@ -1,4 +1,4 @@
-import { BellRing, CalendarDays, Check } from 'lucide-react'
+import { BellRing, CalendarDays, Check, Clock3 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -156,6 +156,13 @@ export function AppointmentReminderAlert() {
     const firedReminderKeys = getFiredReminderKeys()
     firedReminderKeys.add(dueReminder.key)
     saveFiredReminderKeys(firedReminderKeys)
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('Cita próxima', {
+        body: `Tienes una cita a las ${getTimeFromDateTime(dueReminder.appointment.dateTime)}.`,
+        icon: '/icons.svg',
+        tag: dueReminder.key,
+      })
+    }
     const timeoutId = window.setTimeout(() => {
       setActiveReminder(dueReminder)
     }, 0)
@@ -191,6 +198,18 @@ export function AppointmentReminderAlert() {
 
     setActiveReminder(null)
     navigate(`/agenda?date=${selectedDate}&appointment=${appointmentId}`)
+  }
+
+  function handleSnooze() {
+    if (!activeReminder) return
+    const snoozedKey = `${activeReminder.key}-snooze-${Date.now()}`
+    const snoozedReminder = {
+      ...activeReminder,
+      key: snoozedKey,
+      reminder: { ...activeReminder.reminder, amount: 0 },
+    }
+    setActiveReminder(null)
+    window.setTimeout(() => setActiveReminder(snoozedReminder), 5 * 60 * 1000)
   }
 
   if (!activeReminder) {
@@ -232,7 +251,7 @@ export function AppointmentReminderAlert() {
           </p>
         )}
 
-        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+        <div className="mt-5 grid gap-2 sm:grid-cols-3">
           <button
             className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             onClick={() => setActiveReminder(null)}
@@ -240,6 +259,14 @@ export function AppointmentReminderAlert() {
           >
             <Check className="size-4" aria-hidden="true" />
             Entendido
+          </button>
+          <button
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-amber-200 px-4 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
+            onClick={handleSnooze}
+            type="button"
+          >
+            <Clock3 className="size-4" aria-hidden="true" />
+            Posponer 5 min
           </button>
           <button
             className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"

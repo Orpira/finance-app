@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom'
 
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
+import { SensitiveAmount } from '../../components/SensitiveAmount'
+import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import {
   deleteServiceIncome,
   listServiceIncomes,
@@ -42,6 +44,7 @@ function getIncomeStatusClass(status: ServiceIncomeStatus) {
 }
 
 export function IncomeListPage() {
+  const { hidden } = useSensitiveValues()
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
@@ -229,7 +232,7 @@ export function IncomeListPage() {
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHeader
         backLabel="Inicio"
-        backTo="/dashboard"
+        backTo="/"
         eyebrow="Ingresos"
         title="Registros de ingresos"
       >
@@ -370,13 +373,13 @@ export function IncomeListPage() {
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-slate-950">
-                          {formatCurrency(
+                          <SensitiveAmount hidden={hidden} value={formatCurrency(
                             income.realGain,
                             income.currency as CurrencyCode,
-                          )}
+                          )} />
                         </p>
                         <p className="mt-1 text-sm text-slate-500">
-                          {formatCurrency(income.eurValue, 'EUR')}
+                          <SensitiveAmount hidden={hidden} value={formatCurrency(income.eurValue, 'EUR')} />
                         </p>
                       </div>
                     </div>

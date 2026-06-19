@@ -1,342 +1,182 @@
 import {
-  CalendarDays,
-  ChartNoAxesCombined,
-  CircleDollarSign,
-  LayoutDashboard,
-  MapPin,
-  ReceiptText,
-  Settings,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  MinusCircle,
+  PlusCircle,
+  TrendingUp,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { getSettings, updateSettings } from '../../services/settingsService'
-import type { AppSettings, CountryCode } from '../../types/settings'
-import { countries, getCountryCurrency } from '../../utils/countries'
+import { SensitiveAmount } from '../../components/SensitiveAmount'
+import { useSensitiveValues } from '../../hooks/useSensitiveValues'
+import { listExpenses } from '../../services/expenseService'
+import { listServiceIncomes } from '../../services/incomeService'
+import { getSettings } from '../../services/settingsService'
+import type { Expense } from '../../types/expense'
+import type { ServiceIncome } from '../../types/service'
+import type { AppSettings } from '../../types/settings'
+import { formatCurrency } from '../../utils/currency'
+import { calculateFinancialTotals } from '../../utils/financeStats'
 
-const mainActions = [
-  {
-    label: 'Dashboard',
-    title: 'Control general de tu actividad',
-    description:
-      'Visualiza ingresos, gastos, ganancias y estadísticas clave de forma rápida.',
-    path: '/dashboard',
-    icon: LayoutDashboard,
-  },
-  {
-    label: 'Ingresos',
-    title: 'Registro de servicios realizados',
-    description:
-      'Guarda cada servicio, calcula automáticamente tu ganancia real y convierte valores entre monedas.',
-    path: '/income',
-    icon: CircleDollarSign,
-  },
-  {
-    label: 'Egresos',
-    title: 'Control de egresos',
-    description:
-      'Registra gastos operativos y realiza seguimiento detallado de tus costos diarios.',
-    path: '/expenses',
-    icon: ReceiptText,
-  },
-  {
-    label: 'Agenda',
-    title: 'Planificación de citas',
-    description:
-      'Organiza tus compromisos, programa citas y conviértelas fácilmente en servicios completados.',
-    path: '/agenda',
-    icon: CalendarDays,
-  },
-  {
-    label: 'Reportes',
-    title: 'Análisis y exportación',
-    description:
-      'Genera reportes en PDF o Excel y comparte resúmenes de tu actividad cuando lo necesites.',
-    path: '/reports',
-    icon: ChartNoAxesCombined,
-  },
-  {
-    label: 'Configuración',
-    title: 'Preferencias y seguridad',
-    description:
-      'Administra moneda base, tasas de cambio, PIN de acceso, tema visual y opciones de respaldo.',
-    path: '/settings',
-    icon: Settings,
-  },
-]
+function monthRange(offset: number) {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+  const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0)
 
-const LOCATION_CONTEXT_DISMISSAL_KEY =
-  'finance-app:dismissed-location-context'
-
-interface DetectedLocation {
-  country: CountryCode
-  city: string
+  return {
+    from: start.toLocaleDateString('en-CA'),
+    to: end.toLocaleDateString('en-CA'),
+  }
 }
 
-const timezoneLocationMap: Record<string, DetectedLocation> = {
-  'America/Argentina/Buenos_Aires': { country: 'AR', city: 'Buenos Aires' },
-  'America/Bogota': { country: 'CO', city: 'Bogotá' },
-  'America/Mexico_City': { country: 'MX', city: 'Ciudad de México' },
-  'Atlantic/Canary': { country: 'ES', city: 'Las Palmas de Gran Canaria' },
-  'Europe/Madrid': { country: 'ES', city: 'Madrid' },
-  'Europe/London': { country: 'GB', city: 'Londres' },
+function variation(current: number, previous: number) {
+  if (previous === 0) {
+    return current === 0 ? 0 : 100
+  }
+
+  return ((current - previous) / Math.abs(previous)) * 100
 }
 
-function getCountryLabel(countryCode: CountryCode) {
+function Variation({ value }: { value: number }) {
+  const formatted = `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`
+
   return (
-    countries.find((country) => country.value === countryCode)?.label ??
-    countryCode
+    <span
+      className={[
+        'rounded-full px-2.5 py-1 text-xs font-semibold',
+        value >= 0
+          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+          : 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
+      ].join(' ')}
+    >
+      {formatted} vs. mes anterior
+    </span>
   )
-}
-
-function isSupportedCountry(countryCode: string): countryCode is CountryCode {
-  return countries.some((country) => country.value === countryCode)
-}
-
-function getLocationLabel(countryCode: CountryCode, city?: string) {
-  const countryLabel = getCountryLabel(countryCode)
-  const normalizedCity = city?.trim()
-
-  return normalizedCity ? `${countryLabel}, ${normalizedCity}` : countryLabel
-}
-
-function getDetectedLocation() {
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const timezoneLocation = timezone ? timezoneLocationMap[timezone] : undefined
-
-  if (timezoneLocation) {
-    return timezoneLocation
-  }
-
-  const browserLanguages =
-    navigator.languages.length > 0 ? navigator.languages : [navigator.language]
-
-  for (const language of browserLanguages) {
-    const countryCode = language.split('-').at(-1)?.toUpperCase()
-
-    if (countryCode && isSupportedCountry(countryCode)) {
-      return { country: countryCode, city: '' }
-    }
-  }
-
-  return null
 }
 
 export function HomePage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [detectedLocation, setDetectedLocation] = useState<DetectedLocation | null>(
-    null,
-  )
+  const [currentIncomes, setCurrentIncomes] = useState<ServiceIncome[]>([])
+  const [currentExpenses, setCurrentExpenses] = useState<Expense[]>([])
+  const [previousIncomes, setPreviousIncomes] = useState<ServiceIncome[]>([])
+  const [previousExpenses, setPreviousExpenses] = useState<Expense[]>([])
+  const { hidden, toggle } = useSensitiveValues()
 
   useEffect(() => {
-    let isMounted = true
+    let mounted = true
+    const current = monthRange(0)
+    const previous = monthRange(-1)
 
-    getSettings().then((currentSettings) => {
-      if (isMounted) {
-        setSettings(currentSettings)
-        setDetectedLocation(getDetectedLocation())
-      }
+    Promise.all([
+      getSettings(),
+      listServiceIncomes(current),
+      listExpenses(current),
+      listServiceIncomes(previous),
+      listExpenses(previous),
+    ]).then(([nextSettings, incomes, expenses, oldIncomes, oldExpenses]) => {
+      if (!mounted) return
+      setSettings(nextSettings)
+      setCurrentIncomes(incomes)
+      setCurrentExpenses(expenses)
+      setPreviousIncomes(oldIncomes)
+      setPreviousExpenses(oldExpenses)
     })
 
     return () => {
-      isMounted = false
+      mounted = false
     }
   }, [])
 
-  const currentLocationKey = settings
-    ? `${settings.country}:${settings.city.trim()}`
-    : ''
-  const detectedLocationKey = detectedLocation
-    ? `${detectedLocation.country}:${detectedLocation.city.trim()}`
-    : ''
-  const hasLocationChange =
-    settings &&
-    detectedLocation &&
-    (detectedLocation.country !== settings.country ||
-      (detectedLocation.city.trim() !== '' &&
-        detectedLocation.city.trim() !== settings.city.trim()))
-  const shouldShowLocationContextAlert =
-    hasLocationChange &&
-    localStorage.getItem(LOCATION_CONTEXT_DISMISSAL_KEY) !==
-      `${currentLocationKey}:${detectedLocationKey}`
-  const activeLocationLabel = settings
-    ? getLocationLabel(settings.country, settings.city)
-    : ''
-
-  function handleKeepCurrentCountry() {
-    if (!settings || !detectedLocation) {
-      return
+  const totals = useMemo(() => {
+    if (!settings) return null
+    return {
+      current: calculateFinancialTotals(
+        currentIncomes,
+        currentExpenses,
+        settings.defaultCurrency,
+        settings.secondaryCurrency,
+      ),
+      previous: calculateFinancialTotals(
+        previousIncomes,
+        previousExpenses,
+        settings.defaultCurrency,
+        settings.secondaryCurrency,
+      ),
     }
+  }, [currentExpenses, currentIncomes, previousExpenses, previousIncomes, settings])
 
-    localStorage.setItem(
-      LOCATION_CONTEXT_DISMISSAL_KEY,
-      `${currentLocationKey}:${detectedLocationKey}`,
-    )
-    setDetectedLocation(null)
+  if (!settings || !totals) {
+    return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando...</section>
   }
 
-  async function handleFinishSeasonAndChangeLocation() {
-    if (!settings || !detectedLocation) {
-      return
-    }
-
-    const updatedSettings = await updateSettings({
-      closedLocationSeasons: [
-        ...settings.closedLocationSeasons.filter(
-          (season) =>
-            !(
-              season.country === settings.country &&
-              season.city.trim().toLocaleLowerCase('es') ===
-                settings.city.trim().toLocaleLowerCase('es')
-            ),
-        ),
-        {
-          city: settings.city,
-          closedAt: new Date().toISOString(),
-          country: settings.country,
-        },
-      ],
-      country: detectedLocation.country,
-      city: detectedLocation.city,
-      defaultCurrency:
-        getCountryCurrency(detectedLocation.country) ?? settings?.defaultCurrency,
-    })
-
-    setSettings(updatedSettings)
-    setDetectedLocation(null)
-  }
+  const cards = [
+    {
+      icon: PlusCircle,
+      label: 'Ingresos',
+      value: totals.current.primaryIncome,
+      previous: totals.previous.primaryIncome,
+      sensitive: true,
+      tone: 'text-emerald-700 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300',
+    },
+    {
+      icon: MinusCircle,
+      label: 'Egresos',
+      value: totals.current.primaryExpenses,
+      previous: totals.previous.primaryExpenses,
+      sensitive: false,
+      tone: 'text-rose-700 bg-rose-100 dark:bg-rose-950 dark:text-rose-300',
+    },
+    {
+      icon: TrendingUp,
+      label: 'Ganancia',
+      value: totals.current.primaryNet,
+      previous: totals.previous.primaryNet,
+      sensitive: true,
+      tone: 'text-sky-700 bg-sky-100 dark:bg-sky-950 dark:text-sky-300',
+    },
+  ]
 
   return (
-    <section className="mx-auto flex min-h-[calc(100dvh-7rem)] w-full max-w-4xl flex-col justify-center gap-8">
-      {shouldShowLocationContextAlert ? (
-        <aside
-          aria-live="polite"
-          className="flex flex-col gap-4 rounded-lg border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-950 sm:flex-row sm:items-start sm:justify-between"
-        >
-          <div className="flex gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200">
-              <MapPin className="size-5" aria-hidden="true" />
-            </span>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <p className="text-base font-semibold text-slate-950">
-                  Se detectó una ubicación diferente.
-                </p>
-              </div>
-              <dl className="grid gap-3 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="font-medium text-slate-500">
-                    Temporada actual:
-                  </dt>
-                  <dd className="font-semibold text-slate-950">
-                    {getLocationLabel(settings.country, settings.city)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-slate-500">
-                    Nueva ubicación detectada:
-                  </dt>
-                  <dd className="font-semibold text-slate-950">
-                    {getLocationLabel(
-                      detectedLocation.country,
-                      detectedLocation.city,
-                    )}
-                  </dd>
-                </div>
-              </dl>
-              <p className="text-sm font-medium text-slate-600">
-                ¿Deseas finalizar la temporada en{' '}
-                {getLocationLabel(settings.country, settings.city)} y empezar a
-                registrar desde la nueva ubicación?
-              </p>
-              <p className="text-sm leading-5 text-slate-500">
-                Los registros anteriores conservarán su país y ciudad. Si
-                aceptas, la configuración se actualizará automáticamente y los
-                nuevos registros usarán la ubicación detectada desde ahora.
-              </p>
-            </div>
+    <section className="mx-auto flex w-full max-w-5xl flex-col gap-6 py-6 md:py-10">
+      <header className="rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-5 text-white shadow-xl sm:p-7">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-emerald-300">{settings.businessName || 'Private Balance'}</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Inicio</h1>
+            <p className="mt-2 text-sm text-slate-300">Resumen financiero del mes actual</p>
           </div>
-
-          <div className="grid gap-2 sm:min-w-52">
-            <button
-              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
-              onClick={handleKeepCurrentCountry}
-              type="button"
-            >
-              Continuar temporada actual
-            </button>
-            <button
-              className="h-10 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
-              onClick={handleFinishSeasonAndChangeLocation}
-              type="button"
-            >
-              Finalizar y cambiar a{' '}
-              {getLocationLabel(detectedLocation.country, detectedLocation.city)}
-            </button>
-          </div>
-        </aside>
-      ) : null}
-
-      <header className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:text-left">
-        <img
-          alt="Private Balance"
-          className="h-44 w-44 shrink-0 object-contain sm:h-52 sm:w-52"
-          src="/favicon.svg"
-        />
-        <div className="flex max-w-2xl flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-            <span className="rounded-md bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
-              Bienvenida
-            </span>
-            {settings?.businessName ? (
-              <span className="rounded-md border border-slate-200 bg-white px-3 py-1 text-sm font-medium text-slate-600">
-                {settings.businessName}
-              </span>
-            ) : null}
-          </div>
-          <h1 className="text-3xl font-semibold text-slate-950">
-            Tu espacio privado para organizar el día
-          </h1>
-          <p className="text-sm leading-6 text-slate-500">
-            Controla ingresos, gastos y citas desde un lugar sencillo, privado y
-            pensado para tu ritmo de trabajo.
-          </p>
-          {activeLocationLabel ? (
-            <p className="inline-flex w-fit items-center gap-2 self-center rounded-md border border-emerald-100 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm sm:self-start">
-              <MapPin className="size-4 text-emerald-700" aria-hidden="true" />
-              Temporada activa: {activeLocationLabel}
-            </p>
-          ) : null}
+          <button
+            aria-label={hidden ? 'Mostrar valores sensibles' : 'Ocultar valores sensibles'}
+            className="flex size-11 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+            onClick={toggle}
+            type="button"
+          >
+            {hidden ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+          </button>
         </div>
       </header>
 
-      <nav aria-label="Accesos principales">
-        <ul className="grid auto-rows-fr gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {mainActions.map(({ label, title, description, path, icon: Icon }) => (
-            <li className="h-full" key={path}>
-              <Link
-                className="flex h-full min-h-44 items-start gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50"
-                to={path}
-              >
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
-                  <Icon className="size-5" aria-hidden="true" />
-                </span>
-                <span className="flex min-w-0 flex-col gap-1">
-                  <span className="text-lg font-semibold text-slate-950">
-                    {label}
-                  </span>
-                  <span className="text-sm font-semibold text-slate-700">
-                    {title}
-                  </span>
-                  <span className="text-sm leading-5 text-slate-500">
-                    {description}
-                  </span>
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <div className="grid gap-4 md:grid-cols-3">
+        {cards.map(({ icon: Icon, label, previous, sensitive, tone, value }) => (
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900" key={label}>
+            <div className="flex items-center justify-between gap-3">
+              <span className={`flex size-11 items-center justify-center rounded-xl ${tone}`}><Icon className="size-5" aria-hidden="true" /></span>
+              <Variation value={variation(value, previous)} />
+            </div>
+            <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
+            <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+              <SensitiveAmount hidden={sensitive && hidden} value={formatCurrency(value, settings.defaultCurrency)} />
+            </p>
+          </article>
+        ))}
+      </div>
+
+      <Link className="inline-flex h-12 items-center justify-center gap-2 self-stretch rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:self-end" to="/resumen-completo">
+        Ver todo el resumen
+        <ArrowRight className="size-4" aria-hidden="true" />
+      </Link>
     </section>
   )
 }

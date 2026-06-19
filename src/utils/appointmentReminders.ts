@@ -18,8 +18,8 @@ const singularReminderUnitLabels: Record<AppointmentReminderUnit, string> = {
 }
 
 export const reminderTypeLabels: Record<AppointmentReminderType, string> = {
-  local: 'Notificación local',
-  inApp: 'Alerta visual',
+  local: 'Alarma sonora prioritaria',
+  inApp: 'Alarma sonora prioritaria',
 }
 
 export function createReminderId() {
@@ -31,7 +31,7 @@ export function createEmptyReminder(): AppointmentReminder {
     id: createReminderId(),
     amount: 30,
     unit: 'minutes',
-    type: 'inApp',
+    type: 'local',
   }
 }
 
@@ -50,7 +50,7 @@ export function hasInvalidReminders(reminders: AppointmentReminder[]) {
     reminders.some((reminder) => reminder.amount <= 0) ||
     new Set(
       reminders.map(
-        (reminder) => `${reminder.amount}-${reminder.unit}-${reminder.type}`,
+        (reminder) => `${reminder.amount}-${reminder.unit}`,
       ),
     ).size !== reminders.length
   )

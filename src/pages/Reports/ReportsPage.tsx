@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom'
 
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
+import { SensitiveAmount } from '../../components/SensitiveAmount'
+import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import {
   generateDueCutoffReports,
   listCutoffReports,
@@ -163,6 +165,7 @@ function buildPrintableDocument(title: string, body: string) {
 }
 
 export function ReportsPage() {
+  const { hidden: sensitiveValuesHidden } = useSensitiveValues()
   const navigate = useNavigate()
   const initialRange = useMemo(() => getCurrentMonthRange(), [])
   const [period, setPeriod] = useState<Period>('month')
@@ -1207,10 +1210,10 @@ export function ReportsPage() {
               <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <p className="text-sm font-medium text-slate-500">Ingresos</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-950">
-                  {formatCurrency(
+                  <SensitiveAmount hidden={sensitiveValuesHidden} value={formatCurrency(
                     selectedCutoffReport.incomeTotal,
                     selectedCutoffReport.currency,
-                  )}
+                  )} />
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
                   {selectedCutoffReport.incomeCount} registros
@@ -1233,10 +1236,10 @@ export function ReportsPage() {
               <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <p className="text-sm font-medium text-slate-500">Utilidad</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-950">
-                  {formatCurrency(
+                  <SensitiveAmount hidden={sensitiveValuesHidden} value={formatCurrency(
                     selectedCutoffReport.netTotal,
                     selectedCutoffReport.currency,
-                  )}
+                  )} />
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
                   Corte {selectedCutoffReport.periodStart} -{' '}

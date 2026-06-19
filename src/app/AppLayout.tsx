@@ -1,10 +1,11 @@
 import {
   CalendarDays,
   CircleDollarSign,
-  LayoutDashboard,
+  House,
   MoreHorizontal,
   ReceiptText,
 } from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
 import { useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
@@ -13,12 +14,13 @@ import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
 import { runAutomaticDriveBackupIfNeeded } from '../services/backupService'
 import { generateDueCutoffReports } from '../services/cutoffReportService'
 import { ensureActiveEarningPeriod } from '../services/earningPeriodService'
+import { initializeReminderNotifications } from '../services/reminderService'
 
 const navItems = [
   {
     label: 'Inicio',
-    path: '/dashboard',
-    icon: LayoutDashboard,
+    path: '/',
+    icon: House,
   },
   {
     label: 'Ingresos',
@@ -54,6 +56,9 @@ export function AppLayout() {
   )
 
   useEffect(() => {
+    initializeReminderNotifications().catch((error) => {
+      console.warn('No se pudieron inicializar las alarmas nativas.', error)
+    })
     if (!automaticBackupCheckStarted) {
       automaticBackupCheckStarted = true
 
@@ -100,7 +105,36 @@ export function AppLayout() {
 
   return (
     <div className="min-h-dvh bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
-      <main className="mx-auto min-h-dvh w-full max-w-5xl px-4 pb-24">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950 md:block">
+        <p className="px-3 text-lg font-semibold text-slate-950 dark:text-white">Private Balance</p>
+        <p className="mb-6 mt-1 px-3 text-xs font-medium uppercase tracking-widest text-emerald-700">Finanzas privadas</p>
+        <nav aria-label="Navegación principal de escritorio">
+          <ul className="grid gap-1">
+            {navItems.map(({ label, path, icon: Icon }) => (
+              <li key={path}>
+                <NavLink
+                  className={({ isActive }) => [
+                    'flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition-colors',
+                    isActive || (path === '/more' && isMoreSection)
+                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-900',
+                  ].join(' ')}
+                  end={path === '/'}
+                  to={path}
+                >
+                  <Icon className="size-5" aria-hidden="true" />
+                  {label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <p className="absolute bottom-5 left-8 text-xs text-slate-400">
+          {Capacitor.isNativePlatform() ? 'Aplicación Android' : 'Web / PWA'}
+        </p>
+      </aside>
+
+      <main className="mx-auto min-h-dvh w-full max-w-5xl px-4 pb-24 md:ml-64 md:pb-8">
         <Outlet />
       </main>
 

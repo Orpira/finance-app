@@ -1,6 +1,7 @@
 import { db } from '../database/db'
 import type { DateRangeListOptions } from '../types/dataAccess'
 import type { Appointment } from '../types/appointment'
+import { cancelAppointmentReminders } from './reminderService'
 
 export interface AppointmentListOptions extends DateRangeListOptions {
   completed?: boolean
@@ -51,9 +52,11 @@ export async function updateAppointment(
 
 export async function markAppointmentCompleted(id: number, completed = true) {
   await db.appointments.update(id, { completed })
+  if (completed) await cancelAppointmentReminders(id)
   return db.appointments.get(id)
 }
 
-export function deleteAppointment(id: number) {
+export async function deleteAppointment(id: number) {
+  await cancelAppointmentReminders(id)
   return db.appointments.delete(id)
 }

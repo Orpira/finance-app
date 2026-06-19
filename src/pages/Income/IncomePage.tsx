@@ -4,6 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { currencies } from '../../utils/countries'
 
 import { PageHeader } from '../../components/layout/PageHeader'
+import { SensitiveAmount } from '../../components/SensitiveAmount'
+import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import {
   createServiceIncome,
   getServiceIncomeById,
@@ -83,6 +85,7 @@ function hasIncomeAtSameDateTime(
 }
 
 export function IncomePage() {
+  const { hidden: sensitiveValuesHidden } = useSensitiveValues()
   const { incomeId } = useParams()
   const navigate = useNavigate()
   const parsedIncomeId = incomeId ? Number(incomeId) : null
@@ -464,7 +467,7 @@ export function IncomePage() {
               Ganancia real
             </p>
             <p className="mt-1 text-lg font-semibold text-slate-950">
-              {formatCurrency(realGain, currency)}
+              <SensitiveAmount hidden={sensitiveValuesHidden} value={formatCurrency(realGain, currency)} />
             </p>
           </div>
           <div>
@@ -472,7 +475,7 @@ export function IncomePage() {
               Valor {currency}
             </p>
             <p className="mt-1 text-lg font-semibold text-slate-950">
-              {formatCurrency(convertedValues.baseCurrencyValue, currency)}
+              <SensitiveAmount hidden={sensitiveValuesHidden} value={formatCurrency(convertedValues.baseCurrencyValue, currency)} />
             </p>
           </div>
           <div>
@@ -480,10 +483,10 @@ export function IncomePage() {
               Valor {settings.secondaryCurrency}
             </p>
             <p className="mt-1 text-lg font-semibold text-slate-950">
-              {formatCurrency(
+              <SensitiveAmount hidden={sensitiveValuesHidden} value={formatCurrency(
                 convertedValues.secondaryCurrencyValue,
                 settings.secondaryCurrency,
-              )}
+              )} />
             </p>
           </div>
         </div>

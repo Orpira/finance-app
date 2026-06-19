@@ -13,7 +13,6 @@ import { getSettings } from '../../services/settingsService'
 import type {
   Appointment,
   AppointmentReminder,
-  AppointmentReminderType,
   AppointmentReminderUnit,
 } from '../../types/appointment'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
@@ -166,7 +165,12 @@ export function AppointmentFormPage() {
       setExpectedAmount(appointment.expectedAmount)
       setCurrency(appointment.currency as CurrencyCode)
       setNotes(appointment.notes ?? '')
-      setReminders(appointment.reminders ?? [])
+      setReminders(
+        (appointment.reminders ?? []).map((reminder) => ({
+          ...reminder,
+          type: 'local',
+        })),
+      )
     }
 
     loadInitialData()
@@ -233,7 +237,10 @@ export function AppointmentFormPage() {
       country: editingAppointment?.country ?? settings.country,
       city: editingAppointment?.city ?? settings.city,
       notes: notes.trim(),
-      reminders,
+      reminders: reminders.map((reminder) => ({
+        ...reminder,
+        type: 'local' as const,
+      })),
       completed: editingAppointment?.completed ?? false,
       timerMode: editingAppointment?.timerMode,
       timerStartedAt: editingAppointment?.timerStartedAt,
@@ -387,7 +394,7 @@ export function AppointmentFormPage() {
             <div className="flex items-center gap-2">
               <Bell className="size-4 text-emerald-700" aria-hidden="true" />
               <h2 className="text-sm font-semibold text-slate-900">
-                Recordatorios
+                Alarmas sonoras
               </h2>
             </div>
             <button
@@ -397,19 +404,20 @@ export function AppointmentFormPage() {
               type="button"
             >
               <Plus className="size-4" aria-hidden="true" />
-              Añadir
+              Añadir alarma ({reminders.length}/2)
             </button>
           </div>
 
           {reminders.length === 0 ? (
             <p className="text-sm text-slate-500">
-              Sin recordatorios configurados.
+              Sin alarmas configuradas. Puedes añadir hasta dos y elegir cuánto
+              tiempo antes de la cita sonará cada una.
             </p>
           ) : (
             <div className="flex flex-col gap-3">
               {reminders.map((reminder, index) => (
                 <div
-                  className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto]"
+                  className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
                   key={reminder.id}
                 >
                   <label className="flex flex-col gap-1">
@@ -448,24 +456,6 @@ export function AppointmentFormPage() {
                     </select>
                   </label>
 
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs font-semibold text-slate-600">
-                      Tipo
-                    </span>
-                    <select
-                      className="h-10 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                      onChange={(event) =>
-                        updateReminder(reminder.id, {
-                          type: event.target.value as AppointmentReminderType,
-                        })
-                      }
-                      value={reminder.type}
-                    >
-                      <option value="local">notificación local</option>
-                      <option value="inApp">alerta visual en la app</option>
-                    </select>
-                  </label>
-
                   <button
                     className="inline-flex h-10 items-center justify-center self-end rounded-md border border-red-200 px-3 text-sm font-semibold text-red-700 transition hover:bg-red-50"
                     onClick={() => removeReminder(reminder.id)}
@@ -485,6 +475,11 @@ export function AppointmentFormPage() {
               duplicados.
             </p>
           )}
+          <p className="text-xs leading-5 text-slate-500">
+            En Android se programan como alarmas exactas, con sonido, vibración
+            y canal de prioridad máxima. El sistema puede solicitar permisos la
+            primera vez.
+          </p>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

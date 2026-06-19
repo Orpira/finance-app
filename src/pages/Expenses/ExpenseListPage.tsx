@@ -204,7 +204,7 @@ export function ExpenseListPage() {
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHeader
         backLabel="Inicio"
-        backTo="/dashboard"
+        backTo="/"
         eyebrow="Egresos"
         title="Registros de egresos"
       >

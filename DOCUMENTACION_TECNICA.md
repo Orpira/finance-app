@@ -43,8 +43,8 @@ Ofrecer una solución ligera para profesionales autónomos o pequeños negocios 
 
 ### 4.1. Rutas principales
 
-- `/` — `HomePage`
-- `/dashboard` — `DashboardPage`
+- `/` — `HomePage` (Inicio simplificado)
+- `/resumen-completo` — `FullSummaryPage` (todas las métricas; `/dashboard` redirige por compatibilidad)
 - `/income` — `IncomePage`
 - `/expenses` — `ExpensesPage`
 - `/agenda` — `AgendaPage`
@@ -53,6 +53,24 @@ Ofrecer una solución ligera para profesionales autónomos o pequeños negocios 
 - `/debug` — `DebugPage`
 
 La navegación está envuelta en `PinGate` (`src/components/PinGate.tsx`) que bloquea el acceso cuando el PIN está habilitado.
+
+En Android se usa Capacitor 8. La navegación inferior se prioriza en móvil y la web de escritorio usa barra lateral. `PinGate` escucha el ciclo de vida nativo mediante `@capacitor/app`; en web usa actividad y visibilidad. Android se bloquea al pasar a segundo plano y web después de 2 minutos sin actividad.
+
+### 4.2. Privacidad de importes
+
+La preferencia local `finance-app:sensitive-values-hidden` oculta ingresos y ganancias como `****` en Inicio, Resumen completo, listados de ingresos y resúmenes de cortes. No altera ni elimina los datos persistidos.
+
+### 4.3. Alarmas de Agenda
+
+Cada cita admite hasta dos alarmas sonoras independientes. La usuaria parametriza la cantidad y la unidad (minutos, horas o días) de cada alarma antes de la hora de inicio. Android usa `@capacitor/local-notifications`, el sonido propio `appointment_alarm.ogg`, canal de importancia máxima, vibración, alarmas exactas y acciones Detener/Posponer. Requiere aceptar notificaciones en Android 13+ y permitir alarmas exactas en Android 12+ cuando el sistema lo solicite. Android no permite que una app ignore el volumen, No molestar o la configuración manual del canal del dispositivo. En web se usa Notification API más alarma audible en primer plano; un navegador no garantiza sonido ni ejecución con la PWA completamente cerrada. Sin backend push no existe entrega web fiable con la app cerrada.
+
+La recuperación del PIN no revela ni descifra el PIN. Al no existir backend o identidad verificable, ofrece únicamente un reinicio local destructivo confirmado con `BORRAR`. Restaurar datos después requiere un backup cifrado creado previamente.
+
+### 4.4. Pruebas por plataforma
+
+- Web escritorio: `npm run dev`, abrir la URL local y comprobar barra lateral, Inicio, Resumen completo, ocultación y bloqueo tras 2 minutos.
+- Móvil/PWA: abrir la URL desde un dispositivo o modo responsive, instalar desde el navegador y comprobar navegación inferior. Las notificaciones web requieren permiso y solo se garantiza sonido con la app activa.
+- APK Android: `npm run android:apk`, instalar `dist/apk/finance-app-debug.apk`, aceptar notificaciones/alarmas exactas, crear una cita próxima con recordatorio local y probar segundo plano, Detener y Posponer.
 
 ## 5. Modelo de datos
 
@@ -68,7 +86,7 @@ Propiedades principales:
 - `rateMode`: modo de tasa de cambio (`manual` o `automatic`).
 - `theme`: modo visual (`system`, `light`, `dark`).
 - `pinEnabled`: habilita bloqueo por PIN.
-- `pinHash`: hash del PIN cuando está activado.
+- `pinHash`: derivación PBKDF2-SHA-256 con sal aleatoria del PIN cuando está activado. Se conserva verificación de hashes heredados para no bloquear instalaciones existentes.
 
 ### 5.2. `ServiceIncome`
 

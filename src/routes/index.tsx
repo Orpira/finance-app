@@ -1,11 +1,11 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import AppLayout from '../app/AppLayout'
 import { PinGate } from '../components/PinGate'
 import AppointmentFormPage from '../pages/Agenda/AppointmentFormPage'
 import AgendaPage from '../pages/Agenda/AgendaPage'
-import BestDaysHistoryPage from '../pages/Dashboard/BestDaysHistoryPage'
-import DashboardPage from '../pages/Dashboard/DashboardPage'
+import BestDaysHistoryPage from '../pages/Summary/BestDaysHistoryPage'
+import FullSummaryPage from '../pages/Summary/FullSummaryPage'
 import ExpenseListPage from '../pages/Expenses/ExpenseListPage'
 import ExpensesPage from '../pages/Expenses/ExpensesPage'
 import HomePage from '../pages/Home/HomePage'
@@ -27,11 +27,13 @@ export function RouterProvider() {
         <Routes>
           <Route element={<AppLayout />}>
             <Route index element={<HomePage />} />
-            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="resumen-completo" element={<FullSummaryPage />} />
+            <Route path="dashboard" element={<Navigate replace to="/resumen-completo" />} />
             <Route
-              path="dashboard/best-days-history"
+              path="resumen-completo/historial-mejores-dias"
               element={<BestDaysHistoryPage />}
             />
+            <Route path="dashboard/best-days-history" element={<Navigate replace to="/resumen-completo/historial-mejores-dias" />} />
             <Route path="income/nuevo" element={<IncomePage />} />
             <Route path="income/:incomeId/editar" element={<IncomePage />} />
             <Route path="income/list" element={<IncomeListPage />} />

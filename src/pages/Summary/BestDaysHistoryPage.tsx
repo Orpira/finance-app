@@ -125,8 +125,8 @@ export function BestDaysHistoryPage() {
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <PageHeader
-        backLabel="Dashboard"
-        backTo="/dashboard"
+        backLabel="Resumen completo"
+        backTo="/resumen-completo"
         eyebrow="Períodos de ganancia"
         title="Historial de mejores días"
       />

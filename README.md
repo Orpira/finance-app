@@ -92,8 +92,8 @@ Los iconos Android se generan en `android/app/src/main/res/`.
 
 ## ✅ Funcionalidades principales
 
-- `Home`: selector de módulos y bienvenida.
-- `Dashboard`: resumen mensual de ingresos, gastos y métricas.
+- `Inicio`: resumen mensual simplificado de ingresos, egresos y ganancia.
+- `Resumen completo`: indicadores, filtros y métricas financieras detalladas.
 - `Income`: registro de servicios con conversión de monedas.
 - `Expenses`: registro de gastos por categoría.
 - `Agenda`: gestión de citas y cronometrado.
@@ -107,7 +107,7 @@ Los datos se almacenan localmente usando IndexedDB con Dexie. La configuración 
 
 ## 🔐 Seguridad
 
-La función de PIN protege el ingreso a la aplicación. Se habilita o deshabilita desde `Settings`.
+La función de PIN protege el ingreso a la aplicación, bloquea al pasar Android a segundo plano y tras 2 minutos de inactividad en web. El PIN se guarda como hash con sal aleatoria, nunca en texto plano. Como no existe autenticación remota, la recuperación segura exige borrar los datos locales; conviene mantener un backup cifrado actualizado.
 
 ## Backup cifrado con Google Drive App Folder
 
