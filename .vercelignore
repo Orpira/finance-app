@@ -1,0 +1,17 @@
+.git
+.github
+.vercel
+.jdk
+.android-sdk
+.agents
+.codex
+android
+node_modules
+dist
+dist-ssr
+*.apk
+*.aab
+*.jks
+*.keystore
+*.log
+
