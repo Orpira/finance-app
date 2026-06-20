@@ -56,6 +56,10 @@ export interface ClosedLocationSeason {
   country: CountryCode
 }
 
+export interface ReopenedLocationSeason extends ClosedLocationSeason {
+  reopenedAt: string
+}
+
 export interface AppSettings {
   id: 'app'
   businessName: string
@@ -79,6 +83,7 @@ export interface AppSettings {
   googleDriveLastBackupAt?: string
   googleDriveLastBackupStatus?: string
   closedLocationSeasons: ClosedLocationSeason[]
+  reopenedLocationSeasons: ReopenedLocationSeason[]
   createdAt: string
   updatedAt: string
 }

@@ -422,7 +422,10 @@ export function ReportsPage() {
                     {label === 'SIN_TIPO' ? 'Sin tipo' : label}
                   </span>
                   <span className="font-semibold text-slate-950">
-                    {formatCurrency(value, currency)}
+                    <SensitiveAmount
+                      hidden={sensitiveValuesHidden}
+                      value={formatCurrency(value, currency)}
+                    />
                   </span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -1223,10 +1226,13 @@ export function ReportsPage() {
               <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <p className="text-sm font-medium text-slate-500">Egresos</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-950">
-                  {formatCurrency(
-                    selectedCutoffReport.expenseTotal,
-                    selectedCutoffReport.currency,
-                  )}
+                  <SensitiveAmount
+                    hidden={sensitiveValuesHidden}
+                    value={formatCurrency(
+                      selectedCutoffReport.expenseTotal,
+                      selectedCutoffReport.currency,
+                    )}
+                  />
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
                   {selectedCutoffReport.expenseCount} registros

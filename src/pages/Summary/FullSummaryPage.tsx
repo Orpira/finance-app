@@ -348,7 +348,10 @@ export function FullSummaryPage() {
             <MinusCircle className="size-5 text-red-600" aria-hidden="true" />
           </div>
           <p className="mt-3 text-2xl font-semibold text-slate-950">
-            {formatCurrency(primaryExpenses, primaryCurrency)}
+            <SensitiveAmount
+              hidden={hidden}
+              value={formatCurrency(primaryExpenses, primaryCurrency)}
+            />
           </p>
           <p className="mt-1 text-sm text-slate-500">
             {expenses.length} registros

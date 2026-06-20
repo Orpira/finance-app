@@ -9,11 +9,16 @@ export interface ExpenseListOptions extends DateRangeListOptions {
   city?: string
 }
 
-export type CreateExpenseInput = Omit<Expense, 'id'>
+export type CreateExpenseInput = Omit<Expense, 'id' | 'createdAt'> & {
+  createdAt?: string
+}
 export type UpdateExpenseInput = Partial<CreateExpenseInput>
 
 export async function createExpense(input: CreateExpenseInput) {
-  return db.expenses.add(input)
+  return db.expenses.add({
+    ...input,
+    createdAt: input.createdAt ?? new Date().toISOString(),
+  })
 }
 
 export async function getExpenseById(id: number) {

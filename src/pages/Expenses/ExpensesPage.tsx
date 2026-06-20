@@ -3,18 +3,26 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
+import { SensitiveAmount } from '../../components/SensitiveAmount'
+import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import {
   convertCurrencyPair,
   convertCurrencyToEurCop,
   type ExchangeRateResolutionSource,
 } from '../../services/currencyConversionService'
-import { saveExchangeRate } from '../../services/exchangeRateService'
+import {
+  getLatestExchangeRate,
+  saveExchangeRate,
+} from '../../services/exchangeRateService'
 import {
   createExpense,
   getExpenseById,
   updateExpense,
 } from '../../services/expenseService'
+import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
+import type { ExpenseType } from '../../types/expense'
+import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import {
   EUR_COP_DEFAULT_RATE,
@@ -22,10 +30,10 @@ import {
   getTodayInputDate,
   roundMoney,
 } from '../../utils/currency'
-import { currencies } from '../../utils/countries'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 
 type SaveStatus = 'idle' | 'saving' | 'error'
+type CrossIncomeChoice = 'yes' | 'no'
 
 const expenseCategories = [
   'Transporte',
@@ -35,34 +43,69 @@ const expenseCategories = [
   'Otros',
 ]
 
+function formatRate(rate: number) {
+  return new Intl.NumberFormat('es-ES', {
+    maximumFractionDigits: 6,
+  }).format(rate)
+}
+
+function formatRateUpdatedAt(value: string) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat('es-ES', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date)
+}
+
 export function ExpensesPage() {
+  const { hidden: sensitiveValuesHidden } = useSensitiveValues()
   const { expenseId } = useParams()
   const navigate = useNavigate()
   const parsedExpenseId = expenseId ? Number(expenseId) : null
   const isEditing = Number.isFinite(parsedExpenseId) && parsedExpenseId !== null
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [expenseType, setExpenseType] = useState<ExpenseType>('gasto')
   const [date, setDate] = useState(getTodayInputDate())
   const [category, setCategory] = useState(expenseCategories[0])
   const [amount, setAmount] = useState(0)
   const [currency, setCurrency] = useState<CurrencyCode>('EUR')
   const [expenseCountry, setExpenseCountry] = useState<string | undefined>()
   const [expenseCity, setExpenseCity] = useState<string | undefined>()
+  const [expenseCreatedAt, setExpenseCreatedAt] = useState<string | undefined>()
+  const [crossIncome, setCrossIncome] = useState<CrossIncomeChoice>('no')
+  const [relatedIncomeId, setRelatedIncomeId] = useState('')
+  const [notes, setNotes] = useState('')
+  const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [exchangeRate, setExchangeRate] = useState(EUR_COP_DEFAULT_RATE)
   const [exchangeRateSource, setExchangeRateSource] =
     useState<ExchangeRateResolutionSource>('default')
+  const [rateUpdatedAt, setRateUpdatedAt] = useState('')
   const [convertedValues, setConvertedValues] = useState({
     baseCurrencyValue: 0,
     secondaryCurrencyValue: 0,
     eurValue: 0,
     copValue: 0,
+    eurCopRate: EUR_COP_DEFAULT_RATE,
   })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [validationError, setValidationError] = useState('')
+  const hasSelectedRelatedIncome = incomes.some(
+    (income) => income.id === Number(relatedIncomeId),
+  )
 
   useEffect(() => {
     let isMounted = true
 
     async function loadInitialData() {
-      const currentSettings = await getSettings()
+      const [currentSettings, currentIncomes] = await Promise.all([
+        getSettings(),
+        listServiceIncomes({ newestFirst: true }),
+      ])
 
       if (!isMounted) {
         return
@@ -70,6 +113,7 @@ export function ExpensesPage() {
 
       setSettings(currentSettings)
       setCurrency(currentSettings.defaultCurrency)
+      setIncomes(currentIncomes)
     }
 
     loadInitialData()
@@ -109,12 +153,21 @@ export function ExpensesPage() {
         return
       }
 
+      setExpenseType(currentExpense.type ?? 'gasto')
       setDate(currentExpense.date)
       setCategory(currentExpense.category)
       setAmount(currentExpense.amount)
       setCurrency(currentExpense.currency as CurrencyCode)
       setExpenseCountry(currentExpense.country)
       setExpenseCity(currentExpense.city)
+      setExpenseCreatedAt(currentExpense.createdAt)
+      setCrossIncome(currentExpense.relatedIncomeId ? 'yes' : 'no')
+      setRelatedIncomeId(
+        currentExpense.relatedIncomeId
+          ? String(currentExpense.relatedIncomeId)
+          : '',
+      )
+      setNotes(currentExpense.notes ?? '')
 
       if (currentExpense.exchangeRateBaseToSecondary) {
         setExchangeRate(currentExpense.exchangeRateBaseToSecondary)
@@ -151,6 +204,10 @@ export function ExpensesPage() {
         ),
         convertCurrencyToEurCop(amount, currency, conversionOptions),
       ])
+      const latestRate =
+        convertedPairValue.source === 'offline'
+          ? await getLatestExchangeRate(currency, settings.secondaryCurrency)
+          : undefined
 
       if (!isMounted) {
         return
@@ -161,9 +218,15 @@ export function ExpensesPage() {
         secondaryCurrencyValue: convertedPairValue.secondaryValue,
         eurValue: convertedEurCopValue.eurValue,
         copValue: convertedEurCopValue.copValue,
+        eurCopRate: convertedEurCopValue.eurCopRate,
       })
       setExchangeRate(convertedPairValue.rate)
       setExchangeRateSource(convertedPairValue.source)
+      setRateUpdatedAt(
+        convertedPairValue.source === 'api'
+          ? new Date().toISOString()
+          : latestRate?.createdAt ?? '',
+      )
     }
 
     convertExpenseValue()
@@ -180,14 +243,40 @@ export function ExpensesPage() {
       return
     }
 
+    if (amount <= 0) {
+      setValidationError('La cantidad debe ser mayor que 0.')
+      return
+    }
+
+    if (
+      expenseType === 'ajuste' &&
+      crossIncome === 'yes' &&
+      !hasSelectedRelatedIncome
+    ) {
+      setValidationError('Selecciona el ingreso relacionado.')
+      return
+    }
+
+    if (notes.length > 500) {
+      setValidationError('Las observaciones no pueden superar 500 caracteres.')
+      return
+    }
+
+    setValidationError('')
     setSaveStatus('saving')
 
     try {
+      const now = new Date()
+      const expenseDate =
+        expenseType === 'ajuste' && !isEditing
+          ? getTodayInputDate()
+          : date
+
       await saveExchangeRate({
         baseCurrency: currency,
         targetCurrency: settings.secondaryCurrency,
         rate: exchangeRate,
-        date,
+        date: expenseDate,
         source:
           settings.rateMode === 'automatic' && exchangeRateSource === 'api'
             ? 'api'
@@ -195,8 +284,9 @@ export function ExpensesPage() {
       })
 
       const expenseInput = {
-        date,
-        category,
+        type: expenseType,
+        date: expenseDate,
+        category: expenseType === 'ajuste' ? 'Ajuste' : category,
         amount,
         currency,
         eurValue: roundMoney(convertedValues.eurValue),
@@ -208,6 +298,17 @@ export function ExpensesPage() {
           convertedValues.secondaryCurrencyValue,
         ),
         exchangeRateBaseToSecondary: exchangeRate,
+        exchangeRateUsed: exchangeRate,
+        eurCopExchangeRateUsed: convertedValues.eurCopRate,
+        relatedIncomeId:
+          expenseType === 'ajuste' && crossIncome === 'yes'
+            ? Number(relatedIncomeId)
+            : undefined,
+        notes:
+          expenseType === 'ajuste' && notes.trim()
+            ? notes.trim()
+            : undefined,
+        createdAt: expenseCreatedAt ?? now.toISOString(),
         country: expenseCountry ?? settings.country,
         city: expenseCity ?? settings.city,
       }
@@ -245,89 +346,218 @@ export function ExpensesPage() {
         className="flex flex-col gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
         onSubmit={handleSubmit}
       >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">Fecha</span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) => setDate(event.target.value)}
-              type="date"
-              value={date}
-            />
-          </label>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-sm font-medium text-slate-700">
+            Tipo de egreso
+          </legend>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { label: 'Gasto', value: 'gasto' },
+              { label: 'Ajuste', value: 'ajuste' },
+            ] as const).map((option) => (
+              <label
+                className={[
+                  'flex h-11 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-semibold transition',
+                  expenseType === option.value
+                    ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                    : 'border-slate-300 text-slate-600 hover:bg-slate-50',
+                ].join(' ')}
+                key={option.value}
+              >
+                <input
+                  checked={expenseType === option.value}
+                  className="sr-only"
+                  name="expenseType"
+                  onChange={() => {
+                    setExpenseType(option.value)
+                    if (option.value === 'gasto' && category === 'Ajuste') {
+                      setCategory(expenseCategories[0])
+                    }
+                    setValidationError('')
+                  }}
+                  type="radio"
+                  value={option.value}
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
+        {expenseType === 'gasto' ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">Fecha</span>
+              <input
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                onChange={(event) => setDate(event.target.value)}
+                required
+                type="date"
+                value={date}
+              />
+            </label>
+
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                Categoría
+              </span>
+              <select
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                onChange={(event) => setCategory(event.target.value)}
+                value={category}
+              >
+                {expenseCategories.map((categoryOption) => (
+                  <option key={categoryOption} value={categoryOption}>
+                    {categoryOption}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : (
+          <p className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm font-medium text-sky-800">
+            La fecha y hora del ajuste se registran automáticamente al guardar.
+          </p>
+        )}
+
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(14rem,0.8fr)]">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
-              Categoría
+              {expenseType === 'ajuste' ? 'Cantidad que deseas ajustar' : 'Importe'}
             </span>
-            <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) => setCategory(event.target.value)}
-              value={category}
-            >
-              {expenseCategories.map((categoryOption) => (
-                <option key={categoryOption} value={categoryOption}>
-                  {categoryOption}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">Importe</span>
             <input
               className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              min={0}
+              min={0.01}
               onChange={(event) => setAmount(Number(event.target.value))}
+              required
               step="0.01"
               type="number"
               value={amount}
             />
           </label>
 
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">Moneda</span>
-            <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) =>
-                setCurrency(event.target.value as CurrencyCode)
-              }
-              value={currency}
-            >
-              {currencies.map((currencyOption) => (
-                <option key={currencyOption.value} value={currencyOption.value}>
-                  {currencyOption.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex flex-col gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3">
+            <p className="text-sm font-semibold text-sky-950">
+              {isEditing ? 'Moneda del egreso' : 'Moneda actual'}: {currency}
+            </p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">
+              {settings.rateMode === 'manual'
+                ? 'Tasa manual'
+                : exchangeRateSource === 'api'
+                  ? 'Tasa actual de la API'
+                  : exchangeRateSource === 'offline'
+                    ? 'Usando última tasa guardada'
+                    : 'Tasa de respaldo'}
+            </p>
+            {settings.rateMode === 'manual' ? (
+              <input
+                aria-label={`Tasa manual de ${currency} a ${settings.secondaryCurrency}`}
+                className="h-10 rounded-md border border-sky-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                min={0.000001}
+                onChange={(event) => setExchangeRate(Number(event.target.value))}
+                step="any"
+                type="number"
+                value={exchangeRate}
+              />
+            ) : null}
+            <p className="text-sm font-semibold text-slate-900">
+              1 {currency} = {formatRate(exchangeRate)}{' '}
+              {settings.secondaryCurrency}
+            </p>
+            {rateUpdatedAt && settings.rateMode === 'automatic' ? (
+              <p className="text-xs text-slate-500">
+                Actualizado: {formatRateUpdatedAt(rateUpdatedAt)}
+              </p>
+            ) : null}
+          </div>
         </div>
 
-        <label className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-slate-700">
-            Cambio {currency} a {settings.secondaryCurrency}
-          </span>
-          <input
-            className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-            disabled={settings.rateMode === 'automatic'}
-            min={1}
-            onChange={(event) => setExchangeRate(Number(event.target.value))}
-            step="0.01"
-            type="number"
-            value={exchangeRate}
-          />
-          <span className="text-xs font-medium text-slate-500">
-            {settings.rateMode === 'automatic'
-              ? exchangeRateSource === 'api'
-                ? 'API online'
-                : exchangeRateSource === 'offline'
-                  ? 'Fallback offline'
-                  : 'Tasa por defecto'
-              : 'Manual'}
-          </span>
-        </label>
+        {expenseType === 'ajuste' && (
+          <div className="flex flex-col gap-4 rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                ¿Cruzar este ajuste con un ingreso registrado?
+              </span>
+              <select
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                onChange={(event) => {
+                  const choice = event.target.value as CrossIncomeChoice
+                  setCrossIncome(choice)
+                  if (choice === 'no') setRelatedIncomeId('')
+                  setValidationError('')
+                }}
+                value={crossIncome}
+              >
+                <option value="no">No</option>
+                <option value="yes">Sí</option>
+              </select>
+            </label>
+
+            {crossIncome === 'yes' && (
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-slate-700">
+                  Ingreso relacionado
+                </span>
+                <select
+                  className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100"
+                  disabled={incomes.length === 0}
+                  onChange={(event) => {
+                    setRelatedIncomeId(event.target.value)
+                    setValidationError('')
+                  }}
+                  required
+                  value={relatedIncomeId}
+                >
+                  <option value="">
+                    {incomes.length === 0
+                      ? 'No hay ingresos registrados'
+                      : 'Selecciona un ingreso'}
+                  </option>
+                  {incomes.map((income) => (
+                    <option key={income.id} value={income.id}>
+                      {new Intl.DateTimeFormat('es-ES').format(
+                        new Date(`${income.date}T00:00`),
+                      )}{' '}
+                      · {sensitiveValuesHidden
+                        ? '****'
+                        : formatCurrency(
+                            income.totalAmount,
+                            income.currency as CurrencyCode,
+                          )}
+                      {' · '}Ganancia real {sensitiveValuesHidden
+                        ? '****'
+                        : formatCurrency(
+                            income.realGain,
+                            income.currency as CurrencyCode,
+                          )}
+                      {income.city ? ` · ${income.city}` : ''}
+                      {income.country ? `, ${income.country}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                Observaciones <span className="font-normal text-slate-500">(opcional)</span>
+              </span>
+              <textarea
+                className="min-h-28 rounded-md border border-slate-300 bg-white px-3 py-2 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                maxLength={500}
+                onChange={(event) => {
+                  setNotes(event.target.value)
+                  setValidationError('')
+                }}
+                placeholder="Motivo o detalle del ajuste"
+                value={notes}
+              />
+              <span className="text-right text-xs text-slate-500">
+                {notes.length}/500
+              </span>
+            </label>
+          </div>
+        )}
 
         <div className="grid gap-3 rounded-lg border border-red-100 bg-red-50 p-3 sm:grid-cols-2">
           <div>
@@ -335,7 +565,13 @@ export function ExpensesPage() {
               Valor {currency}
             </p>
             <p className="mt-1 text-lg font-semibold text-slate-950">
-              {formatCurrency(convertedValues.baseCurrencyValue, currency)}
+              <SensitiveAmount
+                hidden={sensitiveValuesHidden}
+                value={formatCurrency(
+                  convertedValues.baseCurrencyValue,
+                  currency,
+                )}
+              />
             </p>
           </div>
           <div>
@@ -343,30 +579,40 @@ export function ExpensesPage() {
               Valor {settings.secondaryCurrency}
             </p>
             <p className="mt-1 text-lg font-semibold text-slate-950">
-              {formatCurrency(
-                convertedValues.secondaryCurrencyValue,
-                settings.secondaryCurrency,
-              )}
+              <SensitiveAmount
+                hidden={sensitiveValuesHidden}
+                value={formatCurrency(
+                  convertedValues.secondaryCurrencyValue,
+                  settings.secondaryCurrency,
+                )}
+              />
             </p>
           </div>
         </div>
 
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-slate-500" role="status">
-            {saveStatus === 'error' && 'No se pudo guardar'}
+            {validationError || (saveStatus === 'error' && 'No se pudo guardar')}
           </p>
 
           <button
             className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-            disabled={saveStatus === 'saving' || amount <= 0}
+            disabled={
+              saveStatus === 'saving' ||
+              amount <= 0 ||
+              notes.length > 500 ||
+              (expenseType === 'ajuste' &&
+                crossIncome === 'yes' &&
+                !hasSelectedRelatedIncome)
+            }
             type="submit"
           >
             <Plus className="size-4" aria-hidden="true" />
             {saveStatus === 'saving'
               ? 'Guardando'
               : isEditing
-                ? 'Actualizar gasto'
-                : 'Guardar gasto'}
+                ? `Actualizar ${expenseType}`
+                : `Guardar ${expenseType}`}
           </button>
         </div>
       </form>

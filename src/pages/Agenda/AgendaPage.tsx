@@ -387,6 +387,7 @@ export function AgendaPage() {
                   const isClosedSeason = isLocationSeasonClosed(
                     appointment,
                     settings.closedLocationSeasons,
+                    settings.reopenedLocationSeasons,
                   )
 
                   return (

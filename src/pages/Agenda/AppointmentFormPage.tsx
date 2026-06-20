@@ -9,7 +9,7 @@ import {
   updateAppointment,
 } from '../../services/appointmentService'
 import { scheduleAppointmentReminders } from '../../services/reminderService'
-import { getSettings } from '../../services/settingsService'
+import { getSettings, updateSettings } from '../../services/settingsService'
 import type {
   Appointment,
   AppointmentReminder,
@@ -22,9 +22,13 @@ import {
 } from '../../utils/appointmentReminders'
 import { getTodayInputDate } from '../../utils/currency'
 import { currencies } from '../../utils/countries'
-import { isLocationSeasonClosed } from '../../utils/locationSeasons'
+import {
+  isLocationSeasonClosed,
+  reopenLocationSeason,
+} from '../../utils/locationSeasons'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+type SeasonActionStatus = 'idle' | 'reopening' | 'reopened' | 'error'
 
 function formatInputDate(date: Date) {
   const year = date.getFullYear()
@@ -95,12 +99,17 @@ export function AppointmentFormPage() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [now, setNow] = useState(new Date())
   const [loadError, setLoadError] = useState('')
+  const [seasonActionStatus, setSeasonActionStatus] =
+    useState<SeasonActionStatus>('idle')
 
   const todayInput = formatInputDate(now)
   const currentTimeInput = formatInputTime(now)
   const isSelectedScheduleInPast = isScheduleInPast(date, time, now)
   const hasReminderErrors = hasInvalidReminders(reminders)
   const pageTitle = isEditing ? 'Editar cita' : 'Nueva cita'
+  const isCurrentLocationClosed =
+    !isEditing &&
+    isLocationSeasonClosed(settings ?? {}, settings?.closedLocationSeasons)
 
   const returnToAgenda = useMemo(
     () => `/agenda?date=${date}`,
@@ -149,6 +158,7 @@ export function AppointmentFormPage() {
         isLocationSeasonClosed(
           appointment,
           currentSettings.closedLocationSeasons,
+          currentSettings.reopenedLocationSeasons,
         )
       ) {
         setDate(getDateFromDateTime(appointment.dateTime))
@@ -215,6 +225,41 @@ export function AppointmentFormPage() {
     )
   }
 
+  async function handleReopenSeason() {
+    if (!settings || !isCurrentLocationClosed) {
+      return
+    }
+
+    const locationName = [settings.city, settings.country]
+      .filter(Boolean)
+      .join(', ')
+    const shouldReopen = window.confirm(
+      `¿Deseas reabrir la temporada de ${locationName}?\n\nLos registros históricos no se modificarán.`,
+    )
+
+    if (!shouldReopen) {
+      return
+    }
+
+    setSeasonActionStatus('reopening')
+
+    try {
+      const currentSettings = await getSettings()
+      const reopenedSeason = reopenLocationSeason(
+        currentSettings,
+        currentSettings.closedLocationSeasons,
+        currentSettings.reopenedLocationSeasons,
+      )
+      const updatedSettings = await updateSettings(reopenedSeason)
+
+      setSettings(updatedSettings)
+      setSeasonActionStatus('reopened')
+      setSaveStatus('idle')
+    } catch {
+      setSeasonActionStatus('error')
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -227,6 +272,20 @@ export function AppointmentFormPage() {
       return
     }
 
+    const currentSettings = isEditing ? settings : await getSettings()
+
+    if (
+      !isEditing &&
+      isLocationSeasonClosed(
+        currentSettings,
+        currentSettings.closedLocationSeasons,
+      )
+    ) {
+      setSettings(currentSettings)
+      setSaveStatus('idle')
+      return
+    }
+
     setSaveStatus('saving')
 
     const input = {
@@ -234,8 +293,8 @@ export function AppointmentFormPage() {
       duration,
       expectedAmount,
       currency,
-      country: editingAppointment?.country ?? settings.country,
-      city: editingAppointment?.city ?? settings.city,
+      country: editingAppointment?.country ?? currentSettings.country,
+      city: editingAppointment?.city ?? currentSettings.city,
       notes: notes.trim(),
       reminders: reminders.map((reminder) => ({
         ...reminder,
@@ -312,10 +371,61 @@ export function AppointmentFormPage() {
         title={pageTitle}
       />
 
-      <form
-        className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-        onSubmit={handleSubmit}
-      >
+      {isCurrentLocationClosed && (
+        <div
+          className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950"
+          role="alert"
+        >
+          <h2 className="font-semibold">Ubicación cerrada</h2>
+          <p className="text-sm font-medium">
+            Esta ciudad/país pertenece a una temporada cerrada. Para crear
+            nuevas citas debes reabrir la temporada o cambiar la ubicación
+            activa.
+          </p>
+          <p className="text-sm">
+            Ubicación activa: <strong>{settings.city}, {settings.country}</strong>
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              className="inline-flex h-10 items-center justify-center rounded-md bg-amber-700 px-4 text-sm font-semibold text-white transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-amber-300"
+              disabled={seasonActionStatus === 'reopening'}
+              onClick={handleReopenSeason}
+              type="button"
+            >
+              {seasonActionStatus === 'reopening'
+                ? 'Reabriendo temporada'
+                : 'Reabrir temporada'}
+            </button>
+            <button
+              className="inline-flex h-10 items-center justify-center rounded-md border border-amber-400 bg-white px-4 text-sm font-semibold text-amber-900 transition hover:bg-amber-100"
+              onClick={() => navigate('/settings/business')}
+              type="button"
+            >
+              Cambiar ubicación activa
+            </button>
+          </div>
+          {seasonActionStatus === 'error' && (
+            <p className="text-sm font-semibold text-red-700" role="alert">
+              No se pudo reabrir la temporada. Inténtalo de nuevo.
+            </p>
+          )}
+        </div>
+      )}
+
+      {seasonActionStatus === 'reopened' && (
+        <p
+          className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800"
+          role="status"
+        >
+          Temporada reabierta. Ya puedes crear nuevas citas en esta ubicación.
+        </p>
+      )}
+
+      {!isCurrentLocationClosed && (
+        <form
+          className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+          onSubmit={handleSubmit}
+        >
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">Fecha</span>
@@ -505,6 +615,7 @@ export function AppointmentFormPage() {
               className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
               disabled={
                 saveStatus === 'saving' ||
+                isCurrentLocationClosed ||
                 expectedAmount <= 0 ||
                 isSelectedScheduleInPast ||
                 hasReminderErrors
@@ -520,7 +631,8 @@ export function AppointmentFormPage() {
             </button>
           </div>
         </div>
-      </form>
+        </form>
+      )}
     </section>
   )
 }

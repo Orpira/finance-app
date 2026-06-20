@@ -109,6 +109,79 @@ Los datos se almacenan localmente usando IndexedDB con Dexie. La configuración 
 
 La función de PIN protege el ingreso a la aplicación, bloquea al pasar Android a segundo plano y tras 2 minutos de inactividad en web. El PIN se guarda como hash con sal aleatoria, nunca en texto plano. Como no existe autenticación remota, la recuperación segura exige borrar los datos locales; conviene mantener un backup cifrado actualizado.
 
+## Sistema de licencia demo offline
+
+Private Balance utiliza una licencia local vinculada a cada dispositivo. Antes
+del PIN y de las rutas principales, `LicenseGuard` comprueba en IndexedDB que la
+licencia esté activa, corresponda al código del dispositivo y no haya expirado.
+La comprobación funciona sin servidor y sin conexión.
+
+### Código del dispositivo
+
+- En Android se obtiene un identificador estable mediante `@capacitor/device`.
+- En navegador/PWA se genera un UUID y se conserva en `localStorage`.
+- El identificador se transforma en un código legible como
+  `PB-8F3A-91BC-22DA`; el identificador nativo sin procesar no se muestra.
+
+La licencia se guarda en la tabla Dexie `licenses`. No se incluye en los
+backups financieros, para evitar transferir una activación entre dispositivos.
+
+### Generar un código manualmente
+
+Con el servidor de desarrollo activo (`npm run dev`), abre la consola del
+navegador y ejecuta:
+
+```js
+const { generateActivationCode } = await import('/src/utils/licenseCodeGenerator.ts')
+
+generateActivationCode('PB-8F3A-91BC-22DA', 'demo', '2026-07-31')
+generateActivationCode('PB-8F3A-91BC-22DA', 'monthly', '2026-08-31')
+generateActivationCode('PB-8F3A-91BC-22DA', 'annual', '2027-07-31')
+generateActivationCode('PB-8F3A-91BC-22DA', 'lifetime', '')
+```
+
+El resultado tiene el formato
+`PB-TIPO-YYYYMMDD-HASHDISPOSITIVO-CHECKSUM`. Las licencias `lifetime` utilizan
+`00000000` como fecha interna y no expiran.
+
+Tipos disponibles:
+
+- `demo`: acceso temporal de demostración.
+- `monthly`: licencia mensual; la fecha exacta la decide el desarrollador.
+- `annual`: licencia anual; la fecha exacta la decide el desarrollador.
+- `lifetime`: acceso sin expiración.
+
+### Expiración y protección del reloj
+
+En cada inicio, al volver a primer plano y periódicamente mientras está abierta,
+la app comprueba la expiración. También guarda `lastValidAccessDate`; si el reloj
+del dispositivo retrocede, bloquea el acceso hasta que se corrijan la fecha y la
+hora.
+
+Para probar una licencia expirada durante desarrollo, abre IndexedDB en las
+herramientas del navegador, tabla `licenses`, establece `expirationDate` en una
+fecha pasada y `status` en `active`, y recarga la página.
+
+Para limpiar solo la licencia durante desarrollo:
+
+```js
+const { db } = await import('/src/database/db.ts')
+await db.licenses.clear()
+location.reload()
+```
+
+En Android también se puede limpiar borrando los datos de la aplicación desde
+los ajustes del sistema. El restablecimiento seguro por pérdida del PIN elimina
+toda la base local, incluida la licencia.
+
+### Limitaciones de seguridad
+
+La validación offline es una protección básica para demos y licencias simples.
+El algoritmo y el checksum están incluidos en la aplicación instalada y pueden
+ser inspeccionados o modificados por una persona con conocimientos técnicos. No
+equivale a una licencia firmada con criptografía asimétrica ni a una validación
+remota.
+
 ## Backup cifrado con Google Drive App Folder
 
 La app puede generar backups cifrados de IndexedDB/Dexie y guardarlos en el espacio privado de aplicación de Google Drive. Usa únicamente el scope limitado:

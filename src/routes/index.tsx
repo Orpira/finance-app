@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import AppLayout from '../app/AppLayout'
 import { PinGate } from '../components/PinGate'
+import { LicenseGuard } from '../components/security/LicenseGuard'
 import AppointmentFormPage from '../pages/Agenda/AppointmentFormPage'
 import AgendaPage from '../pages/Agenda/AgendaPage'
 import BestDaysHistoryPage from '../pages/Summary/BestDaysHistoryPage'
@@ -23,8 +24,9 @@ import DebugPage from '../pages/Debug/DebugPage'
 export function RouterProvider() {
   return (
     <BrowserRouter>
-      <PinGate>
-        <Routes>
+      <LicenseGuard>
+        <PinGate>
+          <Routes>
           <Route element={<AppLayout />}>
             <Route index element={<HomePage />} />
             <Route path="resumen-completo" element={<FullSummaryPage />} />
@@ -57,8 +59,9 @@ export function RouterProvider() {
             <Route path="more" element={<MorePage />} />
             <Route path="debug" element={<DebugPage />} />
           </Route>
-        </Routes>
-      </PinGate>
+          </Routes>
+        </PinGate>
+      </LicenseGuard>
     </BrowserRouter>
   )
 }

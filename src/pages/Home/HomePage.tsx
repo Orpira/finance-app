@@ -31,15 +31,18 @@ function monthRange(offset: number) {
   }
 }
 
-function variation(current: number, previous: number) {
-  if (previous === 0) {
-    return current === 0 ? 0 : 100
+function Variation({ current, previous }: { current: number; previous: number }) {
+  if (previous <= 0) {
+    return (
+      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+        {previous === 0 && current > 0
+          ? 'Nueva actividad este mes'
+          : 'Sin datos el mes anterior'}
+      </span>
+    )
   }
 
-  return ((current - previous) / Math.abs(previous)) * 100
-}
-
-function Variation({ value }: { value: number }) {
+  const value = ((current - previous) / previous) * 100
   const formatted = `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`
 
   return (
@@ -125,7 +128,7 @@ export function HomePage() {
       label: 'Egresos',
       value: totals.current.primaryExpenses,
       previous: totals.previous.primaryExpenses,
-      sensitive: false,
+      sensitive: true,
       tone: 'text-rose-700 bg-rose-100 dark:bg-rose-950 dark:text-rose-300',
     },
     {
@@ -163,7 +166,7 @@ export function HomePage() {
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900" key={label}>
             <div className="flex items-center justify-between gap-3">
               <span className={`flex size-11 items-center justify-center rounded-xl ${tone}`}><Icon className="size-5" aria-hidden="true" /></span>
-              <Variation value={variation(value, previous)} />
+              <Variation current={value} previous={previous} />
             </div>
             <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
             <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">

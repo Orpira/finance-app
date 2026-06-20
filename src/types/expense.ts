@@ -1,5 +1,9 @@
+export type ExpenseType = 'gasto' | 'ajuste'
+
 export interface Expense {
   id?: number;
+
+  type: ExpenseType;
 
   date: string;
 
@@ -22,6 +26,16 @@ export interface Expense {
   secondaryCurrencyValue?: number;
 
   exchangeRateBaseToSecondary?: number;
+
+  exchangeRateUsed?: number;
+
+  eurCopExchangeRateUsed?: number;
+
+  relatedIncomeId?: number;
+
+  notes?: string;
+
+  createdAt: string;
 
   country?: string;
 

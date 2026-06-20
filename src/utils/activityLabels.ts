@@ -54,9 +54,12 @@ export function getAppointmentDisplayName(
 
 export function getExpenseDisplayName(expense: Expense) {
   return [
-    `Gasto #${expense.id ?? '-'}`,
-    expense.category,
+    `${expense.type === 'ajuste' ? 'Ajuste' : 'Gasto'} #${expense.id ?? '-'}`,
+    expense.type === 'ajuste' ? undefined : expense.category,
     expense.date,
+    expense.type === 'ajuste'
+      ? formatTimeFromDateTime(expense.createdAt)
+      : undefined,
     expense.city,
   ]
     .filter(Boolean)

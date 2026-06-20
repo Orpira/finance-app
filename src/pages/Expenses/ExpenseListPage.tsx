@@ -10,9 +10,13 @@ import { Link } from 'react-router-dom'
 
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
+import { SensitiveAmount } from '../../components/SensitiveAmount'
+import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { deleteExpense, listExpenses } from '../../services/expenseService'
+import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
+import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
 import { getExpenseDisplayName } from '../../utils/activityLabels'
 import { countries } from '../../utils/countries'
@@ -22,7 +26,9 @@ import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 const EXPENSES_PER_PAGE = 10
 
 export function ExpenseListPage() {
+  const { hidden } = useSensitiveValues()
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
   const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL')
@@ -31,6 +37,10 @@ export function ExpenseListPage() {
   const [dateTo, setDateTo] = useState('')
   const [expensePage, setExpensePage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
+  const incomesById = useMemo(
+    () => new Map(incomes.map((income) => [income.id, income])),
+    [incomes],
+  )
 
   const availableCountries = useMemo(() => {
     const countryCodes = new Set<CountryCode>()
@@ -126,8 +136,9 @@ export function ExpenseListPage() {
     let isMounted = true
 
     async function loadInitialData() {
-      const [currentExpenses, currentSettings] = await Promise.all([
+      const [currentExpenses, currentIncomes, currentSettings] = await Promise.all([
         listExpenses({ newestFirst: true }),
+        listServiceIncomes({ newestFirst: true }),
         getSettings(),
       ])
 
@@ -136,6 +147,7 @@ export function ExpenseListPage() {
       }
 
       setExpenses(currentExpenses)
+      setIncomes(currentIncomes)
       setSettings(currentSettings)
       setIsLoading(false)
     }
@@ -153,7 +165,7 @@ export function ExpenseListPage() {
     }
 
     const shouldDelete = window.confirm(
-      `¿Eliminar el gasto #${expense.id} del ${expense.date}?`,
+      `¿Eliminar el ${expense.type === 'ajuste' ? 'ajuste' : 'gasto'} #${expense.id} del ${expense.date}?`,
     )
 
     if (!shouldDelete) {
@@ -318,27 +330,79 @@ export function ExpenseListPage() {
                   expense,
                   settings?.closedLocationSeasons,
                 )
+                const relatedIncome = expense.relatedIncomeId
+                  ? incomesById.get(expense.relatedIncomeId)
+                  : undefined
 
                 return (
-                <li className="flex flex-col gap-3 p-4" key={expense.id}>
+                <li
+                  className={[
+                    'flex flex-col gap-3 p-4',
+                    expense.type === 'ajuste' ? 'bg-amber-50/50' : '',
+                  ].join(' ')}
+                  key={expense.id}
+                >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
+                      {expense.type === 'ajuste' && (
+                        <span className="mb-2 inline-flex rounded-full bg-amber-200 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-amber-900">
+                          Ajuste
+                        </span>
+                      )}
                       <p className="font-medium text-slate-950">
                         {getExpenseDisplayName(expense)}
                       </p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {expense.category}
-                      </p>
+                      {expense.type !== 'ajuste' && (
+                        <p className="mt-1 text-sm text-slate-500">
+                          {expense.category}
+                        </p>
+                      )}
+                      {expense.notes && (
+                        <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
+                          {expense.notes}
+                        </p>
+                      )}
+                      {relatedIncome && (
+                        <p className="mt-2 text-sm font-medium text-amber-800">
+                          Relacionado con ingreso #{relatedIncome.id} ·{' '}
+                          {new Intl.DateTimeFormat('es-ES').format(
+                            new Date(`${relatedIncome.date}T00:00`),
+                          )}{' '}
+                          ·{' '}
+                          <SensitiveAmount
+                            hidden={hidden}
+                            value={formatCurrency(
+                              relatedIncome.totalAmount,
+                              relatedIncome.currency as CurrencyCode,
+                            )}
+                          />
+                          {relatedIncome.city ? ` · ${relatedIncome.city}` : ''}
+                          {relatedIncome.country
+                            ? `${relatedIncome.city ? ', ' : ' · '}${relatedIncome.country}`
+                            : ''}
+                        </p>
+                      )}
+                      {expense.relatedIncomeId && !relatedIncome && (
+                        <p className="mt-2 text-sm font-medium text-slate-500">
+                          Relacionado con ingreso #{expense.relatedIncomeId} · no encontrado
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="font-semibold text-slate-950">
-                        {formatCurrency(
-                          expense.amount,
-                          expense.currency as CurrencyCode,
-                        )}
+                        <SensitiveAmount
+                          hidden={hidden}
+                          value={formatCurrency(
+                            expense.amount,
+                            expense.currency as CurrencyCode,
+                          )}
+                        />
                       </p>
                       <p className="mt-1 text-sm text-slate-500">
-                        {formatCurrency(expense.eurValue, 'EUR')}
+                        <SensitiveAmount
+                          hidden={hidden}
+                          value={formatCurrency(expense.eurValue, 'EUR')}
+                        />
                       </p>
                     </div>
                   </div>

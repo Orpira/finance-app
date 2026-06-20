@@ -5,6 +5,7 @@ import type { CutoffReport } from '../types/cutoffReport'
 import type { EarningPeriod } from '../types/earningPeriod'
 import type { ExchangeRate } from '../types/exchangeRate'
 import type { Expense } from '../types/expense'
+import type { AppLicense } from '../types/license'
 import type { ServiceIncome } from '../types/service'
 import type { AppSettings } from '../types/settings'
 
@@ -35,6 +36,7 @@ export function createDefaultSettings(): AppSettings {
     googleDriveLastBackupAt: undefined,
     googleDriveLastBackupStatus: undefined,
     closedLocationSeasons: [],
+    reopenedLocationSeasons: [],
     createdAt: now,
     updatedAt: now,
   }
@@ -48,6 +50,7 @@ export class FinanceDB extends Dexie {
   exchangeRates!: Table<ExchangeRate, number>
   cutoffReports!: Table<CutoffReport, number>
   earningPeriods!: Table<EarningPeriod, number>
+  licenses!: Table<AppLicense, AppLicense['id']>
 
   constructor() {
     super('finance-app')
@@ -168,6 +171,41 @@ export class FinanceDB extends Dexie {
         '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
       earningPeriods: '++id,status,startDate,endDate,countryCode,city',
     })
+
+    this.version(10)
+      .stores({
+        services: '++id,date,currency,country,status,earningPeriodId',
+        expenses:
+          '++id,type,date,category,currency,country,relatedIncomeId,createdAt',
+        appointments: '++id,dateTime,completed,currency',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+        cutoffReports:
+          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+        earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+      })
+      .upgrade((transaction) =>
+        transaction
+          .table<Expense, number>('expenses')
+          .toCollection()
+          .modify((expense) => {
+            expense.type ??= 'gasto'
+            expense.createdAt ??= `${expense.date}T00:00:00`
+          }),
+      )
+
+    this.version(11).stores({
+      services: '++id,date,currency,country,status,earningPeriodId',
+      expenses:
+        '++id,type,date,category,currency,country,relatedIncomeId,createdAt',
+      appointments: '++id,dateTime,completed,currency',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate',
+    })
   }
 }
 
@@ -268,7 +306,13 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
 
       await Promise.all([
         db.services.bulkPut(snapshot.services ?? []),
-        db.expenses.bulkPut(snapshot.expenses ?? []),
+        db.expenses.bulkPut(
+          (snapshot.expenses ?? []).map((expense) => ({
+            ...expense,
+            type: expense.type ?? 'gasto',
+            createdAt: expense.createdAt ?? `${expense.date}T00:00:00`,
+          })),
+        ),
         db.appointments.bulkPut(snapshot.appointments ?? []),
         db.settings.bulkPut(snapshot.settings ?? []),
         db.exchangeRates.bulkPut(snapshot.exchangeRates ?? []),
