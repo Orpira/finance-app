@@ -14,6 +14,7 @@ import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
 import { runAutomaticDriveBackupIfNeeded } from '../services/backupService'
 import { generateDueCutoffReports } from '../services/cutoffReportService'
 import { migrateLegacyRecordsToSeasons } from '../services/earningPeriodService'
+import { getRuntimeIntegrityStatus } from '../services/playIntegrityService'
 import { initializeReminderNotifications } from '../services/reminderService'
 
 const navItems = [
@@ -47,6 +48,7 @@ const navItems = [
 let automaticBackupCheckStarted = false
 let automaticCutoffCheckStarted = false
 let earningPeriodCheckStarted = false
+let runtimeIntegrityCheckStarted = false
 
 export function AppLayout() {
   const location = useLocation()
@@ -81,6 +83,18 @@ export function AppLayout() {
       migrateLegacyRecordsToSeasons().catch((error) => {
         console.warn('No se pudieron migrar las temporadas existentes.', error)
       })
+    }
+
+    if (!runtimeIntegrityCheckStarted) {
+      runtimeIntegrityCheckStarted = true
+
+      getRuntimeIntegrityStatus()
+        .then((result) => {
+          console.info('Modo de ejecución Private Balance', result)
+        })
+        .catch((error) => {
+          console.warn('No se pudo comprobar el modo de ejecución.', error)
+        })
     }
 
     function handleVisibilityChange() {

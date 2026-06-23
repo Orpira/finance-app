@@ -109,12 +109,14 @@ Los datos se almacenan localmente usando IndexedDB con Dexie. La configuración 
 
 La función de PIN protege el ingreso a la aplicación, bloquea al pasar Android a segundo plano y tras 2 minutos de inactividad en web. El PIN se guarda como hash con sal aleatoria, nunca en texto plano. Como no existe autenticación remota, la recuperación segura exige borrar los datos locales; conviene mantener un backup cifrado actualizado.
 
-## Licencias firmadas offline V2
+## Seguridad de licencias
 
 Private Balance utiliza una licencia local vinculada a cada dispositivo. Antes
 del PIN y de las rutas principales, `LicenseGuard` comprueba en IndexedDB que la
 licencia esté activa, corresponda al código del dispositivo y no haya expirado.
 La comprobación funciona sin servidor y sin conexión.
+
+## Licencias firmadas V2
 
 La versión V2 reemplaza el checksum local por firma digital asimétrica:
 
@@ -144,7 +146,7 @@ de licencia, fecha de emisión, expiración y funcionalidades habilitadas.
 La licencia se guarda en la tabla Dexie `licenses`. No se incluye en los
 backups financieros, para evitar transferir una activación entre dispositivos.
 
-### Generar claves V2
+## Generación de claves
 
 Genera un par de claves ECDSA P-256:
 
@@ -171,7 +173,7 @@ Si generas una nueva clave para producción, copia la clave pública resultante 
 `publicLicenseKeyJwk` dentro de `src/services/signedLicenseService.ts` y firma
 las licencias con la clave privada correspondiente.
 
-### Generar licencias V2
+## Generación de licencias
 
 El generador lee la clave privada desde:
 
@@ -274,7 +276,43 @@ En Android también se puede limpiar borrando los datos de la aplicación desde
 los ajustes del sistema. El restablecimiento seguro por pérdida del PIN elimina
 toda la base local, incluida la licencia.
 
-### Limitaciones de seguridad
+## Ofuscación Android
+
+Los builds release de Android tienen R8/ProGuard activado en
+`android/app/build.gradle`:
+
+```gradle
+minifyEnabled true
+shrinkResources true
+proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+```
+
+Las reglas de `android/app/proguard-rules.pro` conservan clases necesarias para
+Capacitor, plugins nativos, WebView, notificaciones y futuras integraciones de
+Google. Esto reduce la ingeniería inversa y el tamaño del APK/AAB release sin
+afectar al bundle web que se ejecuta dentro del WebView.
+
+Comandos de release:
+
+```bash
+cd android
+./gradlew assembleRelease
+./gradlew bundleRelease
+```
+
+## Play Integrity API
+
+`src/services/playIntegrityService.ts` deja preparada la integración para Google
+Play Integrity. En web/PWA retorna `available: false` sin bloquear la app. En
+Android también retorna estado no bloqueante hasta que exista un backend que
+emita nonces y verifique los verdicts de Google de forma segura.
+
+Play Integrity puede ayudar a detectar instalaciones fuera de Google Play,
+dispositivos con integridad débil o APKs modificados, pero la validación fuerte
+no debe confiar solo en el cliente. La verificación final debe hacerse en un
+servidor propio cuando la app se publique en Google Play.
+
+## Limitaciones de seguridad offline
 
 Una app offline nunca es 100% inviolable: una persona con control total del
 dispositivo puede inspeccionar o modificar el APK. La firma asimétrica mejora
