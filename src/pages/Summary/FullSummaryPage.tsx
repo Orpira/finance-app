@@ -16,7 +16,7 @@ import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { listExpenses } from '../../services/expenseService'
-import { ensureActiveEarningPeriod } from '../../services/earningPeriodService'
+import { getActiveEarningPeriod } from '../../services/earningPeriodService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
@@ -62,9 +62,10 @@ export function FullSummaryPage() {
           getSettings(),
           listExpenses({ ...range, newestFirst: true }),
         ])
-      const currentPeriod = await ensureActiveEarningPeriod(currentSettings)
-      const currentIncomes = currentPeriod.id
+      const currentPeriod = await getActiveEarningPeriod()
+      const currentIncomes = currentPeriod?.id
         ? await listServiceIncomes({
+            ...range,
             earningPeriodId: currentPeriod.id,
             newestFirst: true,
           })
@@ -75,9 +76,9 @@ export function FullSummaryPage() {
       }
 
       setSettings(currentSettings)
-      setActivePeriod(currentPeriod)
+      setActivePeriod(currentPeriod ?? null)
       setAllIncomes(currentIncomes)
-      setAllExpenses(currentExpenses)
+      setAllExpenses(currentExpenses.filter((item) => item.earningPeriodId === currentPeriod?.id))
     }
 
     loadFullSummary()
@@ -202,6 +203,10 @@ export function FullSummaryPage() {
         <p className="text-sm font-medium text-slate-500">Cargando...</p>
       </section>
     )
+  }
+
+  if (!activePeriod) {
+    return <section className="mx-auto flex min-h-[60dvh] max-w-2xl flex-col items-center justify-center gap-4 text-center"><h1 className="text-2xl font-semibold">No hay temporada activa</h1><p className="text-sm text-slate-500">Crea una temporada para consultar el resumen de actividad.</p><Link className="inline-flex h-11 items-center rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" to="/temporadas">Ir a Temporadas</Link></section>
   }
 
   const primaryIncome = totals.primaryIncome

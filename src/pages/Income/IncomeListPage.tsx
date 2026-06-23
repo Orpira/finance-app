@@ -11,6 +11,7 @@ import {
   listServiceIncomes,
 } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
+import { listClosedEarningPeriods } from '../../services/earningPeriodService'
 import type { ServiceIncome, ServiceIncomeStatus } from '../../types/service'
 import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
 import { getIncomeDisplayName } from '../../utils/activityLabels'
@@ -47,6 +48,7 @@ export function IncomeListPage() {
   const { hidden } = useSensitiveValues()
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [closedPeriodIds, setClosedPeriodIds] = useState<Set<number>>(new Set())
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
   const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL')
   const [selectedPaymentType, setSelectedPaymentType] =
@@ -154,9 +156,10 @@ export function IncomeListPage() {
     let isMounted = true
 
     async function loadInitialData() {
-      const [currentIncomes, currentSettings] = await Promise.all([
+      const [currentIncomes, currentSettings, closedPeriods] = await Promise.all([
         listServiceIncomes({ newestFirst: true }),
         getSettings(),
+        listClosedEarningPeriods(),
       ])
 
       if (!isMounted) {
@@ -165,6 +168,7 @@ export function IncomeListPage() {
 
       setIncomes(currentIncomes)
       setSettings(currentSettings)
+      setClosedPeriodIds(new Set(closedPeriods.flatMap((period) => period.id ? [period.id] : [])))
       setIsLoading(false)
     }
 
@@ -343,7 +347,7 @@ export function IncomeListPage() {
             <ul className="divide-y divide-slate-200">
               {paginatedIncomes.map((income) => {
                 const status = getIncomeStatus(income)
-                const isClosedSeason = isLocationSeasonClosed(
+                const isClosedSeason = closedPeriodIds.has(income.earningPeriodId ?? income.seasonPeriodId ?? -1) || isLocationSeasonClosed(
                   income,
                   settings?.closedLocationSeasons,
                 )

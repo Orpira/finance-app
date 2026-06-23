@@ -1,4 +1,4 @@
-import type { CountryCode } from './settings'
+import type { CountryCode, CurrencyCode } from './settings'
 
 export type EarningPeriodStatus = 'active' | 'closed'
 
@@ -12,6 +12,11 @@ export interface EarningPeriod {
   country?: string
   countryCode?: CountryCode
   city?: string
+  baseCurrency?: CurrencyCode
+  notes?: string
   createdAt: string
+  updatedAt?: string
   closedAt?: string
 }
+
+export type SeasonPeriod = EarningPeriod

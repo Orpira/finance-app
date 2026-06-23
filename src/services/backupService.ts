@@ -22,6 +22,7 @@ import {
   uploadBackupToAppFolder,
 } from './googleDriveBackupService'
 import { getSettings, updateSettings } from './settingsService'
+import { migrateLegacyRecordsToSeasons } from './earningPeriodService'
 
 export interface BackupData {
   version: string
@@ -86,6 +87,7 @@ export async function importBackup(file: File) {
   const snapshot = JSON.parse(content) as DatabaseSnapshot
 
   await importDatabaseSnapshot(snapshot)
+  await migrateLegacyRecordsToSeasons()
 }
 
 function backupDataToSnapshot(backupData: BackupData): DatabaseSnapshot {
@@ -188,6 +190,7 @@ export async function decryptBackup(
 
 export async function restoreBackupData(backupData: BackupData) {
   await importDatabaseSnapshot(backupDataToSnapshot(backupData))
+  await migrateLegacyRecordsToSeasons()
 }
 
 export async function importEncryptedBackup(file: File, passwordOrKey: string) {

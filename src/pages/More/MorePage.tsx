@@ -3,12 +3,19 @@ import {
   ChevronRight,
   DatabaseBackup,
   Settings,
+  CalendarRange,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 
 const moreLinks = [
+  {
+    description: 'Crea, finaliza y consulta ciclos de actividad y sus estadísticas.',
+    href: '/temporadas',
+    icon: CalendarRange,
+    label: 'Temporadas',
+  },
   {
     description: 'Consulta, filtra, exporta y comparte la información financiera.',
     href: '/reports',

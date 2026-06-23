@@ -13,7 +13,7 @@ import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
 import { runAutomaticDriveBackupIfNeeded } from '../services/backupService'
 import { generateDueCutoffReports } from '../services/cutoffReportService'
-import { ensureActiveEarningPeriod } from '../services/earningPeriodService'
+import { migrateLegacyRecordsToSeasons } from '../services/earningPeriodService'
 import { initializeReminderNotifications } from '../services/reminderService'
 
 const navItems = [
@@ -50,7 +50,7 @@ let earningPeriodCheckStarted = false
 
 export function AppLayout() {
   const location = useLocation()
-  const isMoreSection = ['/more', '/reports', '/settings', '/debug'].some(
+  const isMoreSection = ['/more', '/temporadas', '/reports', '/settings', '/debug'].some(
     (path) =>
       location.pathname === path || location.pathname.startsWith(`${path}/`),
   )
@@ -78,8 +78,8 @@ export function AppLayout() {
     if (!earningPeriodCheckStarted) {
       earningPeriodCheckStarted = true
 
-      ensureActiveEarningPeriod().catch((error) => {
-        console.warn('No se pudo inicializar el período de ganancia.', error)
+      migrateLegacyRecordsToSeasons().catch((error) => {
+        console.warn('No se pudieron migrar las temporadas existentes.', error)
       })
     }
 

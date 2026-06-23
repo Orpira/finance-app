@@ -31,6 +31,8 @@ import {
   roundMoney,
 } from '../../utils/currency'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
+import { getActiveEarningPeriod, isEarningPeriodClosed } from '../../services/earningPeriodService'
+import type { EarningPeriod } from '../../types/earningPeriod'
 
 type SaveStatus = 'idle' | 'saving' | 'error'
 type CrossIncomeChoice = 'yes' | 'no'
@@ -69,6 +71,7 @@ export function ExpensesPage() {
   const parsedExpenseId = expenseId ? Number(expenseId) : null
   const isEditing = Number.isFinite(parsedExpenseId) && parsedExpenseId !== null
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
   const [expenseType, setExpenseType] = useState<ExpenseType>('gasto')
   const [date, setDate] = useState(getTodayInputDate())
   const [category, setCategory] = useState(expenseCategories[0])
@@ -102,9 +105,10 @@ export function ExpensesPage() {
     let isMounted = true
 
     async function loadInitialData() {
-      const [currentSettings, currentIncomes] = await Promise.all([
+      const [currentSettings, currentIncomes, currentPeriod] = await Promise.all([
         getSettings(),
         listServiceIncomes({ newestFirst: true }),
+        getActiveEarningPeriod(),
       ])
 
       if (!isMounted) {
@@ -114,6 +118,7 @@ export function ExpensesPage() {
       setSettings(currentSettings)
       setCurrency(currentSettings.defaultCurrency)
       setIncomes(currentIncomes)
+      setActivePeriod(currentPeriod ?? null)
     }
 
     loadInitialData()
@@ -141,6 +146,7 @@ export function ExpensesPage() {
       }
 
       if (
+        await isEarningPeriodClosed(currentExpense.earningPeriodId ?? currentExpense.seasonPeriodId) ||
         isLocationSeasonClosed(
           currentExpense,
           currentSettings.closedLocationSeasons,
@@ -331,6 +337,10 @@ export function ExpensesPage() {
         <p className="text-sm font-medium text-slate-500">Cargando...</p>
       </section>
     )
+  }
+
+  if (!isEditing && !activePeriod) {
+    return <section className="mx-auto flex min-h-[60dvh] max-w-2xl flex-col items-center justify-center gap-4 text-center"><h1 className="text-2xl font-semibold">No hay una temporada activa</h1><p className="text-sm text-slate-500">Crea una temporada para registrar actividad.</p><button className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" onClick={() => navigate('/temporadas')} type="button">Ir a Temporadas</button></section>
   }
 
   return (

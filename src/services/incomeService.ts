@@ -2,7 +2,10 @@ import { db } from '../database/db'
 import type { DateRangeListOptions } from '../types/dataAccess'
 import type { ServiceIncome } from '../types/service'
 import type { CountryCode } from '../types/settings'
-import { ensureActiveEarningPeriod } from './earningPeriodService'
+import {
+  assertRecordIsMutable,
+  requireActiveEarningPeriod,
+} from './earningPeriodService'
 
 export type CreateServiceIncomeInput = Omit<ServiceIncome, 'id'>
 export type UpdateServiceIncomeInput = Partial<CreateServiceIncomeInput>
@@ -15,16 +18,14 @@ export interface ServiceIncomeListOptions extends DateRangeListOptions {
 }
 
 export async function createServiceIncome(input: CreateServiceIncomeInput) {
-  const earningPeriod =
-    input.earningPeriodId === undefined
-      ? await ensureActiveEarningPeriod()
-      : undefined
+  const earningPeriod = await requireActiveEarningPeriod()
 
   return db.services.add({
     createdAt: new Date().toISOString(),
     status: 'PENDIENTE',
     ...input,
-    earningPeriodId: earningPeriod?.id ?? input.earningPeriodId,
+    earningPeriodId: earningPeriod.id,
+    seasonPeriodId: earningPeriod.id,
     earningPercentage:
       earningPeriod?.percentage ?? input.earningPercentage ?? input.percentage,
     percentage: earningPeriod?.percentage ?? input.percentage,
@@ -84,10 +85,12 @@ export async function updateServiceIncome(
   id: number,
   updates: UpdateServiceIncomeInput,
 ) {
+  await assertRecordIsMutable(await db.services.get(id))
   await db.services.update(id, updates)
   return db.services.get(id)
 }
 
-export function deleteServiceIncome(id: number) {
+export async function deleteServiceIncome(id: number) {
+  await assertRecordIsMutable(await db.services.get(id))
   return db.services.delete(id)
 }

@@ -206,6 +206,88 @@ export class FinanceDB extends Dexie {
       earningPeriods: '++id,status,startDate,endDate,countryCode,city',
       licenses: 'id,deviceCode,status,expirationDate',
     })
+
+    this.version(12)
+      .stores({
+        services:
+          '++id,date,currency,country,status,earningPeriodId,seasonPeriodId',
+        expenses:
+          '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId',
+        appointments:
+          '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+        cutoffReports:
+          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+        earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+        licenses: 'id,deviceCode,status,expirationDate',
+      })
+      .upgrade(async (transaction) => {
+        const periodsTable = transaction.table<EarningPeriod, number>('earningPeriods')
+        let periods = await periodsTable.toArray()
+        const servicesTable = transaction.table<ServiceIncome, number>('services')
+        const expensesTable = transaction.table<Expense, number>('expenses')
+        const appointmentsTable = transaction.table<Appointment, number>('appointments')
+        const [services, expenses, appointments] = await Promise.all([
+          servicesTable.toArray(),
+          expensesTable.toArray(),
+          appointmentsTable.toArray(),
+        ])
+
+        if (periods.length === 0 && (services.length || expenses.length || appointments.length)) {
+          const settings = await transaction
+            .table<AppSettings, AppSettings['id']>('settings')
+            .get(DEFAULT_SETTINGS_ID)
+          const dates = [
+            ...services.map((item) => item.date),
+            ...expenses.map((item) => item.date),
+            ...appointments.map((item) => item.dateTime.slice(0, 10)),
+          ].filter(Boolean).sort()
+          const now = new Date().toISOString()
+          const id = await periodsTable.add({
+            name: 'Temporada inicial migrada',
+            percentage: settings?.incomePercentage ?? 50,
+            startDate: `${dates[0] ?? now.slice(0, 10)}T00:00:00.000Z`,
+            status: 'active',
+            country: settings?.country,
+            countryCode: settings?.country,
+            city: settings?.city,
+            baseCurrency: settings?.defaultCurrency,
+            createdAt: now,
+            updatedAt: now,
+          })
+          periods = (await periodsTable.get(id)) ? [await periodsTable.get(id) as EarningPeriod] : []
+        }
+
+        const sortedPeriods = periods.sort((a, b) => a.startDate.localeCompare(b.startDate))
+        const periodForDate = (date: string, existing?: number) => {
+          if (existing) return existing
+          const match = [...sortedPeriods].reverse().find((period) => {
+            const start = period.startDate.slice(0, 10)
+            const end = period.endDate?.slice(0, 10)
+            return date >= start && (!end || date <= end)
+          })
+          return match?.id ?? sortedPeriods.at(-1)?.id
+        }
+
+        await Promise.all([
+          servicesTable.toCollection().modify((item) => {
+            const id = periodForDate(item.date, item.earningPeriodId ?? item.seasonPeriodId)
+            item.earningPeriodId = id
+            item.seasonPeriodId = id
+          }),
+          expensesTable.toCollection().modify((item) => {
+            const id = periodForDate(item.date, item.earningPeriodId ?? item.seasonPeriodId)
+            item.earningPeriodId = id
+            item.seasonPeriodId = id
+          }),
+          appointmentsTable.toCollection().modify((item) => {
+            const id = periodForDate(item.dateTime.slice(0, 10), item.earningPeriodId ?? item.seasonPeriodId)
+            item.earningPeriodId = id
+            item.seasonPeriodId = id
+          }),
+        ])
+      })
   }
 }
 

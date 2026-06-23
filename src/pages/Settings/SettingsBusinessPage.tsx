@@ -1,5 +1,6 @@
 import { Save } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import {
@@ -96,37 +97,6 @@ export function SettingsBusinessPage() {
     setSaveStatus('saving')
 
     try {
-      const currentSettings = await getSettings()
-      const incomePercentageChanged =
-        settings.incomePercentage !== currentSettings.incomePercentage
-      let nextEarningPeriodName: string | undefined
-
-      if (
-        incomePercentageChanged &&
-        !window.confirm(
-          'Cambiar el porcentaje cerrará el período activo actual y creará un nuevo período. Los registros anteriores conservarán su porcentaje original.\n¿Deseas continuar?',
-        )
-      ) {
-        setSettings(currentSettings)
-        setSaveStatus('idle')
-        return
-      }
-
-      if (incomePercentageChanged) {
-        const periodName = window.prompt(
-          'Nombre del nuevo período de ganancia',
-          `Periodo ${new Date().toLocaleDateString('es-ES')}`,
-        )
-
-        if (periodName === null) {
-          setSettings(currentSettings)
-          setSaveStatus('idle')
-          return
-        }
-
-        nextEarningPeriodName = periodName.trim() || undefined
-      }
-
       const updatedSettings = await updateSettings(
         {
           businessName: settings.businessName.trim(),
@@ -140,9 +110,6 @@ export function SettingsBusinessPage() {
           cutoffFrequency: settings.cutoffFrequency,
           cutoffWeekStart: settings.cutoffWeekStart,
           cutoffAnchorDate: settings.cutoffAnchorDate || getTodayInputDate(),
-        },
-        {
-          nextEarningPeriodName,
         },
       )
 
@@ -316,23 +283,20 @@ export function SettingsBusinessPage() {
 
         <label className="flex flex-col gap-2">
           <span className="text-sm font-medium text-slate-700">
-            Porcentaje base de ganancia
+            Porcentaje de la temporada activa
           </span>
           <div className="flex items-center gap-3">
             <input
               className="h-11 w-28 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
               max={100}
               min={0}
-              onChange={(event) =>
-                updateLocalSettings({
-                  incomePercentage: Number(event.target.value),
-                })
-              }
+              readOnly
               type="number"
               value={settings.incomePercentage}
             />
             <span className="text-sm font-medium text-slate-500">%</span>
           </div>
+          <span className="text-sm text-slate-500">El porcentaje se gestiona desde <Link className="font-semibold text-emerald-700 underline" to="/temporadas">Temporadas</Link>. Si ya hay actividad, crea una nueva temporada para cambiarlo.</span>
         </label>
 
         <fieldset className="flex flex-col gap-3">

@@ -4,7 +4,6 @@ import {
   db,
 } from '../database/db'
 import type { AppSettings } from '../types/settings'
-import { closeActiveEarningPeriodAndCreateNext } from './earningPeriodService'
 
 const SETTINGS_STORAGE_KEY = 'finance-app:settings'
 
@@ -14,6 +13,7 @@ export type UpdateSettingsInput = Partial<
 
 export interface UpdateSettingsOptions {
   nextEarningPeriodName?: string
+  allowSeasonPercentageChange?: boolean
 }
 
 function syncSettingsToLocalStorage(settings: AppSettings) {
@@ -96,11 +96,9 @@ export async function updateSettings(
     updates.incomePercentage !== undefined &&
     updates.incomePercentage !== currentSettings.incomePercentage
 
-  if (incomePercentageChanged) {
-    await closeActiveEarningPeriodAndCreateNext(
-      nextSettings,
-      updates.incomePercentage as number,
-      options.nextEarningPeriodName,
+  if (incomePercentageChanged && !options.allowSeasonPercentageChange) {
+    throw new Error(
+      'Para cambiar el porcentaje debes cerrar la temporada actual y crear una nueva.',
     )
   }
 

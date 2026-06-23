@@ -13,6 +13,8 @@ import {
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
+import { listEarningPeriods } from '../../services/earningPeriodService'
+import type { EarningPeriod } from '../../types/earningPeriod'
 import type { CutoffReport, CutoffFrequency } from '../../types/cutoffReport'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
@@ -184,6 +186,8 @@ export function ReportsPage() {
     useState<CutoffFrequencyFilter>('ALL')
   const [selectedCutoffId, setSelectedCutoffId] = useState('')
   const [loadError, setLoadError] = useState('')
+  const [seasons, setSeasons] = useState<EarningPeriod[]>([])
+  const [selectedSeason, setSelectedSeason] = useState<string>('ALL')
 
   useEffect(() => {
     let isMounted = true
@@ -202,12 +206,14 @@ export function ReportsPage() {
           currentIncomes,
           currentExpenses,
           currentCutoffReports,
+          currentSeasons,
         ] =
           await Promise.all([
             getSettings(),
             listServiceIncomes({ ...range, newestFirst: true }),
             listExpenses({ ...range, newestFirst: true }),
             listCutoffReports(),
+            listEarningPeriods(),
           ])
 
         if (!isMounted) {
@@ -218,6 +224,7 @@ export function ReportsPage() {
         setPeriodIncomes(currentIncomes)
         setPeriodExpenses(currentExpenses)
         setCutoffReports(currentCutoffReports)
+        setSeasons(currentSeasons)
       } catch {
         if (isMounted) {
           setLoadError('No se pudieron cargar los reportes.')
@@ -350,9 +357,10 @@ export function ReportsPage() {
           selectedPaymentType === 'ALL' ||
           income.paymentType === selectedPaymentType
 
-        return matchesCountry && matchesCity && matchesPaymentType
+        const matchesSeason = selectedSeason === 'ALL' || String(income.earningPeriodId) === selectedSeason
+        return matchesCountry && matchesCity && matchesPaymentType && matchesSeason
       }),
-    [periodIncomes, selectedCity, selectedCountry, selectedPaymentType],
+    [periodIncomes, selectedCity, selectedCountry, selectedPaymentType, selectedSeason],
   )
 
   const expenses = useMemo(
@@ -364,9 +372,10 @@ export function ReportsPage() {
         const matchesCategory =
           selectedCategory === 'ALL' || expense.category === selectedCategory
 
-        return matchesCountry && matchesCity && matchesCategory
+        const matchesSeason = selectedSeason === 'ALL' || String(expense.earningPeriodId) === selectedSeason
+        return matchesCountry && matchesCity && matchesCategory && matchesSeason
       }),
-    [periodExpenses, selectedCategory, selectedCity, selectedCountry],
+    [periodExpenses, selectedCategory, selectedCity, selectedCountry, selectedSeason],
   )
 
   function handlePeriodChange(nextPeriod: Period) {
@@ -1007,6 +1016,13 @@ export function ReportsPage() {
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-slate-600">Temporada</span>
+            <select className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900" onChange={(event) => setSelectedSeason(event.target.value)} value={selectedSeason}>
+              <option value="ALL">Todas las temporadas</option>
+              {seasons.map((season) => <option key={season.id} value={season.id}>{season.name}{season.status === 'active' ? ' (activa)' : ''}</option>)}
+            </select>
+          </label>
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-600">
               Fecha desde

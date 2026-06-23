@@ -14,7 +14,7 @@ import {
 } from '../../services/incomeService'
 import { saveExchangeRate } from '../../services/exchangeRateService'
 import { getSettings } from '../../services/settingsService'
-import { ensureActiveEarningPeriod } from '../../services/earningPeriodService'
+import { getActiveEarningPeriod, isEarningPeriodClosed } from '../../services/earningPeriodService'
 import {
   convertCurrencyPair,
   convertCurrencyToEurCop,
@@ -121,18 +121,19 @@ export function IncomePage() {
         listServiceIncomes({ newestFirst: true }),
         parsedIncomeId ? getServiceIncomeById(parsedIncomeId) : undefined,
       ])
-      const currentPeriod = await ensureActiveEarningPeriod(currentSettings)
+      const currentPeriod = await getActiveEarningPeriod()
 
       if (!isMounted) {
         return
       }
 
       setSettings(currentSettings)
-      setActivePeriod(currentPeriod)
+      setActivePeriod(currentPeriod ?? null)
       setIncomes(currentIncomes)
 
       if (currentIncome) {
         if (
+          await isEarningPeriodClosed(currentIncome.earningPeriodId ?? currentIncome.seasonPeriodId) ||
           isLocationSeasonClosed(
             currentIncome,
             currentSettings.closedLocationSeasons,
@@ -165,7 +166,7 @@ export function IncomePage() {
             EUR_COP_DEFAULT_RATE,
         )
       } else {
-        setPercentage(currentPeriod.percentage)
+        setPercentage(currentPeriod?.percentage ?? currentSettings.incomePercentage)
         setCurrency(currentSettings.defaultCurrency)
       }
     }
@@ -312,6 +313,10 @@ export function IncomePage() {
         <p className="text-sm font-medium text-slate-500">Cargando...</p>
       </section>
     )
+  }
+
+  if (!isEditing && !activePeriod) {
+    return <section className="mx-auto flex min-h-[60dvh] max-w-2xl flex-col items-center justify-center gap-4 text-center"><h1 className="text-2xl font-semibold">No hay una temporada activa</h1><p className="text-sm text-slate-500">Crea una temporada para registrar actividad.</p><button className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" onClick={() => navigate('/temporadas')} type="button">Ir a Temporadas</button></section>
   }
 
   return (

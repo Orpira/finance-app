@@ -23,6 +23,7 @@ import {
 } from '../../services/appointmentService'
 import { completeAppointmentAsIncome } from '../../services/appointmentCompletionService'
 import { getSettings } from '../../services/settingsService'
+import { listClosedEarningPeriods } from '../../services/earningPeriodService'
 import type { Appointment } from '../../types/appointment'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { getAppointmentDisplayName } from '../../utils/activityLabels'
@@ -131,6 +132,7 @@ export function AgendaPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [closedPeriodIds, setClosedPeriodIds] = useState<Set<number>>(new Set())
   const [selectedDate, setSelectedDate] = useState(
     () => getDateFromSearch(searchParams.get('date')) ?? new Date(),
   )
@@ -153,9 +155,10 @@ export function AgendaPage() {
     let isMounted = true
 
     async function loadInitialData() {
-      const [currentSettings, currentAppointments] = await Promise.all([
+      const [currentSettings, currentAppointments, closedPeriods] = await Promise.all([
         getSettings(),
         listAppointments(),
+        listClosedEarningPeriods(),
       ])
 
       if (!isMounted) {
@@ -164,6 +167,7 @@ export function AgendaPage() {
 
       setSettings(currentSettings)
       setAppointments(currentAppointments)
+      setClosedPeriodIds(new Set(closedPeriods.flatMap((period) => period.id ? [period.id] : [])))
     }
 
     loadInitialData()
@@ -384,7 +388,7 @@ export function AgendaPage() {
                   )
                   const isHighlighted =
                     String(appointment.id) === highlightedAppointmentId
-                  const isClosedSeason = isLocationSeasonClosed(
+                  const isClosedSeason = closedPeriodIds.has(appointment.earningPeriodId ?? appointment.seasonPeriodId ?? -1) || isLocationSeasonClosed(
                     appointment,
                     settings.closedLocationSeasons,
                     settings.reopenedLocationSeasons,

@@ -20,6 +20,9 @@ import SettingsBusinessPage from '../pages/Settings/SettingsBusinessPage'
 import SettingsPage from '../pages/Settings/SettingsPage'
 import SettingsSecurityPage from '../pages/Settings/SettingsSecurityPage'
 import DebugPage from '../pages/Debug/DebugPage'
+import SeasonsPage from '../pages/Seasons/SeasonsPage'
+import SeasonFormPage from '../pages/Seasons/SeasonFormPage'
+import SeasonDetailPage from '../pages/Seasons/SeasonDetailPage'
 
 export function RouterProvider() {
   return (
@@ -52,6 +55,9 @@ export function RouterProvider() {
             <Route path="agenda" element={<AgendaPage />} />
             <Route path="reports/preview" element={<ReportPreviewPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="temporadas/nueva" element={<SeasonFormPage />} />
+            <Route path="temporadas/:id" element={<SeasonDetailPage />} />
+            <Route path="temporadas" element={<SeasonsPage />} />
             <Route path="settings/backup" element={<SettingsBackupPage />} />
             <Route path="settings/business" element={<SettingsBusinessPage />} />
             <Route path="settings/security" element={<SettingsSecurityPage />} />

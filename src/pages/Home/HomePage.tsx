@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  CalendarRange,
   Eye,
   EyeOff,
   MinusCircle,
@@ -19,6 +20,8 @@ import type { ServiceIncome } from '../../types/service'
 import type { AppSettings } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
 import { calculateFinancialTotals } from '../../utils/financeStats'
+import { getActiveEarningPeriod } from '../../services/earningPeriodService'
+import type { EarningPeriod } from '../../types/earningPeriod'
 
 function monthRange(offset: number) {
   const now = new Date()
@@ -65,6 +68,7 @@ export function HomePage() {
   const [currentExpenses, setCurrentExpenses] = useState<Expense[]>([])
   const [previousIncomes, setPreviousIncomes] = useState<ServiceIncome[]>([])
   const [previousExpenses, setPreviousExpenses] = useState<Expense[]>([])
+  const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
   const { hidden, toggle } = useSensitiveValues()
 
   useEffect(() => {
@@ -74,17 +78,19 @@ export function HomePage() {
 
     Promise.all([
       getSettings(),
+      getActiveEarningPeriod(),
       listServiceIncomes(current),
       listExpenses(current),
       listServiceIncomes(previous),
       listExpenses(previous),
-    ]).then(([nextSettings, incomes, expenses, oldIncomes, oldExpenses]) => {
+    ]).then(([nextSettings, period, incomes, expenses, oldIncomes, oldExpenses]) => {
       if (!mounted) return
       setSettings(nextSettings)
-      setCurrentIncomes(incomes)
-      setCurrentExpenses(expenses)
-      setPreviousIncomes(oldIncomes)
-      setPreviousExpenses(oldExpenses)
+      setActivePeriod(period ?? null)
+      setCurrentIncomes(incomes.filter((item) => item.earningPeriodId === period?.id))
+      setCurrentExpenses(expenses.filter((item) => item.earningPeriodId === period?.id))
+      setPreviousIncomes(oldIncomes.filter((item) => item.earningPeriodId === period?.id))
+      setPreviousExpenses(oldExpenses.filter((item) => item.earningPeriodId === period?.id))
     })
 
     return () => {
@@ -112,6 +118,14 @@ export function HomePage() {
 
   if (!settings || !totals) {
     return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando...</section>
+  }
+
+  if (!activePeriod) {
+    return <section className="mx-auto flex min-h-[70dvh] w-full max-w-2xl flex-col items-center justify-center gap-4 text-center">
+      <CalendarRange className="size-12 text-emerald-700" />
+      <div><h1 className="text-2xl font-semibold">No hay temporada activa</h1><p className="mt-2 text-sm text-slate-500">Para registrar ingresos, egresos y citas, primero debes crear una temporada desde el módulo Temporadas.</p></div>
+      <Link className="inline-flex h-11 items-center rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" to="/temporadas">Ir a Temporadas</Link>
+    </section>
   }
 
   const cards = [

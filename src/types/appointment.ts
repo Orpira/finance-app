@@ -27,6 +27,10 @@ export interface Appointment {
 
   city?: string;
 
+  earningPeriodId?: number;
+
+  seasonPeriodId?: number;
+
   notes?: string;
 
   reminders: AppointmentReminder[];

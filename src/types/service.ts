@@ -21,6 +21,8 @@ export interface ServiceIncome {
 
   earningPeriodId?: number;
 
+  seasonPeriodId?: number;
+
   earningPercentage?: number;
 
   realGain: number;

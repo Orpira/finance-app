@@ -33,6 +33,10 @@ export interface Expense {
 
   relatedIncomeId?: number;
 
+  earningPeriodId?: number;
+
+  seasonPeriodId?: number;
+
   notes?: string;
 
   createdAt: string;

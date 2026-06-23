@@ -22,6 +22,8 @@ import {
 } from '../../utils/appointmentReminders'
 import { getTodayInputDate } from '../../utils/currency'
 import { currencies } from '../../utils/countries'
+import { getActiveEarningPeriod, isEarningPeriodClosed } from '../../services/earningPeriodService'
+import type { EarningPeriod } from '../../types/earningPeriod'
 import {
   isLocationSeasonClosed,
   reopenLocationSeason,
@@ -85,6 +87,7 @@ export function AppointmentFormPage() {
   const isEditing = Boolean(parsedAppointmentId)
 
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
   const [editingAppointment, setEditingAppointment] =
     useState<Appointment | null>(null)
   const [date, setDate] = useState(() =>
@@ -130,13 +133,14 @@ export function AppointmentFormPage() {
     let isMounted = true
 
     async function loadInitialData() {
-      const currentSettings = await getSettings()
+      const [currentSettings, currentPeriod] = await Promise.all([getSettings(), getActiveEarningPeriod()])
 
       if (!isMounted) {
         return
       }
 
       setSettings(currentSettings)
+      setActivePeriod(currentPeriod ?? null)
       setCurrency(currentSettings.defaultCurrency)
 
       if (!parsedAppointmentId) {
@@ -155,6 +159,7 @@ export function AppointmentFormPage() {
       }
 
       if (
+        await isEarningPeriodClosed(appointment.earningPeriodId ?? appointment.seasonPeriodId) ||
         isLocationSeasonClosed(
           appointment,
           currentSettings.closedLocationSeasons,
@@ -337,6 +342,10 @@ export function AppointmentFormPage() {
         <p className="text-sm font-medium text-slate-500">Cargando...</p>
       </section>
     )
+  }
+
+  if (!isEditing && !activePeriod) {
+    return <section className="mx-auto flex min-h-[60dvh] max-w-2xl flex-col items-center justify-center gap-4 text-center"><h1 className="text-2xl font-semibold">No hay una temporada activa</h1><p className="text-sm text-slate-500">Crea una temporada para registrar citas.</p><button className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" onClick={() => navigate('/temporadas')} type="button">Ir a Temporadas</button></section>
   }
 
   if (loadError) {

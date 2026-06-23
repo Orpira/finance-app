@@ -9,7 +9,7 @@ import {
 } from './currencyConversionService'
 import { saveExchangeRate } from './exchangeRateService'
 import { createServiceIncome } from './incomeService'
-import { ensureActiveEarningPeriod } from './earningPeriodService'
+import { assertRecordIsMutable, ensureActiveEarningPeriod } from './earningPeriodService'
 
 function getDateFromDateTime(dateTime: string) {
   return dateTime.slice(0, 10)
@@ -62,6 +62,8 @@ export async function completeAppointmentAsIncome(
   if (!appointment.id || appointment.completed) {
     throw new Error('La cita no se puede finalizar.')
   }
+
+  await assertRecordIsMutable(appointment)
 
   const timerStoppedAt = now.toISOString()
   const timerStartedAt = appointment.timerStartedAt ?? appointment.dateTime

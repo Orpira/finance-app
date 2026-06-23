@@ -15,6 +15,7 @@ import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { deleteExpense, listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
+import { listClosedEarningPeriods } from '../../services/earningPeriodService'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
@@ -30,6 +31,7 @@ export function ExpenseListPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [closedPeriodIds, setClosedPeriodIds] = useState<Set<number>>(new Set())
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
   const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL')
   const [selectedCategory, setSelectedCategory] = useState<string | 'ALL'>('ALL')
@@ -136,10 +138,11 @@ export function ExpenseListPage() {
     let isMounted = true
 
     async function loadInitialData() {
-      const [currentExpenses, currentIncomes, currentSettings] = await Promise.all([
+      const [currentExpenses, currentIncomes, currentSettings, closedPeriods] = await Promise.all([
         listExpenses({ newestFirst: true }),
         listServiceIncomes({ newestFirst: true }),
         getSettings(),
+        listClosedEarningPeriods(),
       ])
 
       if (!isMounted) {
@@ -149,6 +152,7 @@ export function ExpenseListPage() {
       setExpenses(currentExpenses)
       setIncomes(currentIncomes)
       setSettings(currentSettings)
+      setClosedPeriodIds(new Set(closedPeriods.flatMap((period) => period.id ? [period.id] : [])))
       setIsLoading(false)
     }
 
@@ -326,7 +330,7 @@ export function ExpenseListPage() {
           ) : (
             <ul className="divide-y divide-slate-200">
               {paginatedExpenses.map((expense) => {
-                const isClosedSeason = isLocationSeasonClosed(
+                const isClosedSeason = closedPeriodIds.has(expense.earningPeriodId ?? expense.seasonPeriodId ?? -1) || isLocationSeasonClosed(
                   expense,
                   settings?.closedLocationSeasons,
                 )
