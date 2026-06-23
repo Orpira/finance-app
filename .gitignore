@@ -13,6 +13,12 @@ dist-ssr
 .jdk
 .android-sdk
 *.local
+.env
+.env.*
+!.env.example
+license-private-key.json
+license-private-key.pem
+.env.license
 
 # Editor directories and files
 .vscode/*
