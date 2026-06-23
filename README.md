@@ -109,12 +109,30 @@ Los datos se almacenan localmente usando IndexedDB con Dexie. La configuración 
 
 La función de PIN protege el ingreso a la aplicación, bloquea al pasar Android a segundo plano y tras 2 minutos de inactividad en web. El PIN se guarda como hash con sal aleatoria, nunca en texto plano. Como no existe autenticación remota, la recuperación segura exige borrar los datos locales; conviene mantener un backup cifrado actualizado.
 
-## Sistema de licencia demo offline
+## Licencias firmadas offline V2
 
 Private Balance utiliza una licencia local vinculada a cada dispositivo. Antes
 del PIN y de las rutas principales, `LicenseGuard` comprueba en IndexedDB que la
 licencia esté activa, corresponda al código del dispositivo y no haya expirado.
 La comprobación funciona sin servidor y sin conexión.
+
+La versión V2 reemplaza el checksum local por firma digital asimétrica:
+
+- El desarrollador conserva una clave privada fuera de la app.
+- La app incluye únicamente la clave pública en
+  `src/services/signedLicenseService.ts`.
+- La licencia se firma fuera del frontend y del APK.
+- La app valida la firma offline con Web Crypto API usando ECDSA P-256 y
+  SHA-256.
+
+El formato de licencia V2 es:
+
+```text
+PB-LIC-V2.<payloadBase64Url>.<signatureBase64Url>
+```
+
+El payload firmado incluye la aplicación, versión, código de dispositivo, tipo
+de licencia, fecha de emisión, expiración y funcionalidades habilitadas.
 
 ### Código del dispositivo
 
@@ -126,7 +144,89 @@ La comprobación funciona sin servidor y sin conexión.
 La licencia se guarda en la tabla Dexie `licenses`. No se incluye en los
 backups financieros, para evitar transferir una activación entre dispositivos.
 
-### Generar un código manualmente
+### Generar claves V2
+
+Genera un par de claves ECDSA P-256:
+
+```bash
+node scripts/generate-license-keys.mjs
+```
+
+Por defecto se generan:
+
+- `license-private-key.json`: clave privada local, ignorada por Git.
+- `license-public-key.json`: clave pública para copiar en la app.
+
+La clave privada también puede guardarse fuera del repositorio:
+
+```bash
+node scripts/generate-license-keys.mjs /ruta/segura/license-private-key.json license-public-key.json
+```
+
+Nunca subas la clave privada al repositorio, no la incluyas en el frontend y no
+la empaquetes en Android. Los archivos `license-private-key.json`,
+`license-private-key.pem` y `.env.license` están ignorados por Git.
+
+Si generas una nueva clave para producción, copia la clave pública resultante en
+`publicLicenseKeyJwk` dentro de `src/services/signedLicenseService.ts` y firma
+las licencias con la clave privada correspondiente.
+
+### Generar licencias V2
+
+El generador lee la clave privada desde:
+
+1. `LICENSE_PRIVATE_KEY_JWK`, con el JWK completo en una variable de entorno.
+2. `LICENSE_PRIVATE_KEY_PATH`, apuntando a un archivo JSON.
+3. `./license-private-key.json`, por defecto.
+
+Licencia demo con expiración:
+
+```bash
+node scripts/generate-signed-license.mjs PB-F78A-870C-3216 demo 2026-07-31
+```
+
+Licencia lifetime:
+
+```bash
+node scripts/generate-signed-license.mjs PB-F78A-870C-3216 lifetime
+```
+
+Tipos disponibles:
+
+- `demo`: acceso temporal de demostración.
+- `monthly`: licencia mensual; requiere fecha de expiración.
+- `annual`: licencia anual; requiere fecha de expiración.
+- `lifetime`: acceso sin expiración, con `expiresAt: null`.
+
+### Validación en la app
+
+`src/services/signedLicenseService.ts` valida:
+
+- Formato `PB-LIC-V2.<payload>.<firma>`.
+- Firma digital ECDSA P-256/SHA-256 con la clave pública.
+- `app === "private-balance"`.
+- `version === 2`.
+- `deviceCode` igual al dispositivo actual.
+- `licenseType` dentro de `demo`, `monthly`, `annual` o `lifetime`.
+- Expiración futura para licencias temporales.
+- `expiresAt: null` para licencias lifetime.
+- Protección básica contra retroceso de fecha mediante `lastValidAccessDate`.
+
+La activación sigue entrando por la pantalla de licencia. Si el código empieza
+por `PB-LIC-V2`, se valida como licencia firmada; los códigos antiguos V1 se
+mantienen solo para transición.
+
+### Compatibilidad temporal V1
+
+Las licencias V1 activas siguen funcionando durante la transición y se marcan
+internamente con `licenseVersion: 1`. Las nuevas activaciones deben generarse en
+V2 y se guardan con `licenseVersion: 2`.
+
+El formato antiguo `PB-TIPO-YYYYMMDD-HASHDISPOSITIVO-CHECKSUM` sigue disponible
+para instalaciones ya activadas o pruebas puntuales, pero no debe usarse para
+licencias nuevas.
+
+### Generar un código V1 manualmente
 
 Con el servidor de desarrollo activo (`npm run dev`), abre la consola del
 navegador y ejecuta:
@@ -176,11 +276,11 @@ toda la base local, incluida la licencia.
 
 ### Limitaciones de seguridad
 
-La validación offline es una protección básica para demos y licencias simples.
-El algoritmo y el checksum están incluidos en la aplicación instalada y pueden
-ser inspeccionados o modificados por una persona con conocimientos técnicos. No
-equivale a una licencia firmada con criptografía asimétrica ni a una validación
-remota.
+Una app offline nunca es 100% inviolable: una persona con control total del
+dispositivo puede inspeccionar o modificar el APK. La firma asimétrica mejora
+mucho la seguridad porque la clave privada no está dentro de la app y el
+checksum ya no puede replicarse desde el bundle, pero no sustituye una
+validación remota para escenarios de máximo riesgo.
 
 ## Backup cifrado con Google Drive App Folder
 

@@ -94,6 +94,11 @@ export function LicenseActivationPage({
 
   const isClockTampered = mode === 'clock-tampered'
   const isExpired = mode === 'expired'
+  const handleActivationCodeChange = (value: string) => {
+    setActivationCode(
+      value.trimStart().startsWith('PB-LIC-V2.') ? value : value.toUpperCase(),
+    )
+  }
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 px-4 py-8">
@@ -179,11 +184,11 @@ export function LicenseActivationPage({
                 Código de activación
               </span>
               <input
-                autoCapitalize="characters"
+                autoCapitalize="off"
                 autoComplete="off"
-                className="h-12 rounded-md border border-slate-300 bg-white px-3 font-mono text-base uppercase text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                onChange={(event) => setActivationCode(event.target.value.toUpperCase())}
-                placeholder="PB-DEMO-20260731-XXXXXXXX-XXXX"
+                className="h-12 rounded-md border border-slate-300 bg-white px-3 font-mono text-sm text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                onChange={(event) => handleActivationCodeChange(event.target.value)}
+                placeholder="PB-LIC-V2.payload.firma"
                 required
                 spellCheck={false}
                 value={activationCode}

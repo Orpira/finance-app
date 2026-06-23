@@ -1,16 +1,18 @@
-import { Device } from '@capacitor/device'
-import { Capacitor } from '@capacitor/core'
-
 import { db } from '../database/db'
 import type { AppLicense, LicenseStatus, LicenseType } from '../types/license'
+import { CURRENT_LICENSE_ID, getDeviceCode } from './licenseDeviceService'
+import {
+  activateSignedLicense,
+  getSignedLicenseStatus,
+} from './signedLicenseService'
 import {
   getDeviceHashFragment,
   parseAndVerifyActivationCode,
 } from '../utils/licenseCodeGenerator'
 
-const CURRENT_LICENSE_ID = 'current'
-const DEVICE_CODE_STORAGE_KEY = 'finance-app:license-device-code'
-const FALLBACK_DEVICE_ID_STORAGE_KEY = 'finance-app:license-device-id'
+const SIGNED_LICENSE_PREFIX = 'PB-LIC-V2.'
+
+export { getDeviceCode } from './licenseDeviceService'
 
 export type LicenseAccessStatus = LicenseStatus | 'clock-tampered'
 
@@ -23,66 +25,6 @@ export interface ActivationValidationResult {
   activationCode: string
   expirationDate?: string
   licenseType: LicenseType
-}
-
-function createFallbackUuid() {
-  if (typeof globalThis.crypto?.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID()
-  }
-
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (value) => {
-    const random = Math.floor(Math.random() * 16)
-    const digit = value === 'x' ? random : (random & 0x3) | 0x8
-
-    return digit.toString(16)
-  })
-}
-
-function getFallbackDeviceId() {
-  const storedId = localStorage.getItem(FALLBACK_DEVICE_ID_STORAGE_KEY)
-
-  if (storedId) {
-    return storedId
-  }
-
-  const nextId = createFallbackUuid()
-  localStorage.setItem(FALLBACK_DEVICE_ID_STORAGE_KEY, nextId)
-
-  return nextId
-}
-
-async function hashDeviceIdentifier(identifier: string) {
-  if (globalThis.crypto?.subtle) {
-    const digest = await globalThis.crypto.subtle.digest(
-      'SHA-256',
-      new TextEncoder().encode(identifier),
-    )
-
-    return Array.from(new Uint8Array(digest))
-      .map((value) => value.toString(16).padStart(2, '0'))
-      .join('')
-      .toUpperCase()
-  }
-
-  return `${getDeviceHashFragment(identifier)}${getDeviceHashFragment(
-    `${identifier}:fallback`,
-  )}`
-}
-
-async function getStableDeviceIdentifier() {
-  if (Capacitor.isNativePlatform()) {
-    try {
-      const deviceId = await Device.getId()
-
-      if (deviceId.identifier) {
-        return `native:${deviceId.identifier}`
-      }
-    } catch {
-      // Web/PWA-compatible fallback below.
-    }
-  }
-
-  return `local:${getFallbackDeviceId()}`
 }
 
 function parseExpirationDate(expirationToken: string) {
@@ -100,22 +42,6 @@ function parseExpirationDate(expirationToken: string) {
   }
 
   return expirationDate
-}
-
-export async function getDeviceCode() {
-  const storedCode = localStorage.getItem(DEVICE_CODE_STORAGE_KEY)
-
-  if (storedCode) {
-    return storedCode
-  }
-
-  const identifier = await getStableDeviceIdentifier()
-  const hash = await hashDeviceIdentifier(identifier)
-  const deviceCode = `PB-${hash.slice(0, 4)}-${hash.slice(4, 8)}-${hash.slice(8, 12)}`
-
-  localStorage.setItem(DEVICE_CODE_STORAGE_KEY, deviceCode)
-
-  return deviceCode
 }
 
 export function getCurrentLicense() {
@@ -158,6 +84,10 @@ export function validateActivationCode(
 }
 
 export async function activateLicense(code: string) {
+  if (code.trim().startsWith(SIGNED_LICENSE_PREFIX)) {
+    return activateSignedLicense(code)
+  }
+
   const deviceCode = await getDeviceCode()
   const validation = validateActivationCode(code, deviceCode)
   const currentLicense = await getCurrentLicense()
@@ -170,6 +100,7 @@ export async function activateLicense(code: string) {
     expirationDate: validation.expirationDate,
     status: 'active',
     licenseType: validation.licenseType,
+    licenseVersion: 1,
     lastValidAccessDate: now,
     createdAt: currentLicense?.createdAt ?? now,
     updatedAt: now,
@@ -204,6 +135,10 @@ export async function getLicenseStatus(): Promise<LicenseStatusResult> {
 
   if (!license) {
     return { status: 'inactive' }
+  }
+
+  if (license.licenseVersion === 2) {
+    return getSignedLicenseStatus()
   }
 
   const deviceCode = await getDeviceCode()
@@ -241,6 +176,7 @@ export async function getLicenseStatus(): Promise<LicenseStatusResult> {
 
   const updatedLicense: AppLicense = {
     ...license,
+    licenseVersion: license.licenseVersion ?? 1,
     lastValidAccessDate: new Date(now).toISOString(),
     updatedAt: new Date(now).toISOString(),
   }
