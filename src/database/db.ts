@@ -23,6 +23,7 @@ export function createDefaultSettings(): AppSettings {
     secondaryCurrency: 'COP',
     incomePercentage: 50,
     rateMode: 'manual',
+    userType: 'primary',
     theme: 'system',
     pinEnabled: false,
     backupEncryptionKey: '',

@@ -85,12 +85,13 @@ export function HomePage() {
       listExpenses(previous),
     ]).then(([nextSettings, period, incomes, expenses, oldIncomes, oldExpenses]) => {
       if (!mounted) return
+      const isBasicUser = nextSettings.userType === 'basic'
       setSettings(nextSettings)
       setActivePeriod(period ?? null)
-      setCurrentIncomes(incomes.filter((item) => item.earningPeriodId === period?.id))
-      setCurrentExpenses(expenses.filter((item) => item.earningPeriodId === period?.id))
-      setPreviousIncomes(oldIncomes.filter((item) => item.earningPeriodId === period?.id))
-      setPreviousExpenses(oldExpenses.filter((item) => item.earningPeriodId === period?.id))
+      setCurrentIncomes(isBasicUser ? incomes : incomes.filter((item) => item.earningPeriodId === period?.id))
+      setCurrentExpenses(isBasicUser ? expenses : expenses.filter((item) => item.earningPeriodId === period?.id))
+      setPreviousIncomes(isBasicUser ? oldIncomes : oldIncomes.filter((item) => item.earningPeriodId === period?.id))
+      setPreviousExpenses(isBasicUser ? oldExpenses : oldExpenses.filter((item) => item.earningPeriodId === period?.id))
     })
 
     return () => {
@@ -120,7 +121,7 @@ export function HomePage() {
     return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando...</section>
   }
 
-  if (!activePeriod) {
+  if (settings.userType === 'primary' && !activePeriod) {
     return <section className="mx-auto flex min-h-[70dvh] w-full max-w-2xl flex-col items-center justify-center gap-4 text-center">
       <CalendarRange className="size-12 text-emerald-700" />
       <div><h1 className="text-2xl font-semibold">No hay temporada activa</h1><p className="mt-2 text-sm text-slate-500">Para registrar ingresos, egresos y citas, primero debes crear una temporada desde el módulo Temporadas.</p></div>
@@ -190,10 +191,12 @@ export function HomePage() {
         ))}
       </div>
 
-      <Link className="inline-flex h-12 items-center justify-center gap-2 self-stretch rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:self-end" to="/resumen-completo">
-        Ver todo el resumen
-        <ArrowRight className="size-4" aria-hidden="true" />
-      </Link>
+      {settings.userType === 'primary' && (
+        <Link className="inline-flex h-12 items-center justify-center gap-2 self-stretch rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:self-end" to="/resumen-completo">
+          Ver todo el resumen
+          <ArrowRight className="size-4" aria-hidden="true" />
+        </Link>
+      )}
     </section>
   )
 }

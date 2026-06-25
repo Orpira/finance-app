@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import AppLayout from '../app/AppLayout'
 import { PinGate } from '../components/PinGate'
 import { LicenseGuard } from '../components/security/LicenseGuard'
+import { UserTypeGuard } from '../components/security/UserTypeGuard'
 import AppointmentFormPage from '../pages/Agenda/AppointmentFormPage'
 import AgendaPage from '../pages/Agenda/AgendaPage'
 import BestDaysHistoryPage from '../pages/Summary/BestDaysHistoryPage'
@@ -32,11 +33,11 @@ export function RouterProvider() {
           <Routes>
           <Route element={<AppLayout />}>
             <Route index element={<HomePage />} />
-            <Route path="resumen-completo" element={<FullSummaryPage />} />
+            <Route path="resumen-completo" element={<UserTypeGuard allowed={['primary']}><FullSummaryPage /></UserTypeGuard>} />
             <Route path="dashboard" element={<Navigate replace to="/resumen-completo" />} />
             <Route
               path="resumen-completo/historial-mejores-dias"
-              element={<BestDaysHistoryPage />}
+              element={<UserTypeGuard allowed={['primary']}><BestDaysHistoryPage /></UserTypeGuard>}
             />
             <Route path="dashboard/best-days-history" element={<Navigate replace to="/resumen-completo/historial-mejores-dias" />} />
             <Route path="income/nuevo" element={<IncomePage />} />
@@ -47,17 +48,17 @@ export function RouterProvider() {
             <Route path="expenses/:expenseId/editar" element={<ExpensesPage />} />
             <Route path="expenses/nuevo" element={<ExpensesPage />} />
             <Route path="expenses" element={<ExpenseListPage />} />
-            <Route path="agenda/nueva" element={<AppointmentFormPage />} />
+            <Route path="agenda/nueva" element={<UserTypeGuard allowed={['primary']}><AppointmentFormPage /></UserTypeGuard>} />
             <Route
               path="agenda/:appointmentId/editar"
-              element={<AppointmentFormPage />}
+              element={<UserTypeGuard allowed={['primary']}><AppointmentFormPage /></UserTypeGuard>}
             />
-            <Route path="agenda" element={<AgendaPage />} />
+            <Route path="agenda" element={<UserTypeGuard allowed={['primary']}><AgendaPage /></UserTypeGuard>} />
             <Route path="reports/preview" element={<ReportPreviewPage />} />
             <Route path="reports" element={<ReportsPage />} />
-            <Route path="temporadas/nueva" element={<SeasonFormPage />} />
-            <Route path="temporadas/:id" element={<SeasonDetailPage />} />
-            <Route path="temporadas" element={<SeasonsPage />} />
+            <Route path="temporadas/nueva" element={<UserTypeGuard allowed={['primary']}><SeasonFormPage /></UserTypeGuard>} />
+            <Route path="temporadas/:id" element={<UserTypeGuard allowed={['primary']}><SeasonDetailPage /></UserTypeGuard>} />
+            <Route path="temporadas" element={<UserTypeGuard allowed={['primary']}><SeasonsPage /></UserTypeGuard>} />
             <Route path="settings/backup" element={<SettingsBackupPage />} />
             <Route path="settings/business" element={<SettingsBusinessPage />} />
             <Route path="settings/security" element={<SettingsSecurityPage />} />

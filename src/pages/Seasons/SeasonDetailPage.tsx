@@ -4,13 +4,14 @@ import { Link, useParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import { getEarningPeriodById, getSeasonStatistics, listSeasonRecords, updateActiveEarningPeriod, type SeasonStatistics } from '../../services/earningPeriodService'
+import { listCityOptions } from '../../services/locationService'
 import type { Appointment } from '../../types/appointment'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
-import type { CurrencyCode } from '../../types/settings'
+import type { CountryCode, CurrencyCode } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
-import { countries } from '../../utils/countries'
+import { countries, getCityOption, getCountryCurrency } from '../../utils/countries'
 
 function formatDate(value?: string) {
   return value ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(value)) : 'En curso'
@@ -42,6 +43,8 @@ export function SeasonDetailPage() {
     if (!period?.id || period.status !== 'active') return
     const nextName = window.prompt('Nombre de la temporada', period.name)
     if (nextName === null) return
+    const nextCity = window.prompt('Ciudad de la temporada', period.city ?? '')
+    if (nextCity === null) return
     const nextPercentageValue = window.prompt('Porcentaje de ganancia', String(period.percentage))
     if (nextPercentageValue === null) return
     const nextPercentage = Number(nextPercentageValue)
@@ -50,7 +53,18 @@ export function SeasonDetailPage() {
       return
     }
     try {
-      const updated = await updateActiveEarningPeriod(period.id, { name: nextName.trim() || period.name, notes: period.notes, percentage: nextPercentage })
+      const cityOptions = await listCityOptions()
+      const selectedCity = getCityOption(nextCity.trim(), cityOptions)
+      const nextCountry = selectedCity?.country ?? (period.countryCode ?? period.country) as CountryCode
+      const updated = await updateActiveEarningPeriod(period.id, {
+        name: nextName.trim() || period.name,
+        notes: period.notes,
+        percentage: nextPercentage,
+        city: nextCity.trim() || period.city,
+        country: nextCountry,
+        countryCode: nextCountry,
+        baseCurrency: getCountryCurrency(nextCountry) ?? period.baseCurrency,
+      })
       if (updated) setPeriod(updated)
     } catch (reason) {
       window.alert(reason instanceof Error ? reason.message : 'No se pudo actualizar la temporada.')
@@ -62,8 +76,8 @@ export function SeasonDetailPage() {
       {period.status === 'closed' ? <Link className="inline-flex h-11 items-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" to={`/temporadas/nueva?basedOn=${period.id}`}><CopyPlus className="size-4" /> Crear basada en esta</Link> : <button className="inline-flex h-11 items-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700" onClick={editActiveSeason} type="button"><Pencil className="size-4" /> Editar temporada</button>}
     </PageHeader>
     <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex flex-wrap items-center gap-2"><span className={period.status === 'closed' ? 'rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700' : 'rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700'}>{period.status === 'closed' ? 'Temporada cerrada' : 'Activa'}</span>{period.status === 'closed' && <span className="inline-flex items-center gap-1 text-xs text-slate-500"><LockKeyhole className="size-3" /> Registros bloqueados</span>}</div>
-      <p className="mt-3 text-sm text-slate-600">{period.city}, {country} · {formatDate(period.startDate)} – {formatDate(period.endDate)} · {period.percentage}%</p>
+      <div className="flex flex-wrap items-center gap-2"><span className={period.status === 'closed' ? 'rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:!text-slate-100' : 'rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900 dark:!text-emerald-100'}>{period.status === 'closed' ? 'Temporada cerrada' : 'Activa'}</span>{period.status === 'closed' && <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:!text-slate-300"><LockKeyhole className="size-3" /> Registros bloqueados</span>}</div>
+      <p className="mt-3 text-sm text-slate-600 dark:!text-slate-300">{period.city}, {country} · {formatDate(period.startDate)} – {formatDate(period.endDate)} · {period.percentage}%</p>
       {period.notes && <p className="mt-2 text-sm text-slate-500">{period.notes}</p>}
     </div>
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">{cards.map(([label, amount]) => <article className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900" key={String(label)}><p className="text-xs text-slate-500">{label}</p><p className="mt-1 font-semibold">{formatCurrency(Number(amount), currency)}</p></article>)}</div>

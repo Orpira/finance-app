@@ -5,9 +5,12 @@ import {
   Settings,
   CalendarRange,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
+import { getSettings } from '../../services/settingsService'
+import type { UserType } from '../../types/settings'
 
 const moreLinks = [
   {
@@ -37,6 +40,27 @@ const moreLinks = [
 ]
 
 export function MorePage() {
+  const [userType, setUserType] = useState<UserType>('primary')
+
+  useEffect(() => {
+    getSettings().then((settings) => setUserType(settings.userType))
+
+    function handleSettingsChanged(event: Event) {
+      setUserType((event as CustomEvent<{ userType: UserType }>).detail.userType)
+    }
+
+    window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
+
+    return () => {
+      window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
+    }
+  }, [])
+
+  const visibleLinks =
+    userType === 'basic'
+      ? moreLinks.filter((link) => link.href !== '/temporadas')
+      : moreLinks
+
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <PageHeader
@@ -47,7 +71,7 @@ export function MorePage() {
       />
 
       <div className="grid gap-3">
-        {moreLinks.map(({ description, href, icon: Icon, label }) => (
+        {visibleLinks.map(({ description, href, icon: Icon, label }) => (
           <Link
             className="flex min-h-20 items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50/40"
             key={href}

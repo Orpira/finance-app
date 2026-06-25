@@ -120,7 +120,7 @@ export function LicenseActivationPage({
           </div>
           <div>
             <p className="text-sm font-semibold uppercase tracking-wider text-emerald-700">
-              Private Balance Demo
+              Private Balance 
             </p>
             <h1 className="mt-1 text-2xl font-semibold text-slate-950">
               {isClockTampered

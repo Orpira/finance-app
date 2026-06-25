@@ -144,7 +144,8 @@ export async function createEarningPeriod(input: CreateSeasonInput) {
 
 export async function updateActiveEarningPeriod(
   id: number,
-  updates: Pick<EarningPeriod, 'name' | 'notes' | 'percentage'>,
+  updates: Pick<EarningPeriod, 'name' | 'notes' | 'percentage'> &
+    Partial<Pick<EarningPeriod, 'city' | 'country' | 'countryCode' | 'baseCurrency'>>,
 ) {
   const period = await db.earningPeriods.get(id)
   if (!period || period.status !== 'active') throw new Error(CLOSED_SEASON_MESSAGE)
@@ -153,9 +154,21 @@ export async function updateActiveEarningPeriod(
   }
   const now = new Date().toISOString()
   await db.earningPeriods.update(id, { ...updates, updatedAt: now })
-  if (updates.percentage !== period.percentage) {
+  if (
+    updates.percentage !== period.percentage ||
+    (updates.city !== undefined && updates.city !== period.city) ||
+    (updates.countryCode !== undefined && updates.countryCode !== period.countryCode) ||
+    (updates.baseCurrency !== undefined && updates.baseCurrency !== period.baseCurrency)
+  ) {
     const settings = await getSettingsForPeriod()
-    await db.settings.put({ ...settings, incomePercentage: updates.percentage, updatedAt: now })
+    await db.settings.put({
+      ...settings,
+      city: updates.city ?? settings.city,
+      country: updates.countryCode ?? settings.country,
+      defaultCurrency: updates.baseCurrency ?? settings.defaultCurrency,
+      incomePercentage: updates.percentage,
+      updatedAt: now,
+    })
   }
   return db.earningPeriods.get(id)
 }

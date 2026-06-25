@@ -178,9 +178,10 @@ export function IncomePage() {
     }
   }, [navigate, parsedIncomeId])
 
+  const isBasicUser = settings?.userType === 'basic'
   const realGain = useMemo(
-    () => roundMoney((totalAmount * percentage) / 100),
-    [percentage, totalAmount],
+    () => roundMoney(isBasicUser ? totalAmount : (totalAmount * percentage) / 100),
+    [isBasicUser, percentage, totalAmount],
   )
 
   useEffect(() => {
@@ -273,11 +274,13 @@ export function IncomePage() {
         currency,
         earningPeriodId: editingIncome?.earningPeriodId ?? activePeriod?.id,
         earningPercentage:
-          editingIncome?.earningPercentage ??
-          editingIncome?.percentage ??
-          activePeriod?.percentage ??
-          percentage,
-        percentage,
+          isBasicUser
+            ? 100
+            : editingIncome?.earningPercentage ??
+              editingIncome?.percentage ??
+              activePeriod?.percentage ??
+              percentage,
+        percentage: isBasicUser ? 100 : percentage,
         realGain,
         eurValue: roundMoney(convertedValues.eurValue),
         copValue: roundMoney(convertedValues.copValue),
@@ -290,8 +293,8 @@ export function IncomePage() {
         ),
         exchangeRateBaseToSecondary: exchangeRate,
         actualDuration: duration,
-        country: editingIncome?.country ?? settings.country,
-        city: editingIncome?.city ?? settings.city,
+        country: isBasicUser ? undefined : editingIncome?.country ?? settings.country,
+        city: isBasicUser ? undefined : editingIncome?.city ?? settings.city,
       }
 
       if (isEditing && parsedIncomeId) {
@@ -315,7 +318,7 @@ export function IncomePage() {
     )
   }
 
-  if (!isEditing && !activePeriod) {
+  if (!isEditing && !isBasicUser && !activePeriod) {
     return <section className="mx-auto flex min-h-[60dvh] max-w-2xl flex-col items-center justify-center gap-4 text-center"><h1 className="text-2xl font-semibold">No hay una temporada activa</h1><p className="text-sm text-slate-500">Crea una temporada para registrar actividad.</p><button className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" onClick={() => navigate('/temporadas')} type="button">Ir a Temporadas</button></section>
   }
 
@@ -332,7 +335,7 @@ export function IncomePage() {
         className="flex flex-col gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
         onSubmit={handleSubmit}
       >
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className={isBasicUser ? 'grid gap-4 sm:grid-cols-2' : 'grid gap-4 sm:grid-cols-3'}>
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">Fecha</span>
             <input
@@ -421,25 +424,27 @@ export function IncomePage() {
             </select>
           </label>
 
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">
-              Porcentaje de ganancia
-            </span>
-            <div className="flex items-center gap-3">
-              <input
-                className="h-11 w-28 rounded-md border border-slate-300 bg-slate-50 px-3 text-base text-slate-950 outline-none"
-                disabled
-                max={100}
-                min={0}
-                type="number"
-                value={percentage}
-              />
-              <span className="text-sm font-medium text-slate-500">%</span>
-            </div>
-            <span className="text-xs font-medium text-slate-500">
-              Período activo: {activePeriod?.name ?? 'Actual'}
-            </span>
-          </label>
+          {!isBasicUser && (
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                Porcentaje de ganancia
+              </span>
+              <div className="flex items-center gap-3">
+                <input
+                  className="h-11 w-28 rounded-md border border-slate-300 bg-slate-50 px-3 text-base text-slate-950 outline-none"
+                  disabled
+                  max={100}
+                  min={0}
+                  type="number"
+                  value={percentage}
+                />
+                <span className="text-sm font-medium text-slate-500">%</span>
+              </div>
+              <span className="text-xs font-medium text-slate-500">
+                Período activo: {activePeriod?.name ?? 'Actual'}
+              </span>
+            </label>
+          )}
 
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">

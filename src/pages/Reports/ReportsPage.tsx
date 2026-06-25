@@ -1,21 +1,14 @@
-import { CalendarRange, Eye, RefreshCw, Share2 } from 'lucide-react'
+import { CalendarRange, Eye, Share2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
-import { SensitiveAmount } from '../../components/SensitiveAmount'
-import { useSensitiveValues } from '../../hooks/useSensitiveValues'
-import {
-  generateDueCutoffReports,
-  listCutoffReports,
-} from '../../services/cutoffReportService'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import { listEarningPeriods } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
-import type { CutoffReport, CutoffFrequency } from '../../types/cutoffReport'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
@@ -35,7 +28,6 @@ import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 
 type Period = 'week' | 'month' | 'year'
 type ReportKind = 'income' | 'expense' | 'paymentType'
-type CutoffFrequencyFilter = CutoffFrequency | 'ALL'
 
 const periods: Array<{ value: Period; label: string }> = [
   { value: 'week', label: 'Semana' },
@@ -64,12 +56,6 @@ const reportCards: Array<{
     title: 'Reporte por tipo de pago',
   },
 ]
-
-const cutoffFrequencyLabels: Record<CutoffFrequency, string> = {
-  weekly: 'Semanal',
-  biweekly: 'Quincenal',
-  monthly: 'Mensual',
-}
 
 function getPeriodRange(period: Period) {
   if (period === 'week') {
@@ -167,7 +153,6 @@ function buildPrintableDocument(title: string, body: string) {
 }
 
 export function ReportsPage() {
-  const { hidden: sensitiveValuesHidden } = useSensitiveValues()
   const navigate = useNavigate()
   const initialRange = useMemo(() => getCurrentMonthRange(), [])
   const [period, setPeriod] = useState<Period>('month')
@@ -181,13 +166,10 @@ export function ReportsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [periodIncomes, setPeriodIncomes] = useState<ServiceIncome[]>([])
   const [periodExpenses, setPeriodExpenses] = useState<Expense[]>([])
-  const [cutoffReports, setCutoffReports] = useState<CutoffReport[]>([])
-  const [cutoffFrequencyFilter, setCutoffFrequencyFilter] =
-    useState<CutoffFrequencyFilter>('ALL')
-  const [selectedCutoffId, setSelectedCutoffId] = useState('')
   const [loadError, setLoadError] = useState('')
   const [seasons, setSeasons] = useState<EarningPeriod[]>([])
   const [selectedSeason, setSelectedSeason] = useState<string>('ALL')
+  const isBasicUser = settings?.userType === 'basic'
 
   useEffect(() => {
     let isMounted = true
@@ -199,20 +181,16 @@ export function ReportsPage() {
           from: dateFrom || undefined,
           to: dateTo || undefined,
         }
-        await generateDueCutoffReports()
-
         const [
           currentSettings,
           currentIncomes,
           currentExpenses,
-          currentCutoffReports,
           currentSeasons,
         ] =
           await Promise.all([
             getSettings(),
             listServiceIncomes({ ...range, newestFirst: true }),
             listExpenses({ ...range, newestFirst: true }),
-            listCutoffReports(),
             listEarningPeriods(),
           ])
 
@@ -223,7 +201,6 @@ export function ReportsPage() {
         setSettings(currentSettings)
         setPeriodIncomes(currentIncomes)
         setPeriodExpenses(currentExpenses)
-        setCutoffReports(currentCutoffReports)
         setSeasons(currentSeasons)
       } catch {
         if (isMounted) {
@@ -238,28 +215,6 @@ export function ReportsPage() {
       isMounted = false
     }
   }, [dateFrom, dateTo])
-
-  const filteredCutoffReports = useMemo(
-    () =>
-      cutoffReports.filter(
-        (report) =>
-          cutoffFrequencyFilter === 'ALL' ||
-          report.frequency === cutoffFrequencyFilter,
-      ),
-    [cutoffFrequencyFilter, cutoffReports],
-  )
-
-  const selectedCutoffReport = useMemo(() => {
-    if (filteredCutoffReports.length === 0) {
-      return null
-    }
-
-    return (
-      filteredCutoffReports.find(
-        (report) => String(report.id) === selectedCutoffId,
-      ) ?? filteredCutoffReports[0]
-    )
-  }, [filteredCutoffReports, selectedCutoffId])
 
   const availableCountries = useMemo(() => {
     const countryCodes = new Set<CountryCode>()
@@ -397,62 +352,6 @@ export function ReportsPage() {
     setSelectedCity(city || 'ALL')
     setSelectedPaymentType('ALL')
     setSelectedCategory('ALL')
-  }
-
-  async function handleRefreshCutoffs() {
-    try {
-      setLoadError('')
-      await generateDueCutoffReports()
-      setCutoffReports(await listCutoffReports())
-    } catch {
-      setLoadError('No se pudieron actualizar los cortes automáticos.')
-    }
-  }
-
-  function renderCutoffBreakdown(
-    title: string,
-    totals: Record<string, number>,
-    currency: CurrencyCode,
-  ) {
-    const entries = Object.entries(totals).sort(([first], [second]) =>
-      first.localeCompare(second, 'es'),
-    )
-    const maxValue = Math.max(...entries.map(([, value]) => value), 0)
-
-    return (
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="text-base font-semibold text-slate-950">{title}</h3>
-        {entries.length > 0 ? (
-          <div className="mt-4 flex flex-col gap-3">
-            {entries.map(([label, value]) => (
-              <div className="flex flex-col gap-1" key={label}>
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-medium text-slate-700">
-                    {label === 'SIN_TIPO' ? 'Sin tipo' : label}
-                  </span>
-                  <span className="font-semibold text-slate-950">
-                    <SensitiveAmount
-                      hidden={sensitiveValuesHidden}
-                      value={formatCurrency(value, currency)}
-                    />
-                  </span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className="h-full rounded-full bg-emerald-600"
-                    style={{
-                      width: maxValue > 0 ? `${(value / maxValue) * 100}%` : '0%',
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-3 text-sm text-slate-500">Sin datos para mostrar.</p>
-        )}
-      </div>
-    )
   }
 
   function buildReportHeader(title: string, total: number, count: number) {
@@ -1015,14 +914,16 @@ export function ReportsPage() {
           </span>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">Temporada</span>
-            <select className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900" onChange={(event) => setSelectedSeason(event.target.value)} value={selectedSeason}>
-              <option value="ALL">Todas las temporadas</option>
-              {seasons.map((season) => <option key={season.id} value={season.id}>{season.name}{season.status === 'active' ? ' (activa)' : ''}</option>)}
-            </select>
-          </label>
+        <div className={['mt-4 grid gap-3 sm:grid-cols-2', isBasicUser ? 'lg:grid-cols-4' : 'lg:grid-cols-5'].join(' ')}>
+          {!isBasicUser && (
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-600">Temporada</span>
+              <select className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900" onChange={(event) => setSelectedSeason(event.target.value)} value={selectedSeason}>
+                <option value="ALL">Todas las temporadas</option>
+                {seasons.map((season) => <option key={season.id} value={season.id}>{season.name}{season.status === 'active' ? ' (activa)' : ''}</option>)}
+              </select>
+            </label>
+          )}
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-600">
               Fecha desde
@@ -1157,150 +1058,6 @@ export function ReportsPage() {
             </div>
           </article>
         ))}
-      </section>
-
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
-              Cortes generados
-            </p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-950">
-              Visualización de cierres automáticos
-            </h2>
-          </div>
-
-          <button
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            onClick={handleRefreshCutoffs}
-            type="button"
-          >
-            <RefreshCw className="size-4" aria-hidden="true" />
-            Actualizar cortes
-          </button>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">
-              Periodicidad
-            </span>
-            <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) => {
-                setCutoffFrequencyFilter(
-                  event.target.value as CutoffFrequencyFilter,
-                )
-                setSelectedCutoffId('')
-              }}
-              value={cutoffFrequencyFilter}
-            >
-              <option value="ALL">Todas</option>
-              <option value="weekly">Semanal</option>
-              <option value="biweekly">Quincenal</option>
-              <option value="monthly">Mensual</option>
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">Corte</span>
-            <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              disabled={filteredCutoffReports.length === 0}
-              onChange={(event) => setSelectedCutoffId(event.target.value)}
-              value={selectedCutoffReport?.id ? String(selectedCutoffReport.id) : ''}
-            >
-              {filteredCutoffReports.length === 0 ? (
-                <option value="">Sin cortes disponibles</option>
-              ) : null}
-              {filteredCutoffReports.map((report) => (
-                <option key={report.id} value={report.id}>
-                  {cutoffFrequencyLabels[report.frequency]} ·{' '}
-                  {report.periodStart} - {report.periodEnd}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {selectedCutoffReport ? (
-          <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-sm font-medium text-slate-500">Ingresos</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-950">
-                  <SensitiveAmount hidden={sensitiveValuesHidden} value={formatCurrency(
-                    selectedCutoffReport.incomeTotal,
-                    selectedCutoffReport.currency,
-                  )} />
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  {selectedCutoffReport.incomeCount} registros
-                </p>
-              </article>
-
-              <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-sm font-medium text-slate-500">Egresos</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-950">
-                  <SensitiveAmount
-                    hidden={sensitiveValuesHidden}
-                    value={formatCurrency(
-                      selectedCutoffReport.expenseTotal,
-                      selectedCutoffReport.currency,
-                    )}
-                  />
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  {selectedCutoffReport.expenseCount} registros
-                </p>
-              </article>
-
-              <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-sm font-medium text-slate-500">Utilidad</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-950">
-                  <SensitiveAmount hidden={sensitiveValuesHidden} value={formatCurrency(
-                    selectedCutoffReport.netTotal,
-                    selectedCutoffReport.currency,
-                  )} />
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  Corte {selectedCutoffReport.periodStart} -{' '}
-                  {selectedCutoffReport.periodEnd}
-                </p>
-              </article>
-
-              <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-sm font-medium text-slate-500">
-                  Tiempo de servicios
-                </p>
-                <p className="mt-2 text-2xl font-semibold text-slate-950">
-                  {selectedCutoffReport.serviceMinutes} min
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  Generado {selectedCutoffReport.generatedAt.slice(0, 10)}
-                </p>
-              </article>
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-2">
-              {renderCutoffBreakdown(
-                'Ingresos por tipo de pago',
-                selectedCutoffReport.paymentTypeTotals,
-                selectedCutoffReport.currency,
-              )}
-              {renderCutoffBreakdown(
-                'Egresos por categoría',
-                selectedCutoffReport.expenseCategoryTotals,
-                selectedCutoffReport.currency,
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-            Los cortes aparecerán automáticamente cuando se complete el primer
-            periodo configurado.
-          </div>
-        )}
       </section>
     </section>
   )

@@ -20,6 +20,12 @@ function syncSettingsToLocalStorage(settings: AppSettings) {
   localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
 }
 
+function notifySettingsChange(settings: AppSettings) {
+  window.dispatchEvent(new CustomEvent<AppSettings>('finance-app:settings-changed', {
+    detail: settings,
+  }))
+}
+
 function getSettingsFromLocalStorage() {
   const storedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY)
 
@@ -105,6 +111,7 @@ export async function updateSettings(
   await db.settings.put(nextSettings)
   syncSettingsToLocalStorage(nextSettings)
   applyTheme(nextSettings.theme)
+  notifySettingsChange(nextSettings)
 
   return nextSettings
 }

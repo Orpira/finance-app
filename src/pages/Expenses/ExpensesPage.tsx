@@ -100,6 +100,7 @@ export function ExpensesPage() {
   const hasSelectedRelatedIncome = incomes.some(
     (income) => income.id === Number(relatedIncomeId),
   )
+  const isBasicUser = settings?.userType === 'basic'
 
   useEffect(() => {
     let isMounted = true
@@ -315,8 +316,8 @@ export function ExpensesPage() {
             ? notes.trim()
             : undefined,
         createdAt: expenseCreatedAt ?? now.toISOString(),
-        country: expenseCountry ?? settings.country,
-        city: expenseCity ?? settings.city,
+        country: isBasicUser ? undefined : expenseCountry ?? settings.country,
+        city: isBasicUser ? undefined : expenseCity ?? settings.city,
       }
 
       if (isEditing && parsedExpenseId) {
@@ -339,7 +340,7 @@ export function ExpensesPage() {
     )
   }
 
-  if (!isEditing && !activePeriod) {
+  if (!isEditing && !isBasicUser && !activePeriod) {
     return <section className="mx-auto flex min-h-[60dvh] max-w-2xl flex-col items-center justify-center gap-4 text-center"><h1 className="text-2xl font-semibold">No hay una temporada activa</h1><p className="text-sm text-slate-500">Crea una temporada para registrar actividad.</p><button className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" onClick={() => navigate('/temporadas')} type="button">Ir a Temporadas</button></section>
   }
 

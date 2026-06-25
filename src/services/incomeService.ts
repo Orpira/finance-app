@@ -4,8 +4,9 @@ import type { ServiceIncome } from '../types/service'
 import type { CountryCode } from '../types/settings'
 import {
   assertRecordIsMutable,
-  requireActiveEarningPeriod,
+  getActiveEarningPeriod,
 } from './earningPeriodService'
+import { getSettings } from './settingsService'
 
 export type CreateServiceIncomeInput = Omit<ServiceIncome, 'id'>
 export type UpdateServiceIncomeInput = Partial<CreateServiceIncomeInput>
@@ -18,14 +19,20 @@ export interface ServiceIncomeListOptions extends DateRangeListOptions {
 }
 
 export async function createServiceIncome(input: CreateServiceIncomeInput) {
-  const earningPeriod = await requireActiveEarningPeriod()
+  const settings = await getSettings()
+  const earningPeriod =
+    settings.userType === 'primary' ? await getActiveEarningPeriod() : undefined
+
+  if (settings.userType === 'primary' && !earningPeriod) {
+    throw new Error('No hay una temporada activa. Crea una temporada para registrar actividad.')
+  }
 
   return db.services.add({
     createdAt: new Date().toISOString(),
     status: 'PENDIENTE',
     ...input,
-    earningPeriodId: earningPeriod.id,
-    seasonPeriodId: earningPeriod.id,
+    earningPeriodId: earningPeriod?.id,
+    seasonPeriodId: earningPeriod?.id,
     earningPercentage:
       earningPeriod?.percentage ?? input.earningPercentage ?? input.percentage,
     percentage: earningPeriod?.percentage ?? input.percentage,

@@ -2,7 +2,8 @@ import { db } from '../database/db'
 import type { DateRangeListOptions } from '../types/dataAccess'
 import type { Expense } from '../types/expense'
 import type { CountryCode } from '../types/settings'
-import { assertRecordIsMutable, requireActiveEarningPeriod } from './earningPeriodService'
+import { assertRecordIsMutable, getActiveEarningPeriod } from './earningPeriodService'
+import { getSettings } from './settingsService'
 
 export interface ExpenseListOptions extends DateRangeListOptions {
   category?: string
@@ -17,12 +18,19 @@ export type CreateExpenseInput = Omit<Expense, 'id' | 'createdAt'> & {
 export type UpdateExpenseInput = Partial<CreateExpenseInput>
 
 export async function createExpense(input: CreateExpenseInput) {
-  const period = await requireActiveEarningPeriod()
+  const settings = await getSettings()
+  const period =
+    settings.userType === 'primary' ? await getActiveEarningPeriod() : undefined
+
+  if (settings.userType === 'primary' && !period) {
+    throw new Error('No hay una temporada activa. Crea una temporada para registrar actividad.')
+  }
+
   return db.expenses.add({
     ...input,
     createdAt: input.createdAt ?? new Date().toISOString(),
-    earningPeriodId: period.id,
-    seasonPeriodId: period.id,
+    earningPeriodId: period?.id,
+    seasonPeriodId: period?.id,
   })
 }
 

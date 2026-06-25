@@ -390,7 +390,7 @@ export function IncomeListPage() {
 
                     <div className="flex flex-wrap justify-start gap-2">
                       {isClosedSeason ? (
-                        <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-500">
+                        <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:!text-slate-200">
                           Solo consulta
                         </span>
                       ) : (
