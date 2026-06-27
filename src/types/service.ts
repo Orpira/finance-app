@@ -1,4 +1,7 @@
+import type { UsageMode } from './settings'
+
 export type ServiceIncomeStatus = 'PENDIENTE' | 'EJECUCION' | 'FINALIZADO';
+export type ServiceIncomeType = 'ingreso' | 'ajuste' | 'otro';
 
 export interface ServiceIncome {
   id?: number;
@@ -7,7 +10,13 @@ export interface ServiceIncome {
 
   status?: ServiceIncomeStatus;
 
+  type?: ServiceIncomeType;
+
+  usageMode?: UsageMode;
+
   paymentType?: string;
+
+  notes?: string;
 
   date: string;
 

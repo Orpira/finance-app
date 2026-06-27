@@ -109,6 +109,16 @@ Los datos se almacenan localmente usando IndexedDB con Dexie. La configuración 
 
 La función de PIN protege el ingreso a la aplicación, bloquea al pasar Android a segundo plano y tras 2 minutos de inactividad en web. El PIN se guarda como hash con sal aleatoria, nunca en texto plano. Como no existe autenticación remota, la recuperación segura exige borrar los datos locales; conviene mantener un backup cifrado actualizado.
 
+## Automation Hub con n8n
+
+Los eventos `income.created`, `expense.created` y `calendar.created` se guardan
+en una outbox IndexedDB dentro de la misma transacción que el registro local.
+Una Vercel Function valida la licencia V2, emite un JWT temporal y reenvía los
+eventos a n8n sin exponer el Bearer Token en el frontend o APK.
+
+La configuración del proxy, variables, reintentos e idempotencia está en
+[`docs/AUTOMATION_HUB.md`](docs/AUTOMATION_HUB.md).
+
 ## Seguridad de licencias
 
 Private Balance utiliza una licencia local vinculada a cada dispositivo. Antes
@@ -170,8 +180,9 @@ la empaquetes en Android. Los archivos `license-private-key.json`,
 `license-private-key.pem` y `.env.license` están ignorados por Git.
 
 Si generas una nueva clave para producción, copia la clave pública resultante en
-`publicLicenseKeyJwk` dentro de `src/services/signedLicenseService.ts` y firma
-las licencias con la clave privada correspondiente.
+`publicLicenseKeyJwk` dentro de `src/services/signedLicenseService.ts` y
+`server/automationSecurity.ts`, y firma las licencias con la clave privada
+correspondiente.
 
 ## Generación de licencias
 

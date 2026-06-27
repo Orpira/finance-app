@@ -405,7 +405,7 @@ export function FullSummaryPage() {
             <CalendarDays className="size-5 text-emerald-700" aria-hidden="true" />
           </div>
           <p className="mt-3 text-2xl font-semibold text-slate-950">
-            {incomes.length}
+            {totals.serviceCount}
           </p>
           <p className="mt-1 text-sm text-slate-500">
             {totals.serviceMinutes} minutos

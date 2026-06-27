@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { SensitiveAmount } from '../../components/SensitiveAmount'
+import { UsageModeBadge } from '../../components/UsageModeBadge'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
@@ -22,6 +23,11 @@ import { formatCurrency } from '../../utils/currency'
 import { calculateFinancialTotals } from '../../utils/financeStats'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
+import {
+  isBasicMode,
+  recordBelongsToUsageMode,
+  requiresSeason,
+} from '../../utils/usageMode'
 
 function monthRange(offset: number) {
   const now = new Date()
@@ -85,13 +91,57 @@ export function HomePage() {
       listExpenses(previous),
     ]).then(([nextSettings, period, incomes, expenses, oldIncomes, oldExpenses]) => {
       if (!mounted) return
-      const isBasicUser = nextSettings.userType === 'basic'
+      const isBasicUser = isBasicMode(nextSettings)
+      const modeIncomes = incomes.filter((item) =>
+        recordBelongsToUsageMode(item, nextSettings.usageMode),
+      )
+      const modeExpenses = expenses.filter((item) =>
+        recordBelongsToUsageMode(item, nextSettings.usageMode),
+      )
+      const oldModeIncomes = oldIncomes.filter((item) =>
+        recordBelongsToUsageMode(item, nextSettings.usageMode),
+      )
+      const oldModeExpenses = oldExpenses.filter((item) =>
+        recordBelongsToUsageMode(item, nextSettings.usageMode),
+      )
       setSettings(nextSettings)
       setActivePeriod(period ?? null)
-      setCurrentIncomes(isBasicUser ? incomes : incomes.filter((item) => item.earningPeriodId === period?.id))
-      setCurrentExpenses(isBasicUser ? expenses : expenses.filter((item) => item.earningPeriodId === period?.id))
-      setPreviousIncomes(isBasicUser ? oldIncomes : oldIncomes.filter((item) => item.earningPeriodId === period?.id))
-      setPreviousExpenses(isBasicUser ? oldExpenses : oldExpenses.filter((item) => item.earningPeriodId === period?.id))
+      setCurrentIncomes(
+        isBasicUser
+          ? modeIncomes
+          : modeIncomes.filter(
+              (item) =>
+                item.earningPeriodId === period?.id ||
+                item.seasonPeriodId === period?.id,
+            ),
+      )
+      setCurrentExpenses(
+        isBasicUser
+          ? modeExpenses
+          : modeExpenses.filter(
+              (item) =>
+                item.earningPeriodId === period?.id ||
+                item.seasonPeriodId === period?.id,
+            ),
+      )
+      setPreviousIncomes(
+        isBasicUser
+          ? oldModeIncomes
+          : oldModeIncomes.filter(
+              (item) =>
+                item.earningPeriodId === period?.id ||
+                item.seasonPeriodId === period?.id,
+            ),
+      )
+      setPreviousExpenses(
+        isBasicUser
+          ? oldModeExpenses
+          : oldModeExpenses.filter(
+              (item) =>
+                item.earningPeriodId === period?.id ||
+                item.seasonPeriodId === period?.id,
+            ),
+      )
     })
 
     return () => {
@@ -121,7 +171,7 @@ export function HomePage() {
     return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando...</section>
   }
 
-  if (settings.userType === 'primary' && !activePeriod) {
+  if (requiresSeason(settings) && !activePeriod) {
     return <section className="mx-auto flex min-h-[70dvh] w-full max-w-2xl flex-col items-center justify-center gap-4 text-center">
       <CalendarRange className="size-12 text-emerald-700" />
       <div><h1 className="text-2xl font-semibold">No hay temporada activa</h1><p className="mt-2 text-sm text-slate-500">Para registrar ingresos, egresos y citas, primero debes crear una temporada desde el módulo Temporadas.</p></div>
@@ -148,7 +198,7 @@ export function HomePage() {
     },
     {
       icon: TrendingUp,
-      label: 'Ganancia',
+      label: isBasicMode(settings) ? 'Balance' : 'Ganancia',
       value: totals.current.primaryNet,
       previous: totals.previous.primaryNet,
       sensitive: true,
@@ -162,6 +212,7 @@ export function HomePage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-emerald-300">{settings.businessName || 'Private Balance'}</p>
+            <div className="mt-2"><UsageModeBadge usageMode={settings.usageMode} /></div>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">Inicio</h1>
             <p className="mt-2 text-sm text-slate-300">Resumen financiero del mes actual</p>
           </div>
@@ -191,7 +242,7 @@ export function HomePage() {
         ))}
       </div>
 
-      {settings.userType === 'primary' && (
+      {!isBasicMode(settings) && (
         <Link className="inline-flex h-12 items-center justify-center gap-2 self-stretch rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:self-end" to="/resumen-completo">
           Ver todo el resumen
           <ArrowRight className="size-4" aria-hidden="true" />

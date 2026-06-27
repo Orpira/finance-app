@@ -7,6 +7,18 @@ import {
   getActiveEarningPeriod,
 } from './earningPeriodService'
 import { getSettings } from './settingsService'
+import { recordBelongsToUsageMode, requiresSeason } from '../utils/usageMode'
+import { assertAllExpenseAdjustmentsAreValid } from '../utils/expenseAdjustments'
+import {
+  isAdjustmentIncome,
+  isServiceIncome,
+  normalizeAdjustmentIncome,
+} from '../utils/incomeTypes'
+import {
+  createAutomationOutboxRecord,
+  enqueueAutomationEvent,
+  scheduleAutomationOutboxFlush,
+} from './automationOutboxService'
 
 export type CreateServiceIncomeInput = Omit<ServiceIncome, 'id'>
 export type UpdateServiceIncomeInput = Partial<CreateServiceIncomeInput>
@@ -18,25 +30,51 @@ export interface ServiceIncomeListOptions extends DateRangeListOptions {
   paymentType?: string
 }
 
+function normalizeIncomeByType<T extends CreateServiceIncomeInput>(input: T): T {
+  if (!isAdjustmentIncome(input)) return input
+  return normalizeAdjustmentIncome(input)
+}
+
 export async function createServiceIncome(input: CreateServiceIncomeInput) {
   const settings = await getSettings()
   const earningPeriod =
-    settings.userType === 'primary' ? await getActiveEarningPeriod() : undefined
+    requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
 
-  if (settings.userType === 'primary' && !earningPeriod) {
+  if (requiresSeason(settings) && !earningPeriod) {
     throw new Error('No hay una temporada activa. Crea una temporada para registrar actividad.')
   }
 
-  return db.services.add({
+  const normalizedInput = normalizeIncomeByType(input)
+
+  const income: ServiceIncome = {
     createdAt: new Date().toISOString(),
     status: 'PENDIENTE',
-    ...input,
+    ...normalizedInput,
+    type: normalizedInput.type ?? 'ingreso',
+    usageMode: settings.usageMode,
     earningPeriodId: earningPeriod?.id,
     seasonPeriodId: earningPeriod?.id,
-    earningPercentage:
-      earningPeriod?.percentage ?? input.earningPercentage ?? input.percentage,
-    percentage: earningPeriod?.percentage ?? input.percentage,
+    earningPercentage: isServiceIncome(normalizedInput)
+      ? earningPeriod?.percentage ??
+        normalizedInput.earningPercentage ??
+        normalizedInput.percentage
+      : 0,
+    percentage: isServiceIncome(normalizedInput)
+      ? earningPeriod?.percentage ?? normalizedInput.percentage
+      : 0,
+  }
+  const incomeId = await db.transaction('rw', [db.services, db.automationOutbox], async () => {
+    const nextIncomeId = await db.services.add(income)
+    await enqueueAutomationEvent(
+      createAutomationOutboxRecord('income.created', {
+        income: { ...income, id: nextIncomeId },
+      }),
+    )
+    return nextIncomeId
   })
+  scheduleAutomationOutboxFlush()
+
+  return incomeId
 }
 
 export async function getServiceIncomeById(id: number) {
@@ -92,12 +130,62 @@ export async function updateServiceIncome(
   id: number,
   updates: UpdateServiceIncomeInput,
 ) {
-  await assertRecordIsMutable(await db.services.get(id))
-  await db.services.update(id, updates)
-  return db.services.get(id)
+  const settings = await getSettings()
+  const currentIncome = await db.services.get(id)
+  if (
+    !currentIncome ||
+    !recordBelongsToUsageMode(currentIncome, settings.usageMode)
+  ) {
+    throw new Error('Este ingreso pertenece a otro modo de uso.')
+  }
+  if (requiresSeason(settings)) {
+    await assertRecordIsMutable(currentIncome)
+  }
+  return db.transaction('rw', [db.services, db.expenses], async () => {
+    const [latestIncome, incomes, expenses] = await Promise.all([
+      db.services.get(id),
+      db.services.toArray(),
+      db.expenses.toArray(),
+    ])
+    if (!latestIncome) throw new Error('El ingreso que intentas modificar no existe.')
+
+    const updatedIncome = normalizeIncomeByType({
+      ...latestIncome,
+      ...updates,
+      usageMode: latestIncome.usageMode ?? settings.usageMode,
+    })
+    const updatedIncomes = incomes.map((income) =>
+      income.id === id ? updatedIncome : income,
+    )
+    assertAllExpenseAdjustmentsAreValid(updatedIncomes, expenses)
+    await db.services.put(updatedIncome)
+    return updatedIncome
+  })
 }
 
 export async function deleteServiceIncome(id: number) {
-  await assertRecordIsMutable(await db.services.get(id))
-  return db.services.delete(id)
+  const settings = await getSettings()
+  const currentIncome = await db.services.get(id)
+  if (
+    !currentIncome ||
+    !recordBelongsToUsageMode(currentIncome, settings.usageMode)
+  ) {
+    throw new Error('Este ingreso pertenece a otro modo de uso.')
+  }
+  if (requiresSeason(settings)) {
+    await assertRecordIsMutable(currentIncome)
+  }
+  return db.transaction('rw', [db.services, db.expenses], async () => {
+    const linkedAdjustment = await db.expenses
+      .where('relatedIncomeId')
+      .equals(id)
+      .and((expense) => expense.type === 'ajuste')
+      .first()
+    if (linkedAdjustment) {
+      throw new Error(
+        'No puedes eliminar un ingreso que tiene ajustes relacionados. Elimina primero sus ajustes.',
+      )
+    }
+    return db.services.delete(id)
+  })
 }

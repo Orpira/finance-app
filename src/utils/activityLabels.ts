@@ -1,6 +1,7 @@
 import type { Appointment } from '../types/appointment'
 import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
+import { getIncomeTypeLabel } from './incomeTypes'
 
 function formatTimeFromDateTime(dateTime: string | undefined) {
   if (!dateTime) {
@@ -29,7 +30,7 @@ export function getIncomeTime(income: ServiceIncome) {
 
 export function getIncomeDisplayName(income: ServiceIncome) {
   return [
-    `Ingreso #${income.id ?? '-'}`,
+    `${getIncomeTypeLabel(income)} #${income.id ?? '-'}`,
     income.date,
     getIncomeTime(income),
     income.city,

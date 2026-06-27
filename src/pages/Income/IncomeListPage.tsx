@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Pencil, ReceiptText, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye, Pencil, ReceiptText, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -11,14 +11,22 @@ import {
   listServiceIncomes,
 } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
-import { listClosedEarningPeriods } from '../../services/earningPeriodService'
-import type { ServiceIncome, ServiceIncomeStatus } from '../../types/service'
+import { listExpenses } from '../../services/expenseService'
+import { getActiveEarningPeriod } from '../../services/earningPeriodService'
+import type { ServiceIncome, ServiceIncomeStatus, ServiceIncomeType } from '../../types/service'
+import type { Expense } from '../../types/expense'
 import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
 import { getIncomeDisplayName } from '../../utils/activityLabels'
 import { countries } from '../../utils/countries'
 import { formatCurrency } from '../../utils/currency'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 import { getPaymentTypeLabel } from '../../utils/paymentTypes'
+import {
+  isBasicMode,
+  recordBelongsToUsageMode,
+  requiresSeason,
+} from '../../utils/usageMode'
+import { getIncomeType, getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
 
 const INCOMES_PER_PAGE = 10
 
@@ -47,16 +55,31 @@ function getIncomeStatusClass(status: ServiceIncomeStatus) {
 export function IncomeListPage() {
   const { hidden } = useSensitiveValues()
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
+  const [relatedAdjustments, setRelatedAdjustments] = useState<Expense[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [closedPeriodIds, setClosedPeriodIds] = useState<Set<number>>(new Set())
+  const [activePeriodId, setActivePeriodId] = useState<number>()
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
   const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL')
   const [selectedPaymentType, setSelectedPaymentType] =
     useState<string | 'ALL'>('ALL')
+  const [selectedIncomeType, setSelectedIncomeType] =
+    useState<ServiceIncomeType | 'ALL'>('ALL')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [incomePage, setIncomePage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
+
+  const adjustmentsByIncomeId = useMemo(() => {
+    const grouped = new Map<number, Expense[]>()
+    relatedAdjustments.forEach((adjustment) => {
+      if (adjustment.type !== 'ajuste' || adjustment.relatedIncomeId === undefined) return
+      grouped.set(adjustment.relatedIncomeId, [
+        ...(grouped.get(adjustment.relatedIncomeId) ?? []),
+        adjustment,
+      ])
+    })
+    return grouped
+  }, [relatedAdjustments])
 
   const availableCountries = useMemo(() => {
     const countryCodes = new Set<CountryCode>()
@@ -119,16 +142,20 @@ export function IncomeListPage() {
           income.paymentType === selectedPaymentType
         const matchesDateFrom = !dateFrom || income.date >= dateFrom
         const matchesDateTo = !dateTo || income.date <= dateTo
+        const matchesIncomeType =
+          selectedIncomeType === 'ALL' ||
+          getIncomeType(income) === selectedIncomeType
 
         return (
           matchesCountry &&
           matchesCity &&
           matchesPaymentType &&
+          matchesIncomeType &&
           matchesDateFrom &&
           matchesDateTo
         )
       }),
-    [dateFrom, dateTo, incomes, selectedCity, selectedCountry, selectedPaymentType],
+    [dateFrom, dateTo, incomes, selectedCity, selectedCountry, selectedIncomeType, selectedPaymentType],
   )
   const totalIncomePages = Math.max(
     1,
@@ -149,26 +176,58 @@ export function IncomeListPage() {
 
   async function reloadIncomes() {
     const currentIncomes = await listServiceIncomes({ newestFirst: true })
-    setIncomes(currentIncomes)
+    setIncomes(
+      settings
+        ? currentIncomes.filter(
+            (income) =>
+              recordBelongsToUsageMode(income, settings.usageMode) &&
+              (isBasicMode(settings) ||
+                (activePeriodId !== undefined &&
+                  (income.earningPeriodId === activePeriodId ||
+                    income.seasonPeriodId === activePeriodId))),
+          )
+        : currentIncomes,
+    )
   }
 
   useEffect(() => {
     let isMounted = true
 
     async function loadInitialData() {
-      const [currentIncomes, currentSettings, closedPeriods] = await Promise.all([
+      const [currentIncomes, currentExpenses, currentSettings, activePeriod] = await Promise.all([
         listServiceIncomes({ newestFirst: true }),
+        listExpenses({ newestFirst: true }),
         getSettings(),
-        listClosedEarningPeriods(),
+        getActiveEarningPeriod(),
       ])
 
       if (!isMounted) {
         return
       }
 
-      setIncomes(currentIncomes)
+      setIncomes(
+        currentIncomes.filter(
+          (income) =>
+            recordBelongsToUsageMode(
+              income,
+              currentSettings.usageMode,
+            ) &&
+            (isBasicMode(currentSettings) ||
+              (activePeriod?.id !== undefined &&
+                (income.earningPeriodId === activePeriod.id ||
+                  income.seasonPeriodId === activePeriod.id))),
+        ),
+      )
       setSettings(currentSettings)
-      setClosedPeriodIds(new Set(closedPeriods.flatMap((period) => period.id ? [period.id] : [])))
+      setActivePeriodId(activePeriod?.id)
+      setRelatedAdjustments(
+        currentExpenses.filter(
+          (expense) =>
+            expense.type === 'ajuste' &&
+            expense.relatedIncomeId !== undefined &&
+            recordBelongsToUsageMode(expense, currentSettings.usageMode),
+        ),
+      )
       setIsLoading(false)
     }
 
@@ -192,8 +251,14 @@ export function IncomeListPage() {
       return
     }
 
-    await deleteServiceIncome(income.id)
-    await reloadIncomes()
+    try {
+      await deleteServiceIncome(income.id)
+      await reloadIncomes()
+    } catch (error: unknown) {
+      window.alert(
+        error instanceof Error ? error.message : 'No se pudo eliminar el ingreso.',
+      )
+    }
   }
 
   function handleCountryFilterChange(country: string) {
@@ -249,7 +314,7 @@ export function IncomeListPage() {
       </PageHeader>
 
       <CollapsibleFilters title="Filtros" storageKey="filters-open-income">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-600">
               Fecha desde
@@ -262,6 +327,25 @@ export function IncomeListPage() {
               value={dateFrom}
             />
           </label>
+
+          {settings && !isBasicMode(settings) && (
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-600">Clase de ingreso</span>
+              <select
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                onChange={(event) => {
+                  setSelectedIncomeType(event.target.value as ServiceIncomeType | 'ALL')
+                  setIncomePage(1)
+                }}
+                value={selectedIncomeType}
+              >
+                <option value="ALL">Todas las clases</option>
+                <option value="ingreso">Servicios</option>
+                <option value="ajuste">Ajustes</option>
+                <option value="otro">Otros ingresos</option>
+              </select>
+            </label>
+          )}
 
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-600">
@@ -341,16 +425,26 @@ export function IncomeListPage() {
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           {filteredIncomes.length === 0 ? (
             <p className="p-4 text-sm text-slate-500">
-              No hay ingresos con los filtros seleccionados.
+              {settings && isBasicMode(settings)
+                ? 'No hay ingresos con los filtros seleccionados.'
+                : !activePeriodId
+                  ? 'No hay ingresos recientes porque no existe una temporada activa.'
+                  : 'No hay ingresos de la temporada activa con los filtros seleccionados.'}
             </p>
           ) : (
             <ul className="divide-y divide-slate-200">
               {paginatedIncomes.map((income) => {
                 const status = getIncomeStatus(income)
-                const isClosedSeason = closedPeriodIds.has(income.earningPeriodId ?? income.seasonPeriodId ?? -1) || isLocationSeasonClosed(
-                  income,
-                  settings?.closedLocationSeasons,
-                )
+                const isService = isServiceIncome(income)
+                const incomeAdjustments = income.id
+                  ? adjustmentsByIncomeId.get(income.id) ?? []
+                  : []
+                const isClosedSeason =
+                  requiresSeason(settings ?? undefined) &&
+                  isLocationSeasonClosed(
+                    income,
+                    settings?.closedLocationSeasons,
+                  )
 
                 return (
                   <li className="flex flex-col gap-3 p-4" key={income.id}>
@@ -360,20 +454,36 @@ export function IncomeListPage() {
                           <p className="font-medium text-slate-950">
                             {getIncomeDisplayName(income)}
                           </p>
-                          <span
+                          {!isService && (
+                            <span className="inline-flex rounded-full bg-amber-200 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-amber-900">
+                              {getIncomeTypeLabel(income)}
+                            </span>
+                          )}
+                          {incomeAdjustments.length > 0 && (
+                            <span className="inline-flex rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-800">
+                              Afectado por ajuste · {incomeAdjustments.length}{' '}
+                              {incomeAdjustments.length === 1 ? 'ajuste aplicado' : 'ajustes aplicados'}
+                            </span>
+                          )}
+                          {!isBasicMode(settings ?? undefined) && isService && <span
                             className={[
                               'inline-flex rounded-md px-2 py-0.5 text-xs font-semibold',
                               getIncomeStatusClass(status),
                             ].join(' ')}
                           >
                             {incomeStatusLabels[status]}
-                          </span>
+                          </span>}
                         </div>
-                        <p className="mt-1 text-sm text-slate-500">
+                        {!isBasicMode(settings ?? undefined) && isService && <p className="mt-1 text-sm text-slate-500">
                           {income.actualDuration ?? income.duration} min ·{' '}
                           {income.percentage}% ·{' '}
                           {getPaymentTypeLabel(income.paymentType)}
-                        </p>
+                        </p>}
+                        {income.notes && (
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
+                            {income.notes}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-slate-950">
@@ -382,13 +492,20 @@ export function IncomeListPage() {
                             income.currency as CurrencyCode,
                           )} />
                         </p>
-                        <p className="mt-1 text-sm text-slate-500">
+                        {!isBasicMode(settings ?? undefined) && <p className="mt-1 text-sm text-slate-500">
                           <SensitiveAmount hidden={hidden} value={formatCurrency(income.eurValue, 'EUR')} />
-                        </p>
+                        </p>}
                       </div>
                     </div>
 
                     <div className="flex flex-wrap justify-start gap-2">
+                      <Link
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-sky-200 px-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-50"
+                        to={`/income/${income.id}`}
+                      >
+                        <Eye className="size-4" aria-hidden="true" />
+                        Ver detalle
+                      </Link>
                       {isClosedSeason ? (
                         <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:!text-slate-200">
                           Solo consulta

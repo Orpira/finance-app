@@ -12,6 +12,7 @@ import type { ServiceIncome } from '../../types/service'
 import type { CountryCode, CurrencyCode } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
 import { countries, getCityOption, getCountryCurrency } from '../../utils/countries'
+import { getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
 
 function formatDate(value?: string) {
   return value ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(value)) : 'En curso'
@@ -24,12 +25,13 @@ export function SeasonDetailPage() {
   const [records, setRecords] = useState<{ incomes: ServiceIncome[]; expenses: Expense[]; appointments: Appointment[] } | null>(null)
 
   useEffect(() => {
-    if (!Number.isFinite(id)) { setPeriod(null); return }
+    if (!Number.isFinite(id)) return
     Promise.all([getEarningPeriodById(id), getSeasonStatistics(id), listSeasonRecords(id)]).then(([item, itemStats, itemRecords]) => {
       setPeriod(item ?? null); setStats(itemStats); setRecords(itemRecords)
     })
   }, [id])
 
+  if (!Number.isFinite(id)) return <section className="mx-auto max-w-2xl py-8"><PageHeader backLabel="Temporadas" backTo="/temporadas" title="Temporada no encontrada" /></section>
   if (period === undefined || !stats || !records) return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando temporada...</section>
   if (!period) return <section className="mx-auto max-w-2xl py-8"><PageHeader backLabel="Temporadas" backTo="/temporadas" title="Temporada no encontrada" /></section>
   const currency = period.baseCurrency ?? 'EUR'
@@ -86,7 +88,7 @@ export function SeasonDetailPage() {
       <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><h2 className="font-semibold">Egresos por categoría</h2><div className="mt-3 grid gap-2">{stats.expensesByCategory.length ? stats.expensesByCategory.map((item) => <div className="flex justify-between text-sm" key={item.category}><span>{item.category}</span><strong>{formatCurrency(item.amount, currency)}</strong></div>) : <p className="text-sm text-slate-500">Sin egresos.</p>}</div></section>
     </div>
     <div className="grid gap-4 lg:grid-cols-3">
-      <ReadOnlyList title={`Ingresos (${records.incomes.length})`} empty="Sin ingresos." items={records.incomes.map((item) => ({ key: item.id, title: item.date, detail: `${formatCurrency(item.totalAmount, item.currency as CurrencyCode)} · ganancia ${formatCurrency(item.realGain, item.currency as CurrencyCode)}` }))} />
+      <ReadOnlyList title={`Ingresos (${records.incomes.length})`} empty="Sin ingresos." items={records.incomes.map((item) => ({ key: item.id, title: `${getIncomeTypeLabel(item)} · ${item.date}`, detail: `${formatCurrency(item.totalAmount, item.currency as CurrencyCode)} · ${isServiceIncome(item) ? 'ganancia' : 'monto efectivo'} ${formatCurrency(item.realGain, item.currency as CurrencyCode)}` }))} />
       <ReadOnlyList title={`Egresos y ajustes (${records.expenses.length})`} empty="Sin egresos ni ajustes." items={records.expenses.map((item) => ({ key: item.id, title: `${item.date} · ${item.category}`, detail: `${item.type === 'ajuste' ? 'Ajuste' : 'Egreso'} · ${formatCurrency(item.amount, item.currency as CurrencyCode)}` }))} />
       <ReadOnlyList title={`Citas (${records.appointments.length})`} empty="Sin citas." items={records.appointments.map((item) => ({ key: item.id, title: formatDate(item.dateTime), detail: `${formatCurrency(item.expectedAmount, item.currency as CurrencyCode)} · ${item.completed ? 'Completada' : 'Registrada'}` }))} />
     </div>

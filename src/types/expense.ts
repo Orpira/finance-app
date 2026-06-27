@@ -1,9 +1,13 @@
+import type { UsageMode } from './settings'
+
 export type ExpenseType = 'gasto' | 'ajuste'
 
 export interface Expense {
   id?: number;
 
   type: ExpenseType;
+
+  usageMode?: UsageMode;
 
   date: string;
 

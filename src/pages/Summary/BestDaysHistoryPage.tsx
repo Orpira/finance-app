@@ -12,6 +12,7 @@ import type { AppSettings, CountryCode, CurrencyCode } from '../../types/setting
 import { countries, getCountryCurrency } from '../../utils/countries'
 import { formatCurrency } from '../../utils/currency'
 import { calculateBestIncomeWeekday } from '../../utils/financeStats'
+import { isServiceIncome } from '../../utils/incomeTypes'
 
 interface BestDayHistoryRow {
   bestDay?: ReturnType<typeof calculateBestIncomeWeekday>
@@ -79,7 +80,7 @@ async function buildRows(settings: AppSettings) {
         bestDay: calculateBestIncomeWeekday(incomes, currency),
         countryCity: getCountryCity(period),
         currency,
-        incomeCount: incomes.length,
+        incomeCount: incomes.filter(isServiceIncome).length,
         period,
       }
     }),

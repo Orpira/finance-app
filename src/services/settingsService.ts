@@ -4,6 +4,7 @@ import {
   db,
 } from '../database/db'
 import type { AppSettings } from '../types/settings'
+import { resolveUsageMode, toLegacyUserType } from '../utils/usageMode'
 
 const SETTINGS_STORAGE_KEY = 'finance-app:settings'
 
@@ -52,10 +53,14 @@ export function applyTheme(theme: AppSettings['theme']) {
 }
 
 function normalizeSettings(settings: AppSettings): AppSettings {
+  const usageMode = resolveUsageMode(settings)
+
   return {
     ...createDefaultSettings(),
     ...settings,
     id: DEFAULT_SETTINGS_ID,
+    usageMode,
+    userType: toLegacyUserType(usageMode),
   }
 }
 
@@ -93,9 +98,20 @@ export async function updateSettings(
   options: UpdateSettingsOptions = {},
 ) {
   const currentSettings = await getSettings()
+  const requestedUsageMode = resolveUsageMode({
+    usageMode: updates.usageMode,
+    userType: updates.userType,
+  })
+  const modeWasUpdated =
+    updates.usageMode !== undefined || updates.userType !== undefined
+  const usageMode = modeWasUpdated
+    ? requestedUsageMode
+    : currentSettings.usageMode
   const nextSettings: AppSettings = {
     ...currentSettings,
     ...updates,
+    usageMode,
+    userType: toLegacyUserType(usageMode),
     updatedAt: new Date().toISOString(),
   }
   const incomePercentageChanged =

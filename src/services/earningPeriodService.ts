@@ -4,6 +4,8 @@ import type { EarningPeriod } from '../types/earningPeriod'
 import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
 import type { AppSettings, CountryCode, CurrencyCode } from '../types/settings'
+import { isBasicMode, recordBelongsToUsageMode } from '../utils/usageMode'
+import { isServiceIncome } from '../utils/incomeTypes'
 
 export const NO_ACTIVE_SEASON_MESSAGE =
   'No hay una temporada activa. Crea una temporada para registrar actividad.'
@@ -69,6 +71,7 @@ export async function getActiveEarningPeriod() {
 
 /** Compatibility helper: it no longer creates empty periods implicitly. */
 export async function ensureActiveEarningPeriod(_settings?: AppSettings) {
+  void _settings
   const active = await getActiveEarningPeriod()
   if (!active) throw new Error(NO_ACTIVE_SEASON_MESSAGE)
   return active
@@ -215,12 +218,13 @@ export async function listSeasonRecords(periodId: number) {
 
 export async function getSeasonStatistics(periodId: number): Promise<SeasonStatistics> {
   const { incomes, expenses, appointments } = await listSeasonRecords(periodId)
+  const serviceIncomes = incomes.filter(isServiceIncome)
   const grossIncome = incomes.reduce((sum, item) => sum + item.totalAmount, 0)
   const realGain = incomes.reduce((sum, item) => sum + item.realGain, 0)
-  const expenseTotal = expenses.filter((item) => item.type !== 'ajuste').reduce((sum, item) => sum + item.amount, 0)
+  const expenseTotal = expenses.reduce((sum, item) => sum + item.amount, 0)
   const adjustments = expenses.filter((item) => item.type === 'ajuste').reduce((sum, item) => sum + item.amount, 0)
   const dayMap = new Map<string, { count: number; amount: number }>()
-  incomes.forEach((item) => {
+  serviceIncomes.forEach((item) => {
     const value = dayMap.get(item.date) ?? { count: 0, amount: 0 }
     value.count += 1
     value.amount += item.realGain
@@ -235,9 +239,9 @@ export async function getSeasonStatistics(periodId: number): Promise<SeasonStati
     realGain,
     expenses: expenseTotal,
     adjustments,
-    netGain: realGain - expenseTotal + adjustments,
+    netGain: realGain - expenseTotal,
     bestDay: bestDay ? { date: bestDay.date, amount: bestDay.amount } : undefined,
-    serviceCount: incomes.length,
+    serviceCount: serviceIncomes.length,
     appointmentCount: appointments.length,
     completedAppointmentCount: appointments.filter((item) => item.completed).length,
     servicesByDay,
@@ -250,16 +254,30 @@ export async function listServiceIncomesByEarningPeriod(periodId: number) {
 }
 
 export async function migrateLegacyRecordsToSeasons() {
+  const settings = await getSettingsForPeriod()
+  if (isBasicMode(settings)) return
+
   const periods = (await db.earningPeriods.toArray()).sort((a, b) => a.startDate.localeCompare(b.startDate))
   const [services, expenses, appointments] = await Promise.all([
     db.services.toArray(), db.expenses.toArray(), db.appointments.toArray(),
   ])
-  if (!periods.length && !services.length && !expenses.length && !appointments.length) return
+  const professionalServices = services.filter((service) =>
+    recordBelongsToUsageMode(service, 'professional'),
+  )
+  const professionalExpenses = expenses.filter((expense) =>
+    recordBelongsToUsageMode(expense, 'professional'),
+  )
+
+  if (
+    !periods.length &&
+    !professionalServices.length &&
+    !professionalExpenses.length &&
+    !appointments.length
+  ) return
 
   let available = periods
   if (!available.length) {
-    const settings = await getSettingsForPeriod()
-    const dates = [...services.map((x) => x.date), ...expenses.map((x) => x.date), ...appointments.map((x) => x.dateTime.slice(0, 10))].sort()
+    const dates = [...professionalServices.map((x) => x.date), ...professionalExpenses.map((x) => x.date), ...appointments.map((x) => x.dateTime.slice(0, 10))].sort()
     const now = new Date().toISOString()
     const id = await db.earningPeriods.add({
       name: 'Temporada inicial migrada', percentage: settings.incomePercentage,
@@ -272,8 +290,8 @@ export async function migrateLegacyRecordsToSeasons() {
   const findId = (date: string, current?: number) => current ?? [...available].reverse().find((p) => date >= p.startDate.slice(0, 10) && (!p.endDate || date <= p.endDate.slice(0, 10)))?.id ?? available.at(-1)?.id
   await db.transaction('rw', db.services, db.expenses, db.appointments, async () => {
     await Promise.all([
-      db.services.bulkPut(services.map((x: ServiceIncome) => ({ ...x, earningPeriodId: findId(x.date, recordPeriodId(x)), seasonPeriodId: findId(x.date, recordPeriodId(x)) }))),
-      db.expenses.bulkPut(expenses.map((x: Expense) => ({ ...x, earningPeriodId: findId(x.date, recordPeriodId(x)), seasonPeriodId: findId(x.date, recordPeriodId(x)) }))),
+      db.services.bulkPut(professionalServices.map((x: ServiceIncome) => ({ ...x, earningPeriodId: findId(x.date, recordPeriodId(x)), seasonPeriodId: findId(x.date, recordPeriodId(x)) }))),
+      db.expenses.bulkPut(professionalExpenses.map((x: Expense) => ({ ...x, earningPeriodId: findId(x.date, recordPeriodId(x)), seasonPeriodId: findId(x.date, recordPeriodId(x)) }))),
       db.appointments.bulkPut(appointments.map((x: Appointment) => ({ ...x, earningPeriodId: findId(x.dateTime.slice(0, 10), recordPeriodId(x)), seasonPeriodId: findId(x.dateTime.slice(0, 10), recordPeriodId(x)) }))),
     ])
   })

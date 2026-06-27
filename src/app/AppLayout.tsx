@@ -1,10 +1,12 @@
 import {
   CalendarDays,
   CircleDollarSign,
+  ChartNoAxesCombined,
   House,
   Moon,
   MoreHorizontal,
   ReceiptText,
+  Settings,
   Sun,
 } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
@@ -12,13 +14,16 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert'
+import { UsageModeBadge } from '../components/UsageModeBadge'
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
 import { runAutomaticDriveBackupIfNeeded } from '../services/backupService'
+import { initializeAutomationOutbox } from '../services/automationOutboxService'
 import { migrateLegacyRecordsToSeasons } from '../services/earningPeriodService'
 import { getRuntimeIntegrityStatus } from '../services/playIntegrityService'
 import { initializeReminderNotifications } from '../services/reminderService'
 import { applyTheme, getSettings, updateSettings } from '../services/settingsService'
-import type { ThemeMode, UserType } from '../types/settings'
+import type { ThemeMode, UsageMode } from '../types/settings'
+import { usesProfessionalAgenda } from '../utils/usageMode'
 
 const navItems = [
   {
@@ -48,14 +53,23 @@ const navItems = [
   },
 ]
 
+const basicNavItems = [
+  navItems[0],
+  navItems[1],
+  navItems[2],
+  { label: 'Reportes', path: '/reports', icon: ChartNoAxesCombined },
+  { label: 'Configuración', path: '/settings', icon: Settings },
+]
+
 let automaticBackupCheckStarted = false
 let earningPeriodCheckStarted = false
 let runtimeIntegrityCheckStarted = false
+let automationOutboxStarted = false
 
 export function AppLayout() {
   const location = useLocation()
   const [theme, setTheme] = useState<ThemeMode>('system')
-  const [userType, setUserType] = useState<UserType>('primary')
+  const [usageMode, setUsageMode] = useState<UsageMode>('professional')
   const [isDarkTheme, setIsDarkTheme] = useState(() =>
     document.documentElement.classList.contains('dark'),
   )
@@ -65,29 +79,31 @@ export function AppLayout() {
   )
 
   useEffect(() => {
-    function syncLayoutSettings(settings: { theme: ThemeMode; userType: UserType }) {
+    function syncLayoutSettings(settings: { theme: ThemeMode; usageMode: UsageMode }) {
       setTheme(settings.theme)
-      setUserType(settings.userType)
+      setUsageMode(settings.usageMode)
       setIsDarkTheme(document.documentElement.classList.contains('dark'))
     }
 
     getSettings()
       .then((settings) => {
         syncLayoutSettings(settings)
+        if (usesProfessionalAgenda(settings)) {
+          initializeReminderNotifications().catch((error) => {
+            console.warn('No se pudieron inicializar las alarmas nativas.', error)
+          })
+        }
       })
       .catch((error) => {
         console.warn('No se pudo cargar el tema.', error)
       })
 
     function handleSettingsChanged(event: Event) {
-      syncLayoutSettings((event as CustomEvent<{ theme: ThemeMode; userType: UserType }>).detail)
+      syncLayoutSettings((event as CustomEvent<{ theme: ThemeMode; usageMode: UsageMode }>).detail)
     }
 
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
 
-    initializeReminderNotifications().catch((error) => {
-      console.warn('No se pudieron inicializar las alarmas nativas.', error)
-    })
     if (!automaticBackupCheckStarted) {
       automaticBackupCheckStarted = true
 
@@ -114,6 +130,11 @@ export function AppLayout() {
         .catch((error) => {
           console.warn('No se pudo comprobar el modo de ejecución.', error)
         })
+    }
+
+    if (!automationOutboxStarted) {
+      automationOutboxStarted = true
+      initializeAutomationOutbox()
     }
 
     function handleVisibilityChange() {
@@ -156,16 +177,13 @@ export function AppLayout() {
 
   const ThemeIcon = isDarkTheme ? Sun : Moon
   const themeLabel = isDarkTheme ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'
-  const visibleNavItems =
-    userType === 'basic'
-      ? navItems.filter((item) => !['/agenda'].includes(item.path))
-      : navItems
+  const visibleNavItems = usageMode === 'basic' ? basicNavItems : navItems
 
   return (
     <div className="min-h-dvh bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950 md:block">
         <p className="px-3 text-lg font-semibold text-slate-950 dark:text-white">Private Balance</p>
-        <p className="mb-6 mt-1 px-3 text-xs font-medium uppercase tracking-widest text-emerald-700">Finanzas privadas</p>
+        <div className="mb-6 mt-2 px-3"><UsageModeBadge usageMode={usageMode} /></div>
         <nav aria-label="Navegación principal de escritorio">
           <ul className="grid gap-1">
             {visibleNavItems.map(({ label, path, icon: Icon }) => (
@@ -204,11 +222,15 @@ export function AppLayout() {
       </aside>
 
       <main className="mx-auto min-h-dvh w-full max-w-5xl px-4 pb-24 md:ml-64 md:pb-8">
+        <div className="flex items-center justify-between gap-3 py-3 md:hidden">
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Private Balance</p>
+          <UsageModeBadge usageMode={usageMode} />
+        </div>
         <Outlet />
       </main>
 
-      <AppointmentReminderAlert />
-      <ServiceTimeAlert />
+      {usesProfessionalAgenda({ usageMode }) && <AppointmentReminderAlert />}
+      {usesProfessionalAgenda({ usageMode }) && <ServiceTimeAlert />}
 
       <button
         aria-label={themeLabel}
@@ -225,7 +247,7 @@ export function AppLayout() {
         aria-label="Navegación principal"
         className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 md:hidden"
       >
-        <ul className={['mx-auto grid max-w-5xl gap-1', userType === 'basic' ? 'grid-cols-4' : 'grid-cols-5'].join(' ')}>
+        <ul className="mx-auto grid max-w-5xl grid-cols-5 gap-1">
           {visibleNavItems.map(({ label, path, icon: Icon }) => (
             <li key={path}>
               <NavLink

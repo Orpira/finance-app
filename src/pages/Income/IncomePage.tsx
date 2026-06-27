@@ -1,11 +1,8 @@
 import { Plus } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { currencies } from '../../utils/countries'
 
 import { PageHeader } from '../../components/layout/PageHeader'
-import { SensitiveAmount } from '../../components/SensitiveAmount'
-import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import {
   createServiceIncome,
   getServiceIncomeById,
@@ -20,17 +17,25 @@ import {
   convertCurrencyToEurCop,
   type ExchangeRateResolutionSource,
 } from '../../services/currencyConversionService'
-import type { ServiceIncome } from '../../types/service'
+import type { ServiceIncome, ServiceIncomeType } from '../../types/service'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import {
   EUR_COP_DEFAULT_RATE,
-  formatCurrency,
-  getTodayInputDate,
   roundMoney,
 } from '../../utils/currency'
 import { paymentTypes } from '../../utils/paymentTypes'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
+import {
+  isBasicMode,
+  recordBelongsToUsageMode,
+  requiresSeason,
+} from '../../utils/usageMode'
+import {
+  getIncomeType,
+  isAdjustmentIncome,
+  isServiceIncome,
+} from '../../utils/incomeTypes'
 
 type SaveStatus = 'idle' | 'saving' | 'error' | 'duplicateHour'
 
@@ -53,6 +58,14 @@ function formatInputTime(date: Date) {
   const minutes = String(date.getMinutes()).padStart(2, '0')
 
   return `${hours}:${minutes}`
+}
+
+function formatInputDate(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
 }
 
 function hasIncomeAtSameDateTime(
@@ -85,7 +98,6 @@ function hasIncomeAtSameDateTime(
 }
 
 export function IncomePage() {
-  const { hidden: sensitiveValuesHidden } = useSensitiveValues()
   const { incomeId } = useParams()
   const navigate = useNavigate()
   const parsedIncomeId = incomeId ? Number(incomeId) : null
@@ -94,12 +106,13 @@ export function IncomePage() {
   const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [editingIncome, setEditingIncome] = useState<ServiceIncome | null>(null)
-  const [date, setDate] = useState(getTodayInputDate())
-  const [time, setTime] = useState(() => formatInputTime(new Date()))
+  const [incomeType, setIncomeType] = useState<ServiceIncomeType>('ingreso')
+  const [date, setDate] = useState(() => formatInputDate(new Date()))
   const [duration, setDuration] = useState(60)
   const [totalAmount, setTotalAmount] = useState(0)
   const [currency, setCurrency] = useState<CurrencyCode>('EUR')
   const [paymentType, setPaymentType] = useState(paymentTypes[0].value)
+  const [notes, setNotes] = useState('')
   const [percentage, setPercentage] = useState(50)
   const [exchangeRate, setExchangeRate] = useState(EUR_COP_DEFAULT_RATE)
   const [exchangeRateSource, setExchangeRateSource] =
@@ -111,6 +124,7 @@ export function IncomePage() {
     copValue: 0,
   })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -129,15 +143,33 @@ export function IncomePage() {
 
       setSettings(currentSettings)
       setActivePeriod(currentPeriod ?? null)
-      setIncomes(currentIncomes)
+      setIncomes(
+        currentIncomes.filter((income) =>
+          recordBelongsToUsageMode(income, currentSettings.usageMode),
+        ),
+      )
 
       if (currentIncome) {
         if (
-          await isEarningPeriodClosed(currentIncome.earningPeriodId ?? currentIncome.seasonPeriodId) ||
-          isLocationSeasonClosed(
+          !recordBelongsToUsageMode(
             currentIncome,
-            currentSettings.closedLocationSeasons,
+            currentSettings.usageMode,
           )
+        ) {
+          window.alert('Este ingreso pertenece a otro modo de uso.')
+          navigate('/income', { replace: true })
+          return
+        }
+
+        if (
+          requiresSeason(currentSettings) &&
+          ((await isEarningPeriodClosed(
+            currentIncome.earningPeriodId ?? currentIncome.seasonPeriodId,
+          )) ||
+            isLocationSeasonClosed(
+              currentIncome,
+              currentSettings.closedLocationSeasons,
+            ))
         ) {
           window.alert(
             'Este ingreso pertenece a una temporada cerrada. Solo puede consultarse desde el historial y usarse en reportes.',
@@ -147,19 +179,14 @@ export function IncomePage() {
         }
 
         setEditingIncome(currentIncome)
+        setIncomeType(getIncomeType(currentIncome))
         setDate(currentIncome.date)
-        setTime(
-          getTimeFromDateTime(
-            currentIncome.timerStartedAt ??
-              currentIncome.createdAt ??
-              currentIncome.timerStoppedAt,
-          ) ?? formatInputTime(new Date()),
-        )
         setDuration(currentIncome.actualDuration ?? currentIncome.duration)
         setTotalAmount(currentIncome.totalAmount)
         setCurrency(currentIncome.currency as CurrencyCode)
         setPaymentType(currentIncome.paymentType ?? paymentTypes[0].value)
-        setPercentage(currentIncome.percentage)
+        setNotes(currentIncome.notes ?? '')
+        setPercentage(currentIncome.percentage ?? 0)
         setExchangeRate(
           currentIncome.exchangeRateBaseToSecondary ??
             currentIncome.exchangeRateUsed ??
@@ -167,7 +194,10 @@ export function IncomePage() {
         )
       } else {
         setPercentage(currentPeriod?.percentage ?? currentSettings.incomePercentage)
-        setCurrency(currentSettings.defaultCurrency)
+        setCurrency(
+          (currentPeriod?.baseCurrency as CurrencyCode | undefined) ??
+            currentSettings.defaultCurrency,
+        )
       }
     }
 
@@ -178,10 +208,19 @@ export function IncomePage() {
     }
   }, [navigate, parsedIncomeId])
 
-  const isBasicUser = settings?.userType === 'basic'
+  const isBasicUser = isBasicMode(settings ?? undefined)
+  const isServiceType = isBasicUser || isServiceIncome({ type: incomeType })
+  const isAdjustmentType = !isBasicUser && isAdjustmentIncome({ type: incomeType })
   const realGain = useMemo(
-    () => roundMoney(isBasicUser ? totalAmount : (totalAmount * percentage) / 100),
-    [isBasicUser, percentage, totalAmount],
+    () =>
+      roundMoney(
+        isBasicUser || isAdjustmentType
+          ? totalAmount
+          : isServiceType
+            ? (totalAmount * percentage) / 100
+            : editingIncome?.realGain ?? totalAmount,
+      ),
+    [editingIncome?.realGain, isAdjustmentType, isBasicUser, isServiceType, percentage, totalAmount],
   )
 
   useEffect(() => {
@@ -194,8 +233,14 @@ export function IncomePage() {
 
       const conversionOptions = {
         date,
-        manualRate: exchangeRate,
-        manualEurCopRate: exchangeRate,
+        manualRate:
+          settings.rateMode === 'manual' && isEditing
+            ? exchangeRate
+            : undefined,
+        manualEurCopRate:
+          settings.rateMode === 'manual' && isEditing
+            ? exchangeRate
+            : undefined,
         useApi: settings.rateMode === 'automatic',
       }
       const [convertedPairValue, convertedEurCopValue] = await Promise.all([
@@ -227,7 +272,7 @@ export function IncomePage() {
     return () => {
       isMounted = false
     }
-  }, [currency, date, exchangeRate, realGain, settings])
+  }, [currency, date, exchangeRate, isEditing, realGain, settings])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -237,14 +282,20 @@ export function IncomePage() {
     }
 
     setSaveStatus('saving')
+    setSaveError('')
 
     try {
-      const registrationDateTime = `${date}T${time}`
+      const now = new Date()
+      const registrationDate = isEditing ? date : formatInputDate(now)
+      const registrationDateTime = `${registrationDate}T${formatInputTime(now)}`
 
       if (
+        !isEditing &&
+        !isBasicUser &&
+        isServiceType &&
         hasIncomeAtSameDateTime(
           incomes,
-          date,
+          registrationDate,
           registrationDateTime,
           parsedIncomeId ?? undefined,
         )
@@ -257,30 +308,37 @@ export function IncomePage() {
         baseCurrency: currency,
         targetCurrency: settings.secondaryCurrency,
         rate: exchangeRate,
-        date,
+        date: registrationDate,
         source:
           settings.rateMode === 'automatic' && exchangeRateSource === 'api'
             ? 'api'
             : 'manual',
       })
 
-      const incomeInput = {
-        createdAt: registrationDateTime,
-        date,
+      const incomeValues = {
         status: editingIncome?.status ?? 'FINALIZADO',
-        paymentType,
-        duration,
+        type: isBasicUser ? 'ingreso' : incomeType,
+        paymentType: isAdjustmentType ? undefined : paymentType,
+        duration: isAdjustmentType ? 0 : duration,
+        notes: notes.trim() || undefined,
         totalAmount,
         currency,
         earningPeriodId: editingIncome?.earningPeriodId ?? activePeriod?.id,
-        earningPercentage:
-          isBasicUser
+        earningPercentage: isAdjustmentType
+          ? 0
+          : isServiceType
+          ? isBasicUser
             ? 100
             : editingIncome?.earningPercentage ??
               editingIncome?.percentage ??
               activePeriod?.percentage ??
-              percentage,
-        percentage: isBasicUser ? 100 : percentage,
+              percentage
+          : editingIncome?.earningPercentage ?? percentage,
+        percentage: isAdjustmentType
+          ? 0
+          : isServiceType
+            ? isBasicUser ? 100 : percentage
+            : editingIncome?.percentage ?? percentage,
         realGain,
         eurValue: roundMoney(convertedValues.eurValue),
         copValue: roundMoney(convertedValues.copValue),
@@ -292,21 +350,28 @@ export function IncomePage() {
           convertedValues.secondaryCurrencyValue,
         ),
         exchangeRateBaseToSecondary: exchangeRate,
-        actualDuration: duration,
-        country: isBasicUser ? undefined : editingIncome?.country ?? settings.country,
+        actualDuration: isAdjustmentType ? 0 : duration,
+        country: editingIncome?.country ?? settings.country,
         city: isBasicUser ? undefined : editingIncome?.city ?? settings.city,
       }
 
       if (isEditing && parsedIncomeId) {
-        await updateServiceIncome(parsedIncomeId, incomeInput)
+        await updateServiceIncome(parsedIncomeId, incomeValues)
         navigate('/income')
         return
       }
 
-      await createServiceIncome(incomeInput)
+      await createServiceIncome({
+        ...incomeValues,
+        createdAt: registrationDateTime,
+        date: registrationDate,
+      })
       navigate('/income')
-    } catch {
+    } catch (error: unknown) {
       setSaveStatus('error')
+      setSaveError(
+        error instanceof Error ? error.message : 'No se pudo guardar el ingreso.',
+      )
     }
   }
 
@@ -314,6 +379,24 @@ export function IncomePage() {
     return (
       <section className="flex min-h-[60dvh] items-center justify-center">
         <p className="text-sm font-medium text-slate-500">Cargando...</p>
+      </section>
+    )
+  }
+
+  if (!settings.defaultCurrency) {
+    return (
+      <section className="mx-auto flex min-h-[60dvh] max-w-2xl flex-col items-center justify-center gap-4 text-center">
+        <h1 className="text-2xl font-semibold">Falta configurar la moneda</h1>
+        <p className="text-sm text-slate-500">
+          Selecciona una moneda en Configuración antes de registrar ingresos.
+        </p>
+        <button
+          className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white"
+          onClick={() => navigate('/settings')}
+          type="button"
+        >
+          Ir a Configuración
+        </button>
       </section>
     )
   }
@@ -335,29 +418,47 @@ export function IncomePage() {
         className="flex flex-col gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
         onSubmit={handleSubmit}
       >
-        <div className={isBasicUser ? 'grid gap-4 sm:grid-cols-2' : 'grid gap-4 sm:grid-cols-3'}>
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">Fecha</span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) => setDate(event.target.value)}
-              required
-              type="date"
-              value={date}
-            />
-          </label>
+        {!isBasicUser && (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Tipo de ingreso
+            </legend>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { label: 'Servicio', value: 'ingreso' },
+                { label: 'Ajuste', value: 'ajuste' },
+              ] as const).map((option) => (
+                <label
+                  className={[
+                    'flex h-11 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-semibold transition',
+                    incomeType === option.value
+                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                      : 'border-slate-300 text-slate-600 hover:bg-slate-50',
+                  ].join(' ')}
+                  key={option.value}
+                >
+                  <input
+                    checked={incomeType === option.value}
+                    className="sr-only"
+                    name="incomeType"
+                    onChange={() => setIncomeType(option.value)}
+                    type="radio"
+                    value={option.value}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
 
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">Hora</span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) => setTime(event.target.value)}
-              required
-              type="time"
-              value={time}
-            />
-          </label>
+        {isEditing && incomeType === 'otro' && (
+          <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900">
+            Este registro histórico se conserva como “Otro ingreso histórico”.
+          </p>
+        )}
 
+        {isServiceType && (
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
               Duración en minutos
@@ -370,12 +471,12 @@ export function IncomePage() {
               value={duration}
             />
           </label>
-        </div>
+        )}
 
-        <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
+        <div className="grid gap-4">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
-              Importe total
+              {isServiceType ? 'Importe total' : 'Cantidad del ajuste'}
             </span>
             <input
               className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
@@ -386,27 +487,9 @@ export function IncomePage() {
               value={totalAmount}
             />
           </label>
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">Moneda</span>
-            <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) => setCurrency(event.target.value as CurrencyCode)}
-              value={currency}
-            >
-              {currencies.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <span className="text-xs font-medium text-slate-500">
-              Según el país seleccionado en Configuración
-            </span>
-          </label>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        {!isBasicUser && isServiceType && <div className="grid gap-4">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
               Tipo de pago
@@ -423,102 +506,42 @@ export function IncomePage() {
               ))}
             </select>
           </label>
+        </div>}
 
-          {!isBasicUser && (
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-700">
-                Porcentaje de ganancia
-              </span>
-              <div className="flex items-center gap-3">
-                <input
-                  className="h-11 w-28 rounded-md border border-slate-300 bg-slate-50 px-3 text-base text-slate-950 outline-none"
-                  disabled
-                  max={100}
-                  min={0}
-                  type="number"
-                  value={percentage}
-                />
-                <span className="text-sm font-medium text-slate-500">%</span>
-              </div>
-              <span className="text-xs font-medium text-slate-500">
-                Período activo: {activePeriod?.name ?? 'Actual'}
-              </span>
-            </label>
-          )}
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">
-              Cambio {currency} a {settings.secondaryCurrency}
-            </span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              disabled={settings.rateMode === 'automatic'}
-              min={1}
-              onChange={(event) => setExchangeRate(Number(event.target.value))}
-              step="0.01"
-              type="number"
-              value={exchangeRate}
-            />
-            <span className="text-xs font-medium text-slate-500">
-              {settings.rateMode === 'automatic'
-                ? exchangeRateSource === 'api'
-                  ? 'API online'
-                  : exchangeRateSource === 'offline'
-                    ? 'Fallback offline'
-                    : 'Tasa por defecto'
-                : 'Manual'}
-            </span>
-          </label>
-        </div>
-
-        <div className="grid gap-3 rounded-lg border border-emerald-100 bg-emerald-50 p-3 sm:grid-cols-3">
-          <div>
-            <p className="text-xs font-medium uppercase text-emerald-700">
-              Ganancia real
-            </p>
-            <p className="mt-1 text-lg font-semibold text-slate-950">
-              <SensitiveAmount hidden={sensitiveValuesHidden} value={formatCurrency(realGain, currency)} />
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-medium uppercase text-emerald-700">
-              Valor {currency}
-            </p>
-            <p className="mt-1 text-lg font-semibold text-slate-950">
-              <SensitiveAmount hidden={sensitiveValuesHidden} value={formatCurrency(convertedValues.baseCurrencyValue, currency)} />
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-medium uppercase text-emerald-700">
-              Valor {settings.secondaryCurrency}
-            </p>
-            <p className="mt-1 text-lg font-semibold text-slate-950">
-              <SensitiveAmount hidden={sensitiveValuesHidden} value={formatCurrency(
-                convertedValues.secondaryCurrencyValue,
-                settings.secondaryCurrency,
-              )} />
-            </p>
-          </div>
-        </div>
+        <label className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-slate-700">
+            Observación <span className="font-normal text-slate-500">(opcional)</span>
+          </span>
+          <textarea
+            className="min-h-24 rounded-md border border-slate-300 bg-white px-3 py-2 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+            maxLength={500}
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="Añade una nota sobre este ingreso"
+            value={notes}
+          />
+        </label>
 
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-slate-500" role="status">
             {saveStatus === 'duplicateHour' &&
               'Ya existe un ingreso registrado en esa misma fecha y hora'}
-            {saveStatus === 'error' && 'No se pudo guardar'}
+            {saveStatus === 'error' && (saveError || 'No se pudo guardar')}
           </p>
 
           <button
             className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-            disabled={saveStatus === 'saving' || totalAmount <= 0 || !date || !time}
+            disabled={
+              saveStatus === 'saving' ||
+              totalAmount <= 0
+            }
             type="submit"
           >
             <Plus className="size-4" aria-hidden="true" />
             {saveStatus === 'saving'
               ? 'Guardando'
               : isEditing
-                ? 'Actualizar ingreso'
-                : 'Guardar ingreso'}
+                ? `Actualizar ${incomeType === 'ajuste' ? 'ajuste' : 'ingreso'}`
+                : `Guardar ${incomeType === 'ajuste' ? 'ajuste' : 'ingreso'}`}
           </button>
         </div>
       </form>

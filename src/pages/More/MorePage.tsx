@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import { getSettings } from '../../services/settingsService'
-import type { UserType } from '../../types/settings'
+import type { UsageMode } from '../../types/settings'
 
 const moreLinks = [
   {
@@ -40,13 +40,15 @@ const moreLinks = [
 ]
 
 export function MorePage() {
-  const [userType, setUserType] = useState<UserType>('primary')
+  const [usageMode, setUsageMode] = useState<UsageMode>('professional')
 
   useEffect(() => {
-    getSettings().then((settings) => setUserType(settings.userType))
+    getSettings().then((settings) => setUsageMode(settings.usageMode))
 
     function handleSettingsChanged(event: Event) {
-      setUserType((event as CustomEvent<{ userType: UserType }>).detail.userType)
+      setUsageMode(
+        (event as CustomEvent<{ usageMode: UsageMode }>).detail.usageMode,
+      )
     }
 
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
@@ -57,7 +59,7 @@ export function MorePage() {
   }, [])
 
   const visibleLinks =
-    userType === 'basic'
+    usageMode === 'basic'
       ? moreLinks.filter((link) => link.href !== '/temporadas')
       : moreLinks
 

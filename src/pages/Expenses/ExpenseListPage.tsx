@@ -15,7 +15,7 @@ import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { deleteExpense, listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
-import { listClosedEarningPeriods } from '../../services/earningPeriodService'
+import { getActiveEarningPeriod } from '../../services/earningPeriodService'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
@@ -23,6 +23,11 @@ import { getExpenseDisplayName } from '../../utils/activityLabels'
 import { countries } from '../../utils/countries'
 import { formatCurrency } from '../../utils/currency'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
+import {
+  isBasicMode,
+  recordBelongsToUsageMode,
+  requiresSeason,
+} from '../../utils/usageMode'
 
 const EXPENSES_PER_PAGE = 10
 
@@ -31,7 +36,7 @@ export function ExpenseListPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [closedPeriodIds, setClosedPeriodIds] = useState<Set<number>>(new Set())
+  const [activePeriodId, setActivePeriodId] = useState<number>()
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
   const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL')
   const [selectedCategory, setSelectedCategory] = useState<string | 'ALL'>('ALL')
@@ -131,28 +136,62 @@ export function ExpenseListPage() {
 
   async function reloadExpenses() {
     const currentExpenses = await listExpenses({ newestFirst: true })
-    setExpenses(currentExpenses)
+    setExpenses(
+      settings
+        ? currentExpenses.filter(
+            (expense) =>
+              recordBelongsToUsageMode(expense, settings.usageMode) &&
+              (isBasicMode(settings) ||
+                (activePeriodId !== undefined &&
+                  (expense.earningPeriodId === activePeriodId ||
+                    expense.seasonPeriodId === activePeriodId))),
+          )
+        : currentExpenses,
+    )
   }
 
   useEffect(() => {
     let isMounted = true
 
     async function loadInitialData() {
-      const [currentExpenses, currentIncomes, currentSettings, closedPeriods] = await Promise.all([
+      const [currentExpenses, currentIncomes, currentSettings, activePeriod] = await Promise.all([
         listExpenses({ newestFirst: true }),
         listServiceIncomes({ newestFirst: true }),
         getSettings(),
-        listClosedEarningPeriods(),
+        getActiveEarningPeriod(),
       ])
 
       if (!isMounted) {
         return
       }
 
-      setExpenses(currentExpenses)
-      setIncomes(currentIncomes)
+      const belongsToActivePeriod = (record: {
+        earningPeriodId?: number
+        seasonPeriodId?: number
+      }) =>
+        activePeriod?.id !== undefined &&
+        (record.earningPeriodId === activePeriod.id ||
+          record.seasonPeriodId === activePeriod.id)
+
+      setExpenses(
+        currentExpenses.filter(
+          (expense) =>
+            recordBelongsToUsageMode(
+              expense,
+              currentSettings.usageMode,
+            ) &&
+            (isBasicMode(currentSettings) || belongsToActivePeriod(expense)),
+        ),
+      )
+      setIncomes(
+        currentIncomes.filter(
+          (income) =>
+            recordBelongsToUsageMode(income, currentSettings.usageMode) &&
+            (isBasicMode(currentSettings) || belongsToActivePeriod(income)),
+        ),
+      )
       setSettings(currentSettings)
-      setClosedPeriodIds(new Set(closedPeriods.flatMap((period) => period.id ? [period.id] : [])))
+      setActivePeriodId(activePeriod?.id)
       setIsLoading(false)
     }
 
@@ -325,15 +364,21 @@ export function ExpenseListPage() {
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           {filteredExpenses.length === 0 ? (
             <p className="p-4 text-sm text-slate-500">
-              No hay egresos con los filtros seleccionados.
+              {settings && isBasicMode(settings)
+                ? 'No hay egresos con los filtros seleccionados.'
+                : !activePeriodId
+                  ? 'No hay egresos recientes porque no existe una temporada activa.'
+                  : 'No hay egresos de la temporada activa con los filtros seleccionados.'}
             </p>
           ) : (
             <ul className="divide-y divide-slate-200">
               {paginatedExpenses.map((expense) => {
-                const isClosedSeason = closedPeriodIds.has(expense.earningPeriodId ?? expense.seasonPeriodId ?? -1) || isLocationSeasonClosed(
-                  expense,
-                  settings?.closedLocationSeasons,
-                )
+                const isClosedSeason =
+                  requiresSeason(settings ?? undefined) &&
+                  isLocationSeasonClosed(
+                    expense,
+                    settings?.closedLocationSeasons,
+                  )
                 const relatedIncome = expense.relatedIncomeId
                   ? incomesById.get(expense.relatedIncomeId)
                   : undefined

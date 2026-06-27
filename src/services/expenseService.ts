@@ -4,6 +4,16 @@ import type { Expense } from '../types/expense'
 import type { CountryCode } from '../types/settings'
 import { assertRecordIsMutable, getActiveEarningPeriod } from './earningPeriodService'
 import { getSettings } from './settingsService'
+import { recordBelongsToUsageMode, requiresSeason } from '../utils/usageMode'
+import {
+  assertExpenseAdjustmentIsValid,
+  calculateAdjustmentCapacity,
+} from '../utils/expenseAdjustments'
+import {
+  createAutomationOutboxRecord,
+  enqueueAutomationEvent,
+  scheduleAutomationOutboxFlush,
+} from './automationOutboxService'
 
 export interface ExpenseListOptions extends DateRangeListOptions {
   category?: string
@@ -20,18 +30,41 @@ export type UpdateExpenseInput = Partial<CreateExpenseInput>
 export async function createExpense(input: CreateExpenseInput) {
   const settings = await getSettings()
   const period =
-    settings.userType === 'primary' ? await getActiveEarningPeriod() : undefined
+    requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
 
-  if (settings.userType === 'primary' && !period) {
+  if (requiresSeason(settings) && !period) {
     throw new Error('No hay una temporada activa. Crea una temporada para registrar actividad.')
   }
 
-  return db.expenses.add({
+  const expense: Expense = {
     ...input,
+    usageMode: settings.usageMode,
     createdAt: input.createdAt ?? new Date().toISOString(),
     earningPeriodId: period?.id,
     seasonPeriodId: period?.id,
+  }
+
+  const expenseId = await db.transaction('rw', [
+    db.expenses,
+    db.services,
+    db.automationOutbox,
+  ], async () => {
+    const [incomes, expenses] = await Promise.all([
+      db.services.toArray(),
+      db.expenses.toArray(),
+    ])
+    assertExpenseAdjustmentIsValid(expense, incomes, expenses)
+    const nextExpenseId = await db.expenses.add(expense)
+    await enqueueAutomationEvent(
+      createAutomationOutboxRecord('expense.created', {
+        expense: { ...expense, id: nextExpenseId },
+      }),
+    )
+    return nextExpenseId
   })
+  scheduleAutomationOutboxFlush()
+
+  return expenseId
 }
 
 export async function getExpenseById(id: number) {
@@ -74,12 +107,68 @@ export async function listExpenses(options: ExpenseListOptions = {}) {
 }
 
 export async function updateExpense(id: number, updates: UpdateExpenseInput) {
-  await assertRecordIsMutable(await db.expenses.get(id))
-  await db.expenses.update(id, updates)
-  return db.expenses.get(id)
+  const settings = await getSettings()
+  const currentExpense = await db.expenses.get(id)
+  if (
+    !currentExpense ||
+    !recordBelongsToUsageMode(currentExpense, settings.usageMode)
+  ) {
+    throw new Error('Este egreso pertenece a otro modo de uso.')
+  }
+  if (requiresSeason(settings)) {
+    await assertRecordIsMutable(currentExpense)
+  }
+  return db.transaction('rw', [db.expenses, db.services], async () => {
+    const latestExpense = await db.expenses.get(id)
+    if (!latestExpense) throw new Error('El egreso que intentas modificar no existe.')
+
+    const updatedExpense: Expense = {
+      ...latestExpense,
+      ...updates,
+      usageMode: latestExpense.usageMode ?? settings.usageMode,
+    }
+    const [incomes, expenses] = await Promise.all([
+      db.services.toArray(),
+      db.expenses.toArray(),
+    ])
+    assertExpenseAdjustmentIsValid(updatedExpense, incomes, expenses, id)
+    await db.expenses.put(updatedExpense)
+    return updatedExpense
+  })
+}
+
+export async function getAdjustmentCapacity(
+  incomeId: number,
+  excludedExpenseId?: number,
+) {
+  const [income, expenses] = await Promise.all([
+    db.services.get(incomeId),
+    db.expenses.where('relatedIncomeId').equals(incomeId).toArray(),
+  ])
+  if (!income) throw new Error('El ingreso seleccionado no existe.')
+  return calculateAdjustmentCapacity(income, expenses, excludedExpenseId)
+}
+
+export function listExpenseAdjustmentsForIncome(incomeId: number) {
+  return db.expenses
+    .where('relatedIncomeId')
+    .equals(incomeId)
+    .filter((expense) => expense.type === 'ajuste')
+    .reverse()
+    .sortBy('createdAt')
 }
 
 export async function deleteExpense(id: number) {
-  await assertRecordIsMutable(await db.expenses.get(id))
+  const settings = await getSettings()
+  const currentExpense = await db.expenses.get(id)
+  if (
+    !currentExpense ||
+    !recordBelongsToUsageMode(currentExpense, settings.usageMode)
+  ) {
+    throw new Error('Este egreso pertenece a otro modo de uso.')
+  }
+  if (requiresSeason(settings)) {
+    await assertRecordIsMutable(currentExpense)
+  }
   return db.expenses.delete(id)
 }

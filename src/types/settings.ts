@@ -46,6 +46,8 @@ export type CountryCode =
   | 'SK'
 export type RateMode = 'automatic' | 'manual'
 export type ThemeMode = 'system' | 'light' | 'dark'
+export type UsageMode = 'professional' | 'basic'
+/** @deprecated Compatibility mirror for backups and older app versions. */
 export type UserType = 'primary' | 'basic'
 export type BackupFrequency = 'daily'
 export type CutoffFrequency = 'weekly' | 'biweekly' | 'monthly'
@@ -70,6 +72,7 @@ export interface AppSettings {
   secondaryCurrency: CurrencyCode
   incomePercentage: number
   rateMode: RateMode
+  usageMode: UsageMode
   userType: UserType
   theme: ThemeMode
   pinEnabled: boolean

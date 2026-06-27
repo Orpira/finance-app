@@ -13,7 +13,7 @@ import type {
   CountryCode,
   CurrencyCode,
   RateMode,
-  UserType,
+  UsageMode,
 } from '../../types/settings'
 import {
   type CityOption,
@@ -29,16 +29,23 @@ const rateModes: Array<{ value: RateMode; label: string }> = [
   { value: 'manual', label: 'Manual' },
 ]
 
-const userTypes: Array<{ value: UserType; label: string; description: string }> = [
+const usageModes: Array<{
+  value: UsageMode
+  label: string
+  summary: string
+  description: string
+}> = [
   {
-    value: 'primary',
-    label: 'Principal',
-    description: 'Temporadas, ciudad, porcentaje, ingresos, egresos y agenda.',
+    value: 'professional',
+    label: 'Profesional',
+    summary: 'Control completo para actividad independiente.',
+    description: 'Temporadas, porcentajes, agenda, reportes y automatizaciones.',
   },
   {
     value: 'basic',
     label: 'Básico',
-    description: 'Solo control simple de ingresos y egresos.',
+    summary: 'Control simple de ingresos y egresos personales.',
+    description: 'Sin temporadas ni porcentajes.',
   },
 ]
 
@@ -93,7 +100,7 @@ export function SettingsBusinessPage() {
           secondaryCurrency: settings.secondaryCurrency,
           incomePercentage: settings.incomePercentage,
           rateMode: settings.rateMode,
-          userType: settings.userType,
+          usageMode: settings.usageMode,
         },
       )
 
@@ -167,29 +174,37 @@ export function SettingsBusinessPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <fieldset className="flex flex-col gap-3 sm:col-span-2">
             <legend className="text-sm font-medium text-slate-700">
-              Tipo de usuario
+              Modo de uso
             </legend>
             <div className="grid gap-2 sm:grid-cols-2">
-              {userTypes.map((userType) => (
+              {usageModes.map((usageMode) => (
                 <label
                   className={[
-                    'flex min-h-20 cursor-pointer flex-col justify-center gap-1 rounded-md border px-3 text-sm transition',
-                    settings.userType === userType.value
+                    'flex min-h-32 cursor-pointer flex-col justify-center gap-1 rounded-lg border p-4 text-sm transition',
+                    settings.usageMode === usageMode.value
                       ? 'border-emerald-600 bg-emerald-50 text-emerald-900'
                       : 'border-slate-200 text-slate-700 hover:bg-slate-50',
                   ].join(' ')}
-                  key={userType.value}
+                  key={usageMode.value}
                 >
                   <span className="flex items-center gap-2 font-semibold">
                     <input
-                      checked={settings.userType === userType.value}
+                      checked={settings.usageMode === usageMode.value}
                       className="size-4 accent-emerald-700"
-                      onChange={() => updateLocalSettings({ userType: userType.value })}
+                      name="usageMode"
+                      onChange={() =>
+                        updateLocalSettings({ usageMode: usageMode.value })
+                      }
                       type="radio"
                     />
-                    {userType.label}
+                    {usageMode.label}
                   </span>
-                  <span className="pl-6 text-xs text-slate-500">{userType.description}</span>
+                  <span className="pl-6 font-medium text-slate-700">
+                    {usageMode.summary}
+                  </span>
+                  <span className="pl-6 text-xs leading-5 text-slate-500">
+                    {usageMode.description}
+                  </span>
                 </label>
               ))}
             </div>
@@ -197,20 +212,26 @@ export function SettingsBusinessPage() {
 
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
-              Nombre del negocio
+              {settings.usageMode === 'professional'
+                ? 'Nombre del negocio'
+                : 'Nombre o alias (opcional)'}
             </span>
             <input
               className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
               onChange={(event) =>
                 updateLocalSettings({ businessName: event.target.value })
               }
-              placeholder="Mi negocio"
+              placeholder={
+                settings.usageMode === 'professional'
+                  ? 'Mi negocio'
+                  : 'Mi espacio financiero'
+              }
               type="text"
               value={settings.businessName}
             />
           </label>
 
-          {settings.userType === 'primary' && (
+          {settings.usageMode === 'professional' && (
             <label className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-700">Ciudad</span>
               <input
@@ -237,24 +258,22 @@ export function SettingsBusinessPage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {settings.userType === 'primary' && (
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-700">País</span>
-              <select
-                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                onChange={(event) =>
-                  handleCountryChange(event.target.value as CountryCode)
-                }
-                value={settings.country}
-              >
-                {countries.map((country) => (
-                  <option key={country.value} value={country.value}>
-                    {country.label} ({country.currency})
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-slate-700">País</span>
+            <select
+              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              onChange={(event) =>
+                handleCountryChange(event.target.value as CountryCode)
+              }
+              value={settings.country}
+            >
+              {countries.map((country) => (
+                <option key={country.value} value={country.value}>
+                  {country.label} ({country.currency})
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
@@ -295,7 +314,7 @@ export function SettingsBusinessPage() {
           </label>
         </div>
 
-        {settings.userType === 'primary' && (
+        {settings.usageMode === 'professional' && (
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
               Porcentaje de la temporada activa

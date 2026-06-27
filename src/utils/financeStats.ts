@@ -2,6 +2,7 @@ import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
 import type { CurrencyCode } from '../types/settings'
 import { roundMoney } from './currency'
+import { isServiceIncome } from './incomeTypes'
 
 const weekdayNames = [
   'Domingo',
@@ -71,6 +72,7 @@ export function calculateFinancialTotals(
   primaryCurrency: CurrencyCode,
   secondaryCurrency: CurrencyCode,
 ) {
+  const serviceIncomes = incomes.filter(isServiceIncome)
   const primaryIncome = incomes.reduce(
     (total, income) => total + getStoredIncomeValue(income, primaryCurrency),
     0,
@@ -96,8 +98,11 @@ export function calculateFinancialTotals(
     secondaryExpenses: roundMoney(secondaryExpenses),
     primaryNet: roundMoney(primaryIncome - primaryExpenses),
     secondaryNet: roundMoney(secondaryIncome - secondaryExpenses),
-    serviceMinutes: incomes.reduce((total, income) => total + income.duration, 0),
-    serviceCount: incomes.length,
+    serviceMinutes: serviceIncomes.reduce(
+      (total, income) => total + (income.actualDuration ?? income.duration),
+      0,
+    ),
+    serviceCount: serviceIncomes.length,
     expenseCount: expenses.length,
   }
 }
@@ -106,22 +111,24 @@ export function calculateAverageIncome(
   incomes: ServiceIncome[],
   currency: CurrencyCode,
 ) {
-  if (incomes.length === 0) {
+  const serviceIncomes = incomes.filter(isServiceIncome)
+  if (serviceIncomes.length === 0) {
     return 0
   }
 
-  const incomeTotal = incomes.reduce(
+  const incomeTotal = serviceIncomes.reduce(
     (total, income) => total + getStoredIncomeValue(income, currency),
     0,
   )
 
-  return roundMoney(incomeTotal / incomes.length)
+  return roundMoney(incomeTotal / serviceIncomes.length)
 }
 
 export function calculateBestIncomeDay(
   incomes: ServiceIncome[],
   currency: CurrencyCode,
 ) {
+  const serviceIncomes = incomes.filter(isServiceIncome)
   const totalsByWeekday = weekdayNames.map((weekday) => ({
     average: 0,
     count: 0,
@@ -129,7 +136,7 @@ export function calculateBestIncomeDay(
     weekday,
   }))
 
-  incomes.forEach((income) => {
+  serviceIncomes.forEach((income) => {
     const weekday = new Date(`${income.date}T00:00`).getDay()
     totalsByWeekday[weekday].total += getStoredIncomeValue(income, currency)
     totalsByWeekday[weekday].count += 1
@@ -150,6 +157,7 @@ export function calculateBestIncomeWeekday(
   incomes: ServiceIncome[],
   currency: CurrencyCode,
 ) {
+  const serviceIncomes = incomes.filter(isServiceIncome)
   const totalsByWeekday = weekdayNames.map((weekday) => ({
     average: 0,
     count: 0,
@@ -157,7 +165,7 @@ export function calculateBestIncomeWeekday(
     weekday,
   }))
 
-  incomes.forEach((income) => {
+  serviceIncomes.forEach((income) => {
     const weekday = new Date(`${income.date}T00:00`).getDay()
     totalsByWeekday[weekday].total += getStoredIncomeValue(income, currency)
     totalsByWeekday[weekday].count += 1
@@ -184,6 +192,7 @@ export function calculateIncomeDaysRanking(
   incomes: ServiceIncome[],
   currency: CurrencyCode,
 ) {
+  const serviceIncomes = incomes.filter(isServiceIncome)
   const totalsByDate = new Map<
     string,
     {
@@ -194,7 +203,7 @@ export function calculateIncomeDaysRanking(
     }
   >()
 
-  incomes.forEach((income) => {
+  serviceIncomes.forEach((income) => {
     const currentDay = totalsByDate.get(income.date) ?? {
       cities: new Set<string>(),
       count: 0,

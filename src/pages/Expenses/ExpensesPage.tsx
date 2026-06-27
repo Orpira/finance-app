@@ -10,12 +10,10 @@ import {
   convertCurrencyToEurCop,
   type ExchangeRateResolutionSource,
 } from '../../services/currencyConversionService'
-import {
-  getLatestExchangeRate,
-  saveExchangeRate,
-} from '../../services/exchangeRateService'
+import { saveExchangeRate } from '../../services/exchangeRateService'
 import {
   createExpense,
+  getAdjustmentCapacity,
   getExpenseById,
   updateExpense,
 } from '../../services/expenseService'
@@ -33,6 +31,14 @@ import {
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 import { getActiveEarningPeriod, isEarningPeriodClosed } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
+import type { AdjustmentCapacity } from '../../utils/expenseAdjustments'
+import { ADJUSTMENT_LIMIT_ERROR } from '../../utils/expenseAdjustments'
+import {
+  isBasicMode,
+  recordBelongsToUsageMode,
+  requiresSeason,
+} from '../../utils/usageMode'
+import { isServiceIncome } from '../../utils/incomeTypes'
 
 type SaveStatus = 'idle' | 'saving' | 'error'
 type CrossIncomeChoice = 'yes' | 'no'
@@ -44,12 +50,6 @@ const expenseCategories = [
   'Publicidad',
   'Otros',
 ]
-
-function formatRate(rate: number) {
-  return new Intl.NumberFormat('es-ES', {
-    maximumFractionDigits: 6,
-  }).format(rate)
-}
 
 function formatRateUpdatedAt(value: string) {
   const date = new Date(value)
@@ -87,7 +87,6 @@ export function ExpensesPage() {
   const [exchangeRate, setExchangeRate] = useState(EUR_COP_DEFAULT_RATE)
   const [exchangeRateSource, setExchangeRateSource] =
     useState<ExchangeRateResolutionSource>('default')
-  const [rateUpdatedAt, setRateUpdatedAt] = useState('')
   const [convertedValues, setConvertedValues] = useState({
     baseCurrencyValue: 0,
     secondaryCurrencyValue: 0,
@@ -97,10 +96,29 @@ export function ExpensesPage() {
   })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [validationError, setValidationError] = useState('')
+  const [adjustmentCapacity, setAdjustmentCapacity] =
+    useState<AdjustmentCapacity | null>(null)
   const hasSelectedRelatedIncome = incomes.some(
     (income) => income.id === Number(relatedIncomeId),
   )
-  const isBasicUser = settings?.userType === 'basic'
+  const isBasicUser = isBasicMode(settings ?? undefined)
+
+  const proposedAdjustmentValue = (() => {
+    if (!adjustmentCapacity || !settings) return 0
+    if (currency === adjustmentCapacity.currency) return amount
+    if (settings.secondaryCurrency === adjustmentCapacity.currency) {
+      return convertedValues.secondaryCurrencyValue
+    }
+    if (adjustmentCapacity.currency === 'EUR') return convertedValues.eurValue
+    if (adjustmentCapacity.currency === 'COP') return convertedValues.copValue
+    return Number.NaN
+  })()
+  const adjustmentLimitExceeded =
+    expenseType === 'ajuste' &&
+    crossIncome === 'yes' &&
+    adjustmentCapacity !== null &&
+    (!Number.isFinite(proposedAdjustmentValue) ||
+      roundMoney(proposedAdjustmentValue) > adjustmentCapacity.availableAmount)
 
   useEffect(() => {
     let isMounted = true
@@ -117,8 +135,19 @@ export function ExpensesPage() {
       }
 
       setSettings(currentSettings)
-      setCurrency(currentSettings.defaultCurrency)
-      setIncomes(currentIncomes)
+      setCurrency(
+        (!isBasicMode(currentSettings) && currentPeriod?.baseCurrency
+          ? currentPeriod.baseCurrency
+          : currentSettings.defaultCurrency) as CurrencyCode,
+      )
+      if (isBasicMode(currentSettings) && !parsedExpenseId) {
+        setCategory('Otros')
+      }
+      setIncomes(
+        currentIncomes.filter((income) =>
+          recordBelongsToUsageMode(income, currentSettings.usageMode),
+        ),
+      )
       setActivePeriod(currentPeriod ?? null)
     }
 
@@ -127,7 +156,7 @@ export function ExpensesPage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [parsedExpenseId])
 
   useEffect(() => {
     let isMounted = true
@@ -147,11 +176,25 @@ export function ExpensesPage() {
       }
 
       if (
-        await isEarningPeriodClosed(currentExpense.earningPeriodId ?? currentExpense.seasonPeriodId) ||
-        isLocationSeasonClosed(
+        !recordBelongsToUsageMode(
           currentExpense,
-          currentSettings.closedLocationSeasons,
+          currentSettings.usageMode,
         )
+      ) {
+        window.alert('Este egreso pertenece a otro modo de uso.')
+        navigate('/expenses', { replace: true })
+        return
+      }
+
+      if (
+        requiresSeason(currentSettings) &&
+        ((await isEarningPeriodClosed(
+          currentExpense.earningPeriodId ?? currentExpense.seasonPeriodId,
+        )) ||
+          isLocationSeasonClosed(
+            currentExpense,
+            currentSettings.closedLocationSeasons,
+          ))
       ) {
         window.alert(
           'Este gasto pertenece a una temporada cerrada. Solo puede consultarse desde el historial y usarse en reportes.',
@@ -160,9 +203,15 @@ export function ExpensesPage() {
         return
       }
 
-      setExpenseType(currentExpense.type ?? 'gasto')
+      setExpenseType(
+        isBasicMode(currentSettings) ? 'gasto' : currentExpense.type ?? 'gasto',
+      )
       setDate(currentExpense.date)
-      setCategory(currentExpense.category)
+      setCategory(
+        isBasicMode(currentSettings) && currentExpense.category === 'Ajuste'
+          ? 'Otros'
+          : currentExpense.category,
+      )
       setAmount(currentExpense.amount)
       setCurrency(currentExpense.currency as CurrencyCode)
       setExpenseCountry(currentExpense.country)
@@ -190,6 +239,36 @@ export function ExpensesPage() {
 
   useEffect(() => {
     let isMounted = true
+    const incomeId = Number(relatedIncomeId)
+
+    if (
+      expenseType !== 'ajuste' ||
+      crossIncome !== 'yes' ||
+      !Number.isFinite(incomeId) ||
+      incomeId <= 0
+    ) {
+      return
+    }
+
+    getAdjustmentCapacity(incomeId, parsedExpenseId ?? undefined)
+      .then((capacity) => {
+        if (isMounted) setAdjustmentCapacity(capacity)
+      })
+      .catch((error: unknown) => {
+        if (!isMounted) return
+        setAdjustmentCapacity(null)
+        setValidationError(
+          error instanceof Error ? error.message : 'No se pudo validar el ajuste.',
+        )
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [crossIncome, expenseType, parsedExpenseId, relatedIncomeId])
+
+  useEffect(() => {
+    let isMounted = true
 
     async function convertExpenseValue() {
       if (!settings) {
@@ -198,8 +277,14 @@ export function ExpensesPage() {
 
       const conversionOptions = {
         date,
-        manualRate: exchangeRate,
-        manualEurCopRate: exchangeRate,
+        manualRate:
+          settings.rateMode === 'manual' && isEditing
+            ? exchangeRate
+            : undefined,
+        manualEurCopRate:
+          settings.rateMode === 'manual' && isEditing
+            ? exchangeRate
+            : undefined,
         useApi: settings.rateMode === 'automatic',
       }
       const [convertedPairValue, convertedEurCopValue] = await Promise.all([
@@ -211,11 +296,6 @@ export function ExpensesPage() {
         ),
         convertCurrencyToEurCop(amount, currency, conversionOptions),
       ])
-      const latestRate =
-        convertedPairValue.source === 'offline'
-          ? await getLatestExchangeRate(currency, settings.secondaryCurrency)
-          : undefined
-
       if (!isMounted) {
         return
       }
@@ -229,11 +309,6 @@ export function ExpensesPage() {
       })
       setExchangeRate(convertedPairValue.rate)
       setExchangeRateSource(convertedPairValue.source)
-      setRateUpdatedAt(
-        convertedPairValue.source === 'api'
-          ? new Date().toISOString()
-          : latestRate?.createdAt ?? '',
-      )
     }
 
     convertExpenseValue()
@@ -241,7 +316,7 @@ export function ExpensesPage() {
     return () => {
       isMounted = false
     }
-  }, [amount, currency, date, exchangeRate, settings])
+  }, [amount, currency, date, exchangeRate, isEditing, settings])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -255,7 +330,13 @@ export function ExpensesPage() {
       return
     }
 
+    if (adjustmentLimitExceeded) {
+      setValidationError(ADJUSTMENT_LIMIT_ERROR)
+      return
+    }
+
     if (
+      !isBasicUser &&
       expenseType === 'ajuste' &&
       crossIncome === 'yes' &&
       !hasSelectedRelatedIncome
@@ -274,8 +355,9 @@ export function ExpensesPage() {
 
     try {
       const now = new Date()
+      const effectiveExpenseType = isBasicUser ? 'gasto' : expenseType
       const expenseDate =
-        expenseType === 'ajuste' && !isEditing
+        (isBasicUser || effectiveExpenseType === 'ajuste') && !isEditing
           ? getTodayInputDate()
           : date
 
@@ -291,9 +373,9 @@ export function ExpensesPage() {
       })
 
       const expenseInput = {
-        type: expenseType,
+        type: effectiveExpenseType,
         date: expenseDate,
-        category: expenseType === 'ajuste' ? 'Ajuste' : category,
+        category: effectiveExpenseType === 'ajuste' ? 'Ajuste' : category,
         amount,
         currency,
         eurValue: roundMoney(convertedValues.eurValue),
@@ -308,15 +390,15 @@ export function ExpensesPage() {
         exchangeRateUsed: exchangeRate,
         eurCopExchangeRateUsed: convertedValues.eurCopRate,
         relatedIncomeId:
-          expenseType === 'ajuste' && crossIncome === 'yes'
+          effectiveExpenseType === 'ajuste' && crossIncome === 'yes'
             ? Number(relatedIncomeId)
             : undefined,
         notes:
-          expenseType === 'ajuste' && notes.trim()
+          notes.trim()
             ? notes.trim()
             : undefined,
         createdAt: expenseCreatedAt ?? now.toISOString(),
-        country: isBasicUser ? undefined : expenseCountry ?? settings.country,
+        country: expenseCountry ?? settings.country,
         city: isBasicUser ? undefined : expenseCity ?? settings.city,
       }
 
@@ -327,8 +409,11 @@ export function ExpensesPage() {
       }
 
       navigate('/expenses')
-    } catch {
+    } catch (error: unknown) {
       setSaveStatus('error')
+      setValidationError(
+        error instanceof Error ? error.message : 'No se pudo guardar el egreso.',
+      )
     }
   }
 
@@ -340,9 +425,34 @@ export function ExpensesPage() {
     )
   }
 
+  if (!settings.defaultCurrency) {
+    return (
+      <section className="mx-auto flex min-h-[60dvh] max-w-2xl flex-col items-center justify-center gap-4 text-center">
+        <h1 className="text-2xl font-semibold">Falta configurar la moneda</h1>
+        <p className="text-sm text-slate-500">
+          Selecciona una moneda en Configuración antes de registrar egresos.
+        </p>
+        <button
+          className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white"
+          onClick={() => navigate('/settings')}
+          type="button"
+        >
+          Ir a Configuración
+        </button>
+      </section>
+    )
+  }
+
   if (!isEditing && !isBasicUser && !activePeriod) {
     return <section className="mx-auto flex min-h-[60dvh] max-w-2xl flex-col items-center justify-center gap-4 text-center"><h1 className="text-2xl font-semibold">No hay una temporada activa</h1><p className="text-sm text-slate-500">Crea una temporada para registrar actividad.</p><button className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" onClick={() => navigate('/temporadas')} type="button">Ir a Temporadas</button></section>
   }
+
+  const readOnlyDateTime = expenseCreatedAt
+    ? formatRateUpdatedAt(expenseCreatedAt)
+    : new Intl.DateTimeFormat('es-ES', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(new Date())
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -357,7 +467,7 @@ export function ExpensesPage() {
         className="flex flex-col gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
         onSubmit={handleSubmit}
       >
-        <fieldset className="flex flex-col gap-2">
+        {!isBasicUser && <fieldset className="flex flex-col gap-2">
           <legend className="text-sm font-medium text-slate-700">
             Tipo de egreso
           </legend>
@@ -381,6 +491,7 @@ export function ExpensesPage() {
                   name="expenseType"
                   onChange={() => {
                     setExpenseType(option.value)
+                    setAdjustmentCapacity(null)
                     if (option.value === 'gasto' && category === 'Ajuste') {
                       setCategory(expenseCategories[0])
                     }
@@ -393,9 +504,21 @@ export function ExpensesPage() {
               </label>
             ))}
           </div>
-        </fieldset>
+        </fieldset>}
 
-        {expenseType === 'gasto' ? (
+        {isBasicUser ? (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Fecha y hora
+            </p>
+            <p className="mt-1 font-medium text-slate-900">
+              {readOnlyDateTime}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Se asignan automáticamente al guardar.
+            </p>
+          </div>
+        ) : expenseType === 'gasto' ? (
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-700">Fecha</span>
@@ -431,7 +554,7 @@ export function ExpensesPage() {
           </p>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(14rem,0.8fr)]">
+        <div className="grid gap-4">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
               {expenseType === 'ajuste' ? 'Cantidad que deseas ajustar' : 'Importe'}
@@ -447,43 +570,24 @@ export function ExpensesPage() {
             />
           </label>
 
-          <div className="flex flex-col gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3">
-            <p className="text-sm font-semibold text-sky-950">
-              {isEditing ? 'Moneda del egreso' : 'Moneda actual'}: {currency}
-            </p>
-            <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">
-              {settings.rateMode === 'manual'
-                ? 'Tasa manual'
-                : exchangeRateSource === 'api'
-                  ? 'Tasa actual de la API'
-                  : exchangeRateSource === 'offline'
-                    ? 'Usando última tasa guardada'
-                    : 'Tasa de respaldo'}
-            </p>
-            {settings.rateMode === 'manual' ? (
-              <input
-                aria-label={`Tasa manual de ${currency} a ${settings.secondaryCurrency}`}
-                className="h-10 rounded-md border border-sky-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                min={0.000001}
-                onChange={(event) => setExchangeRate(Number(event.target.value))}
-                step="any"
-                type="number"
-                value={exchangeRate}
-              />
-            ) : null}
-            <p className="text-sm font-semibold text-slate-900">
-              1 {currency} = {formatRate(exchangeRate)}{' '}
-              {settings.secondaryCurrency}
-            </p>
-            {rateUpdatedAt && settings.rateMode === 'automatic' ? (
-              <p className="text-xs text-slate-500">
-                Actualizado: {formatRateUpdatedAt(rateUpdatedAt)}
-              </p>
-            ) : null}
-          </div>
         </div>
 
-        {expenseType === 'ajuste' && (
+        {isBasicUser && (
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-slate-700">
+              Observación <span className="font-normal text-slate-500">(opcional)</span>
+            </span>
+            <textarea
+              className="min-h-24 rounded-md border border-slate-300 bg-white px-3 py-2 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              maxLength={500}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder="Añade una nota sobre este egreso"
+              value={notes}
+            />
+          </label>
+        )}
+
+        {!isBasicUser && expenseType === 'ajuste' && (
           <div className="flex flex-col gap-4 rounded-lg border border-amber-200 bg-amber-50/60 p-4">
             <label className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-700">
@@ -494,7 +598,10 @@ export function ExpensesPage() {
                 onChange={(event) => {
                   const choice = event.target.value as CrossIncomeChoice
                   setCrossIncome(choice)
-                  if (choice === 'no') setRelatedIncomeId('')
+                  if (choice === 'no') {
+                    setRelatedIncomeId('')
+                    setAdjustmentCapacity(null)
+                  }
                   setValidationError('')
                 }}
                 value={crossIncome}
@@ -513,7 +620,15 @@ export function ExpensesPage() {
                   className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100"
                   disabled={incomes.length === 0}
                   onChange={(event) => {
-                    setRelatedIncomeId(event.target.value)
+                    const nextIncomeId = event.target.value
+                    setRelatedIncomeId(nextIncomeId)
+                    setAdjustmentCapacity(null)
+                    const selectedIncome = incomes.find(
+                      (income) => income.id === Number(nextIncomeId),
+                    )
+                    if (!isEditing && selectedIncome) {
+                      setCurrency(selectedIncome.currency as CurrencyCode)
+                    }
                     setValidationError('')
                   }}
                   required
@@ -535,7 +650,7 @@ export function ExpensesPage() {
                             income.totalAmount,
                             income.currency as CurrencyCode,
                           )}
-                      {' · '}Ganancia real {sensitiveValuesHidden
+                      {' · '}{isServiceIncome(income) ? 'Ganancia real' : 'Monto efectivo'} {sensitiveValuesHidden
                         ? '****'
                         : formatCurrency(
                             income.realGain,
@@ -547,6 +662,58 @@ export function ExpensesPage() {
                   ))}
                 </select>
               </label>
+            )}
+
+            {crossIncome === 'yes' && adjustmentCapacity && (
+              <div className="grid gap-3 rounded-lg border border-amber-200 bg-white p-3 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Ingreso original
+                  </p>
+                  <p className="mt-1 font-semibold text-slate-900">
+                    <SensitiveAmount
+                      hidden={sensitiveValuesHidden}
+                      value={formatCurrency(
+                        adjustmentCapacity.incomeAmount,
+                        adjustmentCapacity.currency as CurrencyCode,
+                      )}
+                    />
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Ajustes aplicados
+                  </p>
+                  <p className="mt-1 font-semibold text-slate-900">
+                    <SensitiveAmount
+                      hidden={sensitiveValuesHidden}
+                      value={formatCurrency(
+                        adjustmentCapacity.adjustedAmount,
+                        adjustmentCapacity.currency as CurrencyCode,
+                      )}
+                    />
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Disponible para ajustar
+                  </p>
+                  <p className="mt-1 font-semibold text-emerald-800">
+                    <SensitiveAmount
+                      hidden={sensitiveValuesHidden}
+                      value={formatCurrency(
+                        adjustmentCapacity.availableAmount,
+                        adjustmentCapacity.currency as CurrencyCode,
+                      )}
+                    />
+                  </p>
+                </div>
+                {adjustmentLimitExceeded && (
+                  <p className="text-sm font-semibold text-red-700 sm:col-span-3" role="alert">
+                    {ADJUSTMENT_LIMIT_ERROR}
+                  </p>
+                )}
+              </div>
             )}
 
             <label className="flex flex-col gap-2">
@@ -570,37 +737,6 @@ export function ExpensesPage() {
           </div>
         )}
 
-        <div className="grid gap-3 rounded-lg border border-red-100 bg-red-50 p-3 sm:grid-cols-2">
-          <div>
-            <p className="text-xs font-medium uppercase text-red-700">
-              Valor {currency}
-            </p>
-            <p className="mt-1 text-lg font-semibold text-slate-950">
-              <SensitiveAmount
-                hidden={sensitiveValuesHidden}
-                value={formatCurrency(
-                  convertedValues.baseCurrencyValue,
-                  currency,
-                )}
-              />
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-medium uppercase text-red-700">
-              Valor {settings.secondaryCurrency}
-            </p>
-            <p className="mt-1 text-lg font-semibold text-slate-950">
-              <SensitiveAmount
-                hidden={sensitiveValuesHidden}
-                value={formatCurrency(
-                  convertedValues.secondaryCurrencyValue,
-                  settings.secondaryCurrency,
-                )}
-              />
-            </p>
-          </div>
-        </div>
-
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-slate-500" role="status">
             {validationError || (saveStatus === 'error' && 'No se pudo guardar')}
@@ -612,6 +748,7 @@ export function ExpensesPage() {
               saveStatus === 'saving' ||
               amount <= 0 ||
               notes.length > 500 ||
+              adjustmentLimitExceeded ||
               (expenseType === 'ajuste' &&
                 crossIncome === 'yes' &&
                 !hasSelectedRelatedIncome)
@@ -622,8 +759,8 @@ export function ExpensesPage() {
             {saveStatus === 'saving'
               ? 'Guardando'
               : isEditing
-                ? `Actualizar ${expenseType}`
-                : `Guardar ${expenseType}`}
+                ? `Actualizar ${isBasicUser ? 'egreso' : expenseType}`
+                : `Guardar ${isBasicUser ? 'egreso' : expenseType}`}
           </button>
         </div>
       </form>

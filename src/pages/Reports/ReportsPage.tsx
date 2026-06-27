@@ -12,6 +12,7 @@ import type { EarningPeriod } from '../../types/earningPeriod'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
+import { isBasicMode, recordBelongsToUsageMode } from '../../utils/usageMode'
 import { getExpenseDisplayName, getIncomeDisplayName } from '../../utils/activityLabels'
 import {
   formatCurrency,
@@ -25,6 +26,11 @@ import {
   getStoredIncomeValue,
 } from '../../utils/financeStats'
 import { getPaymentTypeLabel } from '../../utils/paymentTypes'
+import {
+  getIncomeTypeLabel,
+  isAdjustmentIncome,
+  isServiceIncome,
+} from '../../utils/incomeTypes'
 
 type Period = 'week' | 'month' | 'year'
 type ReportKind = 'income' | 'expense' | 'paymentType'
@@ -166,10 +172,12 @@ export function ReportsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [periodIncomes, setPeriodIncomes] = useState<ServiceIncome[]>([])
   const [periodExpenses, setPeriodExpenses] = useState<Expense[]>([])
+  const [traceIncomes, setTraceIncomes] = useState<ServiceIncome[]>([])
+  const [traceAdjustments, setTraceAdjustments] = useState<Expense[]>([])
   const [loadError, setLoadError] = useState('')
   const [seasons, setSeasons] = useState<EarningPeriod[]>([])
   const [selectedSeason, setSelectedSeason] = useState<string>('ALL')
-  const isBasicUser = settings?.userType === 'basic'
+  const isBasicUser = isBasicMode(settings ?? undefined)
 
   useEffect(() => {
     let isMounted = true
@@ -186,12 +194,16 @@ export function ReportsPage() {
           currentIncomes,
           currentExpenses,
           currentSeasons,
+          allIncomes,
+          allExpenses,
         ] =
           await Promise.all([
             getSettings(),
             listServiceIncomes({ ...range, newestFirst: true }),
             listExpenses({ ...range, newestFirst: true }),
             listEarningPeriods(),
+            listServiceIncomes({ newestFirst: true }),
+            listExpenses({ newestFirst: true }),
           ])
 
         if (!isMounted) {
@@ -199,8 +211,28 @@ export function ReportsPage() {
         }
 
         setSettings(currentSettings)
-        setPeriodIncomes(currentIncomes)
-        setPeriodExpenses(currentExpenses)
+        setPeriodIncomes(
+          currentIncomes.filter((income) =>
+            recordBelongsToUsageMode(income, currentSettings.usageMode),
+          ),
+        )
+        setPeriodExpenses(
+          currentExpenses.filter((expense) =>
+            recordBelongsToUsageMode(expense, currentSettings.usageMode),
+          ),
+        )
+        setTraceIncomes(
+          allIncomes.filter((income) =>
+            recordBelongsToUsageMode(income, currentSettings.usageMode),
+          ),
+        )
+        setTraceAdjustments(
+          allExpenses.filter(
+            (expense) =>
+              expense.type === 'ajuste' &&
+              recordBelongsToUsageMode(expense, currentSettings.usageMode),
+          ),
+        )
         setSeasons(currentSeasons)
       } catch {
         if (isMounted) {
@@ -332,6 +364,20 @@ export function ReportsPage() {
       }),
     [periodExpenses, selectedCategory, selectedCity, selectedCountry, selectedSeason],
   )
+
+  const incomesById = useMemo(
+    () => new Map(traceIncomes.flatMap((income) => income.id ? [[income.id, income] as const] : [])),
+    [traceIncomes],
+  )
+  const adjustmentsByIncomeId = useMemo(() => {
+    const counts = new Map<number, number>()
+    traceAdjustments.forEach((expense) => {
+      if (expense.type === 'ajuste' && expense.relatedIncomeId !== undefined) {
+        counts.set(expense.relatedIncomeId, (counts.get(expense.relatedIncomeId) ?? 0) + 1)
+      }
+    })
+    return counts
+  }, [traceAdjustments])
 
   function handlePeriodChange(nextPeriod: Period) {
     const nextRange = getPeriodRange(nextPeriod)
@@ -532,7 +578,7 @@ export function ReportsPage() {
 
   function buildIncomeTable(reportIncomes: ServiceIncome[]) {
     const totalDuration = reportIncomes.reduce(
-      (total, income) => total + (income.actualDuration ?? income.duration),
+      (total, income) => total + (isServiceIncome(income) ? income.actualDuration ?? income.duration : 0),
       0,
     )
     const totalAmount = reportIncomes.reduce(
@@ -542,12 +588,15 @@ export function ReportsPage() {
     const rows = reportIncomes
       .map((income) => {
         const amount = getIncomeValue(income, primaryCurrency)
+        const adjustmentCount = income.id ? adjustmentsByIncomeId.get(income.id) ?? 0 : 0
 
         return `
           <tr>
             <td>${escapeHtml(getIncomeDisplayName(income))}</td>
+            <td>${escapeHtml(getIncomeTypeLabel(income))}</td>
             <td>${escapeHtml(getPaymentTypeLabel(income.paymentType))}</td>
-            <td>${income.actualDuration ?? income.duration} min</td>
+            <td>${isServiceIncome(income) ? `${income.actualDuration ?? income.duration} min` : 'No aplica'}</td>
+            <td>${adjustmentCount > 0 ? `Afectado por ajuste (${adjustmentCount})` : 'Sin ajustes'}</td>
             <td class="amount">${escapeHtml(formatCurrency(amount, primaryCurrency))}</td>
           </tr>
         `
@@ -559,16 +608,19 @@ export function ReportsPage() {
         <thead>
           <tr>
             <th>Ingreso</th>
+            <th>Tipo</th>
             <th>Tipo de pago</th>
             <th>Duración</th>
+            <th>Trazabilidad</th>
             <th class="amount">Valor</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
         <tfoot>
           <tr>
-            <td colspan="2">Total</td>
+            <td colspan="3">Total</td>
             <td>${totalDuration} min</td>
+            <td></td>
             <td class="amount">${escapeHtml(formatCurrency(totalAmount, primaryCurrency))}</td>
           </tr>
         </tfoot>
@@ -578,7 +630,7 @@ export function ReportsPage() {
 
   function buildIncomeTextRows(reportIncomes: ServiceIncome[]) {
     const totalDuration = reportIncomes.reduce(
-      (total, income) => total + (income.actualDuration ?? income.duration),
+      (total, income) => total + (isServiceIncome(income) ? income.actualDuration ?? income.duration : 0),
       0,
     )
     const totalAmount = reportIncomes.reduce(
@@ -588,11 +640,14 @@ export function ReportsPage() {
     const rows = reportIncomes
       .map((income) => {
         const amount = getIncomeValue(income, primaryCurrency)
+        const adjustmentCount = income.id ? adjustmentsByIncomeId.get(income.id) ?? 0 : 0
 
         return [
           `- ${getIncomeDisplayName(income)}`,
+          `Clase: ${getIncomeTypeLabel(income)}`,
           `Tipo: ${getPaymentTypeLabel(income.paymentType)}`,
-          `Duración: ${income.actualDuration ?? income.duration} min`,
+          `Duración: ${isServiceIncome(income) ? `${income.actualDuration ?? income.duration} min` : 'No aplica'}`,
+          adjustmentCount > 0 ? `Afectado por ajuste (${adjustmentCount})` : 'Sin ajustes relacionados',
           `Valor: ${formatCurrency(amount, primaryCurrency)}`,
         ].join(' | ')
       })
@@ -613,11 +668,15 @@ export function ReportsPage() {
     const rows = reportExpenses
       .map((expense) => {
         const amount = getExpenseValue(expense, primaryCurrency)
+        const relatedIncome = expense.relatedIncomeId
+          ? incomesById.get(expense.relatedIncomeId)
+          : undefined
 
         return `
           <tr>
             <td>${escapeHtml(getExpenseDisplayName(expense))}</td>
             <td>${escapeHtml(expense.category)}</td>
+            <td>${relatedIncome ? escapeHtml(getIncomeDisplayName(relatedIncome)) : expense.relatedIncomeId ? `Ingreso #${expense.relatedIncomeId}` : 'No aplica'}</td>
             <td class="amount">${escapeHtml(formatCurrency(amount, primaryCurrency))}</td>
           </tr>
         `
@@ -630,13 +689,14 @@ export function ReportsPage() {
           <tr>
             <th>Gasto</th>
             <th>Categoría</th>
+            <th>Ingreso relacionado</th>
             <th class="amount">Valor</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
         <tfoot>
           <tr>
-            <td colspan="2">Total</td>
+            <td colspan="3">Total</td>
             <td class="amount">${escapeHtml(formatCurrency(totalAmount, primaryCurrency))}</td>
           </tr>
         </tfoot>
@@ -652,10 +712,14 @@ export function ReportsPage() {
     const rows = reportExpenses
       .map((expense) => {
         const amount = getExpenseValue(expense, primaryCurrency)
+        const relatedIncome = expense.relatedIncomeId
+          ? incomesById.get(expense.relatedIncomeId)
+          : undefined
 
         return [
           `- ${getExpenseDisplayName(expense)}`,
           `Categoría: ${expense.category}`,
+          `Ingreso relacionado: ${relatedIncome ? getIncomeDisplayName(relatedIncome) : expense.relatedIncomeId ? `Ingreso #${expense.relatedIncomeId}` : 'No aplica'}`,
           `Valor: ${formatCurrency(amount, primaryCurrency)}`,
         ].join(' | ')
       })
@@ -678,27 +742,56 @@ export function ReportsPage() {
         (sum, income) => sum + getIncomeValue(income, primaryCurrency),
         0,
       )
+      const incomeSections = [
+        {
+          label: 'Servicios',
+          records: incomes.filter(isServiceIncome),
+        },
+        {
+          label: 'Ajustes',
+          records: incomes.filter(isAdjustmentIncome),
+        },
+        {
+          label: 'Otros ingresos históricos',
+          records: incomes.filter(
+            (income) =>
+              !isServiceIncome(income) && !isAdjustmentIncome(income),
+          ),
+        },
+      ].filter((section) => section.records.length > 0)
       const reportBodyText =
         incomes.length === 0
           ? 'No hay ingresos con los filtros seleccionados.'
-          : buildCitySubtotalTextBlocks(
-              incomes,
-              (income) => income.country,
-              (income) => income.city,
-              (income) => getIncomeValue(income, primaryCurrency),
-              buildIncomeTextRows,
-            )
+          : incomeSections
+              .map(
+                (section) =>
+                  `${section.label}\n${buildCitySubtotalTextBlocks(
+                    section.records,
+                    (income) => income.country,
+                    (income) => income.city,
+                    (income) => getIncomeValue(income, primaryCurrency),
+                    buildIncomeTextRows,
+                  )}`,
+              )
+              .join('\n\n')
       reportHtml =
         buildReportHeader(reportTitle, total, incomes.length) +
         (incomes.length === 0
           ? '<p class="empty">No hay ingresos con los filtros seleccionados.</p>'
-          : buildCitySubtotalBlocks(
-              incomes,
-              (income) => income.country,
-              (income) => income.city,
-              (income) => getIncomeValue(income, primaryCurrency),
-              buildIncomeTable,
-            ))
+          : incomeSections
+              .map(
+                (section) => `
+                  <h2>${escapeHtml(section.label)}</h2>
+                  ${buildCitySubtotalBlocks(
+                    section.records,
+                    (income) => income.country,
+                    (income) => income.city,
+                    (income) => getIncomeValue(income, primaryCurrency),
+                    buildIncomeTable,
+                  )}
+                `,
+              )
+              .join(''))
       reportText = `${buildReportTextHeader(
         reportTitle,
         total,
@@ -740,12 +833,13 @@ export function ReportsPage() {
     }
 
     if (kind === 'paymentType') {
-      const total = incomes.reduce(
+      const paymentIncomesOnly = incomes.filter(isServiceIncome)
+      const total = paymentIncomesOnly.reduce(
         (sum, income) => sum + getIncomeValue(income, primaryCurrency),
         0,
       )
       const paymentTypeMap = new Map<string, ServiceIncome[]>()
-      incomes.forEach((income) => {
+      paymentIncomesOnly.forEach((income) => {
         const paymentType = income.paymentType || 'SIN_TIPO'
         paymentTypeMap.set(paymentType, [
           ...(paymentTypeMap.get(paymentType) ?? []),
@@ -811,17 +905,17 @@ export function ReportsPage() {
         .join('\n\n')
 
       reportHtml =
-        buildReportHeader(reportTitle, total, incomes.length) +
-        (incomes.length === 0
-          ? '<p class="empty">No hay ingresos con los filtros seleccionados.</p>'
+        buildReportHeader(reportTitle, total, paymentIncomesOnly.length) +
+        (paymentIncomesOnly.length === 0
+          ? '<p class="empty">No hay servicios con los filtros seleccionados.</p>'
           : paymentTypeSections)
       reportText = `${buildReportTextHeader(
         reportTitle,
         total,
-        incomes.length,
+        paymentIncomesOnly.length,
       )}\n\n${
-        incomes.length === 0
-          ? 'No hay ingresos con los filtros seleccionados.'
+        paymentIncomesOnly.length === 0
+          ? 'No hay servicios con los filtros seleccionados.'
           : paymentTypeTextSections
       }`
     }
@@ -882,8 +976,8 @@ export function ReportsPage() {
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <PageHeader
-        backLabel="Más"
-        backTo="/more"
+        backLabel={isBasicUser ? 'Inicio' : 'Más'}
+        backTo={isBasicUser ? '/' : '/more'}
         eyebrow="Reportes"
         title="Generación de PDF"
       >
@@ -914,7 +1008,7 @@ export function ReportsPage() {
           </span>
         </div>
 
-        <div className={['mt-4 grid gap-3 sm:grid-cols-2', isBasicUser ? 'lg:grid-cols-4' : 'lg:grid-cols-5'].join(' ')}>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {!isBasicUser && (
             <label className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-600">Temporada</span>
@@ -966,7 +1060,7 @@ export function ReportsPage() {
             </select>
           </label>
 
-          <label className="flex flex-col gap-2">
+          {!isBasicUser && <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-600">Ciudad</span>
             <select
               className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
@@ -980,7 +1074,7 @@ export function ReportsPage() {
                 </option>
               ))}
             </select>
-          </label>
+          </label>}
 
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-600">

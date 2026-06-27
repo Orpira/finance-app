@@ -2,22 +2,22 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 
 import { getSettings } from '../../services/settingsService'
-import type { UserType } from '../../types/settings'
+import type { UsageMode } from '../../types/settings'
 
-export function UserTypeGuard({
+export function UsageModeGuard({
   allowed,
   children,
 }: {
-  allowed: UserType[]
+  allowed: UsageMode[]
   children: ReactNode
 }) {
-  const [userType, setUserType] = useState<UserType | null>(null)
+  const [usageMode, setUsageMode] = useState<UsageMode | null>(null)
 
   useEffect(() => {
-    getSettings().then((settings) => setUserType(settings.userType))
+    getSettings().then((settings) => setUsageMode(settings.usageMode))
   }, [])
 
-  if (!userType) {
+  if (!usageMode) {
     return (
       <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">
         Cargando...
@@ -25,7 +25,7 @@ export function UserTypeGuard({
     )
   }
 
-  if (!allowed.includes(userType)) {
+  if (!allowed.includes(usageMode)) {
     return <Navigate replace to="/" />
   }
 

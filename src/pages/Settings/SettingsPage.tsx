@@ -1,14 +1,18 @@
 import { Building2, ChevronRight, LockKeyhole } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
+import { UsageModeBadge } from '../../components/UsageModeBadge'
+import { getSettings } from '../../services/settingsService'
+import type { UsageMode } from '../../types/settings'
 
 const settingsLinks = [
   {
-    description: 'Nombre del negocio, ciudad, monedas, porcentaje, tasas y tema.',
+    description: 'Modo de uso, nombre, ubicación, monedas, porcentaje y tasas.',
     href: '/settings/business',
     icon: Building2,
-    label: 'Negocio y moneda',
+    label: 'Datos generales',
   },
   {
     description: 'Activar, cambiar o desactivar el PIN de acceso.',
@@ -19,14 +23,30 @@ const settingsLinks = [
 ]
 
 export function SettingsPage() {
+  const [usageMode, setUsageMode] = useState<UsageMode>('professional')
+
+  useEffect(() => {
+    getSettings().then((settings) => setUsageMode(settings.usageMode))
+    function handleSettingsChanged(event: Event) {
+      setUsageMode(
+        (event as CustomEvent<{ usageMode: UsageMode }>).detail.usageMode,
+      )
+    }
+    window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
+    return () =>
+      window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
+  }, [])
+
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <PageHeader
-        backLabel="Más"
-        backTo="/more"
+        backLabel={usageMode === 'basic' ? 'Inicio' : 'Más'}
+        backTo={usageMode === 'basic' ? '/' : '/more'}
         eyebrow="Configuración"
         title="Opciones de la aplicación"
-      />
+      >
+        <UsageModeBadge usageMode={usageMode} />
+      </PageHeader>
 
       <div className="grid gap-3">
         {settingsLinks.map((settingsLink) => {

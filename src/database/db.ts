@@ -8,6 +8,14 @@ import type { Expense } from '../types/expense'
 import type { AppLicense } from '../types/license'
 import type { ServiceIncome } from '../types/service'
 import type { AppSettings } from '../types/settings'
+import type { AutomationOutboxRecord } from '../types/automation'
+import {
+  resolveRecordUsageMode,
+  resolveUsageMode,
+  toLegacyUserType,
+} from '../utils/usageMode'
+import { assertAllExpenseAdjustmentsAreValid } from '../utils/expenseAdjustments'
+import { getIncomeType, normalizeAdjustmentIncome } from '../utils/incomeTypes'
 
 export const DEFAULT_SETTINGS_ID = 'app'
 
@@ -23,6 +31,7 @@ export function createDefaultSettings(): AppSettings {
     secondaryCurrency: 'COP',
     incomePercentage: 50,
     rateMode: 'manual',
+    usageMode: 'professional',
     userType: 'primary',
     theme: 'system',
     pinEnabled: false,
@@ -52,6 +61,7 @@ export class FinanceDB extends Dexie {
   cutoffReports!: Table<CutoffReport, number>
   earningPeriods!: Table<EarningPeriod, number>
   licenses!: Table<AppLicense, AppLicense['id']>
+  automationOutbox!: Table<AutomationOutboxRecord, string>
 
   constructor() {
     super('finance-app')
@@ -229,6 +239,14 @@ export class FinanceDB extends Dexie {
         const servicesTable = transaction.table<ServiceIncome, number>('services')
         const expensesTable = transaction.table<Expense, number>('expenses')
         const appointmentsTable = transaction.table<Appointment, number>('appointments')
+        const settings = await transaction
+          .table<AppSettings, AppSettings['id']>('settings')
+          .get(DEFAULT_SETTINGS_ID)
+
+        if (resolveUsageMode(settings) === 'basic') {
+          return
+        }
+
         const [services, expenses, appointments] = await Promise.all([
           servicesTable.toArray(),
           expensesTable.toArray(),
@@ -236,9 +254,6 @@ export class FinanceDB extends Dexie {
         ])
 
         if (periods.length === 0 && (services.length || expenses.length || appointments.length)) {
-          const settings = await transaction
-            .table<AppSettings, AppSettings['id']>('settings')
-            .get(DEFAULT_SETTINGS_ID)
           const dates = [
             ...services.map((item) => item.date),
             ...expenses.map((item) => item.date),
@@ -313,6 +328,129 @@ export class FinanceDB extends Dexie {
             license.licenseVersion ??= 1
           }),
       )
+
+    this.version(14)
+      .stores({
+        services:
+          '++id,date,currency,country,status,earningPeriodId,seasonPeriodId',
+        expenses:
+          '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId',
+        appointments:
+          '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+        cutoffReports:
+          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+        earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+        licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      })
+      .upgrade((transaction) =>
+        transaction
+          .table<AppSettings, AppSettings['id']>('settings')
+          .toCollection()
+          .modify((settings) => {
+            const usageMode = resolveUsageMode(settings)
+            settings.usageMode = usageMode
+            settings.userType = toLegacyUserType(usageMode)
+          }),
+      )
+
+    this.version(15)
+      .stores({
+        services:
+          '++id,date,currency,country,status,earningPeriodId,seasonPeriodId',
+        expenses:
+          '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId',
+        appointments:
+          '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+        cutoffReports:
+          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+        earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+        licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      })
+      .upgrade((transaction) =>
+        Promise.all([
+          transaction
+            .table<ServiceIncome, number>('services')
+            .toCollection()
+            .modify((income) => {
+              income.usageMode = resolveRecordUsageMode(income)
+            }),
+          transaction
+            .table<Expense, number>('expenses')
+            .toCollection()
+            .modify((expense) => {
+              expense.usageMode = resolveRecordUsageMode(expense)
+            }),
+        ]),
+      )
+
+    this.version(16)
+      .stores({
+        services:
+          '++id,date,currency,country,status,earningPeriodId,seasonPeriodId',
+        expenses:
+          '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId',
+        appointments:
+          '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+        cutoffReports:
+          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+        earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+        licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      })
+      .upgrade((transaction) =>
+        transaction
+          .table<ServiceIncome, number>('services')
+          .toCollection()
+          .modify((income) => {
+            income.type ??= 'ingreso'
+          }),
+      )
+
+    this.version(17)
+      .stores({
+        services:
+          '++id,date,currency,country,status,earningPeriodId,seasonPeriodId',
+        expenses:
+          '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId',
+        appointments:
+          '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+        cutoffReports:
+          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+        earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+        licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      })
+      .upgrade((transaction) =>
+        transaction
+          .table<ServiceIncome, number>('services')
+          .toCollection()
+          .modify((income) => {
+            income.type = getIncomeType(income)
+            Object.assign(income, normalizeAdjustmentIncome(income))
+          }),
+      )
+
+    this.version(18).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId',
+      expenses:
+        '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+    })
   }
 }
 
@@ -337,6 +475,7 @@ export async function resetDatabase() {
       db.exchangeRates,
       db.cutoffReports,
       db.earningPeriods,
+      db.automationOutbox,
     ],
     async () => {
       await Promise.all([
@@ -347,6 +486,7 @@ export async function resetDatabase() {
         db.exchangeRates.clear(),
         db.cutoffReports.clear(),
         db.earningPeriods.clear(),
+        db.automationOutbox.clear(),
       ])
 
       await db.settings.put(createDefaultSettings())
@@ -389,6 +529,23 @@ export async function exportDatabaseSnapshot() {
 export type DatabaseSnapshot = Awaited<ReturnType<typeof exportDatabaseSnapshot>>
 
 export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
+  const normalizedServices = (snapshot.services ?? []).map((income) =>
+    normalizeAdjustmentIncome({
+      ...income,
+      type: getIncomeType(income),
+      usageMode: resolveRecordUsageMode(income),
+    }),
+  )
+  const normalizedExpenses = (snapshot.expenses ?? []).map((expense) => ({
+    ...expense,
+    type: expense.type ?? 'gasto',
+    createdAt: expense.createdAt ?? `${expense.date}T00:00:00`,
+    usageMode: resolveRecordUsageMode(expense),
+  }))
+
+  // Validate before clearing local data: an invalid backup must never partially restore.
+  assertAllExpenseAdjustmentsAreValid(normalizedServices, normalizedExpenses)
+
   await db.transaction(
     'rw',
     [
@@ -399,6 +556,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
       db.exchangeRates,
       db.cutoffReports,
       db.earningPeriods,
+      db.automationOutbox,
     ],
     async () => {
       await Promise.all([
@@ -409,19 +567,26 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.exchangeRates.clear(),
         db.cutoffReports.clear(),
         db.earningPeriods.clear(),
+        db.automationOutbox.clear(),
       ])
 
       await Promise.all([
-        db.services.bulkPut(snapshot.services ?? []),
-        db.expenses.bulkPut(
-          (snapshot.expenses ?? []).map((expense) => ({
-            ...expense,
-            type: expense.type ?? 'gasto',
-            createdAt: expense.createdAt ?? `${expense.date}T00:00:00`,
-          })),
-        ),
+        db.services.bulkPut(normalizedServices),
+        db.expenses.bulkPut(normalizedExpenses),
         db.appointments.bulkPut(snapshot.appointments ?? []),
-        db.settings.bulkPut(snapshot.settings ?? []),
+        db.settings.bulkPut(
+          (snapshot.settings ?? []).map((settings) => {
+            const usageMode = resolveUsageMode(settings)
+
+            return {
+              ...createDefaultSettings(),
+              ...settings,
+              id: DEFAULT_SETTINGS_ID,
+              usageMode,
+              userType: toLegacyUserType(usageMode),
+            }
+          }),
+        ),
         db.exchangeRates.bulkPut(snapshot.exchangeRates ?? []),
         db.cutoffReports.bulkPut(snapshot.cutoffReports ?? []),
         db.earningPeriods.bulkPut(snapshot.earningPeriods ?? []),

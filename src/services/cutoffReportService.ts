@@ -3,6 +3,7 @@ import type { CutoffReport } from '../types/cutoffReport'
 import type { ServiceIncome } from '../types/service'
 import type { AppSettings } from '../types/settings'
 import { getStoredExpenseValue, getStoredIncomeValue } from '../utils/financeStats'
+import { isServiceIncome } from '../utils/incomeTypes'
 import { getSettings } from './settingsService'
 
 interface PeriodRange {
@@ -121,7 +122,7 @@ function sumIncomeByPaymentType(
   incomes: ServiceIncome[],
   currency: AppSettings['defaultCurrency'],
 ) {
-  return incomes.reduce<Record<string, number>>((totals, income) => {
+  return incomes.filter(isServiceIncome).reduce<Record<string, number>>((totals, income) => {
     const paymentType = income.paymentType || 'SIN_TIPO'
 
     return {
@@ -168,9 +169,9 @@ async function createCutoffReport(
     incomeTotal,
     expenseTotal,
     netTotal: incomeTotal - expenseTotal,
-    incomeCount: incomes.length,
+    incomeCount: incomes.filter(isServiceIncome).length,
     expenseCount: expenses.length,
-    serviceMinutes: incomes.reduce(
+    serviceMinutes: incomes.filter(isServiceIncome).reduce(
       (total, income) => total + (income.actualDuration ?? income.duration),
       0,
     ),
