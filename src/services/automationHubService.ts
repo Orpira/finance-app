@@ -13,6 +13,7 @@ const REQUEST_TIMEOUT_MS = 10_000
 export interface AutomationDeliveryResult {
   delivered: boolean
   error?: string
+  data?: Record<string, unknown>
 }
 
 interface AutomationHubConfig {
@@ -72,7 +73,16 @@ export async function sendAutomationEvent(
     })
 
     if (response.ok || response.status === 409) {
-      return { delivered: true }
+      let data: Record<string, unknown> | undefined
+      try {
+        const body = await response.json() as unknown
+        if (body && typeof body === 'object' && !Array.isArray(body)) {
+          data = body as Record<string, unknown>
+        }
+      } catch {
+        // Some n8n workflows acknowledge the event without a JSON body.
+      }
+      return { delivered: true, data }
     }
 
     const errorMessage = response.status === 401

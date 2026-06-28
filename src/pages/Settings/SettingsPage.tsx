@@ -1,4 +1,4 @@
-import { Building2, ChevronRight, LockKeyhole } from 'lucide-react'
+import { Building2, ChevronRight, LockKeyhole, MessagesSquare } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -8,6 +8,12 @@ import { getSettings } from '../../services/settingsService'
 import type { UsageMode } from '../../types/settings'
 
 const settingsLinks = [
+  {
+    description: 'Conecta WhatsApp y elige qué notificaciones enviar.',
+    href: '/settings/communication-channels',
+    icon: MessagesSquare,
+    label: 'Canales de comunicación',
+  },
   {
     description: 'Modo de uso, nombre, ubicación, monedas, porcentaje y tasas.',
     href: '/settings/business',

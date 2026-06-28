@@ -9,6 +9,7 @@ import type { AppLicense } from '../types/license'
 import type { ServiceIncome } from '../types/service'
 import type { AppSettings } from '../types/settings'
 import type { AutomationOutboxRecord } from '../types/automation'
+import type { CommunicationChannel } from '../types/communicationChannel'
 import {
   resolveRecordUsageMode,
   resolveUsageMode,
@@ -62,6 +63,7 @@ export class FinanceDB extends Dexie {
   earningPeriods!: Table<EarningPeriod, number>
   licenses!: Table<AppLicense, AppLicense['id']>
   automationOutbox!: Table<AutomationOutboxRecord, string>
+  communicationChannels!: Table<CommunicationChannel, CommunicationChannel['id']>
 
   constructor() {
     super('finance-app')
@@ -451,6 +453,23 @@ export class FinanceDB extends Dexie {
       licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
       automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
     })
+
+    this.version(19).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId',
+      expenses:
+        '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+      communicationChannels: 'id,type,provider,status,updatedAt',
+    })
   }
 }
 
@@ -476,6 +495,7 @@ export async function resetDatabase() {
       db.cutoffReports,
       db.earningPeriods,
       db.automationOutbox,
+      db.communicationChannels,
     ],
     async () => {
       await Promise.all([
@@ -487,6 +507,7 @@ export async function resetDatabase() {
         db.cutoffReports.clear(),
         db.earningPeriods.clear(),
         db.automationOutbox.clear(),
+        db.communicationChannels.clear(),
       ])
 
       await db.settings.put(createDefaultSettings())
@@ -503,6 +524,7 @@ export async function exportDatabaseSnapshot() {
     exchangeRates,
     cutoffReports,
     earningPeriods,
+    communicationChannels,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -512,6 +534,7 @@ export async function exportDatabaseSnapshot() {
       db.exchangeRates.toArray(),
       db.cutoffReports.toArray(),
       db.earningPeriods.toArray(),
+      db.communicationChannels.toArray(),
     ])
 
   return {
@@ -522,6 +545,7 @@ export async function exportDatabaseSnapshot() {
     exchangeRates,
     cutoffReports,
     earningPeriods,
+    communicationChannels,
     exportedAt: new Date().toISOString(),
   }
 }
@@ -557,6 +581,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
       db.cutoffReports,
       db.earningPeriods,
       db.automationOutbox,
+      db.communicationChannels,
     ],
     async () => {
       await Promise.all([
@@ -568,6 +593,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.cutoffReports.clear(),
         db.earningPeriods.clear(),
         db.automationOutbox.clear(),
+        db.communicationChannels.clear(),
       ])
 
       await Promise.all([
@@ -590,6 +616,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.exchangeRates.bulkPut(snapshot.exchangeRates ?? []),
         db.cutoffReports.bulkPut(snapshot.cutoffReports ?? []),
         db.earningPeriods.bulkPut(snapshot.earningPeriods ?? []),
+        db.communicationChannels.bulkPut(snapshot.communicationChannels ?? []),
       ])
 
       if (!snapshot.settings?.length) {

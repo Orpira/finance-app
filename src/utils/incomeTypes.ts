@@ -42,6 +42,7 @@ export function normalizeAdjustmentIncome<T extends ServiceIncome>(income: T): T
     ...income,
     paymentType: undefined,
     duration: 0,
+    durationLabel: undefined,
     actualDuration: 0,
     percentage: 0,
     earningPercentage: 0,

@@ -10,6 +10,7 @@ import type { EarningPeriod } from '../types/earningPeriod'
 import type { ExchangeRate } from '../types/exchangeRate'
 import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
+import type { CommunicationChannel } from '../types/communicationChannel'
 import { downloadText } from '../utils/download'
 import {
   decryptJsonPayload,
@@ -35,6 +36,7 @@ export interface BackupData {
   exchangeRates: ExchangeRate[]
   cutoffReports?: CutoffReport[]
   earningPeriods?: EarningPeriod[]
+  communicationChannels?: CommunicationChannel[]
 }
 
 export interface EncryptedBackupFile {
@@ -100,6 +102,7 @@ function backupDataToSnapshot(backupData: BackupData): DatabaseSnapshot {
     settings: backupData.settings ? [backupData.settings] : [],
     cutoffReports: backupData.cutoffReports ?? [],
     earningPeriods: backupData.earningPeriods ?? [],
+    communicationChannels: backupData.communicationChannels ?? [],
   }
 }
 
@@ -112,6 +115,7 @@ export async function generateBackupData(): Promise<BackupData> {
     exchangeRates,
     cutoffReports,
     earningPeriods,
+    communicationChannels,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -121,6 +125,7 @@ export async function generateBackupData(): Promise<BackupData> {
       db.exchangeRates.toArray(),
       db.cutoffReports.toArray(),
       db.earningPeriods.toArray(),
+      db.communicationChannels.toArray(),
     ])
 
   return {
@@ -134,6 +139,7 @@ export async function generateBackupData(): Promise<BackupData> {
     exchangeRates,
     cutoffReports,
     earningPeriods,
+    communicationChannels,
   }
 }
 

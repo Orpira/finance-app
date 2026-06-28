@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import { ServiceDurationSelect } from '../../components/forms/ServiceDurationSelect'
 import { PageHeader } from '../../components/layout/PageHeader'
 import {
   createServiceIncome,
@@ -36,6 +37,12 @@ import {
   isAdjustmentIncome,
   isServiceIncome,
 } from '../../utils/incomeTypes'
+import {
+  getNumericDurationLabel,
+  getServiceDurationOption,
+  isServiceDurationLabel,
+  type ServiceDurationLabel,
+} from '../../utils/serviceDuration'
 
 type SaveStatus = 'idle' | 'saving' | 'error' | 'duplicateHour'
 
@@ -108,7 +115,11 @@ export function IncomePage() {
   const [editingIncome, setEditingIncome] = useState<ServiceIncome | null>(null)
   const [incomeType, setIncomeType] = useState<ServiceIncomeType>('ingreso')
   const [date, setDate] = useState(() => formatInputDate(new Date()))
-  const [duration, setDuration] = useState(60)
+  const [duration, setDuration] = useState(0)
+  const [durationLabel, setDurationLabel] =
+    useState<ServiceDurationLabel | ''>('')
+  const [durationSelectionChanged, setDurationSelectionChanged] =
+    useState(false)
   const [totalAmount, setTotalAmount] = useState(0)
   const [currency, setCurrency] = useState<CurrencyCode>('EUR')
   const [paymentType, setPaymentType] = useState(paymentTypes[0].value)
@@ -181,7 +192,15 @@ export function IncomePage() {
         setEditingIncome(currentIncome)
         setIncomeType(getIncomeType(currentIncome))
         setDate(currentIncome.date)
-        setDuration(currentIncome.actualDuration ?? currentIncome.duration)
+        const currentDuration =
+          currentIncome.actualDuration ?? currentIncome.duration
+        setDuration(currentDuration)
+        setDurationLabel(
+          isServiceDurationLabel(currentIncome.durationLabel)
+            ? currentIncome.durationLabel
+            : getNumericDurationLabel(currentDuration) ?? '',
+        )
+        setDurationSelectionChanged(false)
         setTotalAmount(currentIncome.totalAmount)
         setCurrency(currentIncome.currency as CurrencyCode)
         setPaymentType(currentIncome.paymentType ?? paymentTypes[0].value)
@@ -274,10 +293,29 @@ export function IncomePage() {
     }
   }, [currency, date, exchangeRate, isEditing, realGain, settings])
 
+  function handleDurationChange(nextLabel: ServiceDurationLabel) {
+    const selectedOption = getServiceDurationOption(nextLabel)
+
+    if (!selectedOption) {
+      return
+    }
+
+    setDuration(selectedOption.durationMinutes)
+    setDurationLabel(selectedOption.durationLabel)
+    setDurationSelectionChanged(true)
+    setSaveError('')
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     if (!settings) {
+      return
+    }
+
+    if (isServiceType && !durationLabel) {
+      setSaveStatus('error')
+      setSaveError('Selecciona una duración antes de guardar.')
       return
     }
 
@@ -320,6 +358,11 @@ export function IncomePage() {
         type: isBasicUser ? 'ingreso' : incomeType,
         paymentType: isAdjustmentType ? undefined : paymentType,
         duration: isAdjustmentType ? 0 : duration,
+        durationLabel: isAdjustmentType
+          ? undefined
+          : durationSelectionChanged
+            ? durationLabel || undefined
+            : editingIncome?.durationLabel,
         notes: notes.trim() || undefined,
         totalAmount,
         currency,
@@ -459,18 +502,10 @@ export function IncomePage() {
         )}
 
         {isServiceType && (
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">
-              Duración en minutos
-            </span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              min={0}
-              onChange={(event) => setDuration(Number(event.target.value))}
-              type="number"
-              value={duration}
-            />
-          </label>
+          <ServiceDurationSelect
+            onChange={handleDurationChange}
+            value={durationLabel}
+          />
         )}
 
         <div className="grid gap-4">

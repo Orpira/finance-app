@@ -13,6 +13,11 @@ const EVENT_TYPES = [
   'income.created',
   'expense.created',
   'calendar.created',
+  'communication.whatsapp.qr.requested',
+  'communication.whatsapp.status.requested',
+  'communication.whatsapp.disconnect.requested',
+  'communication.whatsapp.test.requested',
+  'communication.whatsapp.preferences.updated',
 ] as const
 const N8N_TIMEOUT_MS = 10_000
 
@@ -21,6 +26,7 @@ const envelopeSchema = z.object({
   event: z.enum(EVENT_TYPES),
   createdAt: z.iso.datetime(),
   schemaVersion: z.literal(1),
+  source: z.literal('private-balance-pwa').optional(),
   data: z.record(z.string(), z.unknown()),
 }).strict()
 
@@ -83,13 +89,19 @@ export default async function handler(
         ...envelope,
         deviceCode: claims.sub,
         receivedAt: new Date().toISOString(),
-        source: 'private-balance',
+        source: envelope.source ?? 'private-balance-pwa',
       }),
       signal: controller.signal,
     })
 
     if (n8nResponse.ok || n8nResponse.status === 409) {
-      response.status(202).json({ accepted: true, eventId: envelope.eventId })
+      let data: unknown
+      try {
+        data = await n8nResponse.json()
+      } catch {
+        data = undefined
+      }
+      response.status(202).json({ accepted: true, eventId: envelope.eventId, data })
       return
     }
 

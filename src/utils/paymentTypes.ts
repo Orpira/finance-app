@@ -1,7 +1,7 @@
 export const paymentTypes = [
   { value: 'cash', label: 'Efectivo' },
   { value: 'transfer', label: 'Transferencia' },
-  { value: 'card', label: 'Tarjeta' },
+  { value: 'revolut', label: 'Revolut' },
   { value: 'bizum', label: 'Bizum' },
   { value: 'other', label: 'Otro' },
 ]

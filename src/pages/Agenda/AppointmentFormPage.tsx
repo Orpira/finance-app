@@ -4,6 +4,10 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import {
+  DEFAULT_DURATION_MINUTES,
+  DurationSelect,
+} from '../../components/forms/DurationSelect'
+import {
   createAppointment,
   getAppointmentById,
   updateAppointment,
@@ -94,7 +98,7 @@ export function AppointmentFormPage() {
     getInitialDate(searchParams.get('date')),
   )
   const [time, setTime] = useState('15:00')
-  const [duration, setDuration] = useState(90)
+  const [duration, setDuration] = useState(DEFAULT_DURATION_MINUTES)
   const [expectedAmount, setExpectedAmount] = useState(120)
   const [currency, setCurrency] = useState<CurrencyCode>('EUR')
   const [notes, setNotes] = useState('')
@@ -460,16 +464,7 @@ export function AppointmentFormPage() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">Duración</span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              min={0}
-              onChange={(event) => setDuration(Number(event.target.value))}
-              type="number"
-              value={duration}
-            />
-          </label>
+          <DurationSelect onChange={setDuration} value={duration} />
 
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">Valor</span>

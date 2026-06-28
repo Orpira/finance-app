@@ -44,15 +44,28 @@ Cada cambio de variables de Vercel requiere un nuevo despliegue.
 ```json
 {
   "eventId": "uuid-v4",
-  "event": "income.created | expense.created | calendar.created",
+  "event": "income.created | expense.created | calendar.created | communication.whatsapp.*",
   "createdAt": "2026-06-27T12:00:00.000Z",
   "schemaVersion": 1,
   "data": {},
   "deviceCode": "PB-XXXX-XXXX-XXXX",
   "receivedAt": "2026-06-27T12:00:01.000Z",
-  "source": "private-balance"
+  "source": "private-balance-pwa"
 }
 ```
+
+Los eventos interactivos del módulo de comunicación son:
+
+- `communication.whatsapp.qr.requested`
+- `communication.whatsapp.status.requested`
+- `communication.whatsapp.disconnect.requested`
+- `communication.whatsapp.test.requested`
+- `communication.whatsapp.preferences.updated`
+
+Para QR y estado, el workflow debe responder JSON. Puede incluir `status`,
+`connectedNumber` y `qrCode` o `base64`; el QR debe ser una imagen HTTPS, un
+data URL PNG/JPEG/WebP o el base64 de un PNG. La API Key de Evolution se
+configura únicamente como credencial de n8n.
 
 ## Configuración obligatoria en n8n
 

@@ -2,6 +2,11 @@ export const PRIVATE_BALANCE_AUTOMATION_EVENTS = [
   'income.created',
   'expense.created',
   'calendar.created',
+  'communication.whatsapp.qr.requested',
+  'communication.whatsapp.status.requested',
+  'communication.whatsapp.disconnect.requested',
+  'communication.whatsapp.test.requested',
+  'communication.whatsapp.preferences.updated',
 ] as const
 
 export type PrivateBalanceEvent =
@@ -12,6 +17,7 @@ export interface AutomationEventEnvelope {
   event: PrivateBalanceEvent
   createdAt: string
   schemaVersion: 1
+  source?: 'private-balance-pwa'
   data: Record<string, unknown>
 }
 

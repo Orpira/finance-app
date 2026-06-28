@@ -135,6 +135,11 @@ Campos clave:
 - `appointments`
 - `settings`
 - `exchangeRates`
+- `cutoffReports`
+- `earningPeriods`
+- `licenses`
+- `automationOutbox`
+- `communicationChannels`
 
 ### 6.2. sincronización de configuración
 
@@ -191,6 +196,12 @@ Genera reportes en:
 
 - `exportBackup()` — descarga `backup.json` con snapshot completo.
 - `importBackup()` — importa datos desde un archivo JSON.
+
+### 7.9. `communicationChannelService`
+
+Mantiene localmente el canal WhatsApp y sus preferencias, y envía a n8n las
+solicitudes de QR, estado, desconexión, prueba y actualización de preferencias.
+La PWA nunca llama directamente a Evolution API ni almacena su API Key.
 
 ## 8. Flujo de conversión de moneda
 

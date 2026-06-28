@@ -31,6 +31,7 @@ import {
   isAdjustmentIncome,
   isServiceIncome,
 } from '../../utils/incomeTypes'
+import { getIncomeDurationDisplay } from '../../utils/serviceDuration'
 
 type Period = 'week' | 'month' | 'year'
 type ReportKind = 'income' | 'expense' | 'paymentType'
@@ -595,7 +596,7 @@ export function ReportsPage() {
             <td>${escapeHtml(getIncomeDisplayName(income))}</td>
             <td>${escapeHtml(getIncomeTypeLabel(income))}</td>
             <td>${escapeHtml(getPaymentTypeLabel(income.paymentType))}</td>
-            <td>${isServiceIncome(income) ? `${income.actualDuration ?? income.duration} min` : 'No aplica'}</td>
+            <td>${isServiceIncome(income) ? escapeHtml(getIncomeDurationDisplay(income)) : 'No aplica'}</td>
             <td>${adjustmentCount > 0 ? `Afectado por ajuste (${adjustmentCount})` : 'Sin ajustes'}</td>
             <td class="amount">${escapeHtml(formatCurrency(amount, primaryCurrency))}</td>
           </tr>
@@ -646,7 +647,7 @@ export function ReportsPage() {
           `- ${getIncomeDisplayName(income)}`,
           `Clase: ${getIncomeTypeLabel(income)}`,
           `Tipo: ${getPaymentTypeLabel(income.paymentType)}`,
-          `Duración: ${isServiceIncome(income) ? `${income.actualDuration ?? income.duration} min` : 'No aplica'}`,
+          `Duración: ${isServiceIncome(income) ? getIncomeDurationDisplay(income) : 'No aplica'}`,
           adjustmentCount > 0 ? `Afectado por ajuste (${adjustmentCount})` : 'Sin ajustes relacionados',
           `Valor: ${formatCurrency(amount, primaryCurrency)}`,
         ].join(' | ')

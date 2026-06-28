@@ -22,6 +22,8 @@ export interface ServiceIncome {
 
   duration: number;
 
+  durationLabel?: string;
+
   totalAmount: number;
 
   currency: string;

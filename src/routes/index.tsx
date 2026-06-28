@@ -21,6 +21,7 @@ import SettingsBackupPage from '../pages/Settings/SettingsBackupPage'
 import SettingsBusinessPage from '../pages/Settings/SettingsBusinessPage'
 import SettingsPage from '../pages/Settings/SettingsPage'
 import SettingsSecurityPage from '../pages/Settings/SettingsSecurityPage'
+import CommunicationChannelsPage from '../pages/Settings/CommunicationChannelsPage'
 import DebugPage from '../pages/Debug/DebugPage'
 import SeasonsPage from '../pages/Seasons/SeasonsPage'
 import SeasonFormPage from '../pages/Seasons/SeasonFormPage'
@@ -64,6 +65,7 @@ export function RouterProvider() {
             <Route path="settings/backup" element={<SettingsBackupPage />} />
             <Route path="settings/business" element={<SettingsBusinessPage />} />
             <Route path="settings/security" element={<SettingsSecurityPage />} />
+            <Route path="settings/communication-channels" element={<CommunicationChannelsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="more" element={<MorePage />} />
             <Route path="debug" element={<DebugPage />} />

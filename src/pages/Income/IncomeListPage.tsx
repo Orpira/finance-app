@@ -21,6 +21,7 @@ import { countries } from '../../utils/countries'
 import { formatCurrency } from '../../utils/currency'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 import { getPaymentTypeLabel } from '../../utils/paymentTypes'
+import { getIncomeDurationDisplay } from '../../utils/serviceDuration'
 import {
   isBasicMode,
   recordBelongsToUsageMode,
@@ -475,7 +476,7 @@ export function IncomeListPage() {
                           </span>}
                         </div>
                         {!isBasicMode(settings ?? undefined) && isService && <p className="mt-1 text-sm text-slate-500">
-                          {income.actualDuration ?? income.duration} min ·{' '}
+                          {getIncomeDurationDisplay(income)} ·{' '}
                           {income.percentage}% ·{' '}
                           {getPaymentTypeLabel(income.paymentType)}
                         </p>}
