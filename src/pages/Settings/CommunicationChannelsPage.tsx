@@ -4,6 +4,7 @@ import {
   Power,
   RefreshCw,
   Send,
+  ShieldCheck,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -17,10 +18,12 @@ import {
   updateWhatsAppNotificationPreferences,
   type CommunicationChannelActionResult,
 } from '../../services/communicationChannelService'
+import { getOrCreateDeviceIdentity } from '../../services/deviceIdentityService'
 import type {
   CommunicationChannel,
   WhatsAppNotificationPreferences,
 } from '../../types/communicationChannel'
+import type { DeviceIdentity } from '../../types/deviceIdentity'
 
 const STATUS_LABELS = {
   not_configured: 'No configurado',
@@ -50,17 +53,33 @@ const PREFERENCE_OPTIONS: Array<{
 
 type ActionName = 'qr' | 'status' | 'disconnect' | 'test' | 'preferences'
 
+function maskIdentityCode(value: string) {
+  const prefixEnd = value.indexOf('-', value.indexOf('-') + 1)
+  const prefix = prefixEnd > 0 ? value.slice(0, prefixEnd) : value.slice(0, 8)
+  return `${prefix}-••••••••-${value.slice(-4)}`
+}
+
+const PROVISIONING_LABELS = {
+  pending: 'Pendiente de envío',
+  provisioned: 'Provisionado',
+  error: 'Pendiente de reintento',
+} as const
+
 export function CommunicationChannelsPage() {
   const [channel, setChannel] = useState<CommunicationChannel | null>(null)
+  const [identity, setIdentity] = useState<DeviceIdentity | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeAction, setActiveAction] = useState<ActionName | null>(null)
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     let active = true
-    getWhatsAppChannel()
-      .then((storedChannel) => {
-        if (active) setChannel(storedChannel)
+    Promise.all([getWhatsAppChannel(), getOrCreateDeviceIdentity()])
+      .then(([storedChannel, storedIdentity]) => {
+        if (active) {
+          setChannel(storedChannel)
+          setIdentity(storedIdentity)
+        }
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -239,6 +258,44 @@ export function CommunicationChannelsPage() {
           )}
         </div>
       </article>
+
+      {identity && (
+        <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+              <ShieldCheck className="size-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-semibold text-slate-950">Identidad técnica</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Identificadores locales persistentes usados para conectar este dispositivo de forma segura.
+              </p>
+              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Usuario</dt>
+                  <dd className="mt-1 break-all font-mono text-xs text-slate-700">{maskIdentityCode(identity.userCode)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Dispositivo</dt>
+                  <dd className="mt-1 break-all font-mono text-xs text-slate-700">{maskIdentityCode(identity.deviceCode)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Plataforma</dt>
+                  <dd className="mt-1 capitalize text-slate-700">{identity.platform}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Provisionamiento</dt>
+                  <dd className="mt-1 text-slate-700">
+                    {identity.provisioningStatus
+                      ? PROVISIONING_LABELS[identity.provisioningStatus]
+                      : 'Sin estado'}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </article>
+      )}
 
       <p className="text-xs leading-5 text-slate-500">
         Private Balance se comunica únicamente con n8n. Las credenciales de Evolution API permanecen fuera de este dispositivo.

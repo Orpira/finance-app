@@ -29,7 +29,11 @@ export default function handler(
       input.activationCode,
       input.deviceCode,
     )
-    const jwt = issueAutomationJwt(input.deviceCode, license.licenseType)
+    const jwt = issueAutomationJwt(
+      input.deviceCode,
+      license.licenseType,
+      license.expiresAt,
+    )
 
     response.status(200).json(jwt)
   } catch {

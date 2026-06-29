@@ -17,6 +17,18 @@ const DEFAULT_ALLOWED_NATIVE_ORIGINS = new Set([
   'https://localhost',
 ])
 
+function isAllowedLocalOrigin(origin: string) {
+  try {
+    const url = new URL(origin)
+    return (
+      ['http:', 'https:'].includes(url.protocol) &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
 function configuredOrigins() {
   return new Set(
     (process.env.PRIVATE_BALANCE_ALLOWED_ORIGINS ?? '')
@@ -40,6 +52,7 @@ export function applyApiSecurityHeaders(
   const allowed = origin && (
     sameOrigin ||
     DEFAULT_ALLOWED_NATIVE_ORIGINS.has(origin) ||
+    isAllowedLocalOrigin(origin) ||
     configuredOrigins().has(origin)
   )
 
@@ -49,9 +62,20 @@ export function applyApiSecurityHeaders(
   }
 
   response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Idempotency-Key')
+  response.setHeader(
+    'Access-Control-Allow-Headers',
+    'Authorization, Content-Type, Idempotency-Key',
+  )
   response.setHeader('Cache-Control', 'no-store')
-  response.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
+  response.setHeader(
+    'Content-Security-Policy',
+    "default-src 'none'; frame-ancestors 'none'",
+  )
+  response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+  response.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=()',
+  )
   response.setHeader('Referrer-Policy', 'no-referrer')
   response.setHeader('X-Content-Type-Options', 'nosniff')
 
@@ -76,6 +100,15 @@ export function rejectInvalidRequest(
   if (request.method !== 'POST') {
     response.setHeader('Allow', 'POST, OPTIONS')
     response.status(405).json({ error: 'Método no permitido.' })
+    return true
+  }
+
+  const contentType = request.headers['content-type']
+  if (
+    typeof contentType !== 'string' ||
+    !contentType.toLowerCase().startsWith('application/json')
+  ) {
+    response.status(415).json({ error: 'Content-Type no permitido.' })
     return true
   }
 

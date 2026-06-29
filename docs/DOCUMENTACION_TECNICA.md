@@ -203,6 +203,25 @@ Mantiene localmente el canal WhatsApp y sus preferencias, y envía a n8n las
 solicitudes de QR, estado, desconexión, prueba y actualización de preferencias.
 La PWA nunca llama directamente a Evolution API ni almacena su API Key.
 
+### 7.10. `deviceIdentityService`
+
+Genera una sola vez `PB-USER-<uuid>` y `PB-DEVICE-<uuid>`, los conserva en la
+tabla Dexie `deviceIdentity` y provisiona el dispositivo mediante la outbox.
+La identidad no forma parte de backups ni resets ordinarios para evitar clonar
+un dispositivo al restaurar datos en otro equipo.
+
+### 7.11. Gestión de licencia
+
+`SettingsLicensePage` permite consultar la activación actual y reemplazar una
+licencia V1 o V2 por una licencia firmada V2 sin eliminar el registro vigente
+antes de validar el nuevo código. `verifySignedLicense()` comprueba firma,
+dispositivo y vencimiento; solo después `activateSignedLicense()` reemplaza la
+fila `current` de la tabla `licenses`. La autorización temporal de Automation
+Hub se limpia y la outbox vuelve a intentar sus eventos con la nueva licencia.
+
+La activación no comparte transacciones ni operaciones destructivas con las
+tablas financieras.
+
 ## 8. Flujo de conversión de moneda
 
 ### 8.1. Modo manual vs automático

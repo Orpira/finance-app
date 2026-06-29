@@ -96,12 +96,25 @@ En `Configuración` puedes ajustar:
 - modo de tasa de cambio (`Automático` o `Manual`)
 - tema visual (`Sistema`, `Claro`, `Oscuro`)
 - activar, cambiar o desactivar el PIN de acceso
+- consultar y actualizar la licencia del dispositivo
 
 ### 8.1. Gestión de PIN
 
 - Para activar el PIN, ingresa un código de 4 a 6 dígitos y confírmalo.
 - Para cambiar el PIN, ingresa el PIN actual y el nuevo código.
 - Para desactivar el PIN, ingresa el PIN actual y selecciona `Desactivar`.
+
+### 8.2. Gestión de licencia
+
+En `Configuración → Licencia` puedes consultar el tipo, versión y vencimiento,
+copiar el código del dispositivo y actualizar una licencia V1 a una licencia
+firmada V2. La aplicación valida la firma, el dispositivo y la vigencia antes
+de reemplazar la activación. Este proceso no modifica ingresos, egresos, citas,
+temporadas ni configuraciones financieras.
+
+Las automatizaciones y los canales de comunicación requieren una licencia V2.
+El código firmado distingue mayúsculas y minúsculas y debe comenzar por
+`PB-LIC-V2.`.
 
 ## 9. Exportar e importar datos
 

@@ -2,11 +2,8 @@ import { Bell, CalendarPlus, Plus, Save, Trash2 } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
+import { ServiceDurationSelect } from '../../components/forms/ServiceDurationSelect'
 import { PageHeader } from '../../components/layout/PageHeader'
-import {
-  DEFAULT_DURATION_MINUTES,
-  DurationSelect,
-} from '../../components/forms/DurationSelect'
 import {
   createAppointment,
   getAppointmentById,
@@ -19,19 +16,24 @@ import type {
   AppointmentReminder,
   AppointmentReminderUnit,
 } from '../../types/appointment'
-import type { AppSettings, CurrencyCode } from '../../types/settings'
+import type { AppSettings } from '../../types/settings'
 import {
   createEmptyReminder,
   hasInvalidReminders,
 } from '../../utils/appointmentReminders'
 import { getTodayInputDate } from '../../utils/currency'
-import { currencies } from '../../utils/countries'
 import { getActiveEarningPeriod, isEarningPeriodClosed } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import {
   isLocationSeasonClosed,
   reopenLocationSeason,
 } from '../../utils/locationSeasons'
+import {
+  getNumericDurationLabel,
+  getServiceDurationOption,
+  isServiceDurationLabel,
+  type ServiceDurationLabel,
+} from '../../utils/serviceDuration'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 type SeasonActionStatus = 'idle' | 'reopening' | 'reopened' | 'error'
@@ -98,9 +100,10 @@ export function AppointmentFormPage() {
     getInitialDate(searchParams.get('date')),
   )
   const [time, setTime] = useState('15:00')
-  const [duration, setDuration] = useState(DEFAULT_DURATION_MINUTES)
+  const [duration, setDuration] = useState(0)
+  const [durationLabel, setDurationLabel] =
+    useState<ServiceDurationLabel | ''>('')
   const [expectedAmount, setExpectedAmount] = useState(120)
-  const [currency, setCurrency] = useState<CurrencyCode>('EUR')
   const [notes, setNotes] = useState('')
   const [reminders, setReminders] = useState<AppointmentReminder[]>([])
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
@@ -145,7 +148,6 @@ export function AppointmentFormPage() {
 
       setSettings(currentSettings)
       setActivePeriod(currentPeriod ?? null)
-      setCurrency(currentSettings.defaultCurrency)
 
       if (!parsedAppointmentId) {
         return
@@ -181,8 +183,12 @@ export function AppointmentFormPage() {
       setDate(getDateFromDateTime(appointment.dateTime))
       setTime(getTimeFromDateTime(appointment.dateTime))
       setDuration(appointment.duration)
+      setDurationLabel(
+        isServiceDurationLabel(appointment.durationLabel)
+          ? appointment.durationLabel
+          : getNumericDurationLabel(appointment.duration) ?? '',
+      )
       setExpectedAmount(appointment.expectedAmount)
-      setCurrency(appointment.currency as CurrencyCode)
       setNotes(appointment.notes ?? '')
       setReminders(
         (appointment.reminders ?? []).map((reminder) => ({
@@ -205,6 +211,18 @@ export function AppointmentFormPage() {
     if (isScheduleInPast(nextDate, time, now)) {
       setTime(formatInputTime(now))
     }
+  }
+
+  function handleDurationChange(nextLabel: ServiceDurationLabel) {
+    const selectedOption = getServiceDurationOption(nextLabel)
+
+    if (!selectedOption) {
+      return
+    }
+
+    setDuration(selectedOption.durationMinutes)
+    setDurationLabel(selectedOption.durationLabel)
+    setSaveStatus('idle')
   }
 
   function addReminder() {
@@ -276,7 +294,7 @@ export function AppointmentFormPage() {
       return
     }
 
-    if (isSelectedScheduleInPast || hasReminderErrors) {
+    if (!durationLabel || isSelectedScheduleInPast || hasReminderErrors) {
       setSaveStatus('error')
       return
     }
@@ -300,8 +318,10 @@ export function AppointmentFormPage() {
     const input = {
       dateTime: `${date}T${time}`,
       duration,
+      durationLabel,
       expectedAmount,
-      currency,
+      currency:
+        editingAppointment?.currency ?? currentSettings.defaultCurrency,
       country: editingAppointment?.country ?? currentSettings.country,
       city: editingAppointment?.city ?? currentSettings.city,
       notes: notes.trim(),
@@ -464,7 +484,10 @@ export function AppointmentFormPage() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <DurationSelect onChange={setDuration} value={duration} />
+          <ServiceDurationSelect
+            onChange={handleDurationChange}
+            value={durationLabel}
+          />
 
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">Valor</span>
@@ -478,21 +501,6 @@ export function AppointmentFormPage() {
             />
           </label>
         </div>
-
-        <label className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-slate-700">Moneda</span>
-          <select
-            className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-            onChange={(event) => setCurrency(event.target.value as CurrencyCode)}
-            value={currency}
-          >
-            {currencies.map((currencyOption) => (
-              <option key={currencyOption.value} value={currencyOption.value}>
-                {currencyOption.label}
-              </option>
-            ))}
-          </select>
-        </label>
 
         <label className="flex flex-col gap-2">
           <span className="text-sm font-medium text-slate-700">Notas</span>
@@ -600,7 +608,9 @@ export function AppointmentFormPage() {
           <p className="text-sm text-slate-500" role="status">
             {saveStatus === 'saved' && 'Cita guardada'}
             {saveStatus === 'error' &&
-              (isSelectedScheduleInPast
+              (!durationLabel
+                ? 'Selecciona una duración'
+                : isSelectedScheduleInPast
                 ? 'Selecciona una fecha y hora actual o futura'
                 : hasReminderErrors
                   ? 'Revisa los recordatorios'
@@ -620,6 +630,7 @@ export function AppointmentFormPage() {
               disabled={
                 saveStatus === 'saving' ||
                 isCurrentLocationClosed ||
+                !durationLabel ||
                 expectedAmount <= 0 ||
                 isSelectedScheduleInPast ||
                 hasReminderErrors

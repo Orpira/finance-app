@@ -33,6 +33,7 @@ import {
 } from '../../utils/appointmentReminders'
 import { formatCurrency } from '../../utils/currency'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
+import { getDurationDisplay } from '../../utils/serviceDuration'
 
 function formatInputDate(date: Date) {
   const year = date.getFullYear()
@@ -412,7 +413,11 @@ export function AgendaPage() {
                           </p>
                           <p className="mt-1 text-sm text-slate-500">
                             {getTimeFromDateTime(appointment.dateTime)} ·{' '}
-                            {appointment.duration} minutos previstos ·{' '}
+                            {getDurationDisplay(
+                              appointment.duration,
+                              appointment.durationLabel,
+                            )}{' '}
+                            previstos ·{' '}
                             {formatCurrency(
                               appointment.expectedAmount,
                               appointment.currency as CurrencyCode,

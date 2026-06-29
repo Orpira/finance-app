@@ -6,6 +6,7 @@ import type {
   WhatsAppNotificationPreferences,
 } from '../types/communicationChannel'
 import { sendAutomationEvent } from './automationHubService'
+import { getOrCreateDeviceIdentity } from './deviceIdentityService'
 
 const WHATSAPP_CHANNEL_ID = 'whatsapp' as const
 const DEFAULT_INSTANCE_NAME = 'private-balance'
@@ -124,17 +125,30 @@ async function sendChannelEvent(
   channel: CommunicationChannel,
   additionalData: Record<string, unknown> = {},
 ) {
+  const identity = await getOrCreateDeviceIdentity()
+  const data = event === 'device.whatsapp.connect.requested'
+    ? {
+        userCode: identity.userCode,
+        deviceCode: identity.deviceCode,
+      }
+    : {
+        userCode: identity.userCode,
+        deviceCode: identity.deviceCode,
+        deviceName: identity.deviceName,
+        platform: identity.platform,
+        appVersion: identity.appVersion,
+        provider: channel.provider,
+        instanceName: channel.instanceName,
+        ...additionalData,
+      }
+
   return sendAutomationEvent({
     eventId: createEventId(),
     event,
     createdAt: new Date().toISOString(),
     schemaVersion: 1,
     source: 'private-balance-pwa',
-    data: {
-      provider: channel.provider,
-      instanceName: channel.instanceName,
-      ...additionalData,
-    },
+    data,
   })
 }
 
@@ -149,8 +163,12 @@ async function markDeliveryFailure(error?: string) {
 
 export async function requestWhatsAppQr(): Promise<CommunicationChannelActionResult> {
   const channel = await createOrUpdateWhatsAppChannel({ status: 'pending' })
-  const result = await sendChannelEvent('communication.whatsapp.qr.requested', channel)
+  const result = await sendChannelEvent('device.whatsapp.connect.requested', channel)
   if (!result.delivered) return markDeliveryFailure(result.error)
+
+  if (import.meta.env.DEV) {
+    console.info('[Private Balance] Evento WhatsApp QR enviado')
+  }
 
   const remote = responseChanges(result.data)
   const updated = await createOrUpdateWhatsAppChannel({

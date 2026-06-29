@@ -18,6 +18,7 @@ import { UsageModeBadge } from '../components/UsageModeBadge'
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
 import { runAutomaticDriveBackupIfNeeded } from '../services/backupService'
 import { initializeAutomationOutbox } from '../services/automationOutboxService'
+import { provisionDeviceIdentity } from '../services/deviceIdentityService'
 import { migrateLegacyRecordsToSeasons } from '../services/earningPeriodService'
 import { getRuntimeIntegrityStatus } from '../services/playIntegrityService'
 import { initializeReminderNotifications } from '../services/reminderService'
@@ -65,6 +66,7 @@ let automaticBackupCheckStarted = false
 let earningPeriodCheckStarted = false
 let runtimeIntegrityCheckStarted = false
 let automationOutboxStarted = false
+let deviceProvisioningStarted = false
 
 export function AppLayout() {
   const location = useLocation()
@@ -91,6 +93,13 @@ export function AppLayout() {
         if (usesProfessionalAgenda(settings)) {
           initializeReminderNotifications().catch((error) => {
             console.warn('No se pudieron inicializar las alarmas nativas.', error)
+          })
+        }
+
+        if (!deviceProvisioningStarted) {
+          deviceProvisioningStarted = true
+          provisionDeviceIdentity().catch((error) => {
+            console.warn('No se pudo provisionar la identidad del dispositivo.', error)
           })
         }
       })

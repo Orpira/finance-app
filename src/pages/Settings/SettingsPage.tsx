@@ -1,4 +1,10 @@
-import { Building2, ChevronRight, LockKeyhole, MessagesSquare } from 'lucide-react'
+import {
+  BadgeCheck,
+  Building2,
+  ChevronRight,
+  LockKeyhole,
+  MessagesSquare,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -8,6 +14,12 @@ import { getSettings } from '../../services/settingsService'
 import type { UsageMode } from '../../types/settings'
 
 const settingsLinks = [
+  {
+    description: 'Consulta o actualiza la licencia segura del dispositivo.',
+    href: '/settings/license',
+    icon: BadgeCheck,
+    label: 'Licencia',
+  },
   {
     description: 'Conecta WhatsApp y elige qué notificaciones enviar.',
     href: '/settings/communication-channels',

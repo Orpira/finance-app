@@ -19,6 +19,8 @@ export interface Appointment {
 
   duration: number;
 
+  durationLabel?: string;
+
   expectedAmount: number;
 
   currency: string;

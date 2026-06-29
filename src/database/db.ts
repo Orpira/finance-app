@@ -10,6 +10,7 @@ import type { ServiceIncome } from '../types/service'
 import type { AppSettings } from '../types/settings'
 import type { AutomationOutboxRecord } from '../types/automation'
 import type { CommunicationChannel } from '../types/communicationChannel'
+import type { DeviceIdentity } from '../types/deviceIdentity'
 import {
   resolveRecordUsageMode,
   resolveUsageMode,
@@ -17,6 +18,7 @@ import {
 } from '../utils/usageMode'
 import { assertAllExpenseAdjustmentsAreValid } from '../utils/expenseAdjustments'
 import { getIncomeType, normalizeAdjustmentIncome } from '../utils/incomeTypes'
+import { getNumericDurationLabel } from '../utils/serviceDuration'
 
 export const DEFAULT_SETTINGS_ID = 'app'
 
@@ -64,6 +66,7 @@ export class FinanceDB extends Dexie {
   licenses!: Table<AppLicense, AppLicense['id']>
   automationOutbox!: Table<AutomationOutboxRecord, string>
   communicationChannels!: Table<CommunicationChannel, CommunicationChannel['id']>
+  deviceIdentity!: Table<DeviceIdentity, DeviceIdentity['id']>
 
   constructor() {
     super('finance-app')
@@ -469,6 +472,52 @@ export class FinanceDB extends Dexie {
       licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
       automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
       communicationChannels: 'id,type,provider,status,updatedAt',
+    })
+
+    this.version(20)
+      .stores({
+        services:
+          '++id,date,currency,country,status,earningPeriodId,seasonPeriodId',
+        expenses:
+          '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId',
+        appointments:
+          '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+        cutoffReports:
+          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+        earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+        licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+        automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+        communicationChannels: 'id,type,provider,status,updatedAt',
+      })
+      .upgrade((transaction) =>
+        transaction
+          .table<Appointment, number>('appointments')
+          .toCollection()
+          .modify((appointment) => {
+            appointment.durationLabel ??= getNumericDurationLabel(
+              appointment.duration,
+            )
+          }),
+      )
+
+    this.version(21).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId',
+      expenses:
+        '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+      communicationChannels: 'id,type,provider,status,updatedAt',
+      deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
     })
   }
 }

@@ -2,6 +2,8 @@ export const PRIVATE_BALANCE_AUTOMATION_EVENTS = [
   'income.created',
   'expense.created',
   'calendar.created',
+  'device.provision.requested',
+  'device.whatsapp.connect.requested',
   'communication.whatsapp.qr.requested',
   'communication.whatsapp.status.requested',
   'communication.whatsapp.disconnect.requested',

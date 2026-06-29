@@ -107,6 +107,7 @@ export async function completeAppointmentAsIncome(
     date: serviceDate,
     status: 'FINALIZADO',
     duration: actualDuration,
+    durationLabel: appointment.durationLabel,
     totalAmount: appointment.expectedAmount,
     currency: appointment.currency,
     earningPeriodId: activePeriod.id,

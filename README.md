@@ -115,6 +115,9 @@ Los eventos `income.created`, `expense.created` y `calendar.created` se guardan
 en una outbox IndexedDB dentro de la misma transacción que el registro local.
 Una Vercel Function valida la licencia V2, emite un JWT temporal y reenvía los
 eventos a n8n sin exponer el Bearer Token en el frontend o APK.
+La web usa el proxy del mismo origen y Android usa únicamente la URL pública
+`VITE_API_BASE_URL`; las credenciales de n8n son siempre variables de
+servidor sin prefijo `VITE_`.
 
 La configuración del proxy, variables, reintentos e idempotencia está en
 [`docs/AUTOMATION_HUB.md`](docs/AUTOMATION_HUB.md).
@@ -155,6 +158,11 @@ de licencia, fecha de emisión, expiración y funcionalidades habilitadas.
 
 La licencia se guarda en la tabla Dexie `licenses`. No se incluye en los
 backups financieros, para evitar transferir una activación entre dispositivos.
+
+Una licencia activa puede consultarse o actualizarse sin borrar datos desde
+`Configuración → Licencia`. El flujo acepta únicamente códigos V2 firmados,
+valida su vínculo con el dispositivo y conserva intactas todas las tablas
+financieras.
 
 ## Generación de claves
 

@@ -5,6 +5,7 @@ import {
   activateLicense,
   getDeviceCode,
 } from '../../services/licenseService'
+import { copyText } from '../../utils/clipboard'
 
 type LicenseScreenMode = 'activation' | 'expired' | 'clock-tampered'
 
@@ -12,22 +13,6 @@ interface LicenseActivationPageProps {
   mode?: LicenseScreenMode
   onActivated?: () => void | Promise<void>
   onRetry?: () => void | Promise<void>
-}
-
-async function copyText(value: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value)
-    return
-  }
-
-  const textArea = document.createElement('textarea')
-  textArea.value = value
-  textArea.style.position = 'fixed'
-  textArea.style.opacity = '0'
-  document.body.appendChild(textArea)
-  textArea.select()
-  document.execCommand('copy')
-  textArea.remove()
 }
 
 export function LicenseActivationPage({

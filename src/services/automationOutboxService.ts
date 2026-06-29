@@ -88,6 +88,21 @@ async function flushDueEvents() {
 
     if (result.delivered) {
       await db.automationOutbox.delete(pendingEvent.eventId)
+      if (pendingEvent.event === 'device.provision.requested') {
+        const identity = await db.deviceIdentity.get('current')
+        if (identity?.deviceCode === pendingEvent.data.deviceCode) {
+          const now = new Date().toISOString()
+          await db.deviceIdentity.update('current', {
+            provisioningStatus: 'provisioned',
+            provisionedAt: now,
+            lastProvisioningError: undefined,
+            updatedAt: now,
+          })
+          if (import.meta.env.DEV) {
+            console.info('[Private Balance] Evento provisioning enviado')
+          }
+        }
+      }
       continue
     }
 
@@ -101,6 +116,16 @@ async function flushDueEvents() {
         attemptedAt.getTime() + retryDelay(attempts),
       ).toISOString(),
     })
+    if (pendingEvent.event === 'device.provision.requested') {
+      const identity = await db.deviceIdentity.get('current')
+      if (identity?.deviceCode === pendingEvent.data.deviceCode) {
+        await db.deviceIdentity.update('current', {
+          provisioningStatus: 'error',
+          lastProvisioningError: result.error?.slice(0, 300),
+          updatedAt: attemptedAt.toISOString(),
+        })
+      }
+    }
   }
 
   const nextEvent = await db.automationOutbox.orderBy('nextAttemptAt').first()

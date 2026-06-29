@@ -131,8 +131,15 @@ export function verifySignedLicenseForDevice(
   return payload as SignedLicensePayload
 }
 
-export function issueAutomationJwt(deviceCode: string, licenseType: string) {
+export function issueAutomationJwt(
+  deviceCode: string,
+  licenseType: string,
+  licenseExpiresAt: string | null,
+) {
   const now = Math.floor(Date.now() / 1000)
+  const licenseExpiration = licenseExpiresAt
+    ? Math.floor(new Date(licenseExpiresAt).getTime() / 1000)
+    : Number.POSITIVE_INFINITY
   const claims: AutomationJwtClaims = {
     iss: JWT_ISSUER,
     aud: JWT_AUDIENCE,
@@ -140,7 +147,7 @@ export function issueAutomationJwt(deviceCode: string, licenseType: string) {
     jti: randomUUID(),
     licenseType,
     iat: now,
-    exp: now + JWT_TTL_SECONDS,
+    exp: Math.min(now + JWT_TTL_SECONDS, licenseExpiration),
   }
   const header = { alg: 'HS256', typ: 'JWT' }
   const unsignedToken = `${encodeBase64Url(JSON.stringify(header))}.${encodeBase64Url(JSON.stringify(claims))}`

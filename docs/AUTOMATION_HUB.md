@@ -5,11 +5,12 @@
 ```text
 IndexedDB + automationOutbox
             |
-            | licencia V2 -> JWT de 15 minutos
+            | POST /api/automation-token
+            | licencia firmada V2 -> JWT en memoria (max. 15 minutos)
             v
 POST /api/automation (Vercel Function)
             |
-            | Authorization: Bearer <PRIVATE_BALANCE_TOKEN>
+            | Authorization: Bearer <N8N_INTERNAL_TOKEN>
             | Idempotency-Key: <eventId>
             v
 Webhook de producción n8n
@@ -20,31 +21,67 @@ La red nunca forma parte de esa transacción. Los fallos se conservan en
 `automationOutbox` y se reintentan con espera exponencial, al recuperar conexión
 y al iniciar la aplicación.
 
+El frontend web publicado llama siempre al mismo origen. El APK y la web
+ejecutada desde `localhost` utilizan la URL pública de Vercel configurada en
+`VITE_API_BASE_URL`. El cliente envía la
+licencia V2 exclusivamente a `/api/automation-token`; Vercel valida su firma y
+su vinculación al dispositivo antes de emitir el JWT. El JWT se conserva solo
+en memoria, se renueva antes de expirar y se solicita una única vez cuando
+varias entregas coinciden. Nunca se guarda en IndexedDB ni `localStorage`.
+
 ## Variables
 
-Frontend (puede formar parte del bundle):
+Frontend Android/Capacitor (es una URL pública y puede formar parte del bundle):
 
 ```env
-VITE_AUTOMATION_API_URL=https://private-balance.orpira.es
+VITE_API_BASE_URL=https://private-balance.orpira.es
 ```
 
 Servidor Vercel (nunca usar el prefijo `VITE_`):
 
 ```env
-N8N_WEBHOOK_URL=https://n8n.example.com/webhook/private-balance
-PRIVATE_BALANCE_TOKEN=<token-rotado-de-n8n>
+N8N_AUTOMATION_WEBHOOK_URL=https://n8n.orpira.es/webhook/private-balance
+N8N_DEVICE_PROVISIONING_WEBHOOK_URL=https://n8n.orpira.es/webhook/private-balance-device
+N8N_WHATSAPP_WEBHOOK_URL=https://n8n.orpira.es/webhook/private-balance-whatsapp
+N8N_INTERNAL_TOKEN=<token-rotado-de-n8n>
 AUTOMATION_JWT_SECRET=<64-caracteres-hex-aleatorios>
 PRIVATE_BALANCE_ALLOWED_ORIGINS=https://private-balance.orpira.es
 ```
 
 Cada cambio de variables de Vercel requiere un nuevo despliegue.
 
+Está prohibido definir `VITE_N8N_WEBHOOK_URL`,
+`VITE_N8N_WHATSAPP_WEBHOOK_URL`, `VITE_PRIVATE_BALANCE_TOKEN` o
+`VITE_EVOLUTION_API_KEY`. El build comprueba estas variables y falla si detecta
+alguna. Las variables `N8N_*` y `AUTOMATION_JWT_SECRET` solo pueden
+existir en Vercel o en un entorno local de servidor. Las licencias V1 siguen
+siendo válidas para el uso local de la
+aplicación, pero no pueden autenticarse contra Automation Hub: este flujo exige
+una licencia firmada V2.
+
+En desarrollo, `vercel dev` sirve los endpoints locales `/api/*`. Si se usa
+`npm run dev`, Vite no sirve Functions y el cliente usa automáticamente
+`VITE_API_BASE_URL`; el proxy admite orígenes loopback con cualquier
+puerto, pero sigue exigiendo licencia V2 y JWT. Para Android, la URL configurada
+debe usar HTTPS. Solo se acepta HTTP para `localhost` durante desarrollo.
+
 ## Contrato enviado a n8n
+
+El gateway usa este router interno:
+
+| Eventos | Variable de destino |
+| --- | --- |
+| `income.created`, `expense.created`, `calendar.created` | `N8N_AUTOMATION_WEBHOOK_URL` |
+| `device.provision.requested` | `N8N_DEVICE_PROVISIONING_WEBHOOK_URL` |
+| `device.whatsapp.connect.requested`, `communication.whatsapp.*` | `N8N_WHATSAPP_WEBHOOK_URL` |
+
+La respuesta JSON de n8n se devuelve sin envoltorios y conservando su status
+HTTP. Los errores JSON también se propagan con su status original.
 
 ```json
 {
   "eventId": "uuid-v4",
-  "event": "income.created | expense.created | calendar.created | communication.whatsapp.*",
+  "event": "income.created | expense.created | calendar.created | device.provision.requested | device.whatsapp.connect.requested | communication.whatsapp.*",
   "createdAt": "2026-06-27T12:00:00.000Z",
   "schemaVersion": 1,
   "data": {},
@@ -56,11 +93,34 @@ Cada cambio de variables de Vercel requiere un nuevo despliegue.
 
 Los eventos interactivos del módulo de comunicación son:
 
-- `communication.whatsapp.qr.requested`
+- `device.whatsapp.connect.requested`
 - `communication.whatsapp.status.requested`
 - `communication.whatsapp.disconnect.requested`
 - `communication.whatsapp.test.requested`
 - `communication.whatsapp.preferences.updated`
+
+El provisionamiento inicial usa `device.provision.requested`. Ambos eventos
+`device.*` incluyen `userCode`, `deviceCode`, `deviceName`, `platform` y
+`appVersion` dentro de `data`; el proxy también expone esos campos en el nivel
+superior para el workflow. `licenseDeviceCode` conserva por separado el código
+con el que se autorizó el JWT. El evento anterior
+`communication.whatsapp.qr.requested` solo se admite para compatibilidad con
+eventos ya encolados.
+
+`device.whatsapp.connect.requested` se enruta exclusivamente a
+`N8N_WHATSAPP_WEBHOOK_URL`. El proxy añade el Bearer con
+`N8N_INTERNAL_TOKEN` y envía a ese workflow exactamente:
+
+```json
+{
+  "event": "device.whatsapp.connect.requested",
+  "userCode": "PB-USER-<uuid>",
+  "deviceCode": "PB-DEVICE-<uuid>"
+}
+```
+
+Si ese workflow responde `422`, el proxy registra el cuerpo en los logs del
+servidor y lo devuelve al cliente para mostrarlo en la consola de depuración.
 
 Para QR y estado, el workflow debe responder JSON. Puede incluir `status`,
 `connectedNumber` y `qrCode` o `base64`; el QR debe ser una imagen HTTPS, un
@@ -69,10 +129,10 @@ configura únicamente como credencial de n8n.
 
 ## Configuración obligatoria en n8n
 
-1. Configura el nodo **Webhook** con `POST`, URL de producción y
+1. Configura cada nodo **Webhook** con `POST`, URL de producción y
    **Header Auth**:
    - Nombre: `Authorization`.
-   - Valor: `Bearer <PRIVATE_BALANCE_TOKEN>`.
+   - Valor: `Bearer <N8N_INTERNAL_TOKEN>`.
 2. Publica el workflow; la URL configurada en Vercel debe ser la URL de
    producción, no la URL temporal de pruebas.
 3. Crea una Data Table llamada `private_balance_events` con estas columnas:
@@ -102,9 +162,22 @@ expuesto. La rotación debe hacerse coordinadamente:
 
 1. Genera un token aleatorio nuevo.
 2. Actualiza la credencial Header Auth del Webhook en n8n.
-3. Actualiza `PRIVATE_BALANCE_TOKEN` en Vercel.
+3. Actualiza `N8N_INTERNAL_TOKEN` en Vercel.
 4. Redespliega y prueba un evento.
 5. Revoca el token anterior.
 
 La clave privada de licencias no participa en este flujo y debe continuar fuera
 del repositorio, frontend, APK y Vercel.
+
+## Controles aplicados
+
+- JWT HS256 de vida corta, vinculado al código de dispositivo y con expiración
+  limitada también por la fecha final de la licencia.
+- Validación estricta del contrato con Zod y límites de tamaño de entrada y de
+  respuesta.
+- CORS restringido, `POST`/JSON obligatorio, cabeceras defensivas y caché
+  deshabilitada.
+- HTTPS obligatorio hacia n8n y Bearer privado añadido únicamente en Vercel.
+- `eventId` UUID e `Idempotency-Key` para evitar efectos duplicados.
+- Una respuesta `401` provoca una sola renovación del JWT; no existen bucles de
+  reautorización.
