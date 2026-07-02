@@ -87,25 +87,13 @@ describe('License registry - authorization flow', () => {
   })
 
   it('Caso 5: Licencia single - Segundo dispositivo debe responder "Esta licencia pertenece a otro dispositivo." via verifySignedLicenseForDevice', async () => {
-    // Spy on verifySignedLicense to return a payload with devicePolicy single
     const server = await import('../server/automationSecurity')
-    const payload = {
-      app: 'private-balance',
-      version: 2,
-      deviceCode: 'PB-DEVICE-AAA',
-      licenseType: 'monthly',
-      issuedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
-      features: [],
-      devicePolicy: 'single',
-    }
-    const spy = vi.spyOn(server, 'verifySignedLicense' as any).mockImplementation(() => payload)
+    const singleDeviceLicense = 'PB-LIC-V2.eyJhcHAiOiJwcml2YXRlLWJhbGFuY2UiLCJ2ZXJzaW9uIjoyLCJkZXZpY2VDb2RlIjoiUEItREVWSUNFLUFBQUFBQUFBLUFBQUEtNEFBQS04QUFBLUFBQUFBQUFBQUFBQSIsImxpY2Vuc2VUeXBlIjoibGlmZXRpbWUiLCJpc3N1ZWRBdCI6IjIwMjYtMDctMDJUMjE6Mzg6NDUuNDkyWiIsImV4cGlyZXNBdCI6bnVsbCwiZmVhdHVyZXMiOlsiY29yZSIsImJhY2t1cCIsInJlcG9ydHMiXSwiZGV2aWNlUG9saWN5Ijoic2luZ2xlIn0.d6l8VX9RD_VvnUosJ597H0KQzpRg6Xye-klIIPPPwII2Ceio_Ag5H9eYxsms7VvBqfbttVHGQvDQUooc3BpzKA'
 
-    try {
-      expect(() => server.verifySignedLicenseForDevice('code', 'PB-DEVICE-BBB')).toThrow('Esta licencia pertenece a otro dispositivo.')
-    } finally {
-      spy.mockRestore()
-    }
+    expect(() => server.verifySignedLicenseForDevice(
+      singleDeviceLicense,
+      'PB-DEVICE-BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB',
+    )).toThrow('Esta licencia pertenece a otro dispositivo.')
   })
 
   it('Caso 6: Dispositivo revocado debe responder "Este dispositivo está revocado."', async () => {

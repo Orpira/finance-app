@@ -1,0 +1,135 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { dispatchWebhook } = vi.hoisted(() => ({
+  dispatchWebhook: vi.fn(),
+}))
+
+vi.mock('../server/automation/webhookDispatcher', () => ({
+  dispatchWebhook,
+}))
+
+import {
+  buildN8nPayload,
+  dispatchAutomationEvent,
+} from '../server/automation/eventDispatcher'
+import {
+  AUTOMATION_EVENT_TYPES,
+  isSynchronousAutomationEvent,
+  type AutomationEnvelope,
+} from '../server/automation/eventTypes'
+import {
+  resolveActiveCommunicationChannels,
+  resolveActiveWhatsappChannel,
+} from '../server/automation/communicationResolver'
+
+const EVENT_ID = '11111111-1111-4111-8111-111111111111'
+const USER_CODE = 'PB-USER-11111111-1111-4111-8111-111111111111'
+const DEVICE_CODE = 'PB-DEVICE-22222222-2222-4222-8222-222222222222'
+
+function envelope(
+  event: AutomationEnvelope['event'],
+  data: Record<string, unknown> = {},
+): AutomationEnvelope {
+  return {
+    eventId: EVENT_ID,
+    event,
+    createdAt: '2026-07-02T20:00:00.000Z',
+    schemaVersion: 1,
+    source: 'private-balance-pwa',
+    data,
+    timezone: 'Europe/Madrid',
+    locale: 'es-ES',
+  }
+}
+
+beforeEach(() => {
+  dispatchWebhook.mockReset()
+})
+
+describe('Automation Gateway dispatcher', () => {
+  it('mantiene todos los eventos actuales y el evento QR legado', () => {
+    expect(AUTOMATION_EVENT_TYPES).toContain('income.created')
+    expect(AUTOMATION_EVENT_TYPES).toContain('device.whatsapp.connect.requested')
+    expect(AUTOMATION_EVENT_TYPES).toContain('communication.whatsapp.qr.requested')
+  })
+
+  it('confirma los eventos financieros asíncronos con accepted y eventId', async () => {
+    dispatchWebhook.mockResolvedValue({
+      status: 202,
+      body: { queued: true },
+      empty: false,
+      successful: true,
+    })
+
+    const result = await dispatchAutomationEvent({
+      envelope: envelope('income.created', { income: { id: 1 } }),
+      licenseDeviceCode: DEVICE_CODE,
+    })
+
+    expect(result).toEqual({
+      status: 202,
+      body: { accepted: true, eventId: EVENT_ID },
+      empty: false,
+    })
+  })
+
+  it('mantiene WhatsApp connect síncrono y devuelve directamente el JSON de n8n', async () => {
+    const n8nBody = {
+      status: 'connecting',
+      qrCode: 'data:image/png;base64,AAAA',
+    }
+    dispatchWebhook.mockResolvedValue({
+      status: 200,
+      body: n8nBody,
+      empty: false,
+      successful: true,
+    })
+
+    const result = await dispatchAutomationEvent({
+      envelope: envelope('device.whatsapp.connect.requested', {
+        userCode: USER_CODE,
+        deviceCode: DEVICE_CODE,
+      }),
+      licenseDeviceCode: DEVICE_CODE,
+    })
+
+    expect(isSynchronousAutomationEvent('device.whatsapp.connect.requested')).toBe(true)
+    expect(result).toEqual({ status: 200, body: n8nBody, empty: false })
+  })
+
+  it('conserva el payload reducido de WhatsApp connect', () => {
+    const payload = buildN8nPayload(
+      envelope('device.whatsapp.connect.requested', {
+        userCode: USER_CODE,
+        deviceCode: DEVICE_CODE,
+      }),
+      DEVICE_CODE,
+    )
+
+    expect(payload).toEqual({
+      event: 'device.whatsapp.connect.requested',
+      userCode: USER_CODE,
+      deviceCode: DEVICE_CODE,
+      timezone: 'Europe/Madrid',
+      locale: 'es-ES',
+    })
+  })
+})
+
+describe('Communication resolver opcional', () => {
+  it('no falla si Neon no está configurado', async () => {
+    const previousDatabaseUrl = process.env.DATABASE_URL
+    delete process.env.DATABASE_URL
+
+    try {
+      await expect(resolveActiveCommunicationChannels(USER_CODE)).resolves.toEqual([])
+      await expect(resolveActiveWhatsappChannel(USER_CODE)).resolves.toBeNull()
+    } finally {
+      if (previousDatabaseUrl === undefined) {
+        delete process.env.DATABASE_URL
+      } else {
+        process.env.DATABASE_URL = previousDatabaseUrl
+      }
+    }
+  })
+})
