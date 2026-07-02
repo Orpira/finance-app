@@ -5,6 +5,7 @@ import {
   type AutomationEnvelope,
 } from './eventTypes.js'
 import { dispatchWebhook } from './webhookDispatcher.js'
+import { resolveActiveWhatsappChannel } from './communicationResolver.js'
 
 const identityCodesSchema = z.object({
   userCode: z.string().regex(/^PB-USER-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
@@ -26,6 +27,14 @@ export interface AutomationDispatchResult {
 export function buildN8nPayload(
   envelope: AutomationEnvelope,
   licenseDeviceCode: string,
+  communicationChannel?: {
+    provider: string
+    instanceName?: string
+    phoneNumber?: string
+    status: string
+    preferences?: unknown
+    providerMetadata?: unknown
+  },
 ) {
   if (envelope.event === 'device.whatsapp.connect.requested') {
     const identity = identityCodesSchema.parse(envelope.data)
@@ -52,22 +61,58 @@ export function buildN8nPayload(
     }
   }
 
-  return {
+  const payload = {
     ...envelope,
     deviceCode: licenseDeviceCode,
     receivedAt: new Date().toISOString(),
     source: envelope.source ?? 'private-balance-pwa',
   }
+
+  if (communicationChannel) {
+    return {
+      ...payload,
+      communicationChannel,
+    }
+  }
+
+  return payload
 }
 
 export async function dispatchAutomationEvent(input: {
   envelope: AutomationEnvelope
   licenseDeviceCode: string
 }): Promise<AutomationDispatchResult> {
+  let communicationChannel
+
+  if (
+    input.envelope.event === 'income.created' ||
+    input.envelope.event === 'expense.created' ||
+    input.envelope.event === 'calendar.created'
+  ) {
+    const userCode = input.envelope.data?.userCode
+    if (typeof userCode === 'string') {
+      const channel = await resolveActiveWhatsappChannel(userCode)
+      if (channel) {
+        communicationChannel = {
+          provider: channel.provider,
+          instanceName: channel.instanceName,
+          phoneNumber: channel.phoneNumber,
+          status: channel.status,
+          preferences: channel.preferences,
+          providerMetadata: channel.providerMetadata,
+        }
+      }
+    }
+  }
+
   const webhook = await dispatchWebhook({
     event: input.envelope.event,
     eventId: input.envelope.eventId,
-    payload: buildN8nPayload(input.envelope, input.licenseDeviceCode),
+    payload: buildN8nPayload(
+      input.envelope,
+      input.licenseDeviceCode,
+      communicationChannel,
+    ),
   })
 
   if (!webhook.successful || isSynchronousAutomationEvent(input.envelope.event)) {

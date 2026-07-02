@@ -17,10 +17,7 @@ import {
   isSynchronousAutomationEvent,
   type AutomationEnvelope,
 } from '../server/automation/eventTypes'
-import {
-  resolveActiveCommunicationChannels,
-  resolveActiveWhatsappChannel,
-} from '../server/automation/communicationResolver'
+import * as communicationResolver from '../server/automation/communicationResolver'
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111'
 const USER_CODE = 'PB-USER-11111111-1111-4111-8111-111111111111'
@@ -122,8 +119,8 @@ describe('Communication resolver opcional', () => {
     delete process.env.DATABASE_URL
 
     try {
-      await expect(resolveActiveCommunicationChannels(USER_CODE)).resolves.toEqual([])
-      await expect(resolveActiveWhatsappChannel(USER_CODE)).resolves.toBeNull()
+      await expect(communicationResolver.resolveActiveCommunicationChannels(USER_CODE)).resolves.toEqual([])
+      await expect(communicationResolver.resolveActiveWhatsappChannel(USER_CODE)).resolves.toBeNull()
     } finally {
       if (previousDatabaseUrl === undefined) {
         delete process.env.DATABASE_URL
@@ -131,5 +128,267 @@ describe('Communication resolver opcional', () => {
         process.env.DATABASE_URL = previousDatabaseUrl
       }
     }
+  })
+
+  it('income.created sin canal conectado mantiene el comportamiento actual', async () => {
+    dispatchWebhook.mockResolvedValue({
+      status: 202,
+      body: { queued: true },
+      empty: false,
+      successful: true,
+    })
+
+    const result = await dispatchAutomationEvent({
+      envelope: envelope('income.created', {
+        income: { id: 1 },
+        userCode: USER_CODE,
+      }),
+      licenseDeviceCode: DEVICE_CODE,
+    })
+
+    expect(result).toEqual({
+      status: 202,
+      body: { accepted: true, eventId: EVENT_ID },
+      empty: false,
+    })
+    expect(dispatchWebhook).toHaveBeenCalledWith({
+      event: 'income.created',
+      eventId: EVENT_ID,
+      payload: expect.objectContaining({
+        event: 'income.created',
+        deviceCode: DEVICE_CODE,
+        receivedAt: expect.any(String),
+        source: 'private-balance-pwa',
+      }),
+    })
+  })
+
+  it('income.created con canal WhatsApp conectado agrega communicationChannel al payload', async () => {
+    const resolveSpy = vi.spyOn(communicationResolver, 'resolveActiveWhatsappChannel')
+      .mockResolvedValue({
+        id: '1',
+        userCode: USER_CODE,
+        provider: 'whatsapp',
+        status: 'connected',
+        instanceName: 'default',
+        phoneNumber: '+34123456789',
+        preferences: { notify: true },
+        providerMetadata: { api: 'whatsapp' },
+      })
+
+    dispatchWebhook.mockResolvedValue({
+      status: 202,
+      body: { queued: true },
+      empty: false,
+      successful: true,
+    })
+
+    const result = await dispatchAutomationEvent({
+      envelope: envelope('income.created', {
+        income: { id: 1 },
+        userCode: USER_CODE,
+      }),
+      licenseDeviceCode: DEVICE_CODE,
+    })
+
+    expect(result).toEqual({
+      status: 202,
+      body: { accepted: true, eventId: EVENT_ID },
+      empty: false,
+    })
+    expect(resolveSpy).toHaveBeenCalledWith(USER_CODE)
+    expect(dispatchWebhook).toHaveBeenCalledWith({
+      event: 'income.created',
+      eventId: EVENT_ID,
+      payload: expect.objectContaining({
+        event: 'income.created',
+        deviceCode: DEVICE_CODE,
+        source: 'private-balance-pwa',
+        communicationChannel: {
+          provider: 'whatsapp',
+          instanceName: 'default',
+          phoneNumber: '+34123456789',
+          status: 'connected',
+          preferences: { notify: true },
+          providerMetadata: { api: 'whatsapp' },
+        },
+      }),
+    })
+
+    resolveSpy.mockRestore()
+  })
+
+  it('expense.created sin canal conectado mantiene el comportamiento actual', async () => {
+    dispatchWebhook.mockResolvedValue({
+      status: 202,
+      body: { queued: true },
+      empty: false,
+      successful: true,
+    })
+
+    const result = await dispatchAutomationEvent({
+      envelope: envelope('expense.created', {
+        expense: { id: 1 },
+        userCode: USER_CODE,
+      }),
+      licenseDeviceCode: DEVICE_CODE,
+    })
+
+    expect(result).toEqual({
+      status: 202,
+      body: { accepted: true, eventId: EVENT_ID },
+      empty: false,
+    })
+    expect(dispatchWebhook).toHaveBeenCalledWith({
+      event: 'expense.created',
+      eventId: EVENT_ID,
+      payload: expect.objectContaining({
+        event: 'expense.created',
+        deviceCode: DEVICE_CODE,
+        source: 'private-balance-pwa',
+      }),
+    })
+  })
+
+  it('expense.created con canal WhatsApp conectado agrega communicationChannel al payload', async () => {
+    const resolveSpy = vi.spyOn(communicationResolver, 'resolveActiveWhatsappChannel')
+      .mockResolvedValue({
+        id: '2',
+        userCode: USER_CODE,
+        provider: 'whatsapp',
+        status: 'connected',
+        instanceName: 'default',
+        phoneNumber: '+34123456789',
+        preferences: { notify: false },
+        providerMetadata: { api: 'whatsapp' },
+      })
+
+    dispatchWebhook.mockResolvedValue({
+      status: 202,
+      body: { queued: true },
+      empty: false,
+      successful: true,
+    })
+
+    const result = await dispatchAutomationEvent({
+      envelope: envelope('expense.created', {
+        expense: { id: 1 },
+        userCode: USER_CODE,
+      }),
+      licenseDeviceCode: DEVICE_CODE,
+    })
+
+    expect(result).toEqual({
+      status: 202,
+      body: { accepted: true, eventId: EVENT_ID },
+      empty: false,
+    })
+    expect(resolveSpy).toHaveBeenCalledWith(USER_CODE)
+    expect(dispatchWebhook).toHaveBeenCalledWith({
+      event: 'expense.created',
+      eventId: EVENT_ID,
+      payload: expect.objectContaining({
+        event: 'expense.created',
+        deviceCode: DEVICE_CODE,
+        source: 'private-balance-pwa',
+        communicationChannel: {
+          provider: 'whatsapp',
+          instanceName: 'default',
+          phoneNumber: '+34123456789',
+          status: 'connected',
+          preferences: { notify: false },
+          providerMetadata: { api: 'whatsapp' },
+        },
+      }),
+    })
+
+    resolveSpy.mockRestore()
+  })
+
+  it('calendar.created sin canal conectado mantiene el comportamiento actual', async () => {
+    dispatchWebhook.mockResolvedValue({
+      status: 202,
+      body: { queued: true },
+      empty: false,
+      successful: true,
+    })
+
+    const result = await dispatchAutomationEvent({
+      envelope: envelope('calendar.created', {
+        calendar: { id: 1 },
+        userCode: USER_CODE,
+      }),
+      licenseDeviceCode: DEVICE_CODE,
+    })
+
+    expect(result).toEqual({
+      status: 202,
+      body: { accepted: true, eventId: EVENT_ID },
+      empty: false,
+    })
+    expect(dispatchWebhook).toHaveBeenCalledWith({
+      event: 'calendar.created',
+      eventId: EVENT_ID,
+      payload: expect.objectContaining({
+        event: 'calendar.created',
+        deviceCode: DEVICE_CODE,
+        source: 'private-balance-pwa',
+      }),
+    })
+  })
+
+  it('calendar.created con canal WhatsApp conectado agrega communicationChannel al payload', async () => {
+    const resolveSpy = vi.spyOn(communicationResolver, 'resolveActiveWhatsappChannel')
+      .mockResolvedValue({
+        id: '3',
+        userCode: USER_CODE,
+        provider: 'whatsapp',
+        status: 'connected',
+        instanceName: 'default',
+        phoneNumber: '+34123456789',
+        preferences: { notify: true },
+        providerMetadata: { api: 'whatsapp' },
+      })
+
+    dispatchWebhook.mockResolvedValue({
+      status: 202,
+      body: { queued: true },
+      empty: false,
+      successful: true,
+    })
+
+    const result = await dispatchAutomationEvent({
+      envelope: envelope('calendar.created', {
+        calendar: { id: 1 },
+        userCode: USER_CODE,
+      }),
+      licenseDeviceCode: DEVICE_CODE,
+    })
+
+    expect(result).toEqual({
+      status: 202,
+      body: { accepted: true, eventId: EVENT_ID },
+      empty: false,
+    })
+    expect(resolveSpy).toHaveBeenCalledWith(USER_CODE)
+    expect(dispatchWebhook).toHaveBeenCalledWith({
+      event: 'calendar.created',
+      eventId: EVENT_ID,
+      payload: expect.objectContaining({
+        event: 'calendar.created',
+        deviceCode: DEVICE_CODE,
+        source: 'private-balance-pwa',
+        communicationChannel: {
+          provider: 'whatsapp',
+          instanceName: 'default',
+          phoneNumber: '+34123456789',
+          status: 'connected',
+          preferences: { notify: true },
+          providerMetadata: { api: 'whatsapp' },
+        },
+      }),
+    })
+
+    resolveSpy.mockRestore()
   })
 })
