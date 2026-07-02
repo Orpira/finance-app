@@ -63,8 +63,12 @@ export function LicenseActivationPage({
     setIsActivating(true)
 
     try {
-      await activateLicense(activationCode)
-      setStatusMessage('Licencia activada correctamente.')
+      const activatedLicense = await activateLicense(activationCode)
+      setStatusMessage(
+        activatedLicense.deviceAuthorization === 'registered'
+          ? `Nuevo dispositivo autorizado (${activatedLicense.activeDevices ?? 1}/${activatedLicense.maxDevices ?? 3}).`
+          : 'Licencia activada correctamente.',
+      )
       await onActivated?.()
     } catch (activationError) {
       setError(

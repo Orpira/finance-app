@@ -99,11 +99,10 @@ Los eventos interactivos del módulo de comunicación son:
 - `communication.whatsapp.test.requested`
 - `communication.whatsapp.preferences.updated`
 
-El provisionamiento inicial usa `device.provision.requested`. Ambos eventos
-`device.*` incluyen `userCode`, `deviceCode`, `deviceName`, `platform` y
-`appVersion` dentro de `data`; el proxy también expone esos campos en el nivel
-superior para el workflow. `licenseDeviceCode` conserva por separado el código
-con el que se autorizó el JWT. El evento anterior
+El provisionamiento inicial usa `device.provision.requested` e incluye
+`userCode`, `deviceCode`, `deviceName`, `platform` y `appVersion` dentro de
+`data`; el proxy los expone en el nivel superior para ese workflow. La conexión
+de WhatsApp se limita a `event`, `userCode` y `deviceCode`. El evento anterior
 `communication.whatsapp.qr.requested` solo se admite para compatibilidad con
 eventos ya encolados.
 
@@ -119,13 +118,20 @@ eventos ya encolados.
 }
 ```
 
+La llamada es síncrona: el Gateway espera a n8n y devuelve su JSON a la PWA. El
+workflow no debe responder solo `{ "accepted": true }`; para una conexión
+correcta debe devolver `success`, `event`, `instanceName`, `status`, `qrCode` y
+`pairingCode`.
+
 Si ese workflow responde `422`, el proxy registra el cuerpo en los logs del
 servidor y lo devuelve al cliente para mostrarlo en la consola de depuración.
 
 Para QR y estado, el workflow debe responder JSON. Puede incluir `status`,
 `connectedNumber` y `qrCode` o `base64`; el QR debe ser una imagen HTTPS, un
 data URL PNG/JPEG/WebP o el base64 de un PNG. La API Key de Evolution se
-configura únicamente como credencial de n8n.
+configura únicamente como credencial de n8n. La PWA persiste el QR recibido y
+lo representa como imagen. Si `status` es `connected` u `open`, limpia cualquier
+QR anterior y presenta el canal como conectado aunque `qrCode` sea `null`.
 
 ## Configuración obligatoria en n8n
 
@@ -133,6 +139,8 @@ configura únicamente como credencial de n8n.
    **Header Auth**:
    - Nombre: `Authorization`.
    - Valor: `Bearer <N8N_INTERNAL_TOKEN>`.
+   - La autenticación integrada se ejecuta antes de los nodos Code. En esta
+     versión de n8n, una credencial ausente o incorrecta responde `403`.
 2. Publica el workflow; la URL configurada en Vercel debe ser la URL de
    producción, no la URL temporal de pruebas.
 3. Crea una Data Table llamada `private_balance_events` con estas columnas:

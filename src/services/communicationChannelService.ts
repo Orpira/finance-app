@@ -15,6 +15,14 @@ export interface CommunicationChannelActionResult {
   channel: CommunicationChannel
   delivered: boolean
   error?: string
+  message?: string
+}
+
+export interface NormalizedWhatsAppConnectResponse {
+  status: Extract<CommunicationChannelStatus, 'connected' | 'connecting' | 'disconnected' | 'error'>
+  qrCode: string | null
+  instanceName?: string
+  message: string
 }
 
 function createEventId() {
@@ -47,7 +55,17 @@ function createDefaultChannel(): CommunicationChannel {
 }
 
 export async function getWhatsAppChannel() {
-  return (await db.communicationChannels.get(WHATSAPP_CHANNEL_ID)) ?? null
+  const channel = await db.communicationChannels.get(WHATSAPP_CHANNEL_ID)
+  if (!channel) return null
+
+  // Dexie puede contener el valor usado por versiones anteriores.
+  if ((channel.status as string) === 'pending') {
+    const migrated = { ...channel, status: 'connecting' as const }
+    await db.communicationChannels.put(migrated)
+    return migrated
+  }
+
+  return channel
 }
 
 export async function createOrUpdateWhatsAppChannel(
@@ -97,7 +115,7 @@ function normalizeQrCode(value?: string) {
 function normalizeStatus(value?: string): CommunicationChannelStatus | undefined {
   const status = value?.toLowerCase().replace(/[\s-]+/g, '_')
   if (['open', 'connected', 'conectado'].includes(status ?? '')) return 'connected'
-  if (['connecting', 'pending', 'qr', 'pendiente'].includes(status ?? '')) return 'pending'
+  if (['connecting', 'pending', 'qr', 'pendiente'].includes(status ?? '')) return 'connecting'
   if (['close', 'closed', 'disconnected', 'desconectado'].includes(status ?? '')) return 'disconnected'
   if (['error', 'failed'].includes(status ?? '')) return 'error'
   return undefined
@@ -106,7 +124,7 @@ function normalizeStatus(value?: string): CommunicationChannelStatus | undefined
 function responseChanges(data?: Record<string, unknown>) {
   const qrCode = normalizeQrCode(firstString(data, [
     ['data', 'data', 'base64'], ['data', 'base64'], ['data', 'qrCode'],
-    ['data', 'qrcode'], ['base64'], ['qrCode'], ['qrcode'],
+    ['data', 'qrcode'], ['base64'], ['qrCode'], ['qrcode'], ['pairing', 'qrCode'],
   ]))
   const status = normalizeStatus(firstString(data, [
     ['data', 'data', 'instance', 'state'], ['data', 'instance', 'state'],
@@ -116,8 +134,97 @@ function responseChanges(data?: Record<string, unknown>) {
     ['data', 'data', 'connectedNumber'], ['data', 'connectedNumber'],
     ['data', 'data', 'number'], ['data', 'number'], ['connectedNumber'], ['number'],
   ])
+  const instanceName = firstString(data, [
+    ['data', 'data', 'instanceName'], ['data', 'instanceName'], ['instanceName'],
+  ])
+  const pairingCode = firstString(data, [
+    ['data', 'data', 'pairingCode'], ['data', 'pairingCode'], ['pairingCode'],
+  ])
 
-  return { qrCode, status, connectedNumber }
+  const message = firstString(data, [
+    ['data', 'data', 'message'], ['data', 'message'], ['message'],
+  ])
+  const success = valueAtPath(data, ['success'])
+
+  return { qrCode, status, connectedNumber, instanceName, pairingCode, message, success }
+}
+
+export function normalizeWhatsAppConnectResponse(
+  response?: Record<string, unknown>,
+): NormalizedWhatsAppConnectResponse {
+  const remote = responseChanges(response)
+
+  if (remote.qrCode) {
+    return {
+      status: 'connecting',
+      qrCode: remote.qrCode,
+      ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
+      message: remote.message ?? 'Escanea el QR para vincular WhatsApp.',
+    }
+  }
+
+  if (remote.success === false) {
+    return {
+      status: 'error',
+      qrCode: null,
+      ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
+      message: remote.message ?? 'No se pudo conectar WhatsApp.',
+    }
+  }
+
+  if (remote.status === 'connected') {
+    return {
+      status: 'connected',
+      qrCode: null,
+      ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
+      message: 'WhatsApp ya está conectado',
+    }
+  }
+
+  if (remote.status === 'disconnected') {
+    return {
+      status: 'disconnected',
+      qrCode: null,
+      ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
+      message: remote.message ?? 'WhatsApp está desconectado.',
+    }
+  }
+
+  if (remote.status === 'connecting') {
+    return {
+      status: 'connecting',
+      qrCode: null,
+      ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
+      message: remote.message ?? 'WhatsApp está pendiente de vinculación.',
+    }
+  }
+
+  return {
+    status: 'error',
+    qrCode: null,
+    ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
+    message: remote.message ?? 'No se pudo interpretar la respuesta de WhatsApp.',
+  }
+}
+
+function logWhatsAppResponse(
+  response: Record<string, unknown> | undefined,
+  normalized: NormalizedWhatsAppConnectResponse,
+) {
+  if (!import.meta.env.DEV) return
+
+  const remote = responseChanges(response)
+  console.info('[Private Balance] Respuesta de /api/automation', {
+    success: remote.success,
+    status: remote.status,
+    instanceName: remote.instanceName,
+    message: remote.message,
+    qrCode: remote.qrCode ? '[QR recibido]' : null,
+  })
+  console.info('[Private Balance] Estado WhatsApp normalizado', {
+    ...normalized,
+    qrCode: normalized.qrCode ? '[QR recibido]' : null,
+  })
 }
 
 async function sendChannelEvent(
@@ -162,21 +269,28 @@ async function markDeliveryFailure(error?: string) {
 }
 
 export async function requestWhatsAppQr(): Promise<CommunicationChannelActionResult> {
-  const channel = await createOrUpdateWhatsAppChannel({ status: 'pending' })
+  const channel = await createOrUpdateWhatsAppChannel({
+    status: 'connecting',
+    qrCode: undefined,
+    pairingCode: undefined,
+  })
   const result = await sendChannelEvent('device.whatsapp.connect.requested', channel)
   if (!result.delivered) return markDeliveryFailure(result.error)
 
-  if (import.meta.env.DEV) {
-    console.info('[Private Balance] Evento WhatsApp QR enviado')
-  }
-
   const remote = responseChanges(result.data)
+  const normalized = normalizeWhatsAppConnectResponse(result.data)
+  logWhatsAppResponse(result.data, normalized)
+
   const updated = await createOrUpdateWhatsAppChannel({
-    status: remote.status ?? 'pending',
-    ...(remote.qrCode ? { qrCode: remote.qrCode } : {}),
+    status: normalized.status,
+    qrCode: normalized.qrCode ?? undefined,
     ...(remote.connectedNumber ? { connectedNumber: remote.connectedNumber } : {}),
+    ...(normalized.instanceName ? { instanceName: normalized.instanceName } : {}),
+    pairingCode: remote.pairingCode,
   })
-  return { channel: updated, delivered: true }
+  return normalized.status === 'error'
+    ? { channel: updated, delivered: false, error: normalized.message }
+    : { channel: updated, delivered: true, message: normalized.message }
 }
 
 export async function refreshWhatsAppStatus(): Promise<CommunicationChannelActionResult> {
@@ -187,8 +301,10 @@ export async function refreshWhatsAppStatus(): Promise<CommunicationChannelActio
   const remote = responseChanges(result.data)
   const updated = await createOrUpdateWhatsAppChannel({
     status: remote.status ?? channel.status,
-    ...(remote.qrCode ? { qrCode: remote.qrCode } : {}),
+    qrCode: remote.status === 'connected' ? undefined : (remote.qrCode ?? channel.qrCode),
     ...(remote.connectedNumber ? { connectedNumber: remote.connectedNumber } : {}),
+    ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
+    pairingCode: remote.pairingCode ?? channel.pairingCode,
   })
   return { channel: updated, delivered: true }
 }

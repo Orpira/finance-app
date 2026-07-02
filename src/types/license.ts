@@ -10,6 +10,13 @@ export interface AppLicense {
   status: LicenseStatus
   licenseType: LicenseType
   licenseVersion: 1 | 2
+  licenseKey?: string
+  userCode?: string
+  deviceName?: string
+  platform?: 'web' | 'android' | 'ios' | 'unknown'
+  deviceAuthorization?: 'existing' | 'registered'
+  activeDevices?: number
+  maxDevices?: number
   lastValidAccessDate?: string
   createdAt: string
   updatedAt: string

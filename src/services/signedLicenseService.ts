@@ -1,6 +1,12 @@
 import { db } from '../database/db'
 import type { AppLicense, LicenseStatus, LicenseType } from '../types/license'
-import { CURRENT_LICENSE_ID, getDeviceCode } from './licenseDeviceService'
+import {
+  CURRENT_LICENSE_ID,
+  getDeviceCode,
+  logLicenseValidatedForExistingDeviceCode,
+} from './licenseDeviceService'
+import { getOrCreateDeviceIdentity } from './deviceIdentityService'
+import { authorizeSignedLicenseDevice } from './licenseAuthorizationService'
 
 const SIGNED_LICENSE_PREFIX = 'PB-LIC-V2'
 const LICENSE_APP_ID = 'private-balance'
@@ -36,6 +42,7 @@ export interface SignedLicensePayload {
   issuedAt: string
   expiresAt: string | null
   features: string[]
+  devicePolicy?: 'multi' | 'single'
 }
 
 export interface SignedLicenseValidationResult {
@@ -96,7 +103,21 @@ function validatePayloadShape(
     throw new Error('La licencia no pertenece a Private Balance.')
   }
 
-  if (payload.deviceCode !== deviceCode) {
+  if (typeof payload.deviceCode !== 'string') {
+    throw new Error('La licencia no contiene un dispositivo inicial válido.')
+  }
+
+  if (
+    payload.devicePolicy !== undefined &&
+    !['multi', 'single'].includes(payload.devicePolicy)
+  ) {
+    throw new Error('La política de dispositivos no es válida.')
+  }
+
+  if (
+    payload.devicePolicy === 'single' &&
+    payload.deviceCode.trim().toUpperCase() !== deviceCode.trim().toUpperCase()
+  ) {
     throw new Error('Esta licencia pertenece a otro dispositivo.')
   }
 
@@ -187,27 +208,53 @@ export async function verifySignedLicense(code: string, deviceCode: string) {
 }
 
 export async function activateSignedLicense(code: string) {
-  const deviceCode = await getDeviceCode()
-  const validation = await verifySignedLicense(code, deviceCode)
+  const identity = await getOrCreateDeviceIdentity()
+  const validation = await verifySignedLicense(code, identity.deviceCode)
+  const authorization = await authorizeSignedLicenseDevice(
+    validation.activationCode,
+    identity,
+  )
   const currentLicense = await db.licenses.get(CURRENT_LICENSE_ID)
   const now = new Date().toISOString()
   const license: AppLicense = {
     id: CURRENT_LICENSE_ID,
-    deviceCode,
+    deviceCode: identity.deviceCode,
     activationCode: validation.activationCode,
     activationDate: now,
     expirationDate: validation.expirationDate,
     status: 'active',
     licenseType: validation.licenseType,
     licenseVersion: 2,
+    licenseKey: authorization.licenseKey,
+    userCode: identity.userCode,
+    deviceName: identity.deviceName,
+    platform: identity.platform,
+    // Do NOT persist device authorization locally. Authorization must
+    // always be validated against the backend (Neon). Keep only the
+    // canonical license fields in IndexedDB.
     lastValidAccessDate: now,
     createdAt: currentLicense?.createdAt ?? now,
     updatedAt: now,
   }
 
-  await db.licenses.put(license)
+  // Persist license without authorization metadata
+  const licenseToPersist: AppLicense = {
+    ...license,
+    // Ensure authorization metadata is not stored locally
+    deviceAuthorization: undefined,
+    activeDevices: undefined,
+    maxDevices: undefined,
+  }
 
-  return license
+  await db.licenses.put(licenseToPersist)
+
+  // Return a view that includes authorization info for immediate UI feedback
+  return {
+    ...licenseToPersist,
+    deviceAuthorization: authorization.deviceAuthorization,
+    activeDevices: authorization.activeDevices,
+    maxDevices: authorization.maxDevices,
+  }
 }
 
 async function markSignedLicenseExpired(license: AppLicense) {
@@ -284,6 +331,7 @@ export async function getSignedLicenseStatus(): Promise<SignedLicenseStatusResul
   }
 
   await db.licenses.put(updatedLicense)
+  logLicenseValidatedForExistingDeviceCode(deviceCode)
 
   return { license: updatedLicense, status: 'active' }
 }

@@ -16,7 +16,11 @@ import { formatCurrency } from '../../utils/currency'
 import { getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 import { getIncomeDurationDisplay } from '../../utils/serviceDuration'
-import { recordBelongsToUsageMode, requiresSeason } from '../../utils/usageMode'
+import {
+  isBasicMode,
+  recordBelongsToUsageMode,
+  requiresSeason,
+} from '../../utils/usageMode'
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(
@@ -30,6 +34,7 @@ export function IncomeDetailPage() {
   const [income, setIncome] = useState<ServiceIncome | null>()
   const [adjustments, setAdjustments] = useState<Expense[]>([])
   const [canEdit, setCanEdit] = useState(false)
+  const [isBasicUser, setIsBasicUser] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -67,6 +72,7 @@ export function IncomeDetailPage() {
       if (!mounted) return
 
       setIncome(currentIncome)
+      setIsBasicUser(isBasicMode(settings))
       setAdjustments(
         currentAdjustments.filter((adjustment) =>
           recordBelongsToUsageMode(adjustment, settings.usageMode),
@@ -110,7 +116,7 @@ export function IncomeDetailPage() {
         <div><p className="text-xs font-semibold uppercase text-slate-500">Valor original</p><p className="mt-1 text-xl font-semibold"><SensitiveAmount hidden={hidden} value={formatCurrency(income.totalAmount, income.currency as CurrencyCode)} /></p></div>
         <div><p className="text-xs font-semibold uppercase text-slate-500">{isService ? 'Ganancia real' : 'Monto efectivo'}</p><p className="mt-1 text-xl font-semibold"><SensitiveAmount hidden={hidden} value={formatCurrency(income.realGain, income.currency as CurrencyCode)} /></p></div>
         <div><p className="text-xs font-semibold uppercase text-slate-500">Fecha</p><p className="mt-1 font-semibold">{formatDate(income.date)}</p></div>
-        {isService && <div><p className="text-xs font-semibold uppercase text-slate-500">Duración</p><p className="mt-1 font-semibold">{getIncomeDurationDisplay(income)}</p></div>}
+        {!isBasicUser && isService && <div><p className="text-xs font-semibold uppercase text-slate-500">Duración</p><p className="mt-1 font-semibold">{getIncomeDurationDisplay(income)}</p></div>}
         {income.notes && <div className="sm:col-span-3"><p className="text-xs font-semibold uppercase text-slate-500">Observación</p><p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{income.notes}</p></div>}
       </section>
 

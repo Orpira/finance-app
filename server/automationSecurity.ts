@@ -1,6 +1,7 @@
 /// <reference types="node" />
 
 import {
+  createHash,
   createHmac,
   createPublicKey,
   randomUUID,
@@ -30,7 +31,7 @@ const publicLicenseKeyJwk = {
   crv: 'P-256',
 } as const
 
-interface SignedLicensePayload {
+export interface SignedLicensePayload {
   app: string
   version: number
   deviceCode: string
@@ -38,6 +39,7 @@ interface SignedLicensePayload {
   issuedAt: string
   expiresAt: string | null
   features: unknown
+  devicePolicy?: 'multi' | 'single'
 }
 
 export interface AutomationJwtClaims {
@@ -72,10 +74,13 @@ function isValidIsoDate(value: unknown) {
   return typeof value === 'string' && Number.isFinite(new Date(value).getTime())
 }
 
-export function verifySignedLicenseForDevice(
-  activationCode: string,
-  deviceCode: string,
-) {
+export function getSignedLicenseKey(activationCode: string) {
+  return createHash('sha256')
+    .update(activationCode.trim().replace(/\s+/g, ''))
+    .digest('hex')
+}
+
+export function verifySignedLicense(activationCode: string) {
   const normalizedCode = activationCode.trim().replace(/\s+/g, '')
   const parts = normalizedCode.split('.')
 
@@ -108,14 +113,20 @@ export function verifySignedLicenseForDevice(
   if (payload.app !== LICENSE_APP_ID || payload.version !== LICENSE_VERSION) {
     throw new Error('La licencia no pertenece a Private Balance.')
   }
-  if (payload.deviceCode !== deviceCode) {
-    throw new Error('La licencia pertenece a otro dispositivo.')
+  if (typeof payload.deviceCode !== 'string') {
+    throw new Error('La licencia no contiene un dispositivo inicial válido.')
   }
   if (!payload.licenseType || !ALLOWED_LICENSE_TYPES.has(payload.licenseType)) {
     throw new Error('El tipo de licencia no es válido.')
   }
   if (!isValidIsoDate(payload.issuedAt) || !Array.isArray(payload.features)) {
     throw new Error('El contenido de la licencia no es válido.')
+  }
+  if (
+    payload.devicePolicy !== undefined &&
+    !['multi', 'single'].includes(payload.devicePolicy)
+  ) {
+    throw new Error('La política de dispositivos no es válida.')
   }
   if (payload.licenseType === 'lifetime') {
     if (payload.expiresAt !== null) {
@@ -129,6 +140,23 @@ export function verifySignedLicenseForDevice(
   }
 
   return payload as SignedLicensePayload
+}
+
+export function verifySignedLicenseForDevice(
+  activationCode: string,
+  deviceCode: string,
+) {
+  const payload = verifySignedLicense(activationCode)
+  const devicePolicy = payload.devicePolicy ?? 'multi'
+
+  if (
+    devicePolicy === 'single' &&
+    payload.deviceCode.trim().toUpperCase() !== deviceCode.trim().toUpperCase()
+  ) {
+    throw new Error('Esta licencia pertenece a otro dispositivo.')
+  }
+
+  return payload
 }
 
 export function issueAutomationJwt(

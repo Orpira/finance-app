@@ -14,6 +14,7 @@ node scripts/generate-signed-license.mjs DEVICE_CODE TIPO_LICENCIA [FECHA_EXPIRA
 Ejemplos:
 node scripts/generate-signed-license.mjs PB-F78A-870C-3216 demo 2026-07-31
 node scripts/generate-signed-license.mjs PB-F78A-870C-3216 lifetime
+node scripts/generate-signed-license.mjs PB-F78A-870C-3216 lifetime --single-device
 
 Clave privada:
 - LICENSE_PRIVATE_KEY_JWK='{"kty":"EC",...}' node scripts/generate-signed-license.mjs ...
@@ -70,6 +71,7 @@ async function importPrivateKey(jwk) {
 }
 
 const [, , deviceCode, licenseType, expirationDate] = process.argv
+const devicePolicy = process.argv.includes('--single-device') ? 'single' : 'multi'
 
 if (!deviceCode || !licenseType) {
   printUsage()
@@ -90,6 +92,7 @@ const payload = {
   expiresAt:
     licenseType === 'lifetime' ? null : normalizeExpirationDate(expirationDate),
   features: ['core', 'backup', 'reports'],
+  devicePolicy,
 }
 
 const privateKey = await importPrivateKey(await readPrivateKeyJwk())

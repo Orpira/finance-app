@@ -27,7 +27,7 @@ import type { DeviceIdentity } from '../../types/deviceIdentity'
 
 const STATUS_LABELS = {
   not_configured: 'No configurado',
-  pending: 'Pendiente de vinculación',
+  connecting: 'Pendiente de vinculación',
   connected: 'Conectado',
   disconnected: 'Desconectado',
   error: 'Error',
@@ -35,7 +35,7 @@ const STATUS_LABELS = {
 
 const STATUS_STYLES = {
   not_configured: 'bg-slate-100 text-slate-700',
-  pending: 'bg-amber-100 text-amber-800',
+  connecting: 'bg-amber-100 text-amber-800',
   connected: 'bg-emerald-100 text-emerald-800',
   disconnected: 'bg-slate-100 text-slate-700',
   error: 'bg-red-100 text-red-800',
@@ -98,7 +98,7 @@ export function CommunicationChannelsPage() {
       const result = await operation()
       setChannel(result.channel)
       setNotice(result.delivered
-        ? { kind: 'success', text: successMessage }
+        ? { kind: 'success', text: result.message ?? successMessage }
         : { kind: 'error', text: result.error ?? 'No se pudo contactar con n8n. Puedes reintentar.' })
     } catch (error) {
       setNotice({
@@ -194,11 +194,11 @@ export function CommunicationChannelsPage() {
                   <button
                     className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={isBusy}
-                    onClick={() => void runAction('qr', requestWhatsAppQr, 'Solicitud enviada. Escanea el QR cuando aparezca.')}
+                    onClick={() => void runAction('qr', requestWhatsAppQr, 'QR recibido. Escanéalo desde WhatsApp.')}
                     type="button"
                   >
                     {activeAction === 'qr' ? <LoaderCircle className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}
-                    {channel?.qrCode || status === 'pending' ? 'Regenerar QR' : 'Conectar WhatsApp'}
+                    {channel?.qrCode || status === 'connecting' ? 'Regenerar QR' : 'Conectar WhatsApp'}
                   </button>
                 )}
                 <button

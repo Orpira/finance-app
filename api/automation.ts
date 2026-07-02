@@ -59,10 +59,14 @@ const envelopeSchema = z.object({
   schemaVersion: z.literal(1),
   source: z.literal('private-balance-pwa').optional(),
   data: z.record(z.string(), z.unknown()),
+  timezone: z.string().optional(),
+  locale: z.string().optional(),
 })
 
 const whatsappConnectRequestSchema = identityCodesSchema.extend({
   event: z.literal('device.whatsapp.connect.requested'),
+  timezone: z.string().optional(),
+  locale: z.string().optional(),
 }).strict()
 
 const provisionIdentityDataSchema = identityCodesSchema.extend({
@@ -105,6 +109,8 @@ function parseGatewayRequest(request: VercelRequest): AutomationEnvelope | null 
       userCode: connectResult.data.userCode,
       deviceCode: connectResult.data.deviceCode,
     },
+    timezone: connectResult.data.timezone,
+    locale: connectResult.data.locale,
   }
 }
 
@@ -155,6 +161,8 @@ function buildN8nPayload(
       event: envelope.event,
       userCode: identity.userCode,
       deviceCode: identity.deviceCode,
+      timezone: envelope.timezone,
+      locale: envelope.locale,
     }
   }
 
@@ -167,6 +175,8 @@ function buildN8nPayload(
       deviceName: identity.deviceName ?? null,
       platform: identity.platform ?? 'unknown',
       appVersion: identity.appVersion ?? null,
+      timezone: envelope.timezone,
+      locale: envelope.locale,
     }
   }
 

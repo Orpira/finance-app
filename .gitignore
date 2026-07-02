@@ -31,3 +31,4 @@ license-private-key.pem
 *.sln
 *.sw?
 .vercel
+.env*

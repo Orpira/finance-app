@@ -1,6 +1,6 @@
 export type CommunicationChannelStatus =
   | 'not_configured'
-  | 'pending'
+  | 'connecting'
   | 'connected'
   | 'disconnected'
   | 'error'
@@ -13,6 +13,7 @@ export interface CommunicationChannel {
   status: CommunicationChannelStatus
   qrCode?: string
   connectedNumber?: string
+  pairingCode?: string
   notifyIncomeCreated: boolean
   notifyExpenseCreated: boolean
   notifyCalendarReminder: boolean

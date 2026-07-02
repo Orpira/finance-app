@@ -1,6 +1,10 @@
 import { db } from '../database/db'
 import type { AppLicense, LicenseStatus, LicenseType } from '../types/license'
-import { CURRENT_LICENSE_ID, getDeviceCode } from './licenseDeviceService'
+import {
+  CURRENT_LICENSE_ID,
+  getDeviceCode,
+  logLicenseValidatedForExistingDeviceCode,
+} from './licenseDeviceService'
 import {
   activateSignedLicense,
   getSignedLicenseStatus,
@@ -182,6 +186,7 @@ export async function getLicenseStatus(): Promise<LicenseStatusResult> {
   }
 
   await db.licenses.put(updatedLicense)
+  logLicenseValidatedForExistingDeviceCode(deviceCode)
 
   return { license: updatedLicense, status: 'active' }
 }

@@ -1,6 +1,7 @@
 import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { Device } from '@capacitor/device'
+import { Preferences } from '@capacitor/preferences'
 
 import { db } from '../database/db'
 import type {
@@ -15,6 +16,8 @@ import {
 } from './automationOutboxService'
 
 const DEVICE_IDENTITY_ID = 'current' as const
+const DEVICE_IDENTITY_STORAGE_KEY = 'privateBalance.deviceIdentity'
+const INDEXED_DB_TIMEOUT_MS = 2_000
 
 let identityRequest: Promise<DeviceIdentity> | undefined
 let provisioningRequest: Promise<DeviceIdentity> | undefined
@@ -83,57 +86,184 @@ function logDevelopment(message: string, identity: DeviceIdentity) {
   }
 }
 
-export async function getDeviceIdentity() {
-  const identity = (await db.deviceIdentity.get(DEVICE_IDENTITY_ID)) ?? null
+function isDeviceIdentity(value: unknown): value is DeviceIdentity {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
 
-  if (identity) {
-    logDevelopment('Identidad recuperada', identity)
+  const identity = value as Partial<DeviceIdentity>
+  return identity.id === DEVICE_IDENTITY_ID &&
+    typeof identity.userCode === 'string' && identity.userCode.startsWith('PB-USER-') &&
+    typeof identity.deviceCode === 'string' && identity.deviceCode.length > 0 &&
+    ['web', 'android', 'ios', 'unknown'].includes(identity.platform ?? '') &&
+    typeof identity.createdAt === 'string' &&
+    typeof identity.updatedAt === 'string'
+}
+
+function readLocalStorageIdentity() {
+  try {
+    const value = globalThis.localStorage?.getItem(DEVICE_IDENTITY_STORAGE_KEY)
+    if (!value) return null
+
+    const parsed = JSON.parse(value) as unknown
+    return isDeviceIdentity(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+async function readPreferencesIdentity() {
+  if (!Capacitor.isNativePlatform()) return null
+
+  try {
+    const { value } = await Preferences.get({ key: DEVICE_IDENTITY_STORAGE_KEY })
+    if (!value) return null
+
+    const parsed = JSON.parse(value) as unknown
+    return isDeviceIdentity(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+async function readIndexedDbIdentity() {
+  try {
+    const identity = await withTimeout(
+      db.deviceIdentity.get(DEVICE_IDENTITY_ID),
+      INDEXED_DB_TIMEOUT_MS,
+    )
+    return isDeviceIdentity(identity) ? identity : null
+  } catch {
+    return null
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = globalThis.setTimeout(
+      () => reject(new Error('IndexedDB no respondió a tiempo.')),
+      timeoutMs,
+    )
+
+    promise.then(
+      (value) => {
+        globalThis.clearTimeout(timeoutId)
+        resolve(value)
+      },
+      (error: unknown) => {
+        globalThis.clearTimeout(timeoutId)
+        reject(error)
+      },
+    )
+  })
+}
+
+async function persistIdentityCopies(identity: DeviceIdentity) {
+  const serialized = JSON.stringify(identity)
+  let persisted = false
+
+  try {
+    globalThis.localStorage?.setItem(DEVICE_IDENTITY_STORAGE_KEY, serialized)
+    persisted = true
+  } catch {
+    // Native Preferences may still persist the identity.
   }
 
-  return identity
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await Preferences.set({ key: DEVICE_IDENTITY_STORAGE_KEY, value: serialized })
+      persisted = true
+    } catch {
+      // IndexedDB or localStorage may already have persisted the identity.
+    }
+  }
+
+  try {
+    await withTimeout(
+      db.deviceIdentity.put(identity),
+      INDEXED_DB_TIMEOUT_MS,
+    )
+    persisted = true
+  } catch {
+    // localStorage and native Preferences remain available as fallbacks.
+  }
+
+  if (!persisted) {
+    throw new Error('No se pudo guardar de forma persistente la identidad del dispositivo.')
+  }
+}
+
+function withRuntimeMetadata(
+  identity: DeviceIdentity,
+  metadata: Awaited<ReturnType<typeof getRuntimeMetadata>>,
+): DeviceIdentity {
+  const deviceName = metadata.deviceName ?? identity.deviceName
+  const appVersion = metadata.appVersion ?? identity.appVersion
+
+  if (
+    identity.platform === metadata.platform &&
+    identity.deviceName === deviceName &&
+    identity.appVersion === appVersion
+  ) {
+    return identity
+  }
+
+  return {
+    ...identity,
+    platform: metadata.platform,
+    deviceName,
+    appVersion,
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+async function recoverStoredIdentity() {
+  const indexedDbIdentity = await readIndexedDbIdentity()
+  if (indexedDbIdentity) {
+    logDevelopment('Identidad recuperada desde IndexedDB', indexedDbIdentity)
+    return indexedDbIdentity
+  }
+
+  const localStorageIdentity = readLocalStorageIdentity()
+  if (localStorageIdentity) {
+    logDevelopment('Identidad recuperada desde localStorage', localStorageIdentity)
+    return localStorageIdentity
+  }
+
+  const preferencesIdentity = await readPreferencesIdentity()
+  if (preferencesIdentity) {
+    logDevelopment('Identidad recuperada desde Capacitor Preferences', preferencesIdentity)
+    return preferencesIdentity
+  }
+
+  return null
+}
+
+export async function getDeviceIdentity() {
+  return recoverStoredIdentity()
 }
 
 async function resolveDeviceIdentity() {
   const metadata = await getRuntimeMetadata()
+  const stored = await recoverStoredIdentity()
 
-  return db.transaction('rw', db.deviceIdentity, async () => {
-    const stored = await db.deviceIdentity.get(DEVICE_IDENTITY_ID)
+  if (stored) {
+    const updated = withRuntimeMetadata(stored, metadata)
+    await persistIdentityCopies(updated)
+    return updated
+  }
 
-    if (stored) {
-      const metadataChanged =
-        stored.platform !== metadata.platform ||
-        stored.deviceName !== metadata.deviceName ||
-        stored.appVersion !== metadata.appVersion
-
-      if (!metadataChanged) {
-        logDevelopment('Identidad recuperada', stored)
-        return stored
-      }
-
-      const updated: DeviceIdentity = {
-        ...stored,
-        ...metadata,
-        updatedAt: new Date().toISOString(),
-      }
-      await db.deviceIdentity.put(updated)
-      logDevelopment('Identidad recuperada', updated)
-      return updated
-    }
-
-    const now = new Date().toISOString()
-    const created: DeviceIdentity = {
-      id: DEVICE_IDENTITY_ID,
-      userCode: `PB-USER-${createSecureUuid()}`,
-      deviceCode: `PB-DEVICE-${createSecureUuid()}`,
-      ...metadata,
-      provisioningStatus: 'pending',
-      createdAt: now,
-      updatedAt: now,
-    }
-    await db.deviceIdentity.add(created)
-    logDevelopment('Identidad creada', created)
-    return created
-  })
+  const now = new Date().toISOString()
+  const created: DeviceIdentity = {
+    id: DEVICE_IDENTITY_ID,
+    userCode: `PB-USER-${createSecureUuid()}`,
+    deviceCode: `PB-DEVICE-${createSecureUuid()}`,
+    ...metadata,
+    provisioningStatus: 'pending',
+    createdAt: now,
+    updatedAt: now,
+  }
+  await persistIdentityCopies(created)
+  logDevelopment('Nueva identidad creada', created)
+  return created
 }
 
 export function getOrCreateDeviceIdentity() {
@@ -159,6 +289,7 @@ async function saveProvisioningResult(
     updatedAt: new Date().toISOString(),
   }
   await db.deviceIdentity.put(updated)
+  await persistIdentityCopies(updated)
   return updated
 }
 
@@ -226,6 +357,14 @@ export async function resetDeviceIdentityForDebugOnly() {
       .equals('device.provision.requested')
       .delete()
   })
+  try {
+    globalThis.localStorage?.removeItem(DEVICE_IDENTITY_STORAGE_KEY)
+  } catch {
+    // Debug reset continues with the remaining stores.
+  }
+  if (Capacitor.isNativePlatform()) {
+    await Preferences.remove({ key: DEVICE_IDENTITY_STORAGE_KEY })
+  }
   identityRequest = undefined
   provisioningRequest = undefined
 }

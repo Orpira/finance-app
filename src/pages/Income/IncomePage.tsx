@@ -75,6 +75,19 @@ function formatInputDate(date: Date) {
   return `${year}-${month}-${day}`
 }
 
+function formatReadOnlyDateTime(value: string) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat('es-ES', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date)
+}
+
 function hasIncomeAtSameDateTime(
   incomes: ServiceIncome[],
   date: string,
@@ -229,6 +242,7 @@ export function IncomePage() {
 
   const isBasicUser = isBasicMode(settings ?? undefined)
   const isServiceType = isBasicUser || isServiceIncome({ type: incomeType })
+  const usesServiceDuration = !isBasicUser && isServiceType
   const isAdjustmentType = !isBasicUser && isAdjustmentIncome({ type: incomeType })
   const realGain = useMemo(
     () =>
@@ -313,7 +327,7 @@ export function IncomePage() {
       return
     }
 
-    if (isServiceType && !durationLabel) {
+    if (usesServiceDuration && !durationLabel) {
       setSaveStatus('error')
       setSaveError('Selecciona una duración antes de guardar.')
       return
@@ -356,13 +370,20 @@ export function IncomePage() {
       const incomeValues = {
         status: editingIncome?.status ?? 'FINALIZADO',
         type: isBasicUser ? 'ingreso' : incomeType,
+        date: registrationDate,
         paymentType: isAdjustmentType ? undefined : paymentType,
-        duration: isAdjustmentType ? 0 : duration,
-        durationLabel: isAdjustmentType
-          ? undefined
-          : durationSelectionChanged
-            ? durationLabel || undefined
-            : editingIncome?.durationLabel,
+        duration: isBasicUser
+          ? editingIncome?.duration ?? 0
+          : isAdjustmentType
+            ? 0
+            : duration,
+        durationLabel: isBasicUser
+          ? editingIncome?.durationLabel
+          : isAdjustmentType
+            ? undefined
+            : durationSelectionChanged
+              ? durationLabel || undefined
+              : editingIncome?.durationLabel,
         notes: notes.trim() || undefined,
         totalAmount,
         currency,
@@ -393,7 +414,11 @@ export function IncomePage() {
           convertedValues.secondaryCurrencyValue,
         ),
         exchangeRateBaseToSecondary: exchangeRate,
-        actualDuration: isAdjustmentType ? 0 : duration,
+        actualDuration: isBasicUser
+          ? editingIncome?.actualDuration ?? 0
+          : isAdjustmentType
+            ? 0
+            : duration,
         country: editingIncome?.country ?? settings.country,
         city: isBasicUser ? undefined : editingIncome?.city ?? settings.city,
       }
@@ -448,6 +473,13 @@ export function IncomePage() {
     return <section className="mx-auto flex min-h-[60dvh] max-w-2xl flex-col items-center justify-center gap-4 text-center"><h1 className="text-2xl font-semibold">No hay una temporada activa</h1><p className="text-sm text-slate-500">Crea una temporada para registrar actividad.</p><button className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" onClick={() => navigate('/temporadas')} type="button">Ir a Temporadas</button></section>
   }
 
+  const readOnlyDateTime = editingIncome?.createdAt
+    ? formatReadOnlyDateTime(editingIncome.createdAt)
+    : new Intl.DateTimeFormat('es-ES', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(new Date())
+
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHeader
@@ -501,7 +533,37 @@ export function IncomePage() {
           </p>
         )}
 
-        {isServiceType && (
+        {!isEditing || isBasicUser ? (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:!text-slate-300">
+              Fecha y hora
+            </p>
+            <p className="mt-1 font-medium text-slate-900 dark:!text-white">
+              {readOnlyDateTime}
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:!text-slate-300">
+              Se asignan automáticamente al guardar.
+            </p>
+          </div>
+        ) : (
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-slate-700">
+              Fecha del ingreso
+            </span>
+            <input
+              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              onChange={(event) => setDate(event.target.value)}
+              required
+              type="date"
+              value={date}
+            />
+            <span className="text-xs text-slate-500">
+              La hora original del registro se conserva.
+            </span>
+          </label>
+        )}
+
+        {usesServiceDuration && (
           <ServiceDurationSelect
             onChange={handleDurationChange}
             value={durationLabel}

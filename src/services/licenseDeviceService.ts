@@ -1,85 +1,63 @@
-import { Capacitor } from '@capacitor/core'
-import { Device } from '@capacitor/device'
-
-import { getDeviceHashFragment } from '../utils/licenseCodeGenerator'
+import { db } from '../database/db'
+import { getOrCreateDeviceIdentity } from './deviceIdentityService'
 
 export const CURRENT_LICENSE_ID = 'current'
 
-const DEVICE_CODE_STORAGE_KEY = 'finance-app:license-device-code'
-const FALLBACK_DEVICE_ID_STORAGE_KEY = 'finance-app:license-device-id'
+const LEGACY_DEVICE_CODE_STORAGE_KEY = 'finance-app:license-device-code'
 
-function createFallbackUuid() {
-  if (typeof globalThis.crypto?.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID()
+let deviceCodeRequest: Promise<string> | undefined
+
+function logExistingDeviceCode(message: string, deviceCode: string) {
+  if (import.meta.env.DEV) {
+    console.info(`[Private Balance] ${message}`, { deviceCode })
   }
-
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (value) => {
-    const random = Math.floor(Math.random() * 16)
-    const digit = value === 'x' ? random : (random & 0x3) | 0x8
-
-    return digit.toString(16)
-  })
 }
 
-function getFallbackDeviceId() {
-  const storedId = localStorage.getItem(FALLBACK_DEVICE_ID_STORAGE_KEY)
-
-  if (storedId) {
-    return storedId
-  }
-
-  const nextId = createFallbackUuid()
-  localStorage.setItem(FALLBACK_DEVICE_ID_STORAGE_KEY, nextId)
-
-  return nextId
-}
-
-async function hashDeviceIdentifier(identifier: string) {
-  if (globalThis.crypto?.subtle) {
-    const digest = await globalThis.crypto.subtle.digest(
-      'SHA-256',
-      new TextEncoder().encode(identifier),
-    )
-
-    return Array.from(new Uint8Array(digest))
-      .map((value) => value.toString(16).padStart(2, '0'))
-      .join('')
-      .toUpperCase()
-  }
-
-  return `${getDeviceHashFragment(identifier)}${getDeviceHashFragment(
-    `${identifier}:fallback`,
-  )}`
-}
-
-async function getStableDeviceIdentifier() {
-  if (Capacitor.isNativePlatform()) {
-    try {
-      const deviceId = await Device.getId()
-
-      if (deviceId.identifier) {
-        return `native:${deviceId.identifier}`
-      }
-    } catch {
-      // Web/PWA-compatible fallback below.
+async function resolveDeviceCode() {
+  // Existing licenses keep their original binding. This avoids invalidating a
+  // previously activated V1/V2 license during the identity migration.
+  try {
+    const existingLicense = await db.licenses.get(CURRENT_LICENSE_ID)
+    if (existingLicense?.deviceCode) {
+      logExistingDeviceCode(
+        'deviceCode recuperado desde licencia existente',
+        existingLicense.deviceCode,
+      )
+      return existingLicense.deviceCode
     }
+  } catch {
+    // Device identity has independent IndexedDB/localStorage/native fallbacks.
   }
 
-  return `local:${getFallbackDeviceId()}`
+  const identity = await getOrCreateDeviceIdentity()
+
+  // Keep the old key synchronized for compatibility with installed versions
+  // that still read it, but never use it to generate a second identity.
+  try {
+    globalThis.localStorage?.setItem(
+      LEGACY_DEVICE_CODE_STORAGE_KEY,
+      identity.deviceCode,
+    )
+  } catch {
+    // The canonical identity is already persisted by deviceIdentityService.
+  }
+
+  return identity.deviceCode
 }
 
-export async function getDeviceCode() {
-  const storedCode = localStorage.getItem(DEVICE_CODE_STORAGE_KEY)
-
-  if (storedCode) {
-    return storedCode
+export function getDeviceCode() {
+  if (!deviceCodeRequest) {
+    deviceCodeRequest = resolveDeviceCode().finally(() => {
+      deviceCodeRequest = undefined
+    })
   }
 
-  const identifier = await getStableDeviceIdentifier()
-  const hash = await hashDeviceIdentifier(identifier)
-  const deviceCode = `PB-${hash.slice(0, 4)}-${hash.slice(4, 8)}-${hash.slice(8, 12)}`
+  return deviceCodeRequest
+}
 
-  localStorage.setItem(DEVICE_CODE_STORAGE_KEY, deviceCode)
-
-  return deviceCode
+export function logLicenseValidatedForExistingDeviceCode(deviceCode: string) {
+  logExistingDeviceCode(
+    'Licencia validada para deviceCode existente',
+    deviceCode,
+  )
 }

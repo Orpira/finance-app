@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
 
 import LicenseActivationPage from '../../pages/License/LicenseActivationPage'
+import { getOrCreateDeviceIdentity } from '../../services/deviceIdentityService'
 import {
   getLicenseStatus,
   type LicenseAccessStatus,
@@ -17,6 +18,7 @@ export function LicenseGuard({ children }: LicenseGuardProps) {
 
   const refreshLicense = useCallback(async () => {
     try {
+      await getOrCreateDeviceIdentity()
       const result = await getLicenseStatus()
       setStatus(result.status)
     } catch {

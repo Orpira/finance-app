@@ -132,13 +132,24 @@ async function requestAutomationToken(): Promise<AutomationToken> {
       body: JSON.stringify({
         activationCode: license.activationCode,
         deviceCode,
+        userCode: license.userCode,
+        deviceName: license.deviceName,
+        platform: license.platform,
       }),
     },
   )
 
   if (!response.ok) {
+    let errorBody: Record<string, unknown> | undefined
+    try {
+      errorBody = await readJsonObject(response)
+    } catch {
+      errorBody = undefined
+    }
     throw new Error(
-      response.status === 401
+      typeof errorBody?.error === 'string' && errorBody.error.trim()
+        ? errorBody.error.trim()
+        : response.status === 401
         ? 'El servidor rechazó la licencia para automatizaciones.'
         : `No se pudo autorizar el dispositivo (${response.status}).`,
     )
@@ -183,11 +194,15 @@ async function postAutomationEvent(
   envelope: AutomationEventEnvelope,
   token: string,
 ) {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const locale = navigator.language
   const body = envelope.event === 'device.whatsapp.connect.requested'
     ? {
         event: envelope.event,
         userCode: envelope.data.userCode,
         deviceCode: envelope.data.deviceCode,
+        timezone,
+        locale,
       }
     : {
         eventId: envelope.eventId,
@@ -196,6 +211,8 @@ async function postAutomationEvent(
         schemaVersion: envelope.schemaVersion,
         source: envelope.source,
         data: envelope.data,
+        timezone,
+        locale,
       }
 
   return fetchWithTimeout(getAutomationApiUrl('/api/automation'), {
@@ -276,7 +293,9 @@ export async function sendAutomationEvent(
     return {
       delivered: false,
       error:
-        error instanceof Error
+        error instanceof SyntaxError
+          ? 'n8n no devolvió una respuesta JSON válida.'
+          : error instanceof Error
           ? error.message
           : 'No se pudo contactar con el Automation Hub.',
     }

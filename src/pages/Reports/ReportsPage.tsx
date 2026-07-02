@@ -579,7 +579,11 @@ export function ReportsPage() {
 
   function buildIncomeTable(reportIncomes: ServiceIncome[]) {
     const totalDuration = reportIncomes.reduce(
-      (total, income) => total + (isServiceIncome(income) ? income.actualDuration ?? income.duration : 0),
+      (total, income) =>
+        total +
+        (!isBasicUser && isServiceIncome(income)
+          ? income.actualDuration ?? income.duration
+          : 0),
       0,
     )
     const totalAmount = reportIncomes.reduce(
@@ -596,7 +600,7 @@ export function ReportsPage() {
             <td>${escapeHtml(getIncomeDisplayName(income))}</td>
             <td>${escapeHtml(getIncomeTypeLabel(income))}</td>
             <td>${escapeHtml(getPaymentTypeLabel(income.paymentType))}</td>
-            <td>${isServiceIncome(income) ? escapeHtml(getIncomeDurationDisplay(income)) : 'No aplica'}</td>
+            ${!isBasicUser ? `<td>${isServiceIncome(income) ? escapeHtml(getIncomeDurationDisplay(income)) : 'No aplica'}</td>` : ''}
             <td>${adjustmentCount > 0 ? `Afectado por ajuste (${adjustmentCount})` : 'Sin ajustes'}</td>
             <td class="amount">${escapeHtml(formatCurrency(amount, primaryCurrency))}</td>
           </tr>
@@ -611,7 +615,7 @@ export function ReportsPage() {
             <th>Ingreso</th>
             <th>Tipo</th>
             <th>Tipo de pago</th>
-            <th>Duración</th>
+            ${!isBasicUser ? '<th>Duración</th>' : ''}
             <th>Trazabilidad</th>
             <th class="amount">Valor</th>
           </tr>
@@ -620,7 +624,7 @@ export function ReportsPage() {
         <tfoot>
           <tr>
             <td colspan="3">Total</td>
-            <td>${totalDuration} min</td>
+            ${!isBasicUser ? `<td>${totalDuration} min</td>` : ''}
             <td></td>
             <td class="amount">${escapeHtml(formatCurrency(totalAmount, primaryCurrency))}</td>
           </tr>
@@ -631,7 +635,11 @@ export function ReportsPage() {
 
   function buildIncomeTextRows(reportIncomes: ServiceIncome[]) {
     const totalDuration = reportIncomes.reduce(
-      (total, income) => total + (isServiceIncome(income) ? income.actualDuration ?? income.duration : 0),
+      (total, income) =>
+        total +
+        (!isBasicUser && isServiceIncome(income)
+          ? income.actualDuration ?? income.duration
+          : 0),
       0,
     )
     const totalAmount = reportIncomes.reduce(
@@ -647,18 +655,20 @@ export function ReportsPage() {
           `- ${getIncomeDisplayName(income)}`,
           `Clase: ${getIncomeTypeLabel(income)}`,
           `Tipo: ${getPaymentTypeLabel(income.paymentType)}`,
-          `Duración: ${isServiceIncome(income) ? getIncomeDurationDisplay(income) : 'No aplica'}`,
+          !isBasicUser
+            ? `Duración: ${isServiceIncome(income) ? getIncomeDurationDisplay(income) : 'No aplica'}`
+            : '',
           adjustmentCount > 0 ? `Afectado por ajuste (${adjustmentCount})` : 'Sin ajustes relacionados',
           `Valor: ${formatCurrency(amount, primaryCurrency)}`,
-        ].join(' | ')
+        ].filter(Boolean).join(' | ')
       })
       .join('\n')
 
     return [
       rows,
-      `Total duración: ${totalDuration} min`,
+      !isBasicUser ? `Total duración: ${totalDuration} min` : '',
       `Total valor: ${formatCurrency(totalAmount, primaryCurrency)}`,
-    ].join('\n')
+    ].filter(Boolean).join('\n')
   }
 
   function buildExpenseTable(reportExpenses: Expense[]) {

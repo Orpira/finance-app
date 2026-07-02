@@ -112,7 +112,9 @@ export function SettingsLicensePage() {
       setActivationCode('')
       setUpdateStatus('saved')
       setMessage(
-        'Licencia V2 activada. Tus datos financieros permanecen intactos y Automation Hub ya puede autorizar este dispositivo.',
+        updatedLicense.deviceAuthorization === 'registered'
+          ? `Licencia V2 activada y nuevo dispositivo autorizado (${updatedLicense.activeDevices ?? 1}/${updatedLicense.maxDevices ?? 3}). Tus datos financieros permanecen intactos.`
+          : 'Licencia V2 activada. Este dispositivo ya estaba autorizado y tus datos financieros permanecen intactos.',
       )
     } catch (error) {
       setUpdateStatus('error')
@@ -198,7 +200,7 @@ export function SettingsLicensePage() {
               Código del dispositivo
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              La licencia V2 debe generarse específicamente para este código.
+              Este código identifica de forma estable al dispositivo dentro de la licencia.
             </p>
           </div>
         </div>

@@ -356,10 +356,7 @@ export function ExpensesPage() {
     try {
       const now = new Date()
       const effectiveExpenseType = isBasicUser ? 'gasto' : expenseType
-      const expenseDate =
-        (isBasicUser || effectiveExpenseType === 'ajuste') && !isEditing
-          ? getTodayInputDate()
-          : date
+      const expenseDate = !isEditing ? getTodayInputDate() : date
 
       await saveExchangeRate({
         baseCurrency: currency,
@@ -506,52 +503,64 @@ export function ExpensesPage() {
           </div>
         </fieldset>}
 
-        {isBasicUser ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {(isBasicUser || !isEditing) && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:!text-slate-300">
               Fecha y hora
             </p>
-            <p className="mt-1 font-medium text-slate-900">
+            <p className="mt-1 font-medium text-slate-900 dark:!text-white">
               {readOnlyDateTime}
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-500 dark:!text-slate-300">
               Se asignan automáticamente al guardar.
             </p>
           </div>
-        ) : expenseType === 'gasto' ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-700">Fecha</span>
-              <input
-                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                onChange={(event) => setDate(event.target.value)}
-                required
-                type="date"
-                value={date}
-              />
-            </label>
+        )}
 
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-700">
-                Categoría
-              </span>
-              <select
-                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                onChange={(event) => setCategory(event.target.value)}
-                value={category}
-              >
-                {expenseCategories.map((categoryOption) => (
-                  <option key={categoryOption} value={categoryOption}>
-                    {categoryOption}
-                  </option>
-                ))}
-              </select>
-            </label>
+        {!isBasicUser && (isEditing || expenseType === 'gasto') && (
+          <div
+            className={[
+              'grid gap-4',
+              isEditing && expenseType === 'gasto' ? 'sm:grid-cols-2' : '',
+            ].join(' ')}
+          >
+            {isEditing && (
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-slate-700">
+                  Fecha del egreso
+                </span>
+                <input
+                  className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  onChange={(event) => setDate(event.target.value)}
+                  required
+                  type="date"
+                  value={date}
+                />
+                <span className="text-xs text-slate-500">
+                  La hora original del registro se conserva.
+                </span>
+              </label>
+            )}
+
+            {expenseType === 'gasto' && (
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-slate-700">
+                  Categoría
+                </span>
+                <select
+                  className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  onChange={(event) => setCategory(event.target.value)}
+                  value={category}
+                >
+                  {expenseCategories.map((categoryOption) => (
+                    <option key={categoryOption} value={categoryOption}>
+                      {categoryOption}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
-        ) : (
-          <p className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm font-medium text-sky-800">
-            La fecha y hora del ajuste se registran automáticamente al guardar.
-          </p>
         )}
 
         <div className="grid gap-4">
