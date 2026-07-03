@@ -96,6 +96,8 @@ export default async function handler(
   }
 
   const envelope = parseGatewayRequest(request)
+  console.log('===== ENVELOPE RECIBIDO =====');
+  console.log(JSON.stringify(envelope, null, 2));   
   if (!envelope || !hasWebhookRoute(envelope.event)) {
     response.status(422).json({ error: 'Evento no válido.' })
     return

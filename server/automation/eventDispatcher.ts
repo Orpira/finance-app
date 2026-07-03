@@ -5,12 +5,49 @@ import {
   type AutomationEnvelope,
 } from './eventTypes.js'
 import { dispatchWebhook } from './webhookDispatcher.js'
-import { resolveActiveWhatsappChannel } from './communicationResolver.js'
+import { resolveActiveWhatsappChannel, resolveUserCodeFromDeviceCode } from './communicationResolver.js'
 
 const identityCodesSchema = z.object({
   userCode: z.string().regex(/^PB-USER-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
   deviceCode: z.string().regex(/^PB-DEVICE-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
 })
+
+/**
+ * Extrae el userCode de forma robusta desde múltiples ubicaciones del envelope
+ * Si no lo encuentra, intenta resolverlo desde deviceCode usando license_devices
+ */
+async function extractUserCode(data: Record<string, unknown>, deviceCode?: string): Promise<string | undefined> {
+  // Intenta obtener desde envelope.data.userCode
+  if (typeof data.userCode === 'string') {
+    return data.userCode
+  }
+  
+  // Intenta obtener desde envelope.data.data?.userCode
+  if (typeof data.data === 'object' && data.data !== null && 'userCode' in data.data) {
+    const nestedUserCode = (data.data as Record<string, unknown>).userCode
+    if (typeof nestedUserCode === 'string') {
+      return nestedUserCode
+    }
+  }
+  
+  // Intenta obtener desde envelope.data.payload?.userCode
+  if (typeof data.payload === 'object' && data.payload !== null && 'userCode' in data.payload) {
+    const payloadUserCode = (data.payload as Record<string, unknown>).userCode
+    if (typeof payloadUserCode === 'string') {
+      return payloadUserCode
+    }
+  }
+  
+  // Intenta resolver desde deviceCode usando license_devices
+  if (typeof deviceCode === 'string') {
+    const resolvedUserCode = await resolveUserCodeFromDeviceCode(deviceCode)
+    if (resolvedUserCode) {
+      return resolvedUserCode
+    }
+  }
+  
+  return undefined
+}
 
 const provisionIdentityDataSchema = identityCodesSchema.extend({
   deviceName: z.string().min(1).max(200).optional(),
@@ -72,6 +109,8 @@ export function buildN8nPayload(
     return {
       ...payload,
       communicationChannel,
+      instanceName: communicationChannel.instanceName,
+      whatsappNumber: communicationChannel.phoneNumber,
     }
   }
 
@@ -89,7 +128,7 @@ export async function dispatchAutomationEvent(input: {
     input.envelope.event === 'expense.created' ||
     input.envelope.event === 'calendar.created'
   ) {
-    const userCode = input.envelope.data?.userCode
+    const userCode = await extractUserCode(input.envelope.data, input.licenseDeviceCode)
     if (typeof userCode === 'string') {
       const channel = await resolveActiveWhatsappChannel(userCode)
       if (channel) {
