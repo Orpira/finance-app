@@ -22,6 +22,7 @@ import * as communicationResolver from '../server/automation/communicationResolv
 const EVENT_ID = '11111111-1111-4111-8111-111111111111'
 const USER_CODE = 'PB-USER-11111111-1111-4111-8111-111111111111'
 const DEVICE_CODE = 'PB-DEVICE-22222222-2222-4222-8222-222222222222'
+const ROOT_DEVICE_CODE = 'PB-9DB2-FBCE-EA10'
 
 function envelope(
   event: AutomationEnvelope['event'],
@@ -462,7 +463,7 @@ describe('Communication resolver opcional', () => {
     resolveSpy.mockRestore()
   })
 
-  it('income.created con solo deviceCode resuelve userCode desde license_devices y agrega communicationChannel', async () => {
+  it('income.created con deviceCode en la raíz resuelve userCode y agrega los datos del canal', async () => {
     const resolveUserCodeSpy = vi.spyOn(communicationResolver, 'resolveUserCodeFromDeviceCode')
       .mockResolvedValue(USER_CODE)
     
@@ -486,10 +487,10 @@ describe('Communication resolver opcional', () => {
     })
 
     const result = await dispatchAutomationEvent({
-      envelope: envelope('income.created', {
-        income: { id: 1 },
-        // No userCode en envelope, solo se usa deviceCode
-      }),
+      envelope: {
+        ...envelope('income.created', { income: { id: 1 } }),
+        deviceCode: ROOT_DEVICE_CODE,
+      },
       licenseDeviceCode: DEVICE_CODE,
     })
 
@@ -498,7 +499,7 @@ describe('Communication resolver opcional', () => {
       body: { accepted: true, eventId: EVENT_ID },
       empty: false,
     })
-    expect(resolveUserCodeSpy).toHaveBeenCalledWith(DEVICE_CODE)
+    expect(resolveUserCodeSpy).toHaveBeenCalledWith(ROOT_DEVICE_CODE)
     expect(resolveWhatsappSpy).toHaveBeenCalledWith(USER_CODE)
     expect(dispatchWebhook).toHaveBeenCalledWith({
       event: 'income.created',
@@ -562,4 +563,3 @@ describe('Communication resolver opcional', () => {
     resolveUserCodeSpy.mockRestore()
   })
 })
-

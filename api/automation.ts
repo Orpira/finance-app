@@ -34,6 +34,8 @@ const envelopeSchema = z.object({
   schemaVersion: z.literal(1),
   source: z.literal('private-balance-pwa').optional(),
   data: z.record(z.string(), z.unknown()),
+  userCode: z.string().optional(),
+  deviceCode: z.string().optional(),
   timezone: z.string().optional(),
   locale: z.string().optional(),
 })

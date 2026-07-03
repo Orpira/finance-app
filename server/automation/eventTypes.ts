@@ -21,6 +21,8 @@ export interface AutomationEnvelope {
   schemaVersion: 1
   source?: 'private-balance-pwa'
   data: Record<string, unknown>
+  userCode?: string
+  deviceCode?: string
   timezone?: string
   locale?: string
 }
