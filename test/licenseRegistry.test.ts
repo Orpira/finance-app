@@ -15,7 +15,14 @@ vi.mock('@neondatabase/serverless', () => {
   return { neon: () => sqlFunction }
 })
 
-import { authorizeLicenseDevice, LicenseRegistryError } from '../server/licenseDeviceRegistry'
+import {
+  AUTHORIZE_DEVICE_FUNCTION_SQL,
+  BACKFILL_DEVICE_USER_CODES_FROM_LICENSES_SQL,
+  BACKFILL_FROM_COMMUNICATION_CHANNELS_SQL,
+  BACKFILL_LICENSE_USER_CODES_FROM_DEVICES_SQL,
+  authorizeLicenseDevice,
+  LicenseRegistryError,
+} from '../server/licenseDeviceRegistry'
 
 const DUMMY_DB_URL = 'postgresql://user:pass@localhost/db'
 
@@ -24,6 +31,46 @@ beforeEach(() => {
 })
 
 describe('License registry - authorization flow', () => {
+  it('un dispositivo nuevo se registra con user_code y timestamps', () => {
+    expect(AUTHORIZE_DEVICE_FUNCTION_SQL).toMatch(
+      /INSERT INTO license_devices\s*\([\s\S]*?user_code,[\s\S]*?status,[\s\S]*?created_at,[\s\S]*?updated_at/s,
+    )
+    expect(AUTHORIZE_DEVICE_FUNCTION_SQL).toMatch(
+      /VALUES\s*\([\s\S]*?current_license_user_code,[\s\S]*?'active',[\s\S]*?NOW\(\),[\s\S]*?NOW\(\)/s,
+    )
+  })
+
+  it('un dispositivo existente completa user_code únicamente cuando está NULL', () => {
+    expect(AUTHORIZE_DEVICE_FUNCTION_SQL).toMatch(
+      /UPDATE license_devices SET\s*user_code = current_license_user_code,[\s\S]*?AND user_code IS NULL/s,
+    )
+  })
+
+  it('nunca sobrescribe un user_code existente con otro distinto', () => {
+    expect(AUTHORIZE_DEVICE_FUNCTION_SQL).not.toContain(
+      'user_code = COALESCE(p_user_code, user_code)',
+    )
+    expect(AUTHORIZE_DEVICE_FUNCTION_SQL).toContain('AND user_code IS NULL')
+  })
+
+  it('la migración automática solo repara user_code incompletos con fuentes conocidas', () => {
+    expect(BACKFILL_DEVICE_USER_CODES_FROM_LICENSES_SQL).toContain(
+      'device.user_code IS NULL',
+    )
+    expect(BACKFILL_DEVICE_USER_CODES_FROM_LICENSES_SQL).toContain(
+      'license.user_code IS NOT NULL',
+    )
+    expect(BACKFILL_LICENSE_USER_CODES_FROM_DEVICES_SQL).toContain(
+      'HAVING COUNT(DISTINCT user_code) = 1',
+    )
+    expect(BACKFILL_FROM_COMMUNICATION_CHANNELS_SQL).toContain(
+      "to_regclass('public.communication_channels')",
+    )
+    expect(BACKFILL_FROM_COMMUNICATION_CHANNELS_SQL).toContain(
+      'device.user_code IS NULL',
+    )
+  })
+
   it('Caso 1: Licencia multi - Primer dispositivo debe registrar', async () => {
     const sql: any = (await import('@neondatabase/serverless')).neon()
     sql._nextResponse = [

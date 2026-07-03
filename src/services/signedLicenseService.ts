@@ -323,9 +323,13 @@ export async function getSignedLicenseStatus(): Promise<SignedLicenseStatusResul
     return { license: expiredLicense, status: 'expired' }
   }
 
+  const identity = await getOrCreateDeviceIdentity()
   const updatedLicense: AppLicense = {
     ...license,
     licenseVersion: license.licenseVersion ?? 1,
+    userCode: license.userCode ?? identity.userCode,
+    deviceName: license.deviceName ?? identity.deviceName,
+    platform: license.platform ?? identity.platform,
     lastValidAccessDate: new Date(now).toISOString(),
     updatedAt: new Date(now).toISOString(),
   }

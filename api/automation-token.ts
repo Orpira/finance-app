@@ -23,7 +23,7 @@ const requestSchema = z.object({
     z.string().regex(/^PB-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}$/),
     z.string().regex(/^PB-DEVICE-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
   ]),
-  userCode: z.string().max(100).optional(),
+  userCode: z.string().min(1).max(100),
   deviceName: z.string().max(200).optional(),
   platform: z.enum(['web', 'android', 'ios', 'unknown']).optional(),
 }).strict()

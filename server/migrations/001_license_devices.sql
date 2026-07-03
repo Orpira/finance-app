@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS license_devices (
   device_name TEXT,
   platform TEXT NOT NULL DEFAULT 'unknown',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   status TEXT NOT NULL DEFAULT 'active'
     CHECK (status IN ('active', 'revoked')),

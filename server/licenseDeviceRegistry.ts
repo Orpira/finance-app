@@ -4,7 +4,7 @@ export type LicenseDevicePlatform = 'web' | 'android' | 'ios' | 'unknown'
 
 export interface LicenseRegistryInput {
   licenseKey: string
-  userCode?: string
+  userCode: string
   deviceCode: string
   deviceName?: string
   platform?: LicenseDevicePlatform
@@ -35,7 +35,7 @@ export class LicenseRegistryError extends Error {
 
 let schemaRequest: Promise<void> | undefined
 
-const AUTHORIZE_DEVICE_FUNCTION_SQL = `
+export const AUTHORIZE_DEVICE_FUNCTION_SQL = `
   CREATE OR REPLACE FUNCTION authorize_license_device(
     p_license_key TEXT,
     p_user_code TEXT,
@@ -58,10 +58,16 @@ const AUTHORIZE_DEVICE_FUNCTION_SQL = `
   AS $$
   DECLARE
     current_license_status TEXT;
+    current_license_user_code TEXT;
     current_device_status TEXT;
     configured_max_devices INTEGER;
     current_active_devices INTEGER;
   BEGIN
+    IF p_user_code IS NULL OR BTRIM(p_user_code) = '' THEN
+      RAISE EXCEPTION 'user_code is required'
+        USING ERRCODE = '23502';
+    END IF;
+
     INSERT INTO licenses (
       license_key,
       user_code,
@@ -85,8 +91,8 @@ const AUTHORIZE_DEVICE_FUNCTION_SQL = `
       max_devices = EXCLUDED.max_devices,
       updated_at = NOW();
 
-    SELECT status, licenses.max_devices
-      INTO current_license_status, configured_max_devices
+    SELECT status, licenses.max_devices, licenses.user_code
+      INTO current_license_status, configured_max_devices, current_license_user_code
     FROM licenses
     WHERE license_key = p_license_key
     FOR UPDATE;
@@ -104,12 +110,19 @@ const AUTHORIZE_DEVICE_FUNCTION_SQL = `
       AND device_code = p_device_code;
 
     IF FOUND THEN
+      UPDATE license_devices SET
+        user_code = current_license_user_code,
+        updated_at = NOW()
+      WHERE license_key = p_license_key
+        AND device_code = p_device_code
+        AND user_code IS NULL;
+
       IF current_device_status = 'active' THEN
         UPDATE license_devices SET
-          user_code = COALESCE(p_user_code, user_code),
           device_name = COALESCE(p_device_name, device_name),
           platform = p_platform,
-          last_seen_at = NOW()
+          last_seen_at = NOW(),
+          updated_at = NOW()
         WHERE license_key = p_license_key
           AND device_code = p_device_code;
       END IF;
@@ -145,13 +158,21 @@ const AUTHORIZE_DEVICE_FUNCTION_SQL = `
       user_code,
       device_code,
       device_name,
-      platform
+      platform,
+      status,
+      created_at,
+      updated_at,
+      last_seen_at
     ) VALUES (
       p_license_key,
-      p_user_code,
+      current_license_user_code,
       p_device_code,
       p_device_name,
-      p_platform
+      p_platform,
+      'active',
+      NOW(),
+      NOW(),
+      NOW()
     );
 
     RETURN QUERY SELECT
@@ -159,6 +180,58 @@ const AUTHORIZE_DEVICE_FUNCTION_SQL = `
       current_active_devices + 1, configured_max_devices;
   END;
   $$
+`
+
+export const BACKFILL_DEVICE_USER_CODES_FROM_LICENSES_SQL = `
+  UPDATE license_devices AS device
+  SET
+    user_code = license.user_code,
+    updated_at = NOW()
+  FROM licenses AS license
+  WHERE device.license_key = license.license_key
+    AND device.user_code IS NULL
+    AND license.user_code IS NOT NULL;
+`
+
+export const BACKFILL_LICENSE_USER_CODES_FROM_DEVICES_SQL = `
+  UPDATE licenses AS license
+  SET
+    user_code = source.user_code,
+    updated_at = NOW()
+  FROM (
+    SELECT license_key, MIN(user_code) AS user_code
+    FROM license_devices
+    WHERE user_code IS NOT NULL
+    GROUP BY license_key
+    HAVING COUNT(DISTINCT user_code) = 1
+  ) AS source
+  WHERE license.license_key = source.license_key
+    AND license.user_code IS NULL;
+`
+
+export const BACKFILL_FROM_COMMUNICATION_CHANNELS_SQL = `
+  DO $migration$
+  BEGIN
+    IF to_regclass('public.communication_channels') IS NOT NULL THEN
+      EXECUTE $backfill$
+        UPDATE license_devices AS device
+        SET
+          user_code = channel.user_code,
+          updated_at = NOW()
+        FROM (
+          SELECT device_code, MIN(user_code) AS user_code
+          FROM communication_channels
+          WHERE device_code IS NOT NULL
+            AND user_code IS NOT NULL
+          GROUP BY device_code
+          HAVING COUNT(DISTINCT user_code) = 1
+        ) AS channel
+        WHERE device.device_code = channel.device_code
+          AND device.user_code IS NULL
+      $backfill$;
+    END IF;
+  END;
+  $migration$;
 `
 
 function getDatabaseUrl() {
@@ -205,6 +278,7 @@ async function ensureSchema() {
       device_name TEXT,
       platform TEXT NOT NULL DEFAULT 'unknown',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       status TEXT NOT NULL DEFAULT 'active'
         CHECK (status IN ('active', 'revoked')),
@@ -217,6 +291,15 @@ async function ensureSchema() {
       ON license_devices (license_key, status)
   `
 
+  await sql`
+    ALTER TABLE license_devices
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  `
+
+  await sql.query(BACKFILL_DEVICE_USER_CODES_FROM_LICENSES_SQL)
+  await sql.query(BACKFILL_FROM_COMMUNICATION_CHANNELS_SQL)
+  await sql.query(BACKFILL_LICENSE_USER_CODES_FROM_DEVICES_SQL)
+  await sql.query(BACKFILL_DEVICE_USER_CODES_FROM_LICENSES_SQL)
   await sql.query(AUTHORIZE_DEVICE_FUNCTION_SQL)
 }
 
@@ -250,7 +333,7 @@ export async function authorizeLicenseDevice(
   const rows = await sql`
     SELECT * FROM authorize_license_device(
       ${input.licenseKey},
-      ${input.userCode ?? null},
+      ${input.userCode},
       ${input.deviceCode},
       ${input.deviceName ?? null},
       ${input.platform ?? 'unknown'},
