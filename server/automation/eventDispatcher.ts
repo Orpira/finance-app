@@ -34,9 +34,6 @@ async function resolveEnvelopeUserCode(
     payload?.userCode,
     envelope.userCode,
   )
-
-  if (userCode) return userCode
-
   const deviceCode = firstString(
     envelope.data.deviceCode,
     nestedData?.deviceCode,
@@ -45,8 +42,14 @@ async function resolveEnvelopeUserCode(
     fallbackDeviceCode,
   )
 
+  console.log('[AUTOMATION] deviceCode:', deviceCode)
+  console.log('[AUTOMATION] userCode:', userCode)
+
+  if (userCode) return userCode
   if (!deviceCode) return undefined
-  return (await resolveUserCodeFromDeviceCode(deviceCode)) ?? undefined
+  const resolvedUserCode = await resolveUserCodeFromDeviceCode(deviceCode)
+  console.log('[AUTOMATION] resolvedUserCode:', resolvedUserCode)
+  return resolvedUserCode ?? undefined
 }
 
 const provisionIdentityDataSchema = identityCodesSchema.extend({
@@ -131,6 +134,7 @@ export async function dispatchAutomationEvent(input: {
     const userCode = await resolveEnvelopeUserCode(input.envelope, input.licenseDeviceCode)
     if (typeof userCode === 'string') {
       const channel = await resolveActiveWhatsappChannel(userCode)
+      console.log('[AUTOMATION] communicationChannel:', channel)
       if (channel) {
         communicationChannel = {
           provider: channel.provider,
@@ -144,14 +148,17 @@ export async function dispatchAutomationEvent(input: {
     }
   }
 
+  const payloadToN8N = buildN8nPayload(
+    input.envelope,
+    input.licenseDeviceCode,
+    communicationChannel,
+  )
+  console.log('[AUTOMATION] payloadToN8N:', payloadToN8N)
+
   const webhook = await dispatchWebhook({
     event: input.envelope.event,
     eventId: input.envelope.eventId,
-    payload: buildN8nPayload(
-      input.envelope,
-      input.licenseDeviceCode,
-      communicationChannel,
-    ),
+    payload: payloadToN8N,
   })
 
   if (!webhook.successful || isSynchronousAutomationEvent(input.envelope.event)) {
