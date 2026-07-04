@@ -33,6 +33,7 @@ import {
   isServiceIncome,
 } from '../../utils/incomeTypes'
 import { getIncomeDurationDisplay } from '../../utils/serviceDuration'
+import { canMarkAsReported, getRecordReportBadge } from '../../utils/reportStatus'
 
 type Period = 'week' | 'month' | 'year'
 type ReportKind = 'income' | 'expense' | 'paymentType'
@@ -181,6 +182,7 @@ export function ReportsPage() {
   const [seasons, setSeasons] = useState<EarningPeriod[]>([])
   const [selectedSeason, setSelectedSeason] = useState<string>('ALL')
   const isBasicUser = isBasicMode(settings ?? undefined)
+  const activeUsageMode = settings?.usageMode ?? 'professional'
 
   useEffect(() => {
     let isMounted = true
@@ -603,6 +605,7 @@ export function ReportsPage() {
             <td>${escapeHtml(getIncomeTypeLabel(income))}</td>
             <td>${escapeHtml(getPaymentTypeLabel(income.paymentType))}</td>
             ${!isBasicUser ? `<td>${isServiceIncome(income) ? escapeHtml(getIncomeDurationDisplay(income)) : 'No aplica'}</td>` : ''}
+            ${!isBasicUser ? `<td>${canMarkAsReported(income, activeUsageMode) ? getRecordReportBadge(income).label : 'No aplica'}</td>` : ''}
             <td>${adjustmentCount > 0 ? `Afectado por ajuste (${adjustmentCount})` : 'Sin ajustes'}</td>
             <td class="amount">${escapeHtml(formatCurrency(amount, primaryCurrency))}</td>
           </tr>
@@ -618,6 +621,7 @@ export function ReportsPage() {
             <th>Tipo</th>
             <th>Tipo de pago</th>
             ${!isBasicUser ? '<th>Duración</th>' : ''}
+            ${!isBasicUser ? '<th>Estado operativo</th>' : ''}
             <th>Trazabilidad</th>
             <th class="amount">Valor</th>
           </tr>
@@ -627,6 +631,7 @@ export function ReportsPage() {
           <tr>
             <td colspan="3">Total</td>
             ${!isBasicUser ? `<td>${totalDuration} min</td>` : ''}
+            ${!isBasicUser ? '<td></td>' : ''}
             <td></td>
             <td class="amount">${escapeHtml(formatCurrency(totalAmount, primaryCurrency))}</td>
           </tr>
@@ -660,6 +665,9 @@ export function ReportsPage() {
           !isBasicUser
             ? `Duración: ${isServiceIncome(income) ? getIncomeDurationDisplay(income) : 'No aplica'}`
             : '',
+          !isBasicUser
+            ? `Estado operativo: ${canMarkAsReported(income, activeUsageMode) ? getRecordReportBadge(income).label : 'No aplica'}`
+            : '',
           adjustmentCount > 0 ? `Afectado por ajuste (${adjustmentCount})` : 'Sin ajustes relacionados',
           `Valor: ${formatCurrency(amount, primaryCurrency)}`,
         ].filter(Boolean).join(' | ')
@@ -690,6 +698,7 @@ export function ReportsPage() {
             <td>${escapeHtml(getExpenseDisplayName(expense))}</td>
             <td>${escapeHtml(expense.category)}</td>
             <td>${relatedIncome ? escapeHtml(getIncomeDisplayName(relatedIncome)) : expense.relatedIncomeId ? `Ingreso #${expense.relatedIncomeId}` : 'No aplica'}</td>
+            ${isBasicUser ? `<td>${canMarkAsReported(expense, activeUsageMode) ? getRecordReportBadge(expense).label : 'No aplica'}</td>` : ''}
             <td class="amount">${escapeHtml(formatCurrency(amount, primaryCurrency))}</td>
           </tr>
         `
@@ -703,6 +712,7 @@ export function ReportsPage() {
             <th>Gasto</th>
             <th>Categoría</th>
             <th>Ingreso relacionado</th>
+            ${isBasicUser ? '<th>Estado operativo</th>' : ''}
             <th class="amount">Valor</th>
           </tr>
         </thead>
@@ -710,6 +720,7 @@ export function ReportsPage() {
         <tfoot>
           <tr>
             <td colspan="3">Total</td>
+            ${isBasicUser ? '<td></td>' : ''}
             <td class="amount">${escapeHtml(formatCurrency(totalAmount, primaryCurrency))}</td>
           </tr>
         </tfoot>
@@ -733,8 +744,11 @@ export function ReportsPage() {
           `- ${getExpenseDisplayName(expense)}`,
           `Categoría: ${expense.category}`,
           `Ingreso relacionado: ${relatedIncome ? getIncomeDisplayName(relatedIncome) : expense.relatedIncomeId ? `Ingreso #${expense.relatedIncomeId}` : 'No aplica'}`,
+          isBasicUser
+            ? `Estado operativo: ${canMarkAsReported(expense, activeUsageMode) ? getRecordReportBadge(expense).label : 'No aplica'}`
+            : '',
           `Valor: ${formatCurrency(amount, primaryCurrency)}`,
-        ].join(' | ')
+        ].filter(Boolean).join(' | ')
       })
       .join('\n')
 

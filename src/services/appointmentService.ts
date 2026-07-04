@@ -13,6 +13,8 @@ import {
   assertReportedRecordUpdateIsAllowed,
   normalizeReportStatus,
 } from '../catalogs/reportStatuses'
+import { assertReportStatusUpdateIsAllowed } from '../utils/reportStatus'
+import { getSettings } from './settingsService'
 
 export interface AppointmentListOptions extends DateRangeListOptions {
   completed?: boolean
@@ -78,11 +80,14 @@ export async function updateAppointment(
   id: number,
   updates: UpdateAppointmentInput,
 ) {
+  const settings = await getSettings()
+
   return db.transaction('rw', db.appointments, async () => {
     const currentAppointment = await db.appointments.get(id)
-    await assertRecordIsMutable(currentAppointment)
-    assertReportedRecordUpdateIsAllowed(currentAppointment, updates)
     if (!currentAppointment) throw new Error('La cita que intentas modificar no existe.')
+    await assertRecordIsMutable(currentAppointment)
+    assertReportStatusUpdateIsAllowed(currentAppointment, settings.usageMode, updates)
+    assertReportedRecordUpdateIsAllowed(currentAppointment, updates)
 
     const updatedAppointment = normalizeReportStatus({
       ...currentAppointment,

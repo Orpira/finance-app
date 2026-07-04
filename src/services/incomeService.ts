@@ -24,6 +24,7 @@ import {
   assertReportedRecordUpdateIsAllowed,
   normalizeReportStatus,
 } from '../catalogs/reportStatuses'
+import { assertReportStatusUpdateIsAllowed } from '../utils/reportStatus'
 
 export type CreateServiceIncomeInput = Omit<ServiceIncome, 'id'>
 export type UpdateServiceIncomeInput = Partial<CreateServiceIncomeInput>
@@ -144,6 +145,7 @@ export async function updateServiceIncome(
   ) {
     throw new Error('Este ingreso pertenece a otro modo de uso.')
   }
+  assertReportStatusUpdateIsAllowed(currentIncome, settings.usageMode, updates)
   assertReportedRecordUpdateIsAllowed(currentIncome, updates)
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentIncome)
@@ -155,6 +157,7 @@ export async function updateServiceIncome(
       db.expenses.toArray(),
     ])
     if (!latestIncome) throw new Error('El ingreso que intentas modificar no existe.')
+    assertReportStatusUpdateIsAllowed(latestIncome, settings.usageMode, updates)
     assertReportedRecordUpdateIsAllowed(latestIncome, updates)
 
     const updatedIncome = normalizeIncomeByType(

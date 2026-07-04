@@ -28,10 +28,11 @@ import {
   recordBelongsToUsageMode,
   requiresSeason,
 } from '../../utils/usageMode'
-import { formatReportStatusMeta, getRecordReportBadge, toggleReportStatus } from '../../utils/reportStatus'
+import { canMarkAsReported, formatReportStatusMeta, getRecordReportBadge, toggleReportStatus } from '../../utils/reportStatus'
 import { useDialog } from '../../components/dialogs/useDialog'
 
 const EXPENSES_PER_PAGE = 10
+type ReportStatusFilter = 'ALL' | 'pending' | 'reported'
 
 export function ExpenseListPage() {
   const { alert, confirm } = useDialog()
@@ -43,6 +44,8 @@ export function ExpenseListPage() {
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
   const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL')
   const [selectedCategory, setSelectedCategory] = useState<string | 'ALL'>('ALL')
+  const [selectedReportStatus, setSelectedReportStatus] =
+    useState<ReportStatusFilter>('ALL')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [expensePage, setExpensePage] = useState(1)
@@ -109,16 +112,24 @@ export function ExpenseListPage() {
           selectedCategory === 'ALL' || expense.category === selectedCategory
         const matchesDateFrom = !dateFrom || expense.date >= dateFrom
         const matchesDateTo = !dateTo || expense.date <= dateTo
+        const matchesReportStatus =
+          selectedReportStatus === 'ALL' ||
+          Boolean(
+            settings &&
+              canMarkAsReported(expense, settings.usageMode) &&
+              getRecordReportBadge(expense).reportStatusCode === selectedReportStatus,
+          )
 
         return (
           matchesCountry &&
           matchesCity &&
           matchesCategory &&
+          matchesReportStatus &&
           matchesDateFrom &&
           matchesDateTo
         )
       }),
-    [dateFrom, dateTo, expenses, selectedCategory, selectedCity, selectedCountry],
+    [dateFrom, dateTo, expenses, selectedCategory, selectedCity, selectedCountry, selectedReportStatus, settings],
   )
   const totalExpensePages = Math.max(
     1,
@@ -206,7 +217,16 @@ export function ExpenseListPage() {
   }, [])
 
   async function handleToggleReportStatus(expense: Expense) {
-    if (!expense.id) {
+    if (!expense.id || !settings) {
+      return
+    }
+
+    if (!canMarkAsReported(expense, settings.usageMode)) {
+      await alert({
+        type: 'error',
+        title: 'Acción no permitida',
+        message: 'Solo los egresos del modo Básico pueden marcarse como reportados.',
+      })
       return
     }
 
@@ -226,7 +246,7 @@ export function ExpenseListPage() {
     }
 
     try {
-      const nextRecord = toggleReportStatus(expense)
+      const nextRecord = toggleReportStatus(expense, settings.usageMode)
       await updateExpense(expense.id, {
         reportStatusCode: nextRecord.reportStatusCode,
         reportStatusLabel: nextRecord.reportStatusLabel,
@@ -329,6 +349,24 @@ export function ExpenseListPage() {
             />
           </label>
 
+          {settings && isBasicMode(settings) && (
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-600">Estado de reporte</span>
+              <select
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                onChange={(event) => {
+                  setSelectedReportStatus(event.target.value as ReportStatusFilter)
+                  setExpensePage(1)
+                }}
+                value={selectedReportStatus}
+              >
+                <option value="ALL">Todos</option>
+                <option value="pending">Pendientes</option>
+                <option value="reported">Reportados</option>
+              </select>
+            </label>
+          )}
+
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-600">
               Fecha hasta
@@ -427,6 +465,9 @@ export function ExpenseListPage() {
                   : undefined
                 const reportBadge = getRecordReportBadge(expense)
                 const reportMeta = formatReportStatusMeta(expense)
+                const canReport = Boolean(
+                  settings && canMarkAsReported(expense, settings.usageMode),
+                )
 
                 return (
                 <li
@@ -515,6 +556,7 @@ export function ExpenseListPage() {
                         Solo consulta
                       </span>
                     ) : reportBadge.isReported ? (
+                      canReport ? (
                       <button
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
                         onClick={() => handleToggleReportStatus(expense)}
@@ -522,6 +564,11 @@ export function ExpenseListPage() {
                       >
                         Quitar marca
                       </button>
+                      ) : (
+                        <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:text-slate-200!">
+                          Solo consulta
+                        </span>
+                      )
                     ) : (
                       <>
                     <Link
@@ -531,13 +578,13 @@ export function ExpenseListPage() {
                       <Pencil className="size-4" aria-hidden="true" />
                       Modificar
                     </Link>
-                    <button
+                    {canReport && <button
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
                       onClick={() => handleToggleReportStatus(expense)}
                       type="button"
                     >
                       Marcar como reportado
-                    </button>
+                    </button>}
                     <button
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
                       onClick={() => handleDeleteExpense(expense)}
