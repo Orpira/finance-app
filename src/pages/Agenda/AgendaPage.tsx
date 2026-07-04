@@ -34,6 +34,8 @@ import {
 import { formatCurrency } from '../../utils/currency'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 import { getDurationDisplay } from '../../utils/serviceDuration'
+import { isReported, markAsPending } from '../../catalogs/reportStatuses'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 function formatInputDate(date: Date) {
   const year = date.getFullYear()
@@ -129,6 +131,7 @@ function getTimerLabel(appointment: Appointment, now: Date) {
 }
 
 export function AgendaPage() {
+  const { alert, confirm } = useDialog()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [settings, setSettings] = useState<AppSettings | null>(null)
@@ -193,6 +196,7 @@ export function AgendaPage() {
       (appointment) =>
         appointment.id &&
         !appointment.completed &&
+        !isReported(appointment) &&
         !appointment.timerStartedAt &&
         appointment.timerMode !== 'manualPending' &&
         new Date(appointment.dateTime).getTime() <= now.getTime(),
@@ -264,6 +268,37 @@ export function AgendaPage() {
   async function handleDelete(appointmentId: number) {
     await deleteAppointment(appointmentId)
     await reloadAppointments()
+  }
+
+  async function handleRemoveReportedMark(appointment: Appointment) {
+    if (!appointment.id) {
+      return
+    }
+
+    const shouldRemoveMark = await confirm({
+      title: 'Quitar marca de Reportado',
+      message: '¿Quitar la marca de Reportado? La cita volverá a permitir modificaciones y eliminación.',
+      confirmLabel: 'Quitar marca',
+    })
+    if (!shouldRemoveMark) {
+      return
+    }
+
+    try {
+      const pendingAppointment = markAsPending(appointment)
+      await updateAppointment(appointment.id, {
+        reportStatusCode: pendingAppointment.reportStatusCode,
+        reportStatusLabel: pendingAppointment.reportStatusLabel,
+        reportedAt: pendingAppointment.reportedAt,
+      })
+      await reloadAppointments()
+    } catch (error: unknown) {
+      await alert({
+        type: 'error',
+        title: 'No se pudo actualizar la cita',
+        message: error instanceof Error ? error.message : 'No se pudo quitar la marca de la cita.',
+      })
+    }
   }
 
   async function handleManualPending(appointment: Appointment) {
@@ -394,6 +429,7 @@ export function AgendaPage() {
                     settings.closedLocationSeasons,
                     settings.reopenedLocationSeasons,
                   )
+                  const appointmentIsReported = isReported(appointment)
 
                   return (
                     <li
@@ -448,6 +484,11 @@ export function AgendaPage() {
                               Servicio realizado · {actualDuration} min reales
                             </p>
                           )}
+                          {appointmentIsReported && (
+                            <p className="mt-2 text-sm font-semibold text-emerald-700">
+                              Reportado · solo consulta
+                            </p>
+                          )}
                           {(appointment.reminders ?? []).length > 0 && (
                             <div className="mt-3 flex flex-wrap gap-2">
                               {(appointment.reminders ?? []).map((reminder) => (
@@ -471,6 +512,14 @@ export function AgendaPage() {
                             <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:!text-slate-200">
                               Solo consulta
                             </span>
+                          ) : appointmentIsReported ? (
+                            <button
+                              className="inline-flex h-10 items-center justify-center rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                              onClick={() => handleRemoveReportedMark(appointment)}
+                              type="button"
+                            >
+                              Quitar marca
+                            </button>
                           ) : (
                             <>
                           <button
@@ -496,7 +545,7 @@ export function AgendaPage() {
                         </div>
                       </div>
 
-                      {!appointment.completed && !isClosedSeason && (
+                      {!appointment.completed && !isClosedSeason && !appointmentIsReported && (
                         <div className="grid gap-2 sm:grid-cols-3">
                           {!hasTimerStarted &&
                             appointment.timerMode !== 'manualPending' && (

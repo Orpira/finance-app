@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 interface ReportPreview {
   html: string
@@ -38,8 +39,7 @@ function openPrintReport(title: string, html: string) {
   const printWindow = window.open('', '_blank', 'noopener,noreferrer')
 
   if (!printWindow) {
-    window.alert('No se pudo abrir la ventana de impresión.')
-    return
+    return false
   }
 
   printWindow.document.write(html)
@@ -49,10 +49,24 @@ function openPrintReport(title: string, html: string) {
   setTimeout(() => {
     printWindow.print()
   }, 250)
+  return true
 }
 
 export function ReportPreviewPage() {
+  const { alert } = useDialog()
   const report = useMemo(() => getStoredReportPreview(), [])
+
+  async function handlePrintReport() {
+    if (!report || openPrintReport(report.title, report.html)) {
+      return
+    }
+
+    await alert({
+      type: 'error',
+      title: 'No se pudo abrir la impresión',
+      message: 'No se pudo abrir la ventana de impresión.',
+    })
+  }
 
   async function handleShareReport() {
     if (!report) {
@@ -69,7 +83,11 @@ export function ReportPreviewPage() {
         title: report.title,
       })
     } catch {
-      window.alert('No se pudo compartir el PDF del reporte.')
+      await alert({
+        type: 'error',
+        title: 'No se pudo compartir el reporte',
+        message: 'No se pudo compartir el PDF del reporte.',
+      })
     }
   }
 
@@ -93,7 +111,7 @@ export function ReportPreviewPage() {
             </button>
             <button
               className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
-              onClick={() => openPrintReport(report.title, report.html)}
+              onClick={handlePrintReport}
               type="button"
             >
               <FileText className="size-4" aria-hidden="true" />

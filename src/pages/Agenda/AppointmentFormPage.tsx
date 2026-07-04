@@ -34,6 +34,8 @@ import {
   isServiceDurationLabel,
   type ServiceDurationLabel,
 } from '../../utils/serviceDuration'
+import { isReported } from '../../catalogs/reportStatuses'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 type SeasonActionStatus = 'idle' | 'reopening' | 'reopened' | 'error'
@@ -86,6 +88,7 @@ function getInitialDate(searchDate: string | null) {
 }
 
 export function AppointmentFormPage() {
+  const { confirm } = useDialog()
   const navigate = useNavigate()
   const { appointmentId } = useParams()
   const [searchParams] = useSearchParams()
@@ -161,6 +164,12 @@ export function AppointmentFormPage() {
 
       if (!appointment) {
         setLoadError('No se encontró la cita.')
+        return
+      }
+
+      if (isReported(appointment)) {
+        setDate(getDateFromDateTime(appointment.dateTime))
+        setLoadError('Esta cita ya fue reportada y solo puede consultarse desde la agenda.')
         return
       }
 
@@ -260,9 +269,12 @@ export function AppointmentFormPage() {
     const locationName = [settings.city, settings.country]
       .filter(Boolean)
       .join(', ')
-    const shouldReopen = window.confirm(
-      `¿Deseas reabrir la temporada de ${locationName}?\n\nLos registros históricos no se modificarán.`,
-    )
+    const shouldReopen = await confirm({
+      title: 'Reabrir temporada',
+      message: `¿Deseas reabrir la temporada de ${locationName}?\n\nLos registros históricos no se modificarán.`,
+      confirmLabel: 'Reabrir temporada',
+      confirmTone: 'warning',
+    })
 
     if (!shouldReopen) {
       return

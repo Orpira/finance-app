@@ -43,6 +43,8 @@ import {
   isServiceDurationLabel,
   type ServiceDurationLabel,
 } from '../../utils/serviceDuration'
+import { isReported } from '../../catalogs/reportStatuses'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 type SaveStatus = 'idle' | 'saving' | 'error' | 'duplicateHour'
 
@@ -118,6 +120,7 @@ function hasIncomeAtSameDateTime(
 }
 
 export function IncomePage() {
+  const { alert } = useDialog()
   const { incomeId } = useParams()
   const navigate = useNavigate()
   const parsedIncomeId = incomeId ? Number(incomeId) : null
@@ -180,7 +183,21 @@ export function IncomePage() {
             currentSettings.usageMode,
           )
         ) {
-          window.alert('Este ingreso pertenece a otro modo de uso.')
+          await alert({
+            type: 'warning',
+            title: 'Ingreso no disponible',
+            message: 'Este ingreso pertenece a otro modo de uso.',
+          })
+          navigate('/income', { replace: true })
+          return
+        }
+
+        if (isReported(currentIncome)) {
+          await alert({
+            type: 'info',
+            title: 'Ingreso reportado',
+            message: 'Este ingreso ya fue reportado y solo puede consultarse.',
+          })
           navigate('/income', { replace: true })
           return
         }
@@ -195,9 +212,11 @@ export function IncomePage() {
               currentSettings.closedLocationSeasons,
             ))
         ) {
-          window.alert(
-            'Este ingreso pertenece a una temporada cerrada. Solo puede consultarse desde el historial y usarse en reportes.',
-          )
+          await alert({
+            type: 'info',
+            title: 'Temporada cerrada',
+            message: 'Este ingreso pertenece a una temporada cerrada. Solo puede consultarse desde el historial y usarse en reportes.',
+          })
           navigate('/income', { replace: true })
           return
         }
@@ -238,7 +257,7 @@ export function IncomePage() {
     return () => {
       isMounted = false
     }
-  }, [navigate, parsedIncomeId])
+  }, [alert, navigate, parsedIncomeId])
 
   const isBasicUser = isBasicMode(settings ?? undefined)
   const isServiceType = isBasicUser || isServiceIncome({ type: incomeType })

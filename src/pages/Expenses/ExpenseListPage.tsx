@@ -12,7 +12,7 @@ import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
-import { deleteExpense, listExpenses } from '../../services/expenseService'
+import { deleteExpense, listExpenses, updateExpense } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
@@ -28,10 +28,13 @@ import {
   recordBelongsToUsageMode,
   requiresSeason,
 } from '../../utils/usageMode'
+import { formatReportStatusMeta, getRecordReportBadge, toggleReportStatus } from '../../utils/reportStatus'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 const EXPENSES_PER_PAGE = 10
 
 export function ExpenseListPage() {
+  const { alert, confirm } = useDialog()
   const { hidden } = useSensitiveValues()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
@@ -202,14 +205,54 @@ export function ExpenseListPage() {
     }
   }, [])
 
+  async function handleToggleReportStatus(expense: Expense) {
+    if (!expense.id) {
+      return
+    }
+
+    const reportBadge = getRecordReportBadge(expense)
+    const confirmationMessage = reportBadge.isReported
+      ? '¿Quitar la marca de Reportado? El egreso volverá a permitir modificaciones y eliminación.'
+      : 'Al marcar este egreso como reportado quedará bloqueado y no podrá modificarse ni eliminarse. ¿Deseas continuar?'
+
+    const confirmed = await confirm({
+      title: reportBadge.isReported ? 'Quitar marca de Reportado' : 'Marcar egreso como reportado',
+      message: confirmationMessage,
+      confirmLabel: reportBadge.isReported ? 'Quitar marca' : 'Marcar como reportado',
+      confirmTone: reportBadge.isReported ? 'primary' : 'warning',
+    })
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      const nextRecord = toggleReportStatus(expense)
+      await updateExpense(expense.id, {
+        reportStatusCode: nextRecord.reportStatusCode,
+        reportStatusLabel: nextRecord.reportStatusLabel,
+        reportedAt: nextRecord.reportedAt,
+      })
+      await reloadExpenses()
+    } catch (error: unknown) {
+      await alert({
+        type: 'error',
+        title: 'No se pudo actualizar el egreso',
+        message: error instanceof Error ? error.message : 'No se pudo actualizar el estado del egreso.',
+      })
+    }
+  }
+
   async function handleDeleteExpense(expense: Expense) {
     if (!expense.id) {
       return
     }
 
-    const shouldDelete = window.confirm(
-      `¿Eliminar el ${expense.type === 'ajuste' ? 'ajuste' : 'gasto'} #${expense.id} del ${expense.date}?`,
-    )
+    const shouldDelete = await confirm({
+      title: expense.type === 'ajuste' ? 'Eliminar ajuste' : 'Eliminar egreso',
+      message: `¿Eliminar el ${expense.type === 'ajuste' ? 'ajuste' : 'gasto'} #${expense.id} del ${expense.date}?`,
+      confirmLabel: 'Eliminar',
+      confirmTone: 'danger',
+    })
 
     if (!shouldDelete) {
       return
@@ -382,6 +425,8 @@ export function ExpenseListPage() {
                 const relatedIncome = expense.relatedIncomeId
                   ? incomesById.get(expense.relatedIncomeId)
                   : undefined
+                const reportBadge = getRecordReportBadge(expense)
+                const reportMeta = formatReportStatusMeta(expense)
 
                 return (
                 <li
@@ -406,10 +451,18 @@ export function ExpenseListPage() {
                           {expense.category}
                         </p>
                       )}
+                      {reportBadge.isReported && (
+                        <span className="mt-2 inline-flex w-fit rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                          {reportBadge.label}
+                        </span>
+                      )}
                       {expense.notes && (
                         <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
                           {expense.notes}
                         </p>
+                      )}
+                      {reportMeta && (
+                        <p className="mt-2 text-sm font-medium text-emerald-700">{reportMeta}</p>
                       )}
                       {relatedIncome && (
                         <p className="mt-2 text-sm font-medium text-amber-800">
@@ -458,9 +511,17 @@ export function ExpenseListPage() {
 
                   <div className="flex flex-wrap justify-start gap-2">
                     {isClosedSeason ? (
-                      <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:!text-slate-200">
+                      <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:text-slate-200!">
                         Solo consulta
                       </span>
+                    ) : reportBadge.isReported ? (
+                      <button
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                        onClick={() => handleToggleReportStatus(expense)}
+                        type="button"
+                      >
+                        Quitar marca
+                      </button>
                     ) : (
                       <>
                     <Link
@@ -470,6 +531,13 @@ export function ExpenseListPage() {
                       <Pencil className="size-4" aria-hidden="true" />
                       Modificar
                     </Link>
+                    <button
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                      onClick={() => handleToggleReportStatus(expense)}
+                      type="button"
+                    >
+                      Marcar como reportado
+                    </button>
                     <button
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
                       onClick={() => handleDeleteExpense(expense)}

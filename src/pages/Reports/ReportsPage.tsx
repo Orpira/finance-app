@@ -1,6 +1,7 @@
 import { CalendarRange, Eye, Share2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -160,6 +161,7 @@ function buildPrintableDocument(title: string, body: string) {
 }
 
 export function ReportsPage() {
+  const { alert } = useDialog()
   const navigate = useNavigate()
   const initialRange = useMemo(() => getCurrentMonthRange(), [])
   const [period, setPeriod] = useState<Period>('month')
@@ -951,7 +953,11 @@ export function ReportsPage() {
         title: report.title,
       })
     } catch {
-      window.alert('No se pudo compartir el PDF del reporte.')
+      await alert({
+        type: 'error',
+        title: 'No se pudo compartir el reporte',
+        message: 'No se pudo compartir el PDF del reporte.',
+      })
     }
   }
 

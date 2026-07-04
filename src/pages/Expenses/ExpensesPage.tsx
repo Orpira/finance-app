@@ -39,6 +39,8 @@ import {
   requiresSeason,
 } from '../../utils/usageMode'
 import { isServiceIncome } from '../../utils/incomeTypes'
+import { isReported } from '../../catalogs/reportStatuses'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 type SaveStatus = 'idle' | 'saving' | 'error'
 type CrossIncomeChoice = 'yes' | 'no'
@@ -65,6 +67,7 @@ function formatRateUpdatedAt(value: string) {
 }
 
 export function ExpensesPage() {
+  const { alert } = useDialog()
   const { hidden: sensitiveValuesHidden } = useSensitiveValues()
   const { expenseId } = useParams()
   const navigate = useNavigate()
@@ -181,7 +184,21 @@ export function ExpensesPage() {
           currentSettings.usageMode,
         )
       ) {
-        window.alert('Este egreso pertenece a otro modo de uso.')
+        await alert({
+          type: 'warning',
+          title: 'Egreso no disponible',
+          message: 'Este egreso pertenece a otro modo de uso.',
+        })
+        navigate('/expenses', { replace: true })
+        return
+      }
+
+      if (isReported(currentExpense)) {
+        await alert({
+          type: 'info',
+          title: 'Egreso reportado',
+          message: 'Este egreso ya fue reportado y solo puede consultarse.',
+        })
         navigate('/expenses', { replace: true })
         return
       }
@@ -196,9 +213,11 @@ export function ExpensesPage() {
             currentSettings.closedLocationSeasons,
           ))
       ) {
-        window.alert(
-          'Este gasto pertenece a una temporada cerrada. Solo puede consultarse desde el historial y usarse en reportes.',
-        )
+        await alert({
+          type: 'info',
+          title: 'Temporada cerrada',
+          message: 'Este gasto pertenece a una temporada cerrada. Solo puede consultarse desde el historial y usarse en reportes.',
+        })
         navigate('/expenses', { replace: true })
         return
       }
@@ -235,7 +254,7 @@ export function ExpensesPage() {
     return () => {
       isMounted = false
     }
-  }, [navigate, parsedExpenseId])
+  }, [alert, navigate, parsedExpenseId])
 
   useEffect(() => {
     let isMounted = true

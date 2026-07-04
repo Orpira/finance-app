@@ -14,6 +14,7 @@ import {
 } from '../../services/signedLicenseService'
 import type { AppLicense, LicenseType } from '../../types/license'
 import { copyText } from '../../utils/clipboard'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 const LICENSE_TYPE_LABELS: Record<LicenseType, string> = {
   demo: 'Demo',
@@ -35,6 +36,7 @@ function formatExpirationDate(expirationDate?: string) {
 }
 
 export function SettingsLicensePage() {
+  const { confirm } = useDialog()
   const [license, setLicense] = useState<AppLicense | null>(null)
   const [deviceCode, setDeviceCode] = useState('')
   const [activationCode, setActivationCode] = useState('')
@@ -92,9 +94,12 @@ export function SettingsLicensePage() {
     try {
       const validation = await verifySignedLicense(normalizedCode, deviceCode)
       const action = license?.licenseVersion === 2 ? 'reemplazar' : 'actualizar'
-      const confirmed = window.confirm(
-        `Se va a ${action} la licencia actual por una licencia V2 ${LICENSE_TYPE_LABELS[validation.licenseType].toLowerCase()}.\n\nLos ingresos, egresos, citas, temporadas y configuraciones no se modificarán. ¿Deseas continuar?`,
-      )
+      const confirmed = await confirm({
+        title: 'Actualizar licencia',
+        message: `Se va a ${action} la licencia actual por una licencia V2 ${LICENSE_TYPE_LABELS[validation.licenseType].toLowerCase()}.\n\nLos ingresos, egresos, citas, temporadas y configuraciones no se modificarán. ¿Deseas continuar?`,
+        confirmLabel: action === 'reemplazar' ? 'Reemplazar licencia' : 'Actualizar licencia',
+        confirmTone: 'warning',
+      })
 
       if (!confirmed) {
         setUpdateStatus('idle')

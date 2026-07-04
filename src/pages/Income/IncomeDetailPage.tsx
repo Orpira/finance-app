@@ -21,6 +21,7 @@ import {
   recordBelongsToUsageMode,
   requiresSeason,
 } from '../../utils/usageMode'
+import { isReported } from '../../catalogs/reportStatuses'
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(
@@ -78,7 +79,7 @@ export function IncomeDetailPage() {
           recordBelongsToUsageMode(adjustment, settings.usageMode),
         ),
       )
-      setCanEdit(!closed)
+      setCanEdit(!closed && !isReported(currentIncome))
     }
 
     loadDetail()

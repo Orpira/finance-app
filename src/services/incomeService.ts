@@ -19,6 +19,11 @@ import {
   enqueueAutomationEvent,
   scheduleAutomationOutboxFlush,
 } from './automationOutboxService'
+import {
+  assertRecordIsNotReported,
+  assertReportedRecordUpdateIsAllowed,
+  normalizeReportStatus,
+} from '../catalogs/reportStatuses'
 
 export type CreateServiceIncomeInput = Omit<ServiceIncome, 'id'>
 export type UpdateServiceIncomeInput = Partial<CreateServiceIncomeInput>
@@ -46,7 +51,7 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
 
   const normalizedInput = normalizeIncomeByType(input)
 
-  const income: ServiceIncome = {
+  const income: ServiceIncome = normalizeReportStatus({
     createdAt: new Date().toISOString(),
     status: 'PENDIENTE',
     ...normalizedInput,
@@ -62,7 +67,7 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
     percentage: isServiceIncome(normalizedInput)
       ? earningPeriod?.percentage ?? normalizedInput.percentage
       : 0,
-  }
+  })
   const incomeId = await db.transaction('rw', [db.services, db.automationOutbox], async () => {
     const nextIncomeId = await db.services.add(income)
     await enqueueAutomationEvent(
@@ -78,7 +83,8 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
 }
 
 export async function getServiceIncomeById(id: number) {
-  return db.services.get(id)
+  const income = await db.services.get(id)
+  return income ? normalizeReportStatus(income) : income
 }
 
 export async function listServiceIncomes(options: ServiceIncomeListOptions = {}) {
@@ -123,7 +129,7 @@ export async function listServiceIncomes(options: ServiceIncomeListOptions = {})
     filtered = filtered.filter((item) => item.paymentType === paymentType)
   }
 
-  return filtered
+  return filtered.map((item) => normalizeReportStatus(item))
 }
 
 export async function updateServiceIncome(
@@ -138,6 +144,7 @@ export async function updateServiceIncome(
   ) {
     throw new Error('Este ingreso pertenece a otro modo de uso.')
   }
+  assertReportedRecordUpdateIsAllowed(currentIncome, updates)
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentIncome)
   }
@@ -148,12 +155,15 @@ export async function updateServiceIncome(
       db.expenses.toArray(),
     ])
     if (!latestIncome) throw new Error('El ingreso que intentas modificar no existe.')
+    assertReportedRecordUpdateIsAllowed(latestIncome, updates)
 
-    const updatedIncome = normalizeIncomeByType({
-      ...latestIncome,
-      ...updates,
-      usageMode: latestIncome.usageMode ?? settings.usageMode,
-    })
+    const updatedIncome = normalizeIncomeByType(
+      normalizeReportStatus({
+        ...latestIncome,
+        ...updates,
+        usageMode: latestIncome.usageMode ?? settings.usageMode,
+      }),
+    )
     const updatedIncomes = incomes.map((income) =>
       income.id === id ? updatedIncome : income,
     )
@@ -172,10 +182,12 @@ export async function deleteServiceIncome(id: number) {
   ) {
     throw new Error('Este ingreso pertenece a otro modo de uso.')
   }
+  assertRecordIsNotReported(currentIncome)
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentIncome)
   }
   return db.transaction('rw', [db.services, db.expenses], async () => {
+    assertRecordIsNotReported(await db.services.get(id))
     const linkedAdjustment = await db.expenses
       .where('relatedIncomeId')
       .equals(id)

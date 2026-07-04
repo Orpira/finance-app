@@ -1,7 +1,12 @@
 import { RouterProvider } from './routes'
+import { DialogProvider } from './components/dialogs/DialogProvider'
 
 function App() {
-  return <RouterProvider />
+  return (
+    <DialogProvider>
+      <RouterProvider />
+    </DialogProvider>
+  )
 }
 
 export default App

@@ -25,6 +25,7 @@ import {
 } from '../../services/googleDriveBackupService'
 import { getSettings, updateSettings } from '../../services/settingsService'
 import type { AppSettings } from '../../types/settings'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 type BackupStatus = 'idle' | 'running' | 'success' | 'error'
 
@@ -33,6 +34,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 export function SettingsBackupPage() {
+  const { confirm } = useDialog()
   const [backupStatus, setBackupStatus] = useState<BackupStatus>('idle')
   const [backupMessage, setBackupMessage] = useState('')
   const [settings, setSettings] = useState<AppSettings | null>(null)
@@ -146,9 +148,12 @@ export function SettingsBackupPage() {
   }
 
   async function handleRestoreLatestDriveBackup() {
-    const shouldRestore = window.confirm(
-      'Restaurar reemplazará los datos locales actuales por el último backup cifrado de Google Drive. ¿Continuar?',
-    )
+    const shouldRestore = await confirm({
+      title: 'Restaurar backup de Google Drive',
+      message: 'Restaurar reemplazará los datos locales actuales por el último backup cifrado de Google Drive. ¿Continuar?',
+      confirmLabel: 'Restaurar backup',
+      confirmTone: 'danger',
+    })
 
     if (!shouldRestore) {
       return

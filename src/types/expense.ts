@@ -1,3 +1,4 @@
+import type { ReportStatusCode, ReportStatusLabel } from '../catalogs/reportStatuses'
 import type { UsageMode } from './settings'
 
 export type ExpenseType = 'gasto' | 'ajuste'
@@ -48,4 +49,8 @@ export interface Expense {
   country?: string;
 
   city?: string;
+
+  reportStatusCode?: ReportStatusCode;
+  reportStatusLabel?: ReportStatusLabel;
+  reportedAt?: string;
 }
