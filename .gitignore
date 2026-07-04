@@ -21,6 +21,7 @@ license-private-key.pem
 .env.license
 
 # Editor directories and files
+scripts/*
 .vscode/*
 !.vscode/extensions.json
 .idea
