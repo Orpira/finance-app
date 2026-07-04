@@ -13,12 +13,14 @@ import type { CountryCode, CurrencyCode } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
 import { countries, getCityOption, getCountryCurrency } from '../../utils/countries'
 import { getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 function formatDate(value?: string) {
   return value ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(value)) : 'En curso'
 }
 
 export function SeasonDetailPage() {
+  const { alert, prompt } = useDialog()
   const id = Number(useParams().id)
   const [period, setPeriod] = useState<EarningPeriod | null>()
   const [stats, setStats] = useState<SeasonStatistics | null>(null)
@@ -43,15 +45,32 @@ export function SeasonDetailPage() {
 
   async function editActiveSeason() {
     if (!period?.id || period.status !== 'active') return
-    const nextName = window.prompt('Nombre de la temporada', period.name)
+    const nextName = await prompt({
+      title: 'Nombre de la temporada',
+      initialValue: period.name,
+      placeholder: 'Nombre de la temporada',
+    })
     if (nextName === null) return
-    const nextCity = window.prompt('Ciudad de la temporada', period.city ?? '')
+    const nextCity = await prompt({
+      title: 'Ciudad de la temporada',
+      initialValue: period.city ?? '',
+      placeholder: 'Ciudad',
+    })
     if (nextCity === null) return
-    const nextPercentageValue = window.prompt('Porcentaje de ganancia', String(period.percentage))
+    const nextPercentageValue = await prompt({
+      title: 'Porcentaje de ganancia',
+      initialValue: String(period.percentage),
+      placeholder: '0–100',
+      inputMode: 'decimal',
+    })
     if (nextPercentageValue === null) return
     const nextPercentage = Number(nextPercentageValue)
     if (!Number.isFinite(nextPercentage) || nextPercentage < 0 || nextPercentage > 100) {
-      window.alert('El porcentaje debe estar entre 0 y 100.')
+      await alert({
+        type: 'warning',
+        title: 'Porcentaje no válido',
+        message: 'El porcentaje debe estar entre 0 y 100.',
+      })
       return
     }
     try {
@@ -69,7 +88,11 @@ export function SeasonDetailPage() {
       })
       if (updated) setPeriod(updated)
     } catch (reason) {
-      window.alert(reason instanceof Error ? reason.message : 'No se pudo actualizar la temporada.')
+      await alert({
+        type: 'error',
+        title: 'No se pudo actualizar la temporada',
+        message: reason instanceof Error ? reason.message : 'No se pudo actualizar la temporada.',
+      })
     }
   }
 

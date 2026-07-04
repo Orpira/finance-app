@@ -23,6 +23,7 @@ import { formatCurrency } from '../../utils/currency'
 import { calculateFinancialTotals } from '../../utils/financeStats'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
+import { isReported } from '../../catalogs/reportStatuses'
 import {
   isBasicMode,
   recordBelongsToUsageMode,
@@ -75,6 +76,7 @@ export function HomePage() {
   const [previousIncomes, setPreviousIncomes] = useState<ServiceIncome[]>([])
   const [previousExpenses, setPreviousExpenses] = useState<Expense[]>([])
   const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
+  const [reportedCount, setReportedCount] = useState(0)
   const { hidden, toggle } = useSensitiveValues()
 
   useEffect(() => {
@@ -106,6 +108,9 @@ export function HomePage() {
       )
       setSettings(nextSettings)
       setActivePeriod(period ?? null)
+      setReportedCount(
+        [...modeIncomes, ...modeExpenses].filter((record) => isReported(record)).length,
+      )
       setCurrentIncomes(
         isBasicUser
           ? modeIncomes
@@ -206,9 +211,18 @@ export function HomePage() {
     },
   ]
 
+  const reportedCard = {
+    icon: CalendarRange,
+    label: 'Registros reportados',
+    value: reportedCount,
+    previous: 0,
+    sensitive: false,
+    tone: 'text-violet-700 bg-violet-100 dark:bg-violet-950 dark:text-violet-300',
+  }
+
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6 py-6 md:py-10">
-      <header className="rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-5 text-white shadow-xl sm:p-7">
+      <header className="rounded-2xl bg-linear-to-br from-slate-950 via-slate-900 to-emerald-950 p-5 text-white shadow-xl sm:p-7">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-emerald-300">{settings.businessName || 'Private Balance'}</p>
@@ -241,6 +255,19 @@ export function HomePage() {
           </article>
         ))}
       </div>
+
+      <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center justify-between gap-3">
+          <span className={`flex size-11 items-center justify-center rounded-xl ${reportedCard.tone}`}>
+            <CalendarRange className="size-5" aria-hidden="true" />
+          </span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            Marcados como cumplidos/reportados
+          </span>
+        </div>
+        <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">{reportedCard.label}</p>
+        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">{reportedCard.value}</p>
+      </article>
 
       {!isBasicMode(settings) && (
         <Link className="inline-flex h-12 items-center justify-center gap-2 self-stretch rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:self-end" to="/resumen-completo">

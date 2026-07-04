@@ -13,6 +13,7 @@ import {
 import type { EarningPeriod } from '../../types/earningPeriod'
 import { formatCurrency } from '../../utils/currency'
 import { countries } from '../../utils/countries'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 function formatDate(value?: string) {
   if (!value) return '—'
@@ -24,6 +25,7 @@ function countryLabel(code?: string) {
 }
 
 export function SeasonsPage() {
+  const { confirm } = useDialog()
   const navigate = useNavigate()
   const [active, setActive] = useState<EarningPeriod | null>(null)
   const [closed, setClosed] = useState<Array<{ period: EarningPeriod; stats: SeasonStatistics }>>([])
@@ -49,9 +51,12 @@ export function SeasonsPage() {
       navigate('/temporadas/nueva')
       return
     }
-    const confirmed = window.confirm(
-      'Ya existe una temporada activa.\n\nPara crear una nueva temporada debes cerrar la temporada actual.\n¿Deseas cerrarla ahora y crear una nueva?',
-    )
+    const confirmed = await confirm({
+      title: 'Cerrar temporada activa',
+      message: 'Ya existe una temporada activa.\n\nPara crear una nueva temporada debes cerrar la temporada actual.\n¿Deseas cerrarla ahora y crear una nueva?',
+      confirmLabel: 'Cerrar y continuar',
+      confirmTone: 'warning',
+    })
     if (!confirmed) return
     await closeActiveEarningPeriod()
     navigate(`/temporadas/nueva?basedOn=${active.id}`)
@@ -59,9 +64,12 @@ export function SeasonsPage() {
 
   async function finishSeason() {
     if (!active) return
-    const confirmed = window.confirm(
-      'Vas a finalizar la temporada actual.\n\nTodos los ingresos, egresos, ajustes y citas asociados quedarán en modo solo consulta. No podrán editarse ni eliminarse. Tampoco serán incluidos en los cálculos de nuevas temporadas.\n\n¿Deseas continuar?',
-    )
+    const confirmed = await confirm({
+      title: 'Finalizar temporada',
+      message: 'Vas a finalizar la temporada actual.\n\nTodos los ingresos, egresos, ajustes y citas asociados quedarán en modo solo consulta. No podrán editarse ni eliminarse. Tampoco serán incluidos en los cálculos de nuevas temporadas.\n\n¿Deseas continuar?',
+      confirmLabel: 'Finalizar temporada',
+      confirmTone: 'danger',
+    })
     if (!confirmed) return
     await closeActiveEarningPeriod()
     await load()

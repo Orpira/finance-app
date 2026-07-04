@@ -1,3 +1,5 @@
+import type { ReportStatusCode, ReportStatusLabel } from '../catalogs/reportStatuses'
+
 export type AppointmentReminderUnit = 'minutes' | 'hours' | 'days';
 
 export type AppointmentReminderType = 'local' | 'inApp';
@@ -46,4 +48,8 @@ export interface Appointment {
   actualDuration?: number;
 
   timerMode?: 'automatic' | 'manual' | 'manualPending';
+
+  reportStatusCode?: ReportStatusCode;
+  reportStatusLabel?: ReportStatusLabel;
+  reportedAt?: string;
 }

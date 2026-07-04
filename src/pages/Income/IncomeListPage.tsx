@@ -9,6 +9,7 @@ import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import {
   deleteServiceIncome,
   listServiceIncomes,
+  updateServiceIncome,
 } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import { listExpenses } from '../../services/expenseService'
@@ -28,6 +29,8 @@ import {
   requiresSeason,
 } from '../../utils/usageMode'
 import { getIncomeType, getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
+import { formatReportStatusMeta, getRecordReportBadge, toggleReportStatus } from '../../utils/reportStatus'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 const INCOMES_PER_PAGE = 10
 
@@ -54,6 +57,7 @@ function getIncomeStatusClass(status: ServiceIncomeStatus) {
 }
 
 export function IncomeListPage() {
+  const { alert, confirm } = useDialog()
   const { hidden } = useSensitiveValues()
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [relatedAdjustments, setRelatedAdjustments] = useState<Expense[]>([])
@@ -239,14 +243,54 @@ export function IncomeListPage() {
     }
   }, [])
 
+  async function handleToggleReportStatus(income: ServiceIncome) {
+    if (!income.id) {
+      return
+    }
+
+    const reportBadge = getRecordReportBadge(income)
+    const confirmationMessage = reportBadge.isReported
+      ? '¿Quitar la marca de Reportado? El ingreso volverá a permitir modificaciones y eliminación.'
+      : 'Al marcar este ingreso como reportado quedará bloqueado y no podrá modificarse ni eliminarse. ¿Deseas continuar?'
+
+    const confirmed = await confirm({
+      title: reportBadge.isReported ? 'Quitar marca de Reportado' : 'Marcar ingreso como reportado',
+      message: confirmationMessage,
+      confirmLabel: reportBadge.isReported ? 'Quitar marca' : 'Marcar como reportado',
+      confirmTone: reportBadge.isReported ? 'primary' : 'warning',
+    })
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      const nextRecord = toggleReportStatus(income)
+      await updateServiceIncome(income.id, {
+        reportStatusCode: nextRecord.reportStatusCode,
+        reportStatusLabel: nextRecord.reportStatusLabel,
+        reportedAt: nextRecord.reportedAt,
+      })
+      await reloadIncomes()
+    } catch (error: unknown) {
+      await alert({
+        type: 'error',
+        title: 'No se pudo actualizar el ingreso',
+        message: error instanceof Error ? error.message : 'No se pudo actualizar el estado del ingreso.',
+      })
+    }
+  }
+
   async function handleDeleteIncome(income: ServiceIncome) {
     if (!income.id) {
       return
     }
 
-    const shouldDelete = window.confirm(
-      `¿Eliminar el ingreso #${income.id} del ${income.date}?`,
-    )
+    const shouldDelete = await confirm({
+      title: 'Eliminar ingreso',
+      message: `¿Eliminar el ingreso #${income.id} del ${income.date}?`,
+      confirmLabel: 'Eliminar',
+      confirmTone: 'danger',
+    })
 
     if (!shouldDelete) {
       return
@@ -256,9 +300,11 @@ export function IncomeListPage() {
       await deleteServiceIncome(income.id)
       await reloadIncomes()
     } catch (error: unknown) {
-      window.alert(
-        error instanceof Error ? error.message : 'No se pudo eliminar el ingreso.',
-      )
+      await alert({
+        type: 'error',
+        title: 'No se pudo eliminar el ingreso',
+        message: error instanceof Error ? error.message : 'No se pudo eliminar el ingreso.',
+      })
     }
   }
 
@@ -446,6 +492,8 @@ export function IncomeListPage() {
                     income,
                     settings?.closedLocationSeasons,
                   )
+                const reportBadge = getRecordReportBadge(income)
+                const reportMeta = formatReportStatusMeta(income)
 
                 return (
                   <li className="flex flex-col gap-3 p-4" key={income.id}>
@@ -466,6 +514,11 @@ export function IncomeListPage() {
                               {incomeAdjustments.length === 1 ? 'ajuste aplicado' : 'ajustes aplicados'}
                             </span>
                           )}
+                          {reportBadge.isReported && (
+                            <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                              {reportBadge.label}
+                            </span>
+                          )}
                           {!isBasicMode(settings ?? undefined) && isService && <span
                             className={[
                               'inline-flex rounded-md px-2 py-0.5 text-xs font-semibold',
@@ -484,6 +537,9 @@ export function IncomeListPage() {
                           <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
                             {income.notes}
                           </p>
+                        )}
+                        {reportMeta && (
+                          <p className="mt-2 text-sm font-medium text-emerald-700">{reportMeta}</p>
                         )}
                       </div>
                       <div className="text-right">
@@ -508,9 +564,17 @@ export function IncomeListPage() {
                         Ver detalle
                       </Link>
                       {isClosedSeason ? (
-                        <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:!text-slate-200">
+                        <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:text-slate-200!">
                           Solo consulta
                         </span>
+                      ) : reportBadge.isReported ? (
+                        <button
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                          onClick={() => handleToggleReportStatus(income)}
+                          type="button"
+                        >
+                          Quitar marca
+                        </button>
                       ) : (
                       <>
                       <Link
@@ -520,6 +584,13 @@ export function IncomeListPage() {
                         <Pencil className="size-4" aria-hidden="true" />
                         Modificar
                       </Link>
+                      <button
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                        onClick={() => handleToggleReportStatus(income)}
+                        type="button"
+                      >
+                        Marcar como reportado
+                      </button>
                       <button
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
                         onClick={() => handleDeleteIncome(income)}

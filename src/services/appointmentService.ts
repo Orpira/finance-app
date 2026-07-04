@@ -8,6 +8,11 @@ import {
   enqueueAutomationEvent,
   scheduleAutomationOutboxFlush,
 } from './automationOutboxService'
+import {
+  assertRecordIsNotReported,
+  assertReportedRecordUpdateIsAllowed,
+  normalizeReportStatus,
+} from '../catalogs/reportStatuses'
 
 export interface AppointmentListOptions extends DateRangeListOptions {
   completed?: boolean
@@ -19,11 +24,11 @@ export type UpdateAppointmentInput = Partial<CreateAppointmentInput>
 
 export async function createAppointment(input: CreateAppointmentInput) {
   const period = await requireActiveEarningPeriod()
-  const appointment = {
+  const appointment = normalizeReportStatus({
     ...input,
     earningPeriodId: period.id,
     seasonPeriodId: period.id,
-  }
+  })
   const appointmentId = await db.transaction('rw', [
     db.appointments,
     db.automationOutbox,
@@ -42,7 +47,8 @@ export async function createAppointment(input: CreateAppointmentInput) {
 }
 
 export async function getAppointmentById(id: number) {
-  return db.appointments.get(id)
+  const appointment = await db.appointments.get(id)
+  return appointment ? normalizeReportStatus(appointment) : appointment
 }
 
 export async function listAppointments(options: AppointmentListOptions = {}) {
@@ -65,27 +71,44 @@ export async function listAppointments(options: AppointmentListOptions = {}) {
   return appointments.filter((appointment) =>
     (completed === undefined || appointment.completed === completed) &&
     (earningPeriodId === undefined || appointment.earningPeriodId === earningPeriodId),
-  )
+  ).map((appointment) => normalizeReportStatus(appointment))
 }
 
 export async function updateAppointment(
   id: number,
   updates: UpdateAppointmentInput,
 ) {
-  await assertRecordIsMutable(await db.appointments.get(id))
-  await db.appointments.update(id, updates)
-  return db.appointments.get(id)
+  return db.transaction('rw', db.appointments, async () => {
+    const currentAppointment = await db.appointments.get(id)
+    await assertRecordIsMutable(currentAppointment)
+    assertReportedRecordUpdateIsAllowed(currentAppointment, updates)
+    if (!currentAppointment) throw new Error('La cita que intentas modificar no existe.')
+
+    const updatedAppointment = normalizeReportStatus({
+      ...currentAppointment,
+      ...updates,
+    }) as Appointment
+    await db.appointments.put(updatedAppointment)
+    return updatedAppointment
+  })
 }
 
 export async function markAppointmentCompleted(id: number, completed = true) {
-  await assertRecordIsMutable(await db.appointments.get(id))
+  const currentAppointment = await db.appointments.get(id)
+  await assertRecordIsMutable(currentAppointment)
+  assertRecordIsNotReported(currentAppointment)
   await db.appointments.update(id, { completed })
   if (completed) await cancelAppointmentReminders(id)
   return db.appointments.get(id)
 }
 
 export async function deleteAppointment(id: number) {
-  await assertRecordIsMutable(await db.appointments.get(id))
+  const currentAppointment = await db.appointments.get(id)
+  await assertRecordIsMutable(currentAppointment)
+  assertRecordIsNotReported(currentAppointment)
   await cancelAppointmentReminders(id)
-  return db.appointments.delete(id)
+  return db.transaction('rw', db.appointments, async () => {
+    assertRecordIsNotReported(await db.appointments.get(id))
+    return db.appointments.delete(id)
+  })
 }

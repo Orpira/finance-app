@@ -19,6 +19,7 @@ import {
 import { assertAllExpenseAdjustmentsAreValid } from '../utils/expenseAdjustments'
 import { getIncomeType, normalizeAdjustmentIncome } from '../utils/incomeTypes'
 import { getNumericDurationLabel } from '../utils/serviceDuration'
+import { normalizeReportStatus } from '../catalogs/reportStatuses'
 
 export const DEFAULT_SETTINGS_ID = 'app'
 
@@ -504,11 +505,11 @@ export class FinanceDB extends Dexie {
 
     this.version(21).stores({
       services:
-        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId',
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode',
       expenses:
-        '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId',
+        '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
       appointments:
-        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId',
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
       settings: 'id',
       exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
       cutoffReports:
@@ -519,6 +520,28 @@ export class FinanceDB extends Dexie {
       communicationChannels: 'id,type,provider,status,updatedAt',
       deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
     })
+      .upgrade((transaction) =>
+        Promise.all([
+          transaction
+            .table<ServiceIncome, number>('services')
+            .toCollection()
+            .modify((income) => {
+              Object.assign(income, normalizeReportStatus(income))
+            }),
+          transaction
+            .table<Expense, number>('expenses')
+            .toCollection()
+            .modify((expense) => {
+              Object.assign(expense, normalizeReportStatus(expense))
+            }),
+          transaction
+            .table<Appointment, number>('appointments')
+            .toCollection()
+            .modify((appointment) => {
+              Object.assign(appointment, normalizeReportStatus(appointment))
+            }),
+        ]),
+      )
   }
 }
 
@@ -604,13 +627,13 @@ export type DatabaseSnapshot = Awaited<ReturnType<typeof exportDatabaseSnapshot>
 export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
   const normalizedServices = (snapshot.services ?? []).map((income) =>
     normalizeAdjustmentIncome({
-      ...income,
+      ...normalizeReportStatus(income),
       type: getIncomeType(income),
       usageMode: resolveRecordUsageMode(income),
     }),
   )
   const normalizedExpenses = (snapshot.expenses ?? []).map((expense) => ({
-    ...expense,
+    ...normalizeReportStatus(expense),
     type: expense.type ?? 'gasto',
     createdAt: expense.createdAt ?? `${expense.date}T00:00:00`,
     usageMode: resolveRecordUsageMode(expense),

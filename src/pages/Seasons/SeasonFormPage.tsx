@@ -9,8 +9,10 @@ import { getSettings } from '../../services/settingsService'
 import type { CountryCode, CurrencyCode } from '../../types/settings'
 import { countries, fallbackCityOptions, getCityOption, getCountryCurrency, type CityOption } from '../../utils/countries'
 import { getTodayInputDate } from '../../utils/currency'
+import { useDialog } from '../../components/dialogs/useDialog'
 
 export function SeasonFormPage() {
+  const { confirm } = useDialog()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const basedOn = Number(params.get('basedOn')) || undefined
@@ -52,7 +54,12 @@ export function SeasonFormPage() {
     try {
       const active = await getActiveEarningPeriod()
       if (active) {
-        const confirmed = window.confirm('Ya existe una temporada activa.\n\nPara crear una nueva temporada debes cerrar la temporada actual.\n¿Deseas cerrarla ahora y crear una nueva?')
+        const confirmed = await confirm({
+          title: 'Cerrar temporada activa',
+          message: 'Ya existe una temporada activa.\n\nPara crear una nueva temporada debes cerrar la temporada actual.\n¿Deseas cerrarla ahora y crear una nueva?',
+          confirmLabel: 'Cerrar y continuar',
+          confirmTone: 'warning',
+        })
         if (!confirmed) { setSaving(false); return }
         await closeActiveEarningPeriod()
       }
