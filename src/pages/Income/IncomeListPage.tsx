@@ -29,10 +29,11 @@ import {
   requiresSeason,
 } from '../../utils/usageMode'
 import { getIncomeType, getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
-import { formatReportStatusMeta, getRecordReportBadge, toggleReportStatus } from '../../utils/reportStatus'
+import { canMarkAsReported, formatReportStatusMeta, getRecordReportBadge, toggleReportStatus } from '../../utils/reportStatus'
 import { useDialog } from '../../components/dialogs/useDialog'
 
 const INCOMES_PER_PAGE = 10
+type ReportStatusFilter = 'ALL' | 'pending' | 'reported'
 
 const incomeStatusLabels: Record<ServiceIncomeStatus, string> = {
   PENDIENTE: 'Pendiente',
@@ -69,6 +70,8 @@ export function IncomeListPage() {
     useState<string | 'ALL'>('ALL')
   const [selectedIncomeType, setSelectedIncomeType] =
     useState<ServiceIncomeType | 'ALL'>('ALL')
+  const [selectedReportStatus, setSelectedReportStatus] =
+    useState<ReportStatusFilter>('ALL')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [incomePage, setIncomePage] = useState(1)
@@ -150,17 +153,25 @@ export function IncomeListPage() {
         const matchesIncomeType =
           selectedIncomeType === 'ALL' ||
           getIncomeType(income) === selectedIncomeType
+        const matchesReportStatus =
+          selectedReportStatus === 'ALL' ||
+          Boolean(
+            settings &&
+              canMarkAsReported(income, settings.usageMode) &&
+              getRecordReportBadge(income).reportStatusCode === selectedReportStatus,
+          )
 
         return (
           matchesCountry &&
           matchesCity &&
           matchesPaymentType &&
           matchesIncomeType &&
+          matchesReportStatus &&
           matchesDateFrom &&
           matchesDateTo
         )
       }),
-    [dateFrom, dateTo, incomes, selectedCity, selectedCountry, selectedIncomeType, selectedPaymentType],
+    [dateFrom, dateTo, incomes, selectedCity, selectedCountry, selectedIncomeType, selectedPaymentType, selectedReportStatus, settings],
   )
   const totalIncomePages = Math.max(
     1,
@@ -244,7 +255,16 @@ export function IncomeListPage() {
   }, [])
 
   async function handleToggleReportStatus(income: ServiceIncome) {
-    if (!income.id) {
+    if (!income.id || !settings) {
+      return
+    }
+
+    if (!canMarkAsReported(income, settings.usageMode)) {
+      await alert({
+        type: 'error',
+        title: 'Acción no permitida',
+        message: 'Solo los servicios del modo Profesional pueden marcarse como reportados.',
+      })
       return
     }
 
@@ -264,7 +284,7 @@ export function IncomeListPage() {
     }
 
     try {
-      const nextRecord = toggleReportStatus(income)
+      const nextRecord = toggleReportStatus(income, settings.usageMode)
       await updateServiceIncome(income.id, {
         reportStatusCode: nextRecord.reportStatusCode,
         reportStatusLabel: nextRecord.reportStatusLabel,
@@ -394,6 +414,24 @@ export function IncomeListPage() {
             </label>
           )}
 
+          {settings && !isBasicMode(settings) && (
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-600">Estado de reporte</span>
+              <select
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                onChange={(event) => {
+                  setSelectedReportStatus(event.target.value as ReportStatusFilter)
+                  setIncomePage(1)
+                }}
+                value={selectedReportStatus}
+              >
+                <option value="ALL">Todos</option>
+                <option value="pending">Pendientes</option>
+                <option value="reported">Reportados</option>
+              </select>
+            </label>
+          )}
+
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-600">
               Fecha hasta
@@ -494,6 +532,9 @@ export function IncomeListPage() {
                   )
                 const reportBadge = getRecordReportBadge(income)
                 const reportMeta = formatReportStatusMeta(income)
+                const canReport = Boolean(
+                  settings && canMarkAsReported(income, settings.usageMode),
+                )
 
                 return (
                   <li className="flex flex-col gap-3 p-4" key={income.id}>
@@ -568,6 +609,7 @@ export function IncomeListPage() {
                           Solo consulta
                         </span>
                       ) : reportBadge.isReported ? (
+                        canReport ? (
                         <button
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
                           onClick={() => handleToggleReportStatus(income)}
@@ -575,6 +617,11 @@ export function IncomeListPage() {
                         >
                           Quitar marca
                         </button>
+                        ) : (
+                          <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:text-slate-200!">
+                            Solo consulta
+                          </span>
+                        )
                       ) : (
                       <>
                       <Link
@@ -584,13 +631,13 @@ export function IncomeListPage() {
                         <Pencil className="size-4" aria-hidden="true" />
                         Modificar
                       </Link>
-                      <button
+                      {canReport && <button
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
                         onClick={() => handleToggleReportStatus(income)}
                         type="button"
                       >
                         Marcar como reportado
-                      </button>
+                      </button>}
                       <button
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
                         onClick={() => handleDeleteIncome(income)}

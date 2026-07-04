@@ -19,6 +19,7 @@ import {
   assertReportedRecordUpdateIsAllowed,
   normalizeReportStatus,
 } from '../catalogs/reportStatuses'
+import { assertReportStatusUpdateIsAllowed } from '../utils/reportStatus'
 
 export interface ExpenseListOptions extends DateRangeListOptions {
   category?: string
@@ -121,6 +122,7 @@ export async function updateExpense(id: number, updates: UpdateExpenseInput) {
   ) {
     throw new Error('Este egreso pertenece a otro modo de uso.')
   }
+  assertReportStatusUpdateIsAllowed(currentExpense, settings.usageMode, updates)
   assertReportedRecordUpdateIsAllowed(currentExpense, updates)
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentExpense)
@@ -128,6 +130,7 @@ export async function updateExpense(id: number, updates: UpdateExpenseInput) {
   return db.transaction('rw', [db.expenses, db.services], async () => {
     const latestExpense = await db.expenses.get(id)
     if (!latestExpense) throw new Error('El egreso que intentas modificar no existe.')
+    assertReportStatusUpdateIsAllowed(latestExpense, settings.usageMode, updates)
     assertReportedRecordUpdateIsAllowed(latestExpense, updates)
 
     const updatedExpense: Expense = normalizeReportStatus({
