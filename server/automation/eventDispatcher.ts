@@ -12,6 +12,10 @@ const identityCodesSchema = z.object({
   deviceCode: z.string().regex(/^PB-DEVICE-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
 })
 
+const whatsappConnectDataSchema = identityCodesSchema.extend({
+  phoneNumber: z.string().regex(/^\d{7,20}$/).optional(),
+})
+
 function nestedRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null
     ? value as Record<string, unknown>
@@ -42,13 +46,9 @@ async function resolveEnvelopeUserCode(
     fallbackDeviceCode,
   )
 
-  console.log('[AUTOMATION] deviceCode:', deviceCode)
-  console.log('[AUTOMATION] userCode:', userCode)
-
   if (userCode) return userCode
   if (!deviceCode) return undefined
   const resolvedUserCode = await resolveUserCodeFromDeviceCode(deviceCode)
-  console.log('[AUTOMATION] resolvedUserCode:', resolvedUserCode)
   return resolvedUserCode ?? undefined
 }
 
@@ -70,18 +70,25 @@ export function buildN8nPayload(
   communicationChannel?: {
     provider: string
     instanceName?: string
+    instanceId?: string
     phoneNumber?: string
+    ownerJid?: string
+    profileName?: string
+    profilePhoto?: string
+    connectedAt?: string
+    lastSeenAt?: string
     status: string
     preferences?: unknown
     providerMetadata?: unknown
   },
 ) {
   if (envelope.event === 'device.whatsapp.connect.requested') {
-    const identity = identityCodesSchema.parse(envelope.data)
+    const identity = whatsappConnectDataSchema.parse(envelope.data)
     return {
       event: envelope.event,
       userCode: identity.userCode,
       deviceCode: identity.deviceCode,
+      phoneNumber: identity.phoneNumber ?? null,
       timezone: envelope.timezone,
       locale: envelope.locale,
     }
@@ -128,18 +135,24 @@ export async function dispatchAutomationEvent(input: {
 
   if (
     input.envelope.event === 'income.created' ||
+    input.envelope.event === 'service.completed' ||
     input.envelope.event === 'expense.created' ||
     input.envelope.event === 'calendar.created'
   ) {
     const userCode = await resolveEnvelopeUserCode(input.envelope, input.licenseDeviceCode)
     if (typeof userCode === 'string') {
       const channel = await resolveActiveWhatsappChannel(userCode)
-      console.log('[AUTOMATION] communicationChannel:', channel)
       if (channel) {
         communicationChannel = {
           provider: channel.provider,
           instanceName: channel.instanceName,
+          instanceId: channel.instanceId,
           phoneNumber: channel.phoneNumber,
+          ownerJid: channel.ownerJid,
+          profileName: channel.profileName,
+          profilePhoto: channel.profilePhoto,
+          connectedAt: channel.connectedAt,
+          lastSeenAt: channel.lastSeenAt,
           status: channel.status,
           preferences: channel.preferences,
           providerMetadata: channel.providerMetadata,
@@ -153,8 +166,6 @@ export async function dispatchAutomationEvent(input: {
     input.licenseDeviceCode,
     communicationChannel,
   )
-  console.log('[AUTOMATION] payloadToN8N:', payloadToN8N)
-
   const webhook = await dispatchWebhook({
     event: input.envelope.event,
     eventId: input.envelope.eventId,

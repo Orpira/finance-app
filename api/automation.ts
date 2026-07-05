@@ -42,6 +42,7 @@ const envelopeSchema = z.object({
 
 const whatsappConnectRequestSchema = identityCodesSchema.extend({
   event: z.literal('device.whatsapp.connect.requested'),
+  phoneNumber: z.string().regex(/^\d{7,20}$/).optional(),
   timezone: z.string().optional(),
   locale: z.string().optional(),
 }).strict()
@@ -77,6 +78,9 @@ function parseGatewayRequest(request: VercelRequest): AutomationEnvelope | null 
     data: {
       userCode: connectResult.data.userCode,
       deviceCode: connectResult.data.deviceCode,
+      ...(connectResult.data.phoneNumber
+        ? { phoneNumber: connectResult.data.phoneNumber }
+        : {}),
     },
     timezone: connectResult.data.timezone,
     locale: connectResult.data.locale,

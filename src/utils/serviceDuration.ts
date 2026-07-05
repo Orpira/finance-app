@@ -1,4 +1,5 @@
 import type { ServiceIncome } from '../types/service'
+import { DEFAULT_EXIT_DURATION_MINUTES } from '../config/serviceTimer'
 
 export type ServiceDurationLabel = '15' | '30' | '60' | '120' | 'Salida'
 
@@ -12,8 +13,16 @@ export const SERVICE_DURATION_OPTIONS: readonly ServiceDurationOption[] = [
   { durationMinutes: 30, durationLabel: '30' },
   { durationMinutes: 60, durationLabel: '60' },
   { durationMinutes: 120, durationLabel: '120' },
-  { durationMinutes: 120, durationLabel: 'Salida' },
+  { durationMinutes: DEFAULT_EXIT_DURATION_MINUTES, durationLabel: 'Salida' },
 ]
+
+export function calculateEffectiveDuration(input: Pick<ServiceIncome, 'duration' | 'durationLabel'>) {
+  if (input.durationLabel === 'Salida') {
+    return DEFAULT_EXIT_DURATION_MINUTES
+  }
+
+  return Math.max(0, Math.floor(input.duration))
+}
 
 export function isServiceDurationLabel(
   value: string | undefined,

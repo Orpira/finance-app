@@ -1,0 +1,1 @@
+export const DEFAULT_EXIT_DURATION_MINUTES = 120

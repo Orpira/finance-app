@@ -15,6 +15,18 @@ export function UsageModeGuard({
 
   useEffect(() => {
     getSettings().then((settings) => setUsageMode(settings.usageMode))
+
+    function handleSettingsChanged(event: Event) {
+      setUsageMode(
+        (event as CustomEvent<{ usageMode: UsageMode }>).detail.usageMode,
+      )
+    }
+
+    window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
+
+    return () => {
+      window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
+    }
   }, [])
 
   if (!usageMode) {

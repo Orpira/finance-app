@@ -1,5 +1,6 @@
 export const AUTOMATION_EVENT_TYPES = [
   'income.created',
+  'service.completed',
   'expense.created',
   'calendar.created',
   'device.provision.requested',

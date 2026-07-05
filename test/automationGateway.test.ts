@@ -47,6 +47,7 @@ beforeEach(() => {
 describe('Automation Gateway dispatcher', () => {
   it('mantiene todos los eventos actuales y el evento QR legado', () => {
     expect(AUTOMATION_EVENT_TYPES).toContain('income.created')
+    expect(AUTOMATION_EVENT_TYPES).toContain('service.completed')
     expect(AUTOMATION_EVENT_TYPES).toContain('device.whatsapp.connect.requested')
     expect(AUTOMATION_EVENT_TYPES).toContain('communication.whatsapp.qr.requested')
   })
@@ -87,6 +88,7 @@ describe('Automation Gateway dispatcher', () => {
       envelope: envelope('device.whatsapp.connect.requested', {
         userCode: USER_CODE,
         deviceCode: DEVICE_CODE,
+        phoneNumber: '34600111222',
       }),
       licenseDeviceCode: DEVICE_CODE,
     })
@@ -100,6 +102,7 @@ describe('Automation Gateway dispatcher', () => {
       envelope('device.whatsapp.connect.requested', {
         userCode: USER_CODE,
         deviceCode: DEVICE_CODE,
+        phoneNumber: '34600111222',
       }),
       DEVICE_CODE,
     )
@@ -108,6 +111,7 @@ describe('Automation Gateway dispatcher', () => {
       event: 'device.whatsapp.connect.requested',
       userCode: USER_CODE,
       deviceCode: DEVICE_CODE,
+      phoneNumber: '34600111222',
       timezone: 'Europe/Madrid',
       locale: 'es-ES',
     })

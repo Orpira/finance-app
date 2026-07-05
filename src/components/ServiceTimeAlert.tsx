@@ -223,7 +223,7 @@ export function ServiceTimeAlert() {
     <div
       aria-labelledby="global-service-time-alert-title"
       aria-modal="true"
-      className="fixed inset-0 z-[80] flex items-end bg-slate-950/75 p-4 backdrop-blur-sm sm:items-center sm:justify-center"
+      className="fixed inset-0 z-80 flex items-end bg-slate-950/75 p-4 backdrop-blur-sm sm:items-center sm:justify-center"
       role="dialog"
     >
       <div className="w-full max-w-md rounded-lg border-2 border-amber-300 bg-white p-4 shadow-2xl">

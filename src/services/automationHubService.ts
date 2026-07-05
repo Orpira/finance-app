@@ -55,7 +55,7 @@ function getAutomationApiBaseUrl() {
   return baseUrl.href.replace(/\/$/, '')
 }
 
-function getAutomationApiUrl(path: '/api/automation-token' | '/api/automation') {
+function getAutomationApiUrl(path: string) {
   return `${getAutomationApiBaseUrl()}${path}`
 }
 
@@ -201,6 +201,7 @@ async function postAutomationEvent(
         event: envelope.event,
         userCode: envelope.data.userCode,
         deviceCode: envelope.data.deviceCode,
+        phoneNumber: envelope.data.phoneNumber,
         timezone,
         locale,
       }
@@ -306,3 +307,29 @@ export function clearAutomationAuthorization() {
   cachedToken = undefined
   tokenRequest = undefined
 }
+
+export async function getAutomationGatewayConfig() {
+  const token = await getAutomationToken()
+  return {
+    baseUrl: getAutomationApiBaseUrl(),
+    bearerToken: token.token,
+  }
+}
+
+export async function automationGatewayRequest(
+  path: string,
+  init: RequestInit = {},
+) {
+  const { bearerToken } = await getAutomationGatewayConfig()
+  const headers = new Headers(init.headers ?? {})
+  if (!headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${bearerToken}`)
+  }
+  const requestInit: RequestInit = {
+    ...init,
+    headers,
+  }
+  return fetchWithTimeout(getAutomationApiUrl(path), requestInit)
+}
+
+export { fetchWithTimeout as automationGatewayFetchWithTimeout, readJsonObject as parseAutomationGatewayJson }
