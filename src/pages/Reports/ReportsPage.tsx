@@ -9,6 +9,7 @@ import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import { listEarningPeriods } from '../../services/earningPeriodService'
+import { buildBalanceReport } from '../../services/balanceReportService'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
@@ -36,7 +37,7 @@ import { getIncomeDurationDisplay } from '../../utils/serviceDuration'
 import { canMarkAsReported, getRecordReportBadge } from '../../utils/reportStatus'
 
 type Period = 'week' | 'month' | 'year'
-type ReportKind = 'income' | 'expense' | 'paymentType'
+type ReportKind = 'income' | 'expense' | 'paymentType' | 'balance'
 
 const periods: Array<{ value: Period; label: string }> = [
   { value: 'week', label: 'Semana' },
@@ -44,7 +45,7 @@ const periods: Array<{ value: Period; label: string }> = [
   { value: 'year', label: 'Año' },
 ]
 
-const reportCards: Array<{
+const baseReportCards: Array<{
   description: string
   kind: ReportKind
   title: string
@@ -65,6 +66,19 @@ const reportCards: Array<{
     title: 'Reporte por tipo de pago',
   },
 ]
+
+function getReportCards(isBasicUser: boolean) {
+  return [
+    ...baseReportCards,
+    {
+      description: isBasicUser
+        ? 'Balance general por rango de fechas, con impacto de ajustes separado.'
+        : 'Balance por temporadas, con impacto de ajustes separado y trazable.',
+      kind: 'balance' as const,
+      title: isBasicUser ? 'Balance general' : 'Balance por temporadas',
+    },
+  ]
+}
 
 function getPeriodRange(period: Period) {
   if (period === 'week') {
@@ -183,6 +197,7 @@ export function ReportsPage() {
   const [selectedSeason, setSelectedSeason] = useState<string>('ALL')
   const isBasicUser = isBasicMode(settings ?? undefined)
   const activeUsageMode = settings?.usageMode ?? 'professional'
+  const reportCards = useMemo(() => getReportCards(isBasicUser), [isBasicUser])
 
   useEffect(() => {
     let isMounted = true
@@ -368,6 +383,16 @@ export function ReportsPage() {
         return matchesCountry && matchesCity && matchesCategory && matchesSeason
       }),
     [periodExpenses, selectedCategory, selectedCity, selectedCountry, selectedSeason],
+  )
+
+  const balanceReport = useMemo(
+    () =>
+      buildBalanceReport({
+        incomes,
+        expenses,
+        currency: primaryCurrency,
+      }),
+    [expenses, incomes, primaryCurrency],
   )
 
   const incomesById = useMemo(
@@ -757,6 +782,169 @@ export function ReportsPage() {
       .join('\n')
   }
 
+  function buildGroupedTotalsTable(
+    title: string,
+    rows: Array<{ label: string; count: number; total: number }>,
+  ) {
+    if (rows.length === 0) {
+      return `
+        <h2>${escapeHtml(title)}</h2>
+        <p class="empty">Sin registros en este bloque.</p>
+      `
+    }
+
+    const body = rows
+      .map(
+        (row) => `
+          <tr>
+            <td>${escapeHtml(row.label)}</td>
+            <td class="amount">${row.count}</td>
+            <td class="amount">${escapeHtml(formatCurrency(row.total, primaryCurrency))}</td>
+          </tr>
+        `,
+      )
+      .join('')
+
+    const total = rows.reduce((sum, row) => sum + row.total, 0)
+    const count = rows.reduce((sum, row) => sum + row.count, 0)
+
+    return `
+      <h2>${escapeHtml(title)}</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th class="amount">Registros</th>
+            <th class="amount">Total</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+        <tfoot>
+          <tr>
+            <td>Total</td>
+            <td class="amount">${count}</td>
+            <td class="amount">${escapeHtml(formatCurrency(total, primaryCurrency))}</td>
+          </tr>
+        </tfoot>
+      </table>
+    `
+  }
+
+  function buildAdjustmentsSection() {
+    const adjustments = balanceReport.adjustments
+    const adjustmentRows = adjustments
+      .map(
+        (adjustment) => `
+          <tr>
+            <td>${escapeHtml(adjustment.date)}</td>
+            <td>${escapeHtml(adjustment.origin === 'income' ? 'Ingreso' : 'Egreso')}</td>
+            <td>${escapeHtml(adjustment.label)}</td>
+            <td>${escapeHtml(adjustment.kind === 'positive' ? 'Ajuste positivo' : 'Ajuste negativo')}</td>
+            <td class="amount">${escapeHtml(formatCurrency(adjustment.value, primaryCurrency))}</td>
+          </tr>
+        `,
+      )
+      .join('')
+
+    if (adjustments.length === 0) {
+      return `
+        <h2>Ajustes</h2>
+        <p class="empty">No hay ajustes en el periodo seleccionado.</p>
+      `
+    }
+
+    return `
+      <h2>Ajustes</h2>
+      <p class="meta">Los ajustes se muestran separados para evitar mezclarlos con ingresos o egresos normales.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Origen</th>
+            <th>Registro</th>
+            <th>Clasificación</th>
+            <th class="amount">Impacto</th>
+          </tr>
+        </thead>
+        <tbody>${adjustmentRows}</tbody>
+      </table>
+      <div class="summary">
+        <div><span>Ajustes positivos</span><strong>${escapeHtml(formatCurrency(balanceReport.adjustmentsPositiveTotal, primaryCurrency))}</strong></div>
+        <div><span>Ajustes negativos</span><strong>-${escapeHtml(formatCurrency(balanceReport.adjustmentsNegativeTotal, primaryCurrency))}</strong></div>
+        <div><span>Impacto por ajustes</span><strong>${escapeHtml(formatCurrency(balanceReport.impactByAdjustments, primaryCurrency))}</strong></div>
+      </div>
+    `
+  }
+
+  function buildBalanceSectionsHtml() {
+    return `
+      <h2>Resumen general</h2>
+      <div class="summary">
+        <div><span>Total ingresos brutos</span><strong>${escapeHtml(formatCurrency(balanceReport.incomeGrossTotal, primaryCurrency))}</strong></div>
+        <div><span>Total egresos</span><strong>${escapeHtml(formatCurrency(balanceReport.expenseTotal, primaryCurrency))}</strong></div>
+        <div><span>Ganancia real / neta</span><strong>${escapeHtml(formatCurrency(balanceReport.netProfit, primaryCurrency))}</strong></div>
+        <div><span>Balance general</span><strong>${escapeHtml(formatCurrency(balanceReport.generalBalance, primaryCurrency))}</strong></div>
+      </div>
+      ${buildGroupedTotalsTable('Ingresos por tipo', balanceReport.incomesByType)}
+      ${buildGroupedTotalsTable('Egresos por tipo', balanceReport.expensesByType)}
+      ${buildAdjustmentsSection()}
+      <h2>Balance final</h2>
+      <div class="subtotal">
+        Fórmula aplicada: (Ingresos brutos - Egresos) + Impacto por ajustes = Balance general
+      </div>
+      <div class="summary">
+        <div><span>Neto sin ajustes</span><strong>${escapeHtml(formatCurrency(balanceReport.netProfit, primaryCurrency))}</strong></div>
+        <div><span>Impacto por ajustes</span><strong>${escapeHtml(formatCurrency(balanceReport.impactByAdjustments, primaryCurrency))}</strong></div>
+        <div><span>Balance general</span><strong>${escapeHtml(formatCurrency(balanceReport.generalBalance, primaryCurrency))}</strong></div>
+      </div>
+    `
+  }
+
+  function buildBalanceSectionsText() {
+    const incomeByTypeText = balanceReport.incomesByType.length === 0
+      ? 'Sin registros.'
+      : balanceReport.incomesByType
+          .map((row) => `${row.label}: ${row.count} | ${formatCurrency(row.total, primaryCurrency)}`)
+          .join('\n')
+    const expenseByTypeText = balanceReport.expensesByType.length === 0
+      ? 'Sin registros.'
+      : balanceReport.expensesByType
+          .map((row) => `${row.label}: ${row.count} | ${formatCurrency(row.total, primaryCurrency)}`)
+          .join('\n')
+    const adjustmentsText = balanceReport.adjustments.length === 0
+      ? 'Sin ajustes en el periodo seleccionado.'
+      : balanceReport.adjustments
+          .map(
+            (adjustment) =>
+              `${adjustment.date} | ${adjustment.origin === 'income' ? 'Ingreso' : 'Egreso'} | ${adjustment.label} | ${adjustment.kind === 'positive' ? 'Ajuste positivo' : 'Ajuste negativo'} | ${formatCurrency(adjustment.value, primaryCurrency)}`,
+          )
+          .join('\n')
+
+    return [
+      'Resumen general',
+      `- Total ingresos brutos: ${formatCurrency(balanceReport.incomeGrossTotal, primaryCurrency)}`,
+      `- Total egresos: ${formatCurrency(balanceReport.expenseTotal, primaryCurrency)}`,
+      `- Ganancia real / neta: ${formatCurrency(balanceReport.netProfit, primaryCurrency)}`,
+      `- Balance general: ${formatCurrency(balanceReport.generalBalance, primaryCurrency)}`,
+      '',
+      'Ingresos por tipo',
+      incomeByTypeText,
+      '',
+      'Egresos por tipo',
+      expenseByTypeText,
+      '',
+      'Ajustes',
+      adjustmentsText,
+      `Ajustes positivos: ${formatCurrency(balanceReport.adjustmentsPositiveTotal, primaryCurrency)}`,
+      `Ajustes negativos: -${formatCurrency(balanceReport.adjustmentsNegativeTotal, primaryCurrency)}`,
+      `Impacto por ajustes: ${formatCurrency(balanceReport.impactByAdjustments, primaryCurrency)}`,
+      '',
+      'Balance final',
+      'Fórmula: (Ingresos brutos - Egresos) + Impacto por ajustes = Balance general',
+      `Balance general: ${formatCurrency(balanceReport.generalBalance, primaryCurrency)}`,
+    ].join('\n')
+  }
+
   function buildReport(kind: ReportKind) {
     const reportTitle =
       reportCards.find((reportCard) => reportCard.kind === kind)?.title ??
@@ -945,6 +1133,66 @@ export function ReportsPage() {
           ? 'No hay servicios con los filtros seleccionados.'
           : paymentTypeTextSections
       }`
+    }
+
+    if (kind === 'balance') {
+      const totalRecords = incomes.length + expenses.length
+      const seasonLabel =
+        !isBasicUser && selectedSeason !== 'ALL'
+          ? seasons.find((season) => String(season.id) === selectedSeason)?.name ??
+            `Temporada #${selectedSeason}`
+          : !isBasicUser
+            ? 'Todas las temporadas'
+            : ''
+      const title = isBasicUser
+        ? 'Balance general'
+        : seasonLabel
+          ? `Balance por temporadas - ${seasonLabel}`
+          : reportTitle
+      const countryLabel =
+        selectedCountry === 'ALL' ? 'Todos los países' : getCountryLabel(selectedCountry)
+      const cityLabel = selectedCity === 'ALL' ? 'Todas las ciudades' : selectedCity
+      const extraFilters = [
+        !isBasicUser ? `Temporada: ${seasonLabel}` : '',
+        `Periodo: ${dateFrom || '-'} - ${dateTo || '-'}`,
+        `País: ${countryLabel}`,
+        `Ciudad: ${cityLabel}`,
+      ]
+        .filter(Boolean)
+        .map((filter) => `<span>${escapeHtml(filter)}</span>`)
+        .join(' · ')
+      const textFilters = [
+        !isBasicUser ? `Temporada: ${seasonLabel}` : '',
+        `Periodo: ${dateFrom || '-'} - ${dateTo || '-'}`,
+        `País: ${countryLabel}`,
+        `Ciudad: ${cityLabel}`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+
+      reportHtml = `
+        <h1>${escapeHtml(title)}</h1>
+        <div class="meta">${extraFilters}</div>
+        <div class="summary">
+          <div><span>Registros</span><strong>${totalRecords}</strong></div>
+          <div><span>Balance general</span><strong>${escapeHtml(formatCurrency(balanceReport.generalBalance, primaryCurrency))}</strong></div>
+        </div>
+        ${
+          balanceReport.hasData
+            ? buildBalanceSectionsHtml()
+            : '<p class="empty">No hay datos para construir el balance con los filtros seleccionados.</p>'
+        }
+      `
+      reportText = [
+        title,
+        textFilters,
+        `Registros: ${totalRecords}`,
+        `Balance general: ${formatCurrency(balanceReport.generalBalance, primaryCurrency)}`,
+        '',
+        balanceReport.hasData
+          ? buildBalanceSectionsText()
+          : 'No hay datos para construir el balance con los filtros seleccionados.',
+      ].join('\n')
     }
 
     return {

@@ -324,7 +324,7 @@ export function AppLayout() {
             usageMode={usageMode}
           />
         </div>
-        <Outlet />
+        <Outlet key={usageMode} />
       </main>
 
       {usesProfessionalAgenda({ usageMode }) && <AppointmentReminderAlert />}
