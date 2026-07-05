@@ -10,10 +10,18 @@ export interface CommunicationChannel {
   type: 'whatsapp'
   provider: 'evolution-api'
   instanceName: string
+  instanceId?: string
   status: CommunicationChannelStatus
   qrCode?: string
+  phoneNumber?: string
   connectedNumber?: string
   pairingCode?: string
+  ownerJid?: string
+  profileName?: string
+  profilePhoto?: string
+  providerMetadata?: Record<string, unknown>
+  connectedAt?: string
+  lastSeenAt?: string
   notifyIncomeCreated: boolean
   notifyExpenseCreated: boolean
   notifyCalendarReminder: boolean

@@ -9,6 +9,7 @@ type N8nWebhookEnvironment =
 
 const EVENT_WEBHOOKS: Record<AutomationEvent, N8nWebhookEnvironment> = {
   'income.created': 'N8N_AUTOMATION_WEBHOOK_URL',
+  'service.completed': 'N8N_AUTOMATION_WEBHOOK_URL',
   'expense.created': 'N8N_AUTOMATION_WEBHOOK_URL',
   'calendar.created': 'N8N_AUTOMATION_WEBHOOK_URL',
   'device.provision.requested': 'N8N_DEVICE_PROVISIONING_WEBHOOK_URL',

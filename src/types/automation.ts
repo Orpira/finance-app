@@ -1,5 +1,6 @@
 export const PRIVATE_BALANCE_AUTOMATION_EVENTS = [
   'income.created',
+  'service.completed',
   'expense.created',
   'calendar.created',
   'device.provision.requested',

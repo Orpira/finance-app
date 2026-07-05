@@ -23,6 +23,7 @@ afterEach(() => {
 describe('Webhook dispatcher', () => {
   it.each([
     ['income.created', ENVIRONMENT.N8N_AUTOMATION_WEBHOOK_URL],
+    ['service.completed', ENVIRONMENT.N8N_AUTOMATION_WEBHOOK_URL],
     ['device.provision.requested', ENVIRONMENT.N8N_DEVICE_PROVISIONING_WEBHOOK_URL],
     ['device.whatsapp.connect.requested', ENVIRONMENT.N8N_WHATSAPP_WEBHOOK_URL],
   ] as const)('enruta %s al webhook configurado', async (event, expectedUrl) => {

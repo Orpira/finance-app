@@ -4,7 +4,7 @@ import { neon } from '@neondatabase/serverless';
 config({ path: '.env.local' });
 config({ path: '.env' });
 
-const databaseUrl = process.env.DATABASE_URL?.trim() || 'postgresql://neondb_owner:npg_PJzZ5GmHKr4h@ep-nameless-salad-at94f22b-pooler.c-9.us-east-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require';
+const databaseUrl = process.env.DATABASE_URL?.trim();
 
 if (!databaseUrl) {
   console.error('❌ DATABASE_URL no está definido');

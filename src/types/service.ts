@@ -3,6 +3,12 @@ import type { UsageMode } from './settings'
 
 export type ServiceIncomeStatus = 'PENDIENTE' | 'EJECUCION' | 'FINALIZADO';
 export type ServiceIncomeType = 'ingreso' | 'ajuste' | 'otro';
+export type ServiceTimerStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'notified'
+  | 'dismissed';
 
 export interface ServiceIncome {
   id?: number;
@@ -58,6 +64,14 @@ export interface ServiceIncome {
   timerStartedAt?: string;
 
   timerStoppedAt?: string;
+
+  timerStatus?: ServiceTimerStatus;
+
+  timerEndsAt?: string;
+
+  timerCompletedAt?: string;
+
+  whatsappNotifiedAt?: string;
 
   actualDuration?: number;
 

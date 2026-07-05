@@ -11,6 +11,11 @@ export interface VercelResponse extends ServerResponse {
   json(body: unknown): VercelResponse
 }
 
+interface RequestValidationOptions {
+  allowedMethods?: string[]
+  requireJsonContentType?: boolean
+}
+
 const DEFAULT_ALLOWED_NATIVE_ORIGINS = new Set([
   'capacitor://localhost',
   'http://localhost',
@@ -41,6 +46,7 @@ function configuredOrigins() {
 export function applyApiSecurityHeaders(
   request: VercelRequest,
   response: VercelResponse,
+  options: RequestValidationOptions = {},
 ) {
   const origin = typeof request.headers.origin === 'string'
     ? request.headers.origin
@@ -56,15 +62,20 @@ export function applyApiSecurityHeaders(
     configuredOrigins().has(origin)
   )
 
+  const allowedMethods = options.allowedMethods ?? ['POST']
+
   if (allowed) {
     response.setHeader('Access-Control-Allow-Origin', origin)
     response.setHeader('Vary', 'Origin')
   }
 
-  response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  response.setHeader(
+    'Access-Control-Allow-Methods',
+    [...new Set([...allowedMethods.map((method) => method.toUpperCase()), 'OPTIONS'])].join(', '),
+  )
   response.setHeader(
     'Access-Control-Allow-Headers',
-    'Authorization, Content-Type, Idempotency-Key',
+    'Authorization, Content-Type, Idempotency-Key, X-Private-Balance-User-Code',
   )
   response.setHeader('Cache-Control', 'no-store')
   response.setHeader(
@@ -86,8 +97,12 @@ export function rejectInvalidRequest(
   request: VercelRequest,
   response: VercelResponse,
   maxBodyBytes: number,
+  options: RequestValidationOptions = {},
 ) {
-  if (!applyApiSecurityHeaders(request, response)) {
+  const allowedMethods = options.allowedMethods ?? ['POST']
+  const requireJsonContentType = options.requireJsonContentType ?? true
+
+  if (!applyApiSecurityHeaders(request, response, { allowedMethods })) {
     response.status(403).json({ error: 'Origen no permitido.' })
     return true
   }
@@ -97,19 +112,22 @@ export function rejectInvalidRequest(
     return true
   }
 
-  if (request.method !== 'POST') {
-    response.setHeader('Allow', 'POST, OPTIONS')
+  const requestMethod = request.method?.toUpperCase() ?? ''
+  if (!allowedMethods.map((method) => method.toUpperCase()).includes(requestMethod)) {
+    response.setHeader('Allow', [...allowedMethods.map((method) => method.toUpperCase()), 'OPTIONS'].join(', '))
     response.status(405).json({ error: 'Método no permitido.' })
     return true
   }
 
-  const contentType = request.headers['content-type']
-  if (
-    typeof contentType !== 'string' ||
-    !contentType.toLowerCase().startsWith('application/json')
-  ) {
-    response.status(415).json({ error: 'Content-Type no permitido.' })
-    return true
+  if (requireJsonContentType && ['POST', 'PUT', 'PATCH'].includes(requestMethod)) {
+    const contentType = request.headers['content-type']
+    if (
+      typeof contentType !== 'string' ||
+      !contentType.toLowerCase().startsWith('application/json')
+    ) {
+      response.status(415).json({ error: 'Content-Type no permitido.' })
+      return true
+    }
   }
 
   const contentLength = Number(request.headers['content-length'] ?? 0)

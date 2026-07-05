@@ -4,32 +4,31 @@ import {
   Power,
   RefreshCw,
   Send,
-  ShieldCheck,
+  UserRoundCog,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import {
+  changeWhatsAppAccount,
+  connectWhatsApp,
   disconnectWhatsApp,
   getWhatsAppChannel,
   refreshWhatsAppStatus,
-  requestWhatsAppQr,
   testWhatsAppNotification,
   updateWhatsAppNotificationPreferences,
   type CommunicationChannelActionResult,
 } from '../../services/communicationChannelService'
-import { getOrCreateDeviceIdentity } from '../../services/deviceIdentityService'
 import type {
   CommunicationChannel,
   WhatsAppNotificationPreferences,
 } from '../../types/communicationChannel'
-import type { DeviceIdentity } from '../../types/deviceIdentity'
 
 const STATUS_LABELS = {
-  not_configured: 'No configurado',
+  not_configured: 'No conectado',
   connecting: 'Pendiente de vinculación',
   connected: 'Conectado',
-  disconnected: 'Desconectado',
+  disconnected: 'No conectado',
   error: 'Error',
 } as const
 
@@ -51,34 +50,33 @@ const PREFERENCE_OPTIONS: Array<{
   { key: 'notifyBackupCompleted', label: 'Notificar backups completados' },
 ]
 
-type ActionName = 'qr' | 'status' | 'disconnect' | 'test' | 'preferences'
+type ActionName = 'connect' | 'status' | 'disconnect' | 'change' | 'test' | 'preferences'
 
-function maskIdentityCode(value: string) {
-  const prefixEnd = value.indexOf('-', value.indexOf('-') + 1)
-  const prefix = prefixEnd > 0 ? value.slice(0, prefixEnd) : value.slice(0, 8)
-  return `${prefix}-••••••••-${value.slice(-4)}`
+function formatLastSync(value?: string) {
+  if (!value) return 'Sin sincronización registrada'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? 'Sin sincronización registrada'
+    : date.toLocaleString('es-ES', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
 }
-
-const PROVISIONING_LABELS = {
-  pending: 'Pendiente de envío',
-  provisioned: 'Provisionado',
-  error: 'Pendiente de reintento',
-} as const
 
 export function CommunicationChannelsPage() {
   const [channel, setChannel] = useState<CommunicationChannel | null>(null)
-  const [identity, setIdentity] = useState<DeviceIdentity | null>(null)
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [loading, setLoading] = useState(true)
   const [activeAction, setActiveAction] = useState<ActionName | null>(null)
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     let active = true
-    Promise.all([getWhatsAppChannel(), getOrCreateDeviceIdentity()])
-      .then(([storedChannel, storedIdentity]) => {
+    getWhatsAppChannel()
+      .then((storedChannel) => {
         if (active) {
           setChannel(storedChannel)
-          setIdentity(storedIdentity)
+          setPhoneNumber(storedChannel?.phoneNumber ?? storedChannel?.connectedNumber ?? '')
         }
       })
       .finally(() => {
@@ -133,6 +131,8 @@ export function CommunicationChannelsPage() {
 
   const status = channel?.status ?? 'not_configured'
   const isBusy = activeAction !== null
+  const isConnected = status === 'connected'
+  const connectedNumber = channel?.phoneNumber ?? channel?.connectedNumber
 
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">
@@ -155,10 +155,12 @@ export function CommunicationChannelsPage() {
             </span>
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-slate-950">WhatsApp</h2>
-              <p className="mt-0.5 text-sm text-slate-500">Evolution API mediante n8n</p>
-              {channel?.connectedNumber && (
+              <p className="mt-0.5 text-sm text-slate-500">
+                Notificaciones automáticas mediante n8n y Evolution API
+              </p>
+              {isConnected && connectedNumber && (
                 <p className="mt-1 text-sm font-medium text-slate-700">
-                  Número vinculado: {channel.connectedNumber}
+                  Número conectado: {connectedNumber}
                 </p>
               )}
             </div>
@@ -176,7 +178,48 @@ export function CommunicationChannelsPage() {
             </div>
           ) : (
             <>
-              {channel?.qrCode && status !== 'connected' && (
+              {!isConnected && status !== 'connecting' && (
+                <p className="rounded-lg bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+                  Private Balance puede usar tu WhatsApp para enviarte notificaciones
+                  automáticas de ingresos, egresos y agenda. Esta autorización es
+                  independiente de la licencia de la aplicación.
+                </p>
+              )}
+
+              {!isConnected && (
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm font-semibold text-slate-800">
+                    Número de WhatsApp
+                  </span>
+                  <input
+                    autoComplete="tel"
+                    className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                    disabled={isBusy}
+                    inputMode="tel"
+                    onChange={(event) => setPhoneNumber(event.target.value)}
+                    placeholder="Ej. 34600111222"
+                    type="tel"
+                    value={phoneNumber}
+                  />
+                  <span className="text-xs leading-5 text-slate-500">
+                    Incluye el prefijo internacional. Se usa para solicitar el código de vinculación; si Evolution no lo ofrece, se mostrará un QR alternativo.
+                  </span>
+                </label>
+              )}
+
+              {channel?.pairingCode && !isConnected && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-sm font-semibold text-emerald-900">Código de vinculación</p>
+                  <p className="mt-3 break-all text-center font-mono text-3xl font-bold tracking-[0.2em] text-emerald-950">
+                    {channel.pairingCode}
+                  </p>
+                  <p className="mt-4 text-sm leading-6 text-emerald-900">
+                    Abre WhatsApp → Dispositivos vinculados → Vincular con número/código → introduce este código.
+                  </p>
+                </div>
+              )}
+
+              {channel?.qrCode && !channel.pairingCode && !isConnected && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 text-center">
                   <img
                     alt="Código QR para vincular WhatsApp"
@@ -184,24 +227,45 @@ export function CommunicationChannelsPage() {
                     src={channel.qrCode}
                   />
                   <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-700">
-                    Abre WhatsApp → Dispositivos vinculados → Vincular dispositivo → Escanea este QR.
+                    Usa este QR solo si vas a vincular desde otro dispositivo.
                   </p>
                 </div>
               )}
 
+              {isConnected && (
+                <dl className="grid gap-3 rounded-lg bg-emerald-50 p-4 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Cuenta</dt>
+                    <dd className="mt-1 font-medium text-emerald-950">
+                      {channel?.profileName || connectedNumber || 'WhatsApp conectado'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Última sincronización</dt>
+                    <dd className="mt-1 font-medium text-emerald-950">
+                      {formatLastSync(channel?.lastSeenAt ?? channel?.updatedAt)}
+                    </dd>
+                  </div>
+                </dl>
+              )}
+
               <div className="flex flex-wrap gap-2">
-                {status !== 'connected' && (
+                {!isConnected && (
                   <button
                     className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={isBusy}
-                    onClick={() => void runAction('qr', requestWhatsAppQr, 'QR recibido. Escanéalo desde WhatsApp.')}
+                    onClick={() => void runAction(
+                      'connect',
+                      () => connectWhatsApp(phoneNumber),
+                      'Solicitud de vinculación preparada.',
+                    )}
                     type="button"
                   >
-                    {activeAction === 'qr' ? <LoaderCircle className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}
-                    {channel?.qrCode || status === 'connecting' ? 'Regenerar QR' : 'Conectar WhatsApp'}
+                    {activeAction === 'connect' ? <LoaderCircle className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}
+                    {status === 'connecting' ? 'Actualizar vinculación' : 'Conectar WhatsApp'}
                   </button>
                 )}
-                <button
+                {isConnected && <button
                   className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isBusy}
                   onClick={() => void runAction('status', refreshWhatsAppStatus, 'Estado actualizado.')}
@@ -209,25 +273,34 @@ export function CommunicationChannelsPage() {
                 >
                   {activeAction === 'status' ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
                   Actualizar estado
-                </button>
-                <button
+                </button>}
+                {isConnected && <button
                   className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isBusy || status !== 'connected'}
+                  disabled={isBusy}
                   onClick={() => void runAction('test', testWhatsAppNotification, 'Mensaje de prueba solicitado.')}
                   type="button"
                 >
                   {activeAction === 'test' ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />}
                   Probar envío
-                </button>
-                <button
+                </button>}
+                {isConnected && <button
                   className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isBusy || status === 'not_configured' || status === 'disconnected'}
+                  disabled={isBusy}
                   onClick={() => void runAction('disconnect', disconnectWhatsApp, 'WhatsApp desconectado.')}
                   type="button"
                 >
                   {activeAction === 'disconnect' ? <LoaderCircle className="size-4 animate-spin" /> : <Power className="size-4" />}
                   Desconectar
-                </button>
+                </button>}
+                {isConnected && <button
+                  className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-white px-4 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isBusy}
+                  onClick={() => void runAction('change', changeWhatsAppAccount, 'Puedes vincular otra cuenta.')}
+                  type="button"
+                >
+                  {activeAction === 'change' ? <LoaderCircle className="size-4 animate-spin" /> : <UserRoundCog className="size-4" />}
+                  Cambiar cuenta
+                </button>}
               </div>
 
               {notice && (
@@ -239,7 +312,7 @@ export function CommunicationChannelsPage() {
                 </p>
               )}
 
-              <fieldset className="space-y-3 border-t border-slate-100 pt-5">
+              <fieldset className="space-y-3 border-t border-slate-100 pt-5" disabled={!isConnected}>
                 <legend className="mb-3 font-semibold text-slate-950">Notificaciones automáticas</legend>
                 {PREFERENCE_OPTIONS.map((option) => (
                   <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-slate-200 px-4 py-3" key={option.key}>
@@ -247,7 +320,7 @@ export function CommunicationChannelsPage() {
                     <input
                       checked={channel?.[option.key] ?? false}
                       className="size-5 accent-emerald-600"
-                      disabled={isBusy}
+                      disabled={isBusy || !isConnected}
                       onChange={(event) => handlePreferenceChange(option.key, event.target.checked)}
                       type="checkbox"
                     />
@@ -258,44 +331,6 @@ export function CommunicationChannelsPage() {
           )}
         </div>
       </article>
-
-      {identity && (
-        <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-              <ShieldCheck className="size-5" aria-hidden="true" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h2 className="font-semibold text-slate-950">Identidad técnica</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-500">
-                Identificadores locales persistentes usados para conectar este dispositivo de forma segura.
-              </p>
-              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Usuario</dt>
-                  <dd className="mt-1 break-all font-mono text-xs text-slate-700">{maskIdentityCode(identity.userCode)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Dispositivo</dt>
-                  <dd className="mt-1 break-all font-mono text-xs text-slate-700">{maskIdentityCode(identity.deviceCode)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Plataforma</dt>
-                  <dd className="mt-1 capitalize text-slate-700">{identity.platform}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Provisionamiento</dt>
-                  <dd className="mt-1 text-slate-700">
-                    {identity.provisioningStatus
-                      ? PROVISIONING_LABELS[identity.provisioningStatus]
-                      : 'Sin estado'}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          </div>
-        </article>
-      )}
 
       <p className="text-xs leading-5 text-slate-500">
         Private Balance se comunica únicamente con n8n. Las credenciales de Evolution API permanecen fuera de este dispositivo.

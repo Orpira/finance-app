@@ -542,6 +542,24 @@ export class FinanceDB extends Dexie {
             }),
         ]),
       )
+
+    this.version(22).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt',
+      expenses:
+        '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+      communicationChannels: 'id,type,provider,status,updatedAt',
+      deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+    })
   }
 }
 

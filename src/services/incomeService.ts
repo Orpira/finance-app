@@ -19,6 +19,7 @@ import {
   enqueueAutomationEvent,
   scheduleAutomationOutboxFlush,
 } from './automationOutboxService'
+import { buildInitialServiceTimerState } from './serviceTimerService'
 import {
   assertRecordIsNotReported,
   assertReportedRecordUpdateIsAllowed,
@@ -52,8 +53,9 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
 
   const normalizedInput = normalizeIncomeByType(input)
 
-  const income: ServiceIncome = normalizeReportStatus({
-    createdAt: new Date().toISOString(),
+  const createdAt = new Date().toISOString()
+  const incomeBase: ServiceIncome = normalizeReportStatus({
+    createdAt,
     status: 'PENDIENTE',
     ...normalizedInput,
     type: normalizedInput.type ?? 'ingreso',
@@ -69,6 +71,10 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
       ? earningPeriod?.percentage ?? normalizedInput.percentage
       : 0,
   })
+  const income: ServiceIncome = {
+    ...incomeBase,
+    ...buildInitialServiceTimerState(incomeBase, createdAt),
+  }
   const incomeId = await db.transaction('rw', [db.services, db.automationOutbox], async () => {
     const nextIncomeId = await db.services.add(income)
     await enqueueAutomationEvent(

@@ -1,4 +1,5 @@
 import {
+  BriefcaseBusiness,
   CalendarDays,
   CircleDollarSign,
   ChartNoAxesCombined,
@@ -14,6 +15,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert'
+import { ServiceCompletionAlert } from '../components/ServiceCompletionAlert'
 import { UsageModeBadge } from '../components/UsageModeBadge'
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
 import { runAutomaticDriveBackupIfNeeded } from '../services/backupService'
@@ -68,10 +70,47 @@ let runtimeIntegrityCheckStarted = false
 let automationOutboxStarted = false
 let deviceProvisioningStarted = false
 
+interface UsageModeQuickToggleProps {
+  usageMode: UsageMode
+  disabled?: boolean
+  onToggle: () => void
+}
+
+function UsageModeQuickToggle({ usageMode, disabled = false, onToggle }: UsageModeQuickToggleProps) {
+  const isProfessional = usageMode === 'professional'
+  const Icon = isProfessional ? BriefcaseBusiness : House
+  const nextLabel = isProfessional ? 'Básico' : 'Profesional'
+  const currentLabel = isProfessional ? 'Profesional' : 'Básico'
+
+  return (
+    <button
+      aria-label={`Cambiar modo de uso a ${nextLabel}`}
+      className={[
+        'inline-flex min-h-11 min-w-11 items-center gap-2 rounded-full border px-3 text-sm font-semibold',
+        'transition-all duration-300 ease-out',
+        'focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2',
+        'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100',
+        'dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200 dark:hover:bg-emerald-900',
+        'focus:ring-offset-white dark:focus:ring-offset-slate-950',
+        disabled ? 'cursor-not-allowed opacity-60' : '',
+      ].join(' ')}
+      disabled={disabled}
+      onClick={onToggle}
+      title={`Modo ${currentLabel}. Tocar para cambiar a ${nextLabel}`}
+      type="button"
+    >
+      <Icon className="size-4" aria-hidden="true" />
+      <span className="leading-none">{currentLabel}</span>
+    </button>
+  )
+}
+
 export function AppLayout() {
   const location = useLocation()
   const [theme, setTheme] = useState<ThemeMode>('system')
   const [usageMode, setUsageMode] = useState<UsageMode>('professional')
+  const [isTogglingUsageMode, setIsTogglingUsageMode] = useState(false)
+  const [isUsageModeTransitioning, setIsUsageModeTransitioning] = useState(false)
   const [isDarkTheme, setIsDarkTheme] = useState(() =>
     document.documentElement.classList.contains('dark'),
   )
@@ -164,6 +203,17 @@ export function AppLayout() {
     }
   }, [])
 
+  useEffect(() => {
+    setIsUsageModeTransitioning(true)
+    const timeoutId = window.setTimeout(() => {
+      setIsUsageModeTransitioning(false)
+    }, 260)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [usageMode])
+
   async function toggleTheme() {
     const nextTheme: ThemeMode = isDarkTheme ? 'light' : 'dark'
     const previousTheme = theme
@@ -181,6 +231,28 @@ export function AppLayout() {
       applyTheme(previousTheme)
       setTheme(previousTheme)
       setIsDarkTheme(document.documentElement.classList.contains('dark'))
+    }
+  }
+
+  async function toggleUsageMode() {
+    if (isTogglingUsageMode) {
+      return
+    }
+
+    const previousUsageMode = usageMode
+    const nextUsageMode: UsageMode = usageMode === 'professional' ? 'basic' : 'professional'
+
+    setIsTogglingUsageMode(true)
+    setUsageMode(nextUsageMode)
+
+    try {
+      const updatedSettings = await updateSettings({ usageMode: nextUsageMode })
+      setUsageMode(updatedSettings.usageMode)
+    } catch (error) {
+      setUsageMode(previousUsageMode)
+      console.warn('No se pudo cambiar el modo de uso.', error)
+    } finally {
+      setIsTogglingUsageMode(false)
     }
   }
 
@@ -218,32 +290,50 @@ export function AppLayout() {
           <p className="text-xs text-slate-400">
             {Capacitor.isNativePlatform() ? 'Aplicación Android' : 'Web / PWA'}
           </p>
-          <button
-            aria-label={themeLabel}
-            className="inline-flex size-10 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-950"
-            onClick={toggleTheme}
-            title={themeLabel}
-            type="button"
-          >
-            <ThemeIcon className="size-5" aria-hidden="true" />
-          </button>
+          <div className="flex items-center gap-2">
+            <UsageModeQuickToggle
+              disabled={isTogglingUsageMode}
+              onToggle={toggleUsageMode}
+              usageMode={usageMode}
+            />
+            <button
+              aria-label={themeLabel}
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-950"
+              onClick={toggleTheme}
+              title={themeLabel}
+              type="button"
+            >
+              <ThemeIcon className="size-5" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </aside>
 
-      <main className="mx-auto min-h-dvh w-full max-w-5xl px-4 pb-24 md:ml-64 md:pb-8">
+      <main
+        className={[
+          'mx-auto min-h-dvh w-full max-w-5xl px-4 pb-24 md:ml-64 md:pb-8',
+          'transition-all duration-300 ease-out',
+          isUsageModeTransitioning ? 'opacity-95' : 'opacity-100',
+        ].join(' ')}
+      >
         <div className="flex items-center justify-between gap-3 py-3 md:hidden">
           <p className="text-sm font-semibold text-slate-900 dark:text-white">Private Balance</p>
-          <UsageModeBadge usageMode={usageMode} />
+          <UsageModeQuickToggle
+            disabled={isTogglingUsageMode}
+            onToggle={toggleUsageMode}
+            usageMode={usageMode}
+          />
         </div>
         <Outlet />
       </main>
 
       {usesProfessionalAgenda({ usageMode }) && <AppointmentReminderAlert />}
       {usesProfessionalAgenda({ usageMode }) && <ServiceTimeAlert />}
+      <ServiceCompletionAlert />
 
       <button
         aria-label={themeLabel}
-        className="fixed right-4 z-50 inline-flex size-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg shadow-slate-900/10 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-950 md:hidden"
+        className="fixed right-4 z-50 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg shadow-slate-900/10 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-950 md:hidden"
         onClick={toggleTheme}
         style={{ bottom: 'calc(max(env(safe-area-inset-bottom), 0.5rem) + 5.25rem)' }}
         title={themeLabel}
