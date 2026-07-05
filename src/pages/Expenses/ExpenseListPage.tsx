@@ -34,6 +34,36 @@ import { useDialog } from '../../components/dialogs/useDialog'
 const EXPENSES_PER_PAGE = 10
 type ReportStatusFilter = 'ALL' | 'pending' | 'reported'
 
+function filterExpensesByMode(
+  expenses: Expense[],
+  settings: AppSettings,
+  activePeriodId?: number,
+) {
+  return expenses.filter(
+    (expense) =>
+      recordBelongsToUsageMode(expense, settings.usageMode) &&
+      (isBasicMode(settings) ||
+        (activePeriodId !== undefined &&
+          (expense.earningPeriodId === activePeriodId ||
+            expense.seasonPeriodId === activePeriodId))),
+  )
+}
+
+function filterIncomesByMode(
+  incomes: ServiceIncome[],
+  settings: AppSettings,
+  activePeriodId?: number,
+) {
+  return incomes.filter(
+    (income) =>
+      recordBelongsToUsageMode(income, settings.usageMode) &&
+      (isBasicMode(settings) ||
+        (activePeriodId !== undefined &&
+          (income.earningPeriodId === activePeriodId ||
+            income.seasonPeriodId === activePeriodId))),
+  )
+}
+
 export function ExpenseListPage() {
   const { alert, confirm } = useDialog()
   const { hidden } = useSensitiveValues()
@@ -149,19 +179,12 @@ export function ExpenseListPage() {
   }
 
   async function reloadExpenses() {
+    if (!settings) {
+      return
+    }
+
     const currentExpenses = await listExpenses({ newestFirst: true })
-    setExpenses(
-      settings
-        ? currentExpenses.filter(
-            (expense) =>
-              recordBelongsToUsageMode(expense, settings.usageMode) &&
-              (isBasicMode(settings) ||
-                (activePeriodId !== undefined &&
-                  (expense.earningPeriodId === activePeriodId ||
-                    expense.seasonPeriodId === activePeriodId))),
-          )
-        : currentExpenses,
-    )
+    setExpenses(filterExpensesByMode(currentExpenses, settings, activePeriodId))
   }
 
   useEffect(() => {
@@ -179,30 +202,11 @@ export function ExpenseListPage() {
         return
       }
 
-      const belongsToActivePeriod = (record: {
-        earningPeriodId?: number
-        seasonPeriodId?: number
-      }) =>
-        activePeriod?.id !== undefined &&
-        (record.earningPeriodId === activePeriod.id ||
-          record.seasonPeriodId === activePeriod.id)
-
       setExpenses(
-        currentExpenses.filter(
-          (expense) =>
-            recordBelongsToUsageMode(
-              expense,
-              currentSettings.usageMode,
-            ) &&
-            (isBasicMode(currentSettings) || belongsToActivePeriod(expense)),
-        ),
+        filterExpensesByMode(currentExpenses, currentSettings, activePeriod?.id),
       )
       setIncomes(
-        currentIncomes.filter(
-          (income) =>
-            recordBelongsToUsageMode(income, currentSettings.usageMode) &&
-            (isBasicMode(currentSettings) || belongsToActivePeriod(income)),
-        ),
+        filterIncomesByMode(currentIncomes, currentSettings, activePeriod?.id),
       )
       setSettings(currentSettings)
       setActivePeriodId(activePeriod?.id)
@@ -211,8 +215,32 @@ export function ExpenseListPage() {
 
     loadInitialData()
 
+    async function handleSettingsChanged(event: Event) {
+      const nextSettings = (event as CustomEvent<AppSettings>).detail
+      const [currentExpenses, currentIncomes, activePeriod] = await Promise.all([
+        listExpenses({ newestFirst: true }),
+        listServiceIncomes({ newestFirst: true }),
+        getActiveEarningPeriod(),
+      ])
+
+      if (!isMounted) {
+        return
+      }
+
+      const nextActivePeriodId = activePeriod?.id
+      setSettings(nextSettings)
+      setActivePeriodId(nextActivePeriodId)
+      setExpenses(filterExpensesByMode(currentExpenses, nextSettings, nextActivePeriodId))
+      setIncomes(filterIncomesByMode(currentIncomes, nextSettings, nextActivePeriodId))
+      setSelectedReportStatus('ALL')
+      setExpensePage(1)
+    }
+
+    window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
+
     return () => {
       isMounted = false
+      window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
     }
   }, [])
 

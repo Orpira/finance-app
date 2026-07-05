@@ -84,27 +84,30 @@ export function HomePage() {
     const current = monthRange(0)
     const previous = monthRange(-1)
 
-    Promise.all([
-      getSettings(),
-      getActiveEarningPeriod(),
-      listServiceIncomes(current),
-      listExpenses(current),
-      listServiceIncomes(previous),
-      listExpenses(previous),
-    ]).then(([nextSettings, period, incomes, expenses, oldIncomes, oldExpenses]) => {
+    async function loadDashboard(nextSettings?: AppSettings) {
+      const resolvedSettings = nextSettings ?? await getSettings()
+      const [period, incomes, expenses, oldIncomes, oldExpenses] = await Promise.all([
+        getActiveEarningPeriod(),
+        listServiceIncomes(current),
+        listExpenses(current),
+        listServiceIncomes(previous),
+        listExpenses(previous),
+      ])
+
       if (!mounted) return
-      const isBasicUser = isBasicMode(nextSettings)
+
+      const isBasicUser = isBasicMode(resolvedSettings)
       const modeIncomes = incomes.filter((item) =>
-        recordBelongsToUsageMode(item, nextSettings.usageMode),
+        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
       )
       const modeExpenses = expenses.filter((item) =>
-        recordBelongsToUsageMode(item, nextSettings.usageMode),
+        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
       )
       const oldModeIncomes = oldIncomes.filter((item) =>
-        recordBelongsToUsageMode(item, nextSettings.usageMode),
+        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
       )
       const oldModeExpenses = oldExpenses.filter((item) =>
-        recordBelongsToUsageMode(item, nextSettings.usageMode),
+        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
       )
       const belongsToActivePeriod = (item: {
         earningPeriodId?: number
@@ -119,18 +122,18 @@ export function HomePage() {
         ? modeExpenses
         : modeExpenses.filter(belongsToActivePeriod)
       const matchesActiveLocation = (item: { country?: string; city?: string }) =>
-        (!item.country || item.country === nextSettings.country) &&
-        (!nextSettings.city || !item.city || item.city === nextSettings.city)
+        (!item.country || item.country === resolvedSettings.country) &&
+        (!resolvedSettings.city || !item.city || item.city === resolvedSettings.city)
       const reportableContextRecords = (
         isBasicUser ? contextualExpenses : contextualIncomes
       ).filter(matchesActiveLocation)
 
-      setSettings(nextSettings)
+      setSettings(resolvedSettings)
       setActivePeriod(period ?? null)
       setReportedCount(
         getReportedCountByUsageMode(
           reportableContextRecords,
-          nextSettings.usageMode,
+          resolvedSettings.usageMode,
         ),
       )
       setCurrentIncomes(contextualIncomes)
@@ -153,10 +156,19 @@ export function HomePage() {
                 item.seasonPeriodId === period?.id,
             ),
       )
-    })
+    }
+
+    void loadDashboard()
+
+    function handleSettingsChanged(event: Event) {
+      void loadDashboard((event as CustomEvent<AppSettings>).detail)
+    }
+
+    window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
 
     return () => {
       mounted = false
+      window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
     }
   }, [])
 

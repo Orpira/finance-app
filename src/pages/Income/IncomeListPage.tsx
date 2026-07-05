@@ -57,6 +57,30 @@ function getIncomeStatusClass(status: ServiceIncomeStatus) {
   return 'bg-slate-100 text-slate-700'
 }
 
+function filterIncomesByMode(
+  incomes: ServiceIncome[],
+  settings: AppSettings,
+  activePeriodId?: number,
+) {
+  return incomes.filter(
+    (income) =>
+      recordBelongsToUsageMode(income, settings.usageMode) &&
+      (isBasicMode(settings) ||
+        (activePeriodId !== undefined &&
+          (income.earningPeriodId === activePeriodId ||
+            income.seasonPeriodId === activePeriodId))),
+  )
+}
+
+function filterAdjustmentsByMode(expenses: Expense[], settings: AppSettings) {
+  return expenses.filter(
+    (expense) =>
+      expense.type === 'ajuste' &&
+      expense.relatedIncomeId !== undefined &&
+      recordBelongsToUsageMode(expense, settings.usageMode),
+  )
+}
+
 export function IncomeListPage() {
   const { alert, confirm } = useDialog()
   const { hidden } = useSensitiveValues()
@@ -191,19 +215,12 @@ export function IncomeListPage() {
   }
 
   async function reloadIncomes() {
+    if (!settings) {
+      return
+    }
+
     const currentIncomes = await listServiceIncomes({ newestFirst: true })
-    setIncomes(
-      settings
-        ? currentIncomes.filter(
-            (income) =>
-              recordBelongsToUsageMode(income, settings.usageMode) &&
-              (isBasicMode(settings) ||
-                (activePeriodId !== undefined &&
-                  (income.earningPeriodId === activePeriodId ||
-                    income.seasonPeriodId === activePeriodId))),
-          )
-        : currentIncomes,
-    )
+    setIncomes(filterIncomesByMode(currentIncomes, settings, activePeriodId))
   }
 
   useEffect(() => {
@@ -221,36 +238,42 @@ export function IncomeListPage() {
         return
       }
 
-      setIncomes(
-        currentIncomes.filter(
-          (income) =>
-            recordBelongsToUsageMode(
-              income,
-              currentSettings.usageMode,
-            ) &&
-            (isBasicMode(currentSettings) ||
-              (activePeriod?.id !== undefined &&
-                (income.earningPeriodId === activePeriod.id ||
-                  income.seasonPeriodId === activePeriod.id))),
-        ),
-      )
+      setIncomes(filterIncomesByMode(currentIncomes, currentSettings, activePeriod?.id))
       setSettings(currentSettings)
       setActivePeriodId(activePeriod?.id)
-      setRelatedAdjustments(
-        currentExpenses.filter(
-          (expense) =>
-            expense.type === 'ajuste' &&
-            expense.relatedIncomeId !== undefined &&
-            recordBelongsToUsageMode(expense, currentSettings.usageMode),
-        ),
-      )
+      setRelatedAdjustments(filterAdjustmentsByMode(currentExpenses, currentSettings))
       setIsLoading(false)
     }
 
     loadInitialData()
 
+    async function handleSettingsChanged(event: Event) {
+      const nextSettings = (event as CustomEvent<AppSettings>).detail
+      const [currentIncomes, currentExpenses, activePeriod] = await Promise.all([
+        listServiceIncomes({ newestFirst: true }),
+        listExpenses({ newestFirst: true }),
+        getActiveEarningPeriod(),
+      ])
+
+      if (!isMounted) {
+        return
+      }
+
+      const nextActivePeriodId = activePeriod?.id
+      setSettings(nextSettings)
+      setActivePeriodId(nextActivePeriodId)
+      setIncomes(filterIncomesByMode(currentIncomes, nextSettings, nextActivePeriodId))
+      setRelatedAdjustments(filterAdjustmentsByMode(currentExpenses, nextSettings))
+      setSelectedIncomeType('ALL')
+      setSelectedReportStatus('ALL')
+      setIncomePage(1)
+    }
+
+    window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
+
     return () => {
       isMounted = false
+      window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
     }
   }, [])
 
