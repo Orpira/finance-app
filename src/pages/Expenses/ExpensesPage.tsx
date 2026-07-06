@@ -413,7 +413,7 @@ export function ExpensesPage() {
           notes.trim()
             ? notes.trim()
             : undefined,
-        createdAt: expenseCreatedAt ?? now.toISOString(),
+        createdAt: isEditing ? expenseCreatedAt ?? now.toISOString() : undefined,
         country: expenseCountry ?? settings.country,
         city: isBasicUser ? undefined : expenseCity ?? settings.city,
       }

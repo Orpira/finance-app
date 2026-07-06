@@ -58,9 +58,7 @@ export function getExpenseDisplayName(expense: Expense) {
     `${expense.type === 'ajuste' ? 'Ajuste' : 'Gasto'} #${expense.id ?? '-'}`,
     expense.type === 'ajuste' ? undefined : expense.category,
     expense.date,
-    expense.type === 'ajuste'
-      ? formatTimeFromDateTime(expense.createdAt)
-      : undefined,
+    formatTimeFromDateTime(expense.createdAt),
     expense.city,
   ]
     .filter(Boolean)
