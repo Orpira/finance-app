@@ -18,7 +18,10 @@ import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert
 import { ServiceCompletionAlert } from '../components/ServiceCompletionAlert'
 import { UsageModeBadge } from '../components/UsageModeBadge'
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
-import { runAutomaticDriveBackupIfNeeded } from '../services/backupService'
+import {
+  getDelayUntilNextDailyBackupCheck,
+  runAutomaticDriveBackupIfNeeded,
+} from '../services/backupService'
 import { initializeAutomationOutbox } from '../services/automationOutboxService'
 import { provisionDeviceIdentity } from '../services/deviceIdentityService'
 import { migrateLegacyRecordsToSeasons } from '../services/earningPeriodService'
@@ -65,10 +68,28 @@ const basicNavItems = [
 ]
 
 let automaticBackupCheckStarted = false
+let automaticBackupTimeoutId: number | null = null
 let earningPeriodCheckStarted = false
 let runtimeIntegrityCheckStarted = false
 let automationOutboxStarted = false
 let deviceProvisioningStarted = false
+
+function runAutomaticBackupCheck() {
+  runAutomaticDriveBackupIfNeeded().catch((error) => {
+    console.warn('No se pudo ejecutar el backup automático.', error)
+  })
+}
+
+function scheduleNextAutomaticBackupCheck() {
+  if (automaticBackupTimeoutId !== null) {
+    window.clearTimeout(automaticBackupTimeoutId)
+  }
+
+  automaticBackupTimeoutId = window.setTimeout(() => {
+    runAutomaticBackupCheck()
+    scheduleNextAutomaticBackupCheck()
+  }, getDelayUntilNextDailyBackupCheck())
+}
 
 interface UsageModeQuickToggleProps {
   usageMode: UsageMode
@@ -120,6 +141,8 @@ export function AppLayout() {
   )
 
   useEffect(() => {
+    let startedAutomaticBackupOnThisMount = false
+
     function syncLayoutSettings(settings: { theme: ThemeMode; usageMode: UsageMode }) {
       setTheme(settings.theme)
       setUsageMode(settings.usageMode)
@@ -154,10 +177,9 @@ export function AppLayout() {
 
     if (!automaticBackupCheckStarted) {
       automaticBackupCheckStarted = true
-
-      runAutomaticDriveBackupIfNeeded().catch((error) => {
-        console.warn('No se pudo ejecutar el backup automático.', error)
-      })
+      startedAutomaticBackupOnThisMount = true
+      runAutomaticBackupCheck()
+      scheduleNextAutomaticBackupCheck()
     }
 
     if (!earningPeriodCheckStarted) {
@@ -186,18 +208,29 @@ export function AppLayout() {
     }
 
     function handleVisibilityChange() {
-      if (document.visibilityState !== 'hidden') {
+      if (
+        document.visibilityState !== 'hidden' &&
+        document.visibilityState !== 'visible'
+      ) {
         return
       }
 
-      runAutomaticDriveBackupIfNeeded().catch((error) => {
-        console.warn('No se pudo ejecutar el backup automático.', error)
-      })
+      runAutomaticBackupCheck()
+      scheduleNextAutomaticBackupCheck()
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
+      if (startedAutomaticBackupOnThisMount) {
+        automaticBackupCheckStarted = false
+
+        if (automaticBackupTimeoutId !== null) {
+          window.clearTimeout(automaticBackupTimeoutId)
+          automaticBackupTimeoutId = null
+        }
+      }
+
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
     }

@@ -32,7 +32,7 @@ function isLocalDevelopmentUrl(url: URL) {
   )
 }
 
-function getAutomationApiBaseUrl() {
+export function getAutomationApiBaseUrl() {
   const isNative = Capacitor.isNativePlatform()
   const runtimeOrigin = new URL(globalThis.location.origin)
   const shouldUseConfiguredApi = isNative || isLocalDevelopmentUrl(runtimeOrigin)
