@@ -3,6 +3,7 @@ import {
   CalendarRange,
   Eye,
   EyeOff,
+  Landmark,
   MinusCircle,
   PlusCircle,
   TrendingUp,
@@ -15,6 +16,7 @@ import { UsageModeBadge } from '../../components/UsageModeBadge'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
+import { buildBalanceReport } from '../../services/balanceReportService'
 import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
@@ -138,24 +140,10 @@ export function HomePage() {
       )
       setCurrentIncomes(contextualIncomes)
       setCurrentExpenses(contextualExpenses)
-      setPreviousIncomes(
-        isBasicUser
-          ? oldModeIncomes
-          : oldModeIncomes.filter(
-              (item) =>
-                item.earningPeriodId === period?.id ||
-                item.seasonPeriodId === period?.id,
-            ),
-      )
-      setPreviousExpenses(
-        isBasicUser
-          ? oldModeExpenses
-          : oldModeExpenses.filter(
-              (item) =>
-                item.earningPeriodId === period?.id ||
-                item.seasonPeriodId === period?.id,
-            ),
-      )
+      // Para variación mensual, el mes anterior no debe limitarse a la temporada activa actual.
+      // De lo contrario, una temporada cerrada del mes anterior queda fuera y se muestra "sin datos".
+      setPreviousIncomes(oldModeIncomes)
+      setPreviousExpenses(oldModeExpenses)
     }
 
     void loadDashboard()
@@ -190,7 +178,26 @@ export function HomePage() {
     }
   }, [currentExpenses, currentIncomes, previousExpenses, previousIncomes, settings])
 
-  if (!settings || !totals) {
+  const balanceSummary = useMemo(() => {
+    if (!settings) {
+      return null
+    }
+
+    return {
+      current: buildBalanceReport({
+        incomes: currentIncomes,
+        expenses: currentExpenses,
+        currency: settings.defaultCurrency,
+      }),
+      previous: buildBalanceReport({
+        incomes: previousIncomes,
+        expenses: previousExpenses,
+        currency: settings.defaultCurrency,
+      }),
+    }
+  }, [currentExpenses, currentIncomes, previousExpenses, previousIncomes, settings])
+
+  if (!settings || !totals || !balanceSummary) {
     return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando...</section>
   }
 
@@ -287,6 +294,35 @@ export function HomePage() {
         </div>
         <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">{reportedCard.label}</p>
         <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">{reportedCard.value}</p>
+      </article>
+
+      <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex size-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+            <Landmark className="size-5" aria-hidden="true" />
+          </span>
+          <Variation current={balanceSummary.current.generalBalance} previous={balanceSummary.previous.generalBalance} />
+        </div>
+        <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">
+          {isBasicMode(settings) ? 'Balance general' : 'Balance operativo'}
+        </p>
+        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+          <SensitiveAmount hidden={hidden} value={formatCurrency(balanceSummary.current.generalBalance, settings.defaultCurrency)} />
+        </p>
+        <div className="mt-4 grid gap-2 text-sm text-slate-600 dark:text-slate-300 sm:grid-cols-2">
+          <p>
+            Neto sin ajustes:{' '}
+            <span className="font-semibold text-slate-900 dark:text-white">
+              <SensitiveAmount hidden={hidden} value={formatCurrency(balanceSummary.current.netProfit, settings.defaultCurrency)} />
+            </span>
+          </p>
+          <p>
+            Impacto ajustes:{' '}
+            <span className="font-semibold text-slate-900 dark:text-white">
+              <SensitiveAmount hidden={hidden} value={formatCurrency(balanceSummary.current.impactByAdjustments, settings.defaultCurrency)} />
+            </span>
+          </p>
+        </div>
       </article>
 
       {!isBasicMode(settings) && (

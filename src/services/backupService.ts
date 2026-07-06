@@ -52,13 +52,44 @@ interface EncryptedBackupDocument {
 }
 
 const BACKUP_VERSION = '2'
-const AUTOMATIC_BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000
 
-function buildBackupFilename(generatedAt: string) {
+export function buildBackupFilename(generatedAt: string) {
   const date = generatedAt.slice(0, 10)
-  const time = generatedAt.slice(11, 16).replace(':', '-')
+  const time = generatedAt.slice(11, 19).replace(/:/g, '-')
 
   return `private-balance-backup-${date}-${time}.json.enc`
+}
+
+function buildLocalDateKey(value: Date) {
+  const year = value.getFullYear()
+  const month = `${value.getMonth() + 1}`.padStart(2, '0')
+  const day = `${value.getDate()}`.padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+export function shouldCreateDailyBackup(
+  lastBackupAt?: string,
+  now: Date = new Date(),
+) {
+  if (!lastBackupAt) {
+    return true
+  }
+
+  const lastBackupTime = new Date(lastBackupAt)
+
+  if (Number.isNaN(lastBackupTime.getTime())) {
+    return true
+  }
+
+  return buildLocalDateKey(lastBackupTime) !== buildLocalDateKey(now)
+}
+
+export function getDelayUntilNextDailyBackupCheck(now: Date = new Date()) {
+  const nextMidnight = new Date(now)
+  nextMidnight.setHours(24, 0, 0, 0)
+
+  return Math.max(nextMidnight.getTime() - now.getTime(), 0)
 }
 
 function buildBackupStatus(status: 'success' | 'error', message: string) {
@@ -224,13 +255,7 @@ export async function shouldRunAutomaticBackup() {
     return true
   }
 
-  const lastBackupTime = new Date(settings.googleDriveLastBackupAt).getTime()
-
-  if (Number.isNaN(lastBackupTime)) {
-    return true
-  }
-
-  return Date.now() - lastBackupTime >= AUTOMATIC_BACKUP_INTERVAL_MS
+  return shouldCreateDailyBackup(settings.googleDriveLastBackupAt)
 }
 
 export async function runDriveBackupNow() {
