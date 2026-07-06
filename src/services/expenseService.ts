@@ -33,6 +33,16 @@ export type CreateExpenseInput = Omit<Expense, 'id' | 'createdAt'> & {
 }
 export type UpdateExpenseInput = Partial<CreateExpenseInput>
 
+function formatLocalDateTime(date: Date) {
+  const year = String(date.getFullYear())
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
 export async function createExpense(input: CreateExpenseInput) {
   const settings = await getSettings()
   const period =
@@ -42,10 +52,12 @@ export async function createExpense(input: CreateExpenseInput) {
     throw new Error('No hay una temporada activa. Crea una temporada para registrar actividad.')
   }
 
+  const createdAt = input.createdAt ?? formatLocalDateTime(new Date())
+
   const expense: Expense = normalizeReportStatus({
-    ...input,
     usageMode: settings.usageMode,
-    createdAt: input.createdAt ?? new Date().toISOString(),
+    ...input,
+    createdAt,
     earningPeriodId: period?.id,
     seasonPeriodId: period?.id,
   })
