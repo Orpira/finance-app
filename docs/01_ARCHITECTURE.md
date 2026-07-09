@@ -19,6 +19,7 @@ Vercel Functions (/api/*)
 	v
 n8n
 	|
+	+--> processed_events (idempotency barrier)
 	+--> Neon PostgreSQL
 	+--> Evolution API
 ```
@@ -45,6 +46,16 @@ n8n
 - server/communicationChannelStore.ts: acceso a communication_channels en Neon.
 - server/licenseDeviceRegistry.ts: autorización de dispositivos por licencia.
 - scripts/: utilidades operativas y despliegue de workflows.
+
+### Idempotencia de automatización
+
+- Los eventos asíncronos salen de `automationOutbox` con `eventId` estable.
+- `/api/automation` resuelve el identificador con prioridad `X-Private-Balance-Event-Id`, `Idempotency-Key`, `payload.eventId`.
+- El gateway reenvía ese identificador a n8n en `Idempotency-Key` y `X-Private-Balance-Event-Id`.
+- El workflow `Private Balance - Nuevo Ingreso` reclama el evento en `processed_events` antes de `event_log`, escrituras financieras o WhatsApp.
+- `processed_events.event_id` es `UNIQUE`; `payload_hash` protege contra reutilizar un `eventId` con contenido distinto.
+- Un duplicado idéntico devuelve `200 OK` con `duplicate: true`; un duplicado con payload distinto devuelve `409 Conflict`.
+- `event_log` no se usa para deduplicar; permanece como auditoría.
 
 ## Tecnologías identificadas
 
@@ -82,9 +93,9 @@ n8n
 - n8n es el motor de orquestación externa.
 - Evolution API no se consume desde el frontend; se encapsula en n8n.
 - MCP se usa como herramienta de auditoría y desarrollo, no como runtime de producción.
+- La idempotencia de eventos remotos se resuelve en infraestructura (`processed_events`) antes de ejecutar efectos financieros o notificaciones.
 
 ## Riesgos arquitectónicos detectados
 
 - Existen workflows legacy que aún referencian tablas antiguas como whatsapp_channel, app_user y device.
-- El workflow Private Balance - Nuevo Ingreso tiene ramas sin respuesta y selección global de canal WhatsApp; requiere corrección fuera de esta tarea documental.
-
+- El workflow Private Balance - Nuevo Ingreso mitigó la selección global de canal WhatsApp en ingreso/egreso con resolución contextual por `deviceCode`; permanece pendiente cerrar ramas sin respuesta en flujos no cubiertos por esa mitigación.
