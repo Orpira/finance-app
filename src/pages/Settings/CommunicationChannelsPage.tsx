@@ -52,6 +52,9 @@ const PREFERENCE_OPTIONS: Array<{
 
 type ActionName = 'connect' | 'status' | 'disconnect' | 'change' | 'test' | 'preferences'
 
+const STATUS_POLL_INTERVAL_MS = 7_000
+const STATUS_POLL_TIMEOUT_MS = 90_000
+
 function formatLastSync(value?: string) {
   if (!value) return 'Sin sincronización registrada'
   const date = new Date(value)
@@ -70,6 +73,11 @@ export function CommunicationChannelsPage() {
   const [activeAction, setActiveAction] = useState<ActionName | null>(null)
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
 
+  const status = channel?.status ?? 'not_configured'
+  const isBusy = activeAction !== null
+  const isConnected = status === 'connected'
+  const connectedNumber = channel?.phoneNumber ?? channel?.connectedNumber
+
   useEffect(() => {
     let active = true
     getWhatsAppChannel()
@@ -84,6 +92,46 @@ export function CommunicationChannelsPage() {
       })
     return () => { active = false }
   }, [])
+
+  useEffect(() => {
+    if (status !== 'connecting' || activeAction !== null) return
+
+    let active = true
+    const startedAt = Date.now()
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    const terminalStatuses = new Set(['connected', 'disconnected', 'error'])
+
+    const pollStatus = async () => {
+      try {
+        const result = await refreshWhatsAppStatus()
+        if (!active) return
+
+        setChannel(result.channel)
+
+        const shouldStop =
+          terminalStatuses.has(result.channel.status) ||
+          Date.now() - startedAt >= STATUS_POLL_TIMEOUT_MS
+        if (shouldStop) return
+
+        timer = setTimeout(() => { void pollStatus() }, STATUS_POLL_INTERVAL_MS)
+      } catch {
+        if (!active) return
+
+        const timedOut = Date.now() - startedAt >= STATUS_POLL_TIMEOUT_MS
+        if (timedOut) return
+
+        timer = setTimeout(() => { void pollStatus() }, STATUS_POLL_INTERVAL_MS)
+      }
+    }
+
+    timer = setTimeout(() => { void pollStatus() }, STATUS_POLL_INTERVAL_MS)
+
+    return () => {
+      active = false
+      if (timer) clearTimeout(timer)
+    }
+  }, [activeAction, status])
 
   async function runAction(
     action: ActionName,
@@ -128,11 +176,6 @@ export function CommunicationChannelsPage() {
       'Preferencias guardadas.',
     )
   }
-
-  const status = channel?.status ?? 'not_configured'
-  const isBusy = activeAction !== null
-  const isConnected = status === 'connected'
-  const connectedNumber = channel?.phoneNumber ?? channel?.connectedNumber
 
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">
@@ -250,7 +293,7 @@ export function CommunicationChannelsPage() {
               )}
 
               <div className="flex flex-wrap gap-2">
-                {!isConnected && (
+                {!isConnected && status !== 'connecting' && (
                   <button
                     className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={isBusy}
@@ -262,7 +305,33 @@ export function CommunicationChannelsPage() {
                     type="button"
                   >
                     {activeAction === 'connect' ? <LoaderCircle className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}
-                    {status === 'connecting' ? 'Actualizar vinculación' : 'Conectar WhatsApp'}
+                    Conectar WhatsApp
+                  </button>
+                )}
+                {!isConnected && status === 'connecting' && (
+                  <button
+                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isBusy}
+                    onClick={() => void runAction('status', refreshWhatsAppStatus, 'Estado actualizado.')}
+                    type="button"
+                  >
+                    {activeAction === 'status' ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                    Actualizar estado
+                  </button>
+                )}
+                {!isConnected && status === 'connecting' && (
+                  <button
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isBusy}
+                    onClick={() => void runAction(
+                      'connect',
+                      () => connectWhatsApp(phoneNumber),
+                      'Solicitud de vinculación preparada.',
+                    )}
+                    type="button"
+                  >
+                    {activeAction === 'connect' ? <LoaderCircle className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}
+                    Generar nuevo código
                   </button>
                 )}
                 {isConnected && <button
@@ -310,6 +379,14 @@ export function CommunicationChannelsPage() {
                 >
                   {notice.text}
                 </p>
+              )}
+
+              {channel?.status === 'connecting' && channel?.pairingCode == null && channel?.qrCode == null && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+                  {channel?.lastSeenAt
+                    ? 'No hay QR disponible para esta instancia. Pulsa "Actualizar estado" para consultar conexión o "Generar nuevo código" para solicitar un nuevo código.'
+                    : 'No hay QR disponible. Pulsa "Actualizar estado" para consultar conexión o "Generar nuevo código" para solicitar un nuevo código.'}
+                </div>
               )}
 
               <fieldset className="space-y-3 border-t border-slate-100 pt-5" disabled={!isConnected}>

@@ -12,6 +12,12 @@ if (!databaseUrl) {
 }
 
 const sql = neon(databaseUrl);
+const deviceCode = process.argv[2]?.trim();
+
+if (!deviceCode) {
+  console.error('❌ Debes indicar deviceCode. Uso: node scripts/query-whatsapp.mjs <PB-DEVICE-...>');
+  process.exit(1);
+}
 
 try {
   // Primero mostrar la estructura de la tabla
@@ -24,21 +30,26 @@ try {
   `;
   schema.forEach(col => console.log(`  ${col.column_name}: ${col.data_type}`));
   
-  console.log('\n✅ Query - WhatsApp conectados:');
+  console.log(`\n✅ Query contextual - WhatsApp conectado para ${deviceCode}:`);
   const result = await sql`
     SELECT
-      instance_name,
-      phone_number,
-      status,
-      provider
-    FROM communication_channels
-    WHERE provider = 'whatsapp' AND status = 'connected'
-    ORDER BY updated_at DESC
+      cc.instance_name,
+      cc.phone_number,
+      cc.status,
+      cc.provider,
+      cc.preferences
+    FROM license_devices ld
+    JOIN communication_channels cc
+      ON cc.user_code = ld.user_code
+    WHERE ld.device_code = ${deviceCode}
+      AND cc.provider = 'whatsapp'
+      AND cc.status = 'connected'
+    ORDER BY cc.updated_at DESC
     LIMIT 1;
   `;
 
   if (result.length === 0) {
-    console.log('⚠️  No hay canales WhatsApp conectados.');
+    console.log('⚠️  No hay canal WhatsApp conectado para este dispositivo.');
   } else {
     console.log(JSON.stringify(result, null, 2));
   }

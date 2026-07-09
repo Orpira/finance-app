@@ -41,6 +41,7 @@ export interface NormalizedWhatsAppConnectResponse {
   status: Extract<CommunicationChannelStatus, 'connected' | 'connecting' | 'disconnected' | 'error'>
   qrCode: string | null
   pairingCode: string | null
+  action?: 'retry_connect' | 'refresh_status' | 'show_connected'
   instanceName?: string
   instanceId?: string
   phoneNumber?: string
@@ -259,6 +260,19 @@ function normalizeQrCode(value?: string) {
   return undefined
 }
 
+function isValidManualPairingCode(value?: string) {
+  if (!value) return false
+  const compact = value.trim()
+  if (compact.length < 4 || compact.length > 32) return false
+  if (/\r|\n/.test(compact)) return false
+  if (/^data:image\//i.test(compact)) return false
+  if (/^https?:\/\//i.test(compact)) return false
+  if (compact.includes(',')) return false
+  const noSpaces = compact.replace(/\s/g, '')
+  if (/^[a-z0-9+/=]+$/i.test(noSpaces) && noSpaces.length > 64) return false
+  return true
+}
+
 function normalizeStatus(value?: string): CommunicationChannelStatus | undefined {
   const status = value?.toLowerCase().replace(/[\s-]+/g, '_')
   if (['open', 'connected', 'conectado'].includes(status ?? '')) return 'connected'
@@ -271,7 +285,9 @@ function normalizeStatus(value?: string): CommunicationChannelStatus | undefined
 function responseChanges(data?: Record<string, unknown>) {
   const qrCode = normalizeQrCode(firstString(data, [
     ['data', 'data', 'base64'], ['data', 'base64'], ['data', 'qrCode'],
-    ['data', 'qrcode'], ['base64'], ['qrCode'], ['qrcode'], ['pairing', 'qrCode'],
+    ['data', 'qrcode'], ['data', 'qrcode', 'base64'], ['data', 'qr', 'base64'],
+    ['data', 'data', 'qrcode', 'base64'], ['base64'], ['qrCode'], ['qrcode'],
+    ['qrcode', 'base64'], ['qr', 'base64'], ['pairing', 'qrCode'],
   ]))
   const status = normalizeStatus(firstString(data, [
     ['data', 'data', 'instance', 'state'], ['data', 'instance', 'state'],
@@ -292,7 +308,11 @@ function responseChanges(data?: Record<string, unknown>) {
   const pairingCode = firstString(data, [
     ['data', 'data', 'pairingCode'], ['data', 'pairingCode'],
     ['data', 'data', 'qrcode', 'pairingCode'], ['data', 'qrcode', 'pairingCode'],
-    ['qrcode', 'pairingCode'], ['pairingCode'],
+    ['qrcode', 'pairingCode'], ['pairing', 'code'],
+    ['pairingCode'],
+  ])
+  const code = firstString(data, [
+    ['data', 'data', 'code'], ['data', 'code'], ['qrcode', 'code'], ['code'],
   ])
   const ownerJid = firstString(data, [
     ['data', 'data', 'ownerJid'], ['data', 'ownerJid'], ['ownerJid'],
@@ -320,6 +340,9 @@ function responseChanges(data?: Record<string, unknown>) {
   const message = firstString(data, [
     ['data', 'data', 'message'], ['data', 'message'], ['message'],
   ])
+  const action = firstString(data, [
+    ['data', 'data', 'action'], ['data', 'action'], ['action'],
+  ]) as NormalizedWhatsAppConnectResponse['action'] | undefined
   const success = valueAtPath(data, ['success'])
 
   return {
@@ -337,6 +360,8 @@ function responseChanges(data?: Record<string, unknown>) {
     providerMetadata,
     message,
     success,
+    action,
+    code,
   }
 }
 
@@ -344,12 +369,20 @@ export function normalizeWhatsAppConnectResponse(
   response?: Record<string, unknown>,
 ): NormalizedWhatsAppConnectResponse {
   const remote = responseChanges(response)
+  const manualPairingCode = isValidManualPairingCode(remote.pairingCode)
+    ? remote.pairingCode
+    : isValidManualPairingCode(remote.code)
+      ? remote.code
+      : null
+  const qrFallbackFromCode = normalizeQrCode(remote.code)
+  const normalizedQrCode = remote.qrCode ?? qrFallbackFromCode
 
   if (remote.status === 'connected') {
     return {
       status: 'connected',
       qrCode: null,
       pairingCode: null,
+      action: 'show_connected',
       ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
       ...(remote.instanceId ? { instanceId: remote.instanceId } : {}),
       ...(remote.connectedNumber ? { phoneNumber: remote.connectedNumber } : {}),
@@ -368,16 +401,18 @@ export function normalizeWhatsAppConnectResponse(
       status: 'error',
       qrCode: null,
       pairingCode: null,
+      action: 'refresh_status',
       ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
       message: remote.message ?? 'No se pudo conectar WhatsApp.',
     }
   }
 
-  if (remote.pairingCode) {
+  if (manualPairingCode) {
     return {
       status: 'connecting',
       qrCode: null,
-      pairingCode: remote.pairingCode,
+      pairingCode: manualPairingCode,
+      action: 'retry_connect',
       ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
       ...(remote.instanceId ? { instanceId: remote.instanceId } : {}),
       ...(remote.connectedNumber ? { phoneNumber: remote.connectedNumber } : {}),
@@ -385,11 +420,12 @@ export function normalizeWhatsAppConnectResponse(
     }
   }
 
-  if (remote.qrCode) {
+  if (normalizedQrCode) {
     return {
       status: 'connecting',
-      qrCode: remote.qrCode,
+      qrCode: normalizedQrCode,
       pairingCode: null,
+      action: 'retry_connect',
       ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
       ...(remote.instanceId ? { instanceId: remote.instanceId } : {}),
       message: remote.message ?? 'QR alternativo generado.',
@@ -401,6 +437,7 @@ export function normalizeWhatsAppConnectResponse(
       status: 'disconnected',
       qrCode: null,
       pairingCode: null,
+      action: 'refresh_status',
       ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
       message: remote.message ?? 'WhatsApp está desconectado.',
     }
@@ -408,11 +445,12 @@ export function normalizeWhatsAppConnectResponse(
 
   if (remote.status === 'connecting') {
     return {
-      status: 'connecting',
+      status: 'error',
       qrCode: null,
       pairingCode: null,
+      action: 'refresh_status',
       ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
-      message: remote.message ?? 'WhatsApp está pendiente de vinculación.',
+      message: 'Evolution no devolvió un código de vinculación manual válido ni QR.',
     }
   }
 
@@ -420,6 +458,7 @@ export function normalizeWhatsAppConnectResponse(
     status: 'error',
     qrCode: null,
     pairingCode: null,
+    action: 'refresh_status',
     ...(remote.instanceName ? { instanceName: remote.instanceName } : {}),
     message: remote.message ?? 'No se pudo interpretar la respuesta de WhatsApp.',
   }
