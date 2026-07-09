@@ -22,6 +22,7 @@ license-private-key.pem
 
 # Editor directories and files
 scripts/*
+!scripts/generate-docs-summary.mjs
 .vscode/*
 !.vscode/extensions.json
 .idea
