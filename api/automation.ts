@@ -28,7 +28,7 @@ const identityCodesSchema = z.object({
 })
 
 const envelopeSchema = z.object({
-  eventId: z.string().uuid(),
+  eventId: z.string().uuid().optional(),
   event: z.enum(AUTOMATION_EVENT_TYPES),
   createdAt: z.iso.datetime().default(() => new Date().toISOString()),
   schemaVersion: z.literal(1),
@@ -57,14 +57,25 @@ function getBearerToken(request: VercelRequest) {
 }
 
 function getRequestEventId(request: VercelRequest) {
+  const privateBalanceEventId = request.headers['x-private-balance-event-id']
   const idempotencyKey = request.headers['idempotency-key']
-  const parsedKey = z.string().uuid().safeParse(idempotencyKey)
+  const payloadEventId = typeof request.body === 'object' && request.body !== null
+    ? (request.body as Record<string, unknown>).eventId
+    : undefined
+  const parsedKey = z.string().uuid().safeParse(
+    privateBalanceEventId ?? idempotencyKey ?? payloadEventId,
+  )
   return parsedKey.success ? parsedKey.data : randomUUID()
 }
 
 function parseGatewayRequest(request: VercelRequest): AutomationEnvelope | null {
   const envelopeResult = envelopeSchema.safeParse(request.body)
-  if (envelopeResult.success) return envelopeResult.data
+  if (envelopeResult.success) {
+    return {
+      ...envelopeResult.data,
+      eventId: getRequestEventId(request),
+    }
+  }
 
   const connectResult = whatsappConnectRequestSchema.safeParse(request.body)
   if (!connectResult.success) return null

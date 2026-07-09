@@ -75,7 +75,7 @@ export function applyApiSecurityHeaders(
   )
   response.setHeader(
     'Access-Control-Allow-Headers',
-    'Authorization, Content-Type, Idempotency-Key, X-Private-Balance-User-Code',
+    'Authorization, Content-Type, Idempotency-Key, X-Private-Balance-Event-Id, X-Private-Balance-User-Code',
   )
   response.setHeader('Cache-Control', 'no-store')
   response.setHeader(
