@@ -16,6 +16,19 @@ export const SERVICE_DURATION_OPTIONS: readonly ServiceDurationOption[] = [
   { durationMinutes: DEFAULT_EXIT_DURATION_MINUTES, durationLabel: 'Salida' },
 ]
 
+export interface EffectiveFinancialDurationInput {
+  actualDuration?: number
+  duration?: number
+  durationLabel?: string
+}
+
+/** Preserves the stored-duration precedence used by financial summaries. */
+export function getEffectiveFinancialDuration(
+  input: EffectiveFinancialDurationInput,
+) {
+  return input.actualDuration ?? input.duration
+}
+
 export function calculateEffectiveDuration(input: Pick<ServiceIncome, 'duration' | 'durationLabel'>) {
   if (input.durationLabel === 'Salida') {
     return DEFAULT_EXIT_DURATION_MINUTES
@@ -66,7 +79,7 @@ export function getIncomeDurationDisplay(
   income: Pick<ServiceIncome, 'actualDuration' | 'duration' | 'durationLabel'>,
 ) {
   return getDurationDisplay(
-    income.actualDuration ?? income.duration,
+    getEffectiveFinancialDuration(income) ?? 0,
     income.durationLabel,
   )
 }

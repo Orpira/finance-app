@@ -1,6 +1,8 @@
 import type { Appointment } from '../types/appointment'
 import type { AppSettings, CurrencyCode } from '../types/settings'
 import { roundMoney } from '../utils/currency'
+import { calculateStoredRealGain } from '../utils/realGain'
+import { getEffectiveFinancialDuration } from '../utils/serviceDuration'
 import { updateAppointment } from './appointmentService'
 import {
   convertCurrencyPair,
@@ -39,7 +41,7 @@ export function getAppointmentActualDuration(
   }
 
   if (!appointment.timerStartedAt) {
-    return appointment.duration
+    return getEffectiveFinancialDuration(appointment) ?? appointment.duration
   }
 
   return Math.max(
@@ -74,9 +76,12 @@ export async function completeAppointmentAsIncome(
     useApi: settings.rateMode === 'automatic',
   }
   const activePeriod = await ensureActiveEarningPeriod(settings)
-  const realGain = roundMoney(
-    (appointment.expectedAmount * activePeriod.percentage) / 100,
-  )
+  const realGain = calculateStoredRealGain({
+    totalAmount: appointment.expectedAmount,
+    percentage: activePeriod.percentage,
+    usageMode: 'professional',
+    incomeType: 'ingreso',
+  })
   const [convertedPairValues, convertedEurCopValues, eurCopRate] =
     await Promise.all([
       convertCurrencyPair(
