@@ -1,22 +1,19 @@
-export type FinancialParityValue =
-  | number
-  | string
-  | boolean
-  | null
-  | undefined
-  | FinancialParityValue[]
-  | { [key: string]: FinancialParityValue }
-
 export interface FinancialParityContext {
-  rule: string
+  rule?: string
+  scope?: string
   mode?: string
+  usageMode?: string
   currency?: string
+  earningPeriodId?: number
+  incomeCount?: number
+  expenseCount?: number
+  field?: string
   ids?: Array<number | string>
 }
 
 export interface ValidateFinancialParityInput {
-  legacyValue: FinancialParityValue
-  newValue: FinancialParityValue
+  legacyValue: unknown
+  newValue: unknown
   context: FinancialParityContext
 }
 
@@ -26,8 +23,8 @@ interface FinancialParityValidatorOptions {
 }
 
 function areExactlyEqual(
-  legacyValue: FinancialParityValue,
-  newValue: FinancialParityValue,
+  legacyValue: unknown,
+  newValue: unknown,
 ): boolean {
   if (Object.is(legacyValue, newValue)) return true
 
@@ -48,12 +45,14 @@ function areExactlyEqual(
 
   const legacyKeys = Object.keys(legacyValue)
   const newKeys = Object.keys(newValue)
+  const legacyRecord = legacyValue as Record<string, unknown>
+  const newRecord = newValue as Record<string, unknown>
 
   return legacyKeys.length === newKeys.length &&
     legacyKeys.every(
       (key) =>
-        Object.prototype.hasOwnProperty.call(newValue, key) &&
-        areExactlyEqual(legacyValue[key], newValue[key]),
+        Object.prototype.hasOwnProperty.call(newRecord, key) &&
+        areExactlyEqual(legacyRecord[key], newRecord[key]),
     )
 }
 
