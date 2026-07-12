@@ -44,8 +44,8 @@ function expense(partial: Partial<Expense> = {}): Expense {
 }
 
 function homeInput(options: {
-  incomes?: ServiceIncome[]
-  expenses?: Expense[]
+  incomes?: readonly ServiceIncome[]
+  expenses?: readonly Expense[]
   currency?: CurrencyCode
   usageMode?: UsageMode
   earningPeriodId?: number
@@ -71,7 +71,7 @@ function divergentRunner(input: Parameters<typeof runFinancialEngine>[0]): Finan
   }
 }
 
-describe('buildHomeBalanceSummary shadow consumer', () => {
+describe('buildHomeBalanceSummary controlled pilot', () => {
   it.each([
     ['basic mode', homeInput()],
     ['professional mode', homeInput({
@@ -110,6 +110,7 @@ describe('buildHomeBalanceSummary shadow consumer', () => {
     const expected = buildBalanceReport(input)
     const result = buildHomeBalanceSummary(input, {
       dev: false,
+      financialEngineEnabled: true,
       engineRunner: () => { throw new Error('adapter failure') },
     })
     expect(result).toEqual(expected)
@@ -121,7 +122,7 @@ describe('buildHomeBalanceSummary shadow consumer', () => {
     expect(logger).not.toHaveBeenCalled()
   })
 
-  it('keeps the legacy report as Home official result', () => {
+  it('uses legacy when the flag is absent', () => {
     const input = homeInput()
     const expected = buildBalanceReport(input)
     const result = buildHomeBalanceSummary(input, {
@@ -130,5 +131,51 @@ describe('buildHomeBalanceSummary shadow consumer', () => {
     })
     expect(result).toEqual(expected)
     expect(result.generalBalance).toBe(80)
+  })
+
+  it('uses legacy when the flag is false', () => {
+    const input = homeInput()
+    const result = buildHomeBalanceSummary(input, {
+      dev: false,
+      financialEngineEnabled: false,
+      engineRunner: divergentRunner,
+    })
+    expect(result.generalBalance).toBe(80)
+  })
+
+  it('uses the Financial Engine when the flag is true', () => {
+    const result = buildHomeBalanceSummary(homeInput(), {
+      dev: false,
+      financialEngineEnabled: true,
+      engineRunner: divergentRunner,
+    })
+    expect(result.generalBalance).toBe(80.01)
+  })
+
+  it('rolls back immediately to legacy when the flag is disabled', () => {
+    const input = homeInput()
+    const enabled = buildHomeBalanceSummary(input, {
+      dev: false,
+      financialEngineEnabled: true,
+      engineRunner: divergentRunner,
+    })
+    const disabled = buildHomeBalanceSummary(input, {
+      dev: false,
+      financialEngineEnabled: false,
+      engineRunner: divergentRunner,
+    })
+    expect(enabled.generalBalance).toBe(80.01)
+    expect(disabled.generalBalance).toBe(80)
+  })
+
+  it('does not mutate readonly inputs', () => {
+    const incomes = Object.freeze([Object.freeze(income())])
+    const expenses = Object.freeze([Object.freeze(expense())])
+    const before = JSON.stringify({ incomes, expenses })
+    buildHomeBalanceSummary(homeInput({ incomes, expenses }), {
+      dev: false,
+      financialEngineEnabled: true,
+    })
+    expect(JSON.stringify({ incomes, expenses })).toBe(before)
   })
 })
