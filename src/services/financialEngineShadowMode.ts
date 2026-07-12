@@ -15,7 +15,7 @@ export interface FinancialEngineShadowInput extends FinancialEngineInput {
   readonly scope: string
 }
 
-interface FinancialEngineShadowOptions {
+export interface FinancialEngineShadowOptions {
   dev?: boolean
   logger?: (message: string, details: Record<string, unknown>) => void
   engineRunner?: (input: FinancialEngineInput) => FinancialEngineResult
