@@ -6,11 +6,18 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ## [Unreleased]
 
+### Added
+
+- Deterministic, read-only Financial Engine adapter with parity characterization.
+- Reports shadow mode, which observes parity while keeping legacy official.
+- Reversible Home balance-summary pilot controlled only by the exact Vite build value `VITE_FINANCIAL_ENGINE_HOME_ENABLED=true`.
+
 ### Changed
 
 - The documentation hierarchy was normalized so [PRIVATE_BALANCE_CONSTITUTION.md](PRIVATE_BALANCE_CONSTITUTION.md) is the single canonical source.
 - [MCP_RULES.md](MCP_RULES.md) now acts as a short operational summary for agents.
 - [DECISIONS.md](DECISIONS.md) was aligned with ADR structure and references the Constitution explicitly.
+- AI Foundation documentation now separates implemented pilot behavior from target architecture. Legacy remains the default official source; Financial Engine is not global, and rollback of the Home pilot requires rebuild and redeploy.
 
 ### Removed
 
@@ -27,5 +34,4 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 ### Fixed
 
 - Cross-document governance and canonical references for documentation.
-
 

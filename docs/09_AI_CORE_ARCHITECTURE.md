@@ -82,7 +82,17 @@ Dexie + automationOutbox
 
 Los eventos actuales incluyen `income.created`, `expense.created`, `calendar.created`, `service.completed` y eventos de dispositivo y comunicación. Este conjunto no constituye un historial completo de event sourcing porque no representa todavía todas las actualizaciones y eliminaciones.
 
-No existe actualmente un runtime de IA en producción. Tampoco existen aún los cinco componentes de AI Core definidos en este documento como subsistemas independientes.
+No existe actualmente un runtime de IA generativa en producción. Financial Engine cuenta con una implementación inicial limitada: adaptador determinista de solo lectura, caracterización de paridad, Reports en shadow mode y un piloto del resumen de balance de Home. No constituye todavía una fuente financiera global ni el subsistema completo descrito por la arquitectura objetivo.
+
+### 3.1 Piloto AI Foundation [IMPLEMENTADO]
+
+- **Reports:** ejecuta Financial Engine en shadow mode y devuelve siempre el resultado legacy oficial.
+- **Home:** únicamente el resumen de balance puede devolver el resultado del adaptador cuando el build de Vite contiene el texto exacto `VITE_FINANCIAL_ENGINE_HOME_ENABLED=true`.
+- **Aislamiento del flag:** ausencia, `false` o cualquier valor distinto del texto exacto `true` mantienen legacy. No existe override programático.
+- **Rollback:** el flag se incorpora en build time; desactivarlo exige un nuevo build y redeploy. No requiere migración ni limpieza de datos.
+- **Autoridad:** legacy sigue siendo la fuente oficial por defecto. Financial Engine no es fuente global y no se han migrado nuevos consumidores.
+
+Financial Snapshot, Rule Registry, Knowledge Layer e Insight Engine no están implementados. Sus contratos, persistencia y runtimes descritos más adelante son exclusivamente arquitectura objetivo.
 
 ## 4. Principios arquitectónicos [OBJETIVO APROBADO]
 
@@ -220,7 +230,9 @@ Rule Registry es una dependencia transversal:
         Financial Engine     Knowledge Layer       Insight Engine
 ```
 
-## 6. Financial Engine [FUTURO — NO DESPLEGADO]
+## 6. Financial Engine [OBJETIVO APROBADO — NO DESPLEGADO COMO SUBSISTEMA GLOBAL]
+
+La implementación inicial indicada en 3.1 valida un adaptador y dos fronteras controladas, pero no materializa todavía este componente objetivo completo ni cambia la fuente oficial global.
 
 ### 6.1 Responsabilidades
 
@@ -767,12 +779,12 @@ La transición `ready -> processing` de notificaciones deberá ser condicional y
 - Definir contratos, privacidad, timezone, periodos, hashes y comparabilidad.
 - Inventariar reglas financieras existentes.
 
-### Fase 1 — Financial Engine
+### Fase 1 — Financial Engine [PARCIALMENTE IMPLEMENTADA]
 
-- Adaptadores de solo lectura.
-- Reutilización de lógica existente.
-- Ejecución determinista.
-- Paridad comprobada con reportes actuales.
+- [IMPLEMENTADO] Adaptador de solo lectura que reutiliza lógica existente.
+- [IMPLEMENTADO] Ejecución determinista y pruebas de paridad.
+- [IMPLEMENTADO] Reports en shadow mode y piloto acotado de Home bajo feature flag de build.
+- [PENDIENTE] Promoción global, contratos completos y cualquier consumidor adicional; no forman parte del milestone actual.
 
 ### Fase 2 — Financial Snapshot
 
@@ -950,7 +962,7 @@ Las decisiones vinculantes que requieran formalización deberán incorporarse co
 
 ## 24. Regla de verdad documental
 
-Este documento describe el **objetivo aprobado**. `03_DATABASE.md`, `04_N8N_WORKFLOWS.md` y `AUTOMATION_HUB.md` describen la **realidad implementada y operativa**.
+Este documento describe principalmente el **objetivo aprobado**; la sección 3.1 identifica de forma expresa el piloto realmente implementado. `01_ARCHITECTURE.md`, `03_DATABASE.md`, `04_N8N_WORKFLOWS.md` y `AUTOMATION_HUB.md` describen la **realidad implementada y operativa**.
 
 Una tabla, evento, workflow o componente futuro no podrá tratarse como desplegado únicamente porque aparezca aquí. Su estado solo cambia después de implementación, despliegue, verificación y actualización explícita de la documentación operativa correspondiente.
 

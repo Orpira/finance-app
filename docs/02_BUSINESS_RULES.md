@@ -45,6 +45,15 @@
 - El estado de reporte forma parte del dato persistido.
 - Exportaciones disponibles: PDF, CSV y tablas formateadas; XLSX aparece documentado a nivel de servicio y debe validarse operativamente en cada release.
 
+## Autoridad de cálculo durante AI Foundation
+
+- Las reglas legacy vigentes siguen siendo la fuente oficial por defecto y el Financial Engine debe reutilizarlas sin reinterpretarlas.
+- Reports permanece en shadow mode: una divergencia se observa, pero nunca sustituye el resultado legacy.
+- Solo el resumen de balance de Home puede usar el resultado del Financial Engine, y únicamente cuando el build contiene el texto exacto `VITE_FINANCIAL_ENGINE_HOME_ENABLED=true`.
+- Ausencia, `false`, diferencias de mayúsculas, espacios u otros valores conservan legacy. No existe override programático del flag.
+- Desactivar el piloto requiere rebuild y redeploy. No hay migración de datos ni limpieza asociada al rollback.
+- Financial Engine no es todavía fuente global; Financial Snapshot, Rule Registry, Knowledge Layer e Insight Engine no existen como componentes implementados.
+
 ## Licencias y dispositivo
 
 - La licencia está vinculada al dispositivo.
@@ -61,4 +70,3 @@
 
 - Regla final de negocio para fallback cuando un usuario tenga más de un canal WhatsApp activo por combinación de userCode y deviceCode.
 - Cobertura total de service.completed en documentación funcional pública.
-
