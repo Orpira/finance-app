@@ -306,9 +306,7 @@ export type SealedFinancialSnapshotStatus =
   | 'superseded'
   | 'invalidated'
 
-interface SnapshotCandidateBase<
-  TEngineResult extends SnapshotJsonObject = SnapshotJsonObject,
-> {
+interface SnapshotCandidateBase<TEngineResult = SnapshotJsonObject> {
   readonly identity: SnapshotCandidateIdentity
   readonly scope: SnapshotScope
   readonly engineResult: TEngineResult
@@ -321,29 +319,24 @@ interface SnapshotCandidateBase<
   readonly rulesetVersion: RulesetVersion
 }
 
-export interface DraftSnapshotCandidate<
-  TEngineResult extends SnapshotJsonObject = SnapshotJsonObject,
-> extends SnapshotCandidateBase<TEngineResult> {
+export interface DraftSnapshotCandidate<TEngineResult = SnapshotJsonObject>
+  extends SnapshotCandidateBase<TEngineResult> {
   readonly status: 'draft'
 }
 
-export interface ValidatedSnapshotCandidate<
-  TEngineResult extends SnapshotJsonObject = SnapshotJsonObject,
-> extends SnapshotCandidateBase<TEngineResult> {
+export interface ValidatedSnapshotCandidate<TEngineResult = SnapshotJsonObject>
+  extends SnapshotCandidateBase<TEngineResult> {
   readonly status: 'validated'
 }
 
-export interface RejectedSnapshotCandidate<
-  TEngineResult extends SnapshotJsonObject = SnapshotJsonObject,
-> extends SnapshotCandidateBase<TEngineResult> {
+export interface RejectedSnapshotCandidate<TEngineResult = SnapshotJsonObject>
+  extends SnapshotCandidateBase<TEngineResult> {
   readonly status: 'rejected'
   readonly rejectionCodes: readonly [SnapshotNormativeCode, ...SnapshotNormativeCode[]]
 }
 
 /** Pre-canonicalization, pre-fingerprint result of a future in-memory builder. */
-export type SnapshotCandidate<
-  TEngineResult extends SnapshotJsonObject = SnapshotJsonObject,
-> =
+export type SnapshotCandidate<TEngineResult = SnapshotJsonObject> =
   | DraftSnapshotCandidate<TEngineResult>
   | ValidatedSnapshotCandidate<TEngineResult>
   | RejectedSnapshotCandidate<TEngineResult>
@@ -363,9 +356,8 @@ export interface RunningSnapshotBuildExecution extends SnapshotBuildExecutionBas
   readonly startedAt: UtcInstant
 }
 
-export interface SucceededSnapshotBuildExecution<
-  TEngineResult extends SnapshotJsonObject = SnapshotJsonObject,
-> extends SnapshotBuildExecutionBase {
+export interface SucceededSnapshotBuildExecution<TEngineResult = SnapshotJsonObject>
+  extends SnapshotBuildExecutionBase {
   readonly status: 'succeeded'
   readonly startedAt: UtcInstant
   readonly completedAt: UtcInstant
@@ -393,9 +385,7 @@ export interface CancelledSnapshotBuildExecution extends SnapshotBuildExecutionB
 }
 
 /** Transient build execution; never a financial artifact or revision. */
-export type SnapshotBuildExecution<
-  TEngineResult extends SnapshotJsonObject = SnapshotJsonObject,
-> =
+export type SnapshotBuildExecution<TEngineResult = SnapshotJsonObject> =
   | RequestedSnapshotBuildExecution
   | RunningSnapshotBuildExecution
   | SucceededSnapshotBuildExecution<TEngineResult>
@@ -403,9 +393,7 @@ export type SnapshotBuildExecution<
   | CancelledSnapshotBuildExecution
 
 /** Data shape reserved for a future canonicalization milestone. */
-export interface CanonicalFinancialSnapshotPayload<
-  TEngineResult extends SnapshotJsonObject = SnapshotJsonObject,
-> {
+export interface CanonicalFinancialSnapshotPayload<TEngineResult = SnapshotJsonObject> {
   readonly scope: SnapshotScope
   readonly engineResult: TEngineResult
   readonly evidence: FinancialEvidence
@@ -413,9 +401,7 @@ export interface CanonicalFinancialSnapshotPayload<
 }
 
 /** Final immutable artifact; no transient execution or candidate state is accepted. */
-export interface SealedFinancialSnapshot<
-  TEngineResult extends SnapshotJsonObject = SnapshotJsonObject,
-> {
+export interface SealedFinancialSnapshot<TEngineResult = SnapshotJsonObject> {
   readonly identity: SealedSnapshotIdentity
   readonly revision: SnapshotRevision
   readonly status: SealedFinancialSnapshotStatus
