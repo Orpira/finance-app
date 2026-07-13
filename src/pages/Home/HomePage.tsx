@@ -16,7 +16,7 @@ import { UsageModeBadge } from '../../components/UsageModeBadge'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
-import { buildBalanceReport } from '../../services/balanceReportService'
+import { buildHomeBalanceSummary } from '../../services/homeBalanceSummaryService'
 import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
@@ -184,18 +184,23 @@ export function HomePage() {
     }
 
     return {
-      current: buildBalanceReport({
+      current: buildHomeBalanceSummary({
         incomes: currentIncomes,
         expenses: currentExpenses,
         currency: settings.defaultCurrency,
+        usageMode: settings.usageMode,
+        earningPeriodId: isBasicMode(settings) ? undefined : activePeriod?.id,
+        scope: 'home.current-month',
       }),
-      previous: buildBalanceReport({
+      previous: buildHomeBalanceSummary({
         incomes: previousIncomes,
         expenses: previousExpenses,
         currency: settings.defaultCurrency,
+        usageMode: settings.usageMode,
+        scope: 'home.previous-month',
       }),
     }
-  }, [currentExpenses, currentIncomes, previousExpenses, previousIncomes, settings])
+  }, [activePeriod?.id, currentExpenses, currentIncomes, previousExpenses, previousIncomes, settings])
 
   if (!settings || !totals || !balanceSummary) {
     return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando...</section>

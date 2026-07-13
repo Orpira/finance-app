@@ -38,11 +38,13 @@ import {
   isServiceIncome,
 } from '../../utils/incomeTypes'
 import {
+  getEffectiveFinancialDuration,
   getNumericDurationLabel,
   getServiceDurationOption,
   isServiceDurationLabel,
   type ServiceDurationLabel,
 } from '../../utils/serviceDuration'
+import { calculateStoredRealGain } from '../../utils/realGain'
 import { isReported } from '../../catalogs/reportStatuses'
 import { useDialog } from '../../components/dialogs/useDialog'
 
@@ -224,8 +226,7 @@ export function IncomePage() {
         setEditingIncome(currentIncome)
         setIncomeType(getIncomeType(currentIncome))
         setDate(currentIncome.date)
-        const currentDuration =
-          currentIncome.actualDuration ?? currentIncome.duration
+        const currentDuration = getEffectiveFinancialDuration(currentIncome) ?? 0
         setDuration(currentDuration)
         setDurationLabel(
           isServiceDurationLabel(currentIncome.durationLabel)
@@ -265,14 +266,14 @@ export function IncomePage() {
   const isAdjustmentType = !isBasicUser && isAdjustmentIncome({ type: incomeType })
   const realGain = useMemo(
     () =>
-      roundMoney(
-        isBasicUser || isAdjustmentType
-          ? totalAmount
-          : isServiceType
-            ? (totalAmount * percentage) / 100
-            : editingIncome?.realGain ?? totalAmount,
-      ),
-    [editingIncome?.realGain, isAdjustmentType, isBasicUser, isServiceType, percentage, totalAmount],
+      calculateStoredRealGain({
+        totalAmount,
+        percentage,
+        usageMode: isBasicUser ? 'basic' : 'professional',
+        incomeType,
+        storedRealGain: editingIncome?.realGain,
+      }),
+    [editingIncome?.realGain, incomeType, isBasicUser, percentage, totalAmount],
   )
 
   useEffect(() => {
