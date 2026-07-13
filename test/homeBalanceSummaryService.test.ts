@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { buildBalanceReport } from '../src/services/balanceReportService'
 import {
@@ -72,6 +72,10 @@ function divergentRunner(input: Parameters<typeof runFinancialEngine>[0]): Finan
 }
 
 describe('buildHomeBalanceSummary controlled pilot', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it.each([
     ['basic mode', homeInput()],
     ['professional mode', homeInput({
@@ -110,7 +114,6 @@ describe('buildHomeBalanceSummary controlled pilot', () => {
     const expected = buildBalanceReport(input)
     const result = buildHomeBalanceSummary(input, {
       dev: false,
-      financialEngineEnabled: true,
       engineRunner: () => { throw new Error('adapter failure') },
     })
     expect(result).toEqual(expected)
@@ -123,6 +126,7 @@ describe('buildHomeBalanceSummary controlled pilot', () => {
   })
 
   it('uses legacy when the flag is absent', () => {
+    vi.stubEnv('VITE_FINANCIAL_ENGINE_HOME_ENABLED', undefined)
     const input = homeInput()
     const expected = buildBalanceReport(input)
     const result = buildHomeBalanceSummary(input, {
@@ -134,19 +138,19 @@ describe('buildHomeBalanceSummary controlled pilot', () => {
   })
 
   it('uses legacy when the flag is false', () => {
+    vi.stubEnv('VITE_FINANCIAL_ENGINE_HOME_ENABLED', 'false')
     const input = homeInput()
     const result = buildHomeBalanceSummary(input, {
       dev: false,
-      financialEngineEnabled: false,
       engineRunner: divergentRunner,
     })
     expect(result.generalBalance).toBe(80)
   })
 
   it('uses the Financial Engine when the flag is true', () => {
+    vi.stubEnv('VITE_FINANCIAL_ENGINE_HOME_ENABLED', 'true')
     const result = buildHomeBalanceSummary(homeInput(), {
       dev: false,
-      financialEngineEnabled: true,
       engineRunner: divergentRunner,
     })
     expect(result.generalBalance).toBe(80.01)
@@ -154,27 +158,39 @@ describe('buildHomeBalanceSummary controlled pilot', () => {
 
   it('rolls back immediately to legacy when the flag is disabled', () => {
     const input = homeInput()
+    vi.stubEnv('VITE_FINANCIAL_ENGINE_HOME_ENABLED', 'true')
     const enabled = buildHomeBalanceSummary(input, {
       dev: false,
-      financialEngineEnabled: true,
       engineRunner: divergentRunner,
     })
+    vi.stubEnv('VITE_FINANCIAL_ENGINE_HOME_ENABLED', 'false')
     const disabled = buildHomeBalanceSummary(input, {
       dev: false,
-      financialEngineEnabled: false,
       engineRunner: divergentRunner,
     })
     expect(enabled.generalBalance).toBe(80.01)
     expect(disabled.generalBalance).toBe(80)
   })
 
+  it.each(['TRUE', '1', 'yes', ' true ', 'invalid'])(
+    'uses legacy when the flag has invalid value %j',
+    (value) => {
+      vi.stubEnv('VITE_FINANCIAL_ENGINE_HOME_ENABLED', value)
+      const result = buildHomeBalanceSummary(homeInput(), {
+        dev: false,
+        engineRunner: divergentRunner,
+      })
+      expect(result.generalBalance).toBe(80)
+    },
+  )
+
   it('does not mutate readonly inputs', () => {
+    vi.stubEnv('VITE_FINANCIAL_ENGINE_HOME_ENABLED', 'true')
     const incomes = Object.freeze([Object.freeze(income())])
     const expenses = Object.freeze([Object.freeze(expense())])
     const before = JSON.stringify({ incomes, expenses })
     buildHomeBalanceSummary(homeInput({ incomes, expenses }), {
       dev: false,
-      financialEngineEnabled: true,
     })
     expect(JSON.stringify({ incomes, expenses })).toBe(before)
   })

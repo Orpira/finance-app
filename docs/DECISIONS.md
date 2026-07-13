@@ -52,3 +52,10 @@ Format used: one ADR per section with Context, Decision, Status and Consequences
 - Context: the documentation tree needs a discoverability entry point.
 - Decision: [docs/README.md](README.md) explains the purpose of each document.
 - Consequences: newcomers and agents can navigate the docs without guessing the structure.
+
+## ADR-008: Controlled Financial Engine adoption
+
+- Status: accepted for the AI Foundation milestone.
+- Context: the deterministic adapter needs production-shaped validation without changing the official financial source globally.
+- Decision: legacy remains official by default; Reports runs only in shadow mode, and the Home balance-summary pilot is enabled exclusively by the exact Vite build value `VITE_FINANCIAL_ENGINE_HOME_ENABLED=true`.
+- Consequences: there is no programmatic override or runtime toggle. Absence, `false` and invalid values select legacy. Rollback requires rebuild and redeploy. Financial Engine is not a global source, no additional consumer is migrated, and Financial Snapshot, Rule Registry, Knowledge Layer and Insight Engine remain unimplemented target architecture.

@@ -21,10 +21,6 @@ interface BuildHomeBalanceSummaryInput {
   readonly scope: 'home.current-month' | 'home.previous-month'
 }
 
-interface HomeBalanceSummaryOptions extends FinancialEngineShadowOptions {
-  financialEngineEnabled?: boolean
-}
-
 function isHomeFinancialEngineEnabled() {
   return import.meta.env.VITE_FINANCIAL_ENGINE_HOME_ENABLED === 'true'
 }
@@ -36,7 +32,7 @@ function isHomeFinancialEngineEnabled() {
  */
 export function buildHomeBalanceSummary(
   input: BuildHomeBalanceSummaryInput,
-  options: HomeBalanceSummaryOptions = {},
+  options: FinancialEngineShadowOptions = {},
 ): BalanceReportResult {
   const legacyBalanceReport = buildBalanceReport({
     incomes: [...input.incomes],
@@ -70,7 +66,7 @@ export function buildHomeBalanceSummary(
       },
     }, { dev: options.dev, logger: options.logger })
 
-    return (options.financialEngineEnabled ?? isHomeFinancialEngineEnabled())
+    return isHomeFinancialEngineEnabled()
       ? engineResult.balanceReport
       : legacyBalanceReport
   } catch {
