@@ -10,6 +10,7 @@ import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import { listEarningPeriods } from '../../services/earningPeriodService'
 import { buildBalanceReport } from '../../services/balanceReportService'
+import { runFinancialEngineShadowMode } from '../../services/financialEngineShadowMode'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
@@ -385,15 +386,24 @@ export function ReportsPage() {
     [periodExpenses, selectedCategory, selectedCity, selectedCountry, selectedSeason],
   )
 
-  const balanceReport = useMemo(
-    () =>
-      buildBalanceReport({
+  const balanceReport = useMemo(() => {
+    const legacyBalanceReport = buildBalanceReport({
         incomes,
         expenses,
         currency: primaryCurrency,
-      }),
-    [expenses, incomes, primaryCurrency],
-  )
+      })
+
+    return runFinancialEngineShadowMode({
+      incomes,
+      expenses,
+      currency: primaryCurrency,
+      usageMode: activeUsageMode,
+      earningPeriodId:
+        selectedSeason === 'ALL' ? undefined : Number(selectedSeason),
+      legacyBalanceReport,
+      scope: 'reports.balance',
+    })
+  }, [activeUsageMode, expenses, incomes, primaryCurrency, selectedSeason])
 
   const incomesById = useMemo(
     () => new Map(traceIncomes.flatMap((income) => income.id ? [[income.id, income] as const] : [])),

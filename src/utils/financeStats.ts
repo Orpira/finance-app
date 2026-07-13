@@ -3,6 +3,7 @@ import type { ServiceIncome } from '../types/service'
 import type { CurrencyCode } from '../types/settings'
 import { roundMoney } from './currency'
 import { isServiceIncome } from './incomeTypes'
+import { getEffectiveFinancialDuration } from './serviceDuration'
 
 const weekdayNames = [
   'Domingo',
@@ -99,7 +100,7 @@ export function calculateFinancialTotals(
     primaryNet: roundMoney(primaryIncome - primaryExpenses),
     secondaryNet: roundMoney(secondaryIncome - secondaryExpenses),
     serviceMinutes: serviceIncomes.reduce(
-      (total, income) => total + (income.actualDuration ?? income.duration),
+      (total, income) => total + (getEffectiveFinancialDuration(income) ?? 0),
       0,
     ),
     serviceCount: serviceIncomes.length,

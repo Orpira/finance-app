@@ -95,6 +95,15 @@ n8n
 - MCP se usa como herramienta de auditoría y desarrollo, no como runtime de producción.
 - La idempotencia de eventos remotos se resuelve en infraestructura (`processed_events`) antes de ejecutar efectos financieros o notificaciones.
 
+## AI Foundation: estado actualmente implementado
+
+- Existe un adaptador determinista y de solo lectura denominado Financial Engine; reutiliza reglas financieras existentes, pero no es la fuente global de resultados.
+- Reports ejecuta el adaptador únicamente en shadow mode: compara paridad y conserva siempre el resultado legacy como oficial.
+- Home tiene un piloto reversible limitado al resumen de balance. Solo el valor de build exacto `VITE_FINANCIAL_ENGINE_HOME_ENABLED=true` promueve el resultado del adaptador; ausencia, `false` o cualquier otro texto mantienen legacy.
+- El flag se resuelve durante el build de Vite. El rollback operativo exige retirar o desactivar el valor y realizar un nuevo build y redeploy; no es un interruptor runtime.
+- Legacy continúa siendo la fuente oficial por defecto. No se han migrado otros consumidores.
+- Financial Snapshot, Rule Registry, Knowledge Layer e Insight Engine pertenecen a la arquitectura objetivo y no están implementados.
+
 ## Riesgos arquitectónicos detectados
 
 - Existen workflows legacy que aún referencian tablas antiguas como whatsapp_channel, app_user y device.
