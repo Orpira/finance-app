@@ -1802,3 +1802,46 @@ Antes de abrir la escritura, el repositorio invoca el sellador oficial, que reca
 Los errores públicos son códigos deterministas sin contenido financiero: `SNAPSHOT_PERSISTENCE_REVISION_CONFLICT`, `SNAPSHOT_PERSISTENCE_INVALID_SUPERSEDES`, `SNAPSHOT_PERSISTENCE_INTEGRITY_FAILURE`, `SNAPSHOT_PERSISTENCE_NOT_FOUND` y `SNAPSHOT_PERSISTENCE_SCHEMA_ERROR`. La idempotencia es un resultado exitoso, no un error.
 
 Dexie no soporta downgrade automático. El rollback conceptual de v23 consiste en retirar consumidores/escritores manteniendo la base y la tabla intactas; nunca se borra IndexedDB para retroceder.
+
+## 26. Decisiones normativas del shadow mode observacional V1
+
+Esta sección registra lo implementado por Milestone 4A:
+
+- consumidor único: `homeBalanceSummaryService`, únicamente `home.balance.current-month`;
+- scope único: `monthly`, semiabierto y con tiempos, timezone, modo, moneda y periodo profesional explícitos;
+- flag independiente: solo `VITE_FINANCIAL_SNAPSHOT_SHADOW_ENABLED=true` habilita ejecución;
+- Financial Engine se ejecuta una vez y su resultado existente se entrega al Builder;
+- el servicio no consulta Dexie para reconstruir ingresos o egresos; solo el repository accede a `financialSnapshots`;
+- evidencia v1 respeta los schemas materiales aprobados y excluye entidades completas, notas, contactos, direcciones, secretos y payloads externos;
+- fingerprint igual para la misma key es idempotencia y no consume revisión;
+- fingerprint nuevo crea revisión lineal y `supersedes` referencia el latest previo;
+- comparación limitada a versiones, identidad/revisión, conteos, totales, duración y códigos;
+- logging solo en desarrollo y sin evidencia, documento canónico, fingerprint completo ni datos personales;
+- cualquier fallo queda aislado del resultado oficial de Home.
+
+No se crea Promotion Policy de Snapshot. El flag habilita observación y persistencia local, no promoción; Legacy/Financial Engine siguen gobernando el resultado visible según la policy preexistente de Home.
+
+## 27. Decisiones normativas de Snapshot Promotion Policy V1
+
+Milestone 4B incorpora exclusivamente `assessSnapshotPromotion(snapshot)`, una función síncrona, pura y determinista. Su salida contiene `eligible`, la secuencia completa de checks, los checks fallidos y warnings ordenados. No incluye score: elegibilidad exige conjunción de todos los checks obligatorios y ningún resultado parcial compensa un fallo.
+
+Compatibilidad V1 es cerrada: `financial-snapshot/1.0.0`, `financial-snapshot-c14n/1.0.0`, `financial-snapshot-fingerprint/1.0.0`, SHA-256 y engine `1.0.0-phase-1a-minimal`. Versiones desconocidas no son elegibles. Las reglas deben pertenecer al conjunto declarado por ese engine y conservar orden base cero, engine y ruleset coherentes.
+
+La policy comprueba coherencia estructural de fingerprint, identidad y documento, pero no recalcula hashes ni canonicaliza. Comprueba `supersedes` solo dentro del artefacto: revisión 1 sin predecesor y revisión posterior con referencia no vacía. Existencia del predecesor, latest real, idempotencia y conflictos requieren contexto de repository y quedan expresamente fuera de esta función.
+
+La policy no lee Dexie, no usa red, reloj o aleatoriedad, no persiste, no repara y no promueve. Warnings declarados por el snapshot no bloquean por sí mismos. Snapshot continúa como artefacto derivado y no oficial.
+
+## 28. Decisiones normativas de ejecución controlada de promoción — Milestone 4C
+
+- El único consumidor autorizado es `homeBalanceSummaryService` para `home.balance.current-month`.
+- Solo el texto exacto de build `VITE_FINANCIAL_SNAPSHOT_HOME_ENABLED=true` habilita el intento. El flag es independiente de Financial Engine Home y Snapshot Shadow Mode.
+- El resultado oficial vigente se calcula y conserva antes de cualquier lectura. Es el fallback obligatorio ante todo fallo.
+- La promoción exige repository local, revisión latest única, cadena consecutiva desde revisión 1 y enlaces `supersedes` exactos.
+- Se recalcula el fingerprint del documento canónico y deben coincidir fingerprint, `fingerprintValue` y `snapshotId` content-addressed.
+- Scope kind, moneda, timezone, intervalo semiabierto, usage mode y `earningPeriodId` deben coincidir exactamente con la solicitud.
+- `engineVersion` y `rulesetVersion` deben coincidir con el Financial Engine vigente y `SnapshotPromotionPolicy` debe devolver `eligible = true`.
+- El `engineResult` debe satisfacer el contrato esperado antes de devolverse y se entrega como copia independiente.
+- El executor no calcula cifras, no compara métricas manualmente, no crea snapshots, no repara cadenas y no persiste la decisión.
+- Producción no emite logs ni telemetría. Desarrollo solo puede registrar fuente, key, revisión, versiones, scope kind, checks fallidos y razón normalizada.
+- Rollback: retirar o desactivar el flag, rebuild y redeploy. No requiere migración ni limpieza.
+- Financial Snapshot continúa sin autoridad global y no existe promoción automática.

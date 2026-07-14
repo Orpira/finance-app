@@ -11,6 +11,10 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 - Deterministic, read-only Financial Engine adapter with parity characterization.
 - Reports shadow mode, which observes parity while keeping legacy official.
 - Reversible Home balance-summary pilot controlled only by the exact Vite build value `VITE_FINANCIAL_ENGINE_HOME_ENABLED=true`.
+- Observational Financial Snapshot shadow mode for Home's current-month balance, disabled by default and enabled only by exact `VITE_FINANCIAL_SNAPSHOT_SHADOW_ENABLED=true`.
+- Complete local Snapshot pipeline with embedded material evidence, validation, canonicalization, fingerprinting, sealing, append-only persistence, revision comparison and in-flight deduplication.
+- Pure deterministic Snapshot Promotion Policy assessment with closed version compatibility, structured checks and no automatic promotion.
+- Controlled Home current-month Snapshot promotion execution, enabled only by exact `VITE_FINANCIAL_SNAPSHOT_HOME_ENABLED=true`, with repository-chain, integrity, scope, version and mandatory policy checks.
 
 ### Changed
 
@@ -18,6 +22,9 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 - [MCP_RULES.md](MCP_RULES.md) now acts as a short operational summary for agents.
 - [DECISIONS.md](DECISIONS.md) was aligned with ADR structure and references the Constitution explicitly.
 - AI Foundation documentation now separates implemented pilot behavior from target architecture. Legacy remains the default official source; Financial Engine is not global, and rollback of the Home pilot requires rebuild and redeploy.
+- Financial Snapshot remains derived and non-official; shadow failures are isolated and production emits no Snapshot logs or telemetry.
+- Snapshot promotion eligibility is evaluated without repository access, persistence, consumers, score, clock, network or randomness.
+- Snapshot promotion execution is read-only and fail-closed: the current result remains the immediate fallback, rollback is rebuild/redeploy, production emits no logs, and Snapshot is still not a global source.
 
 ### Removed
 
@@ -34,4 +41,3 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 ### Fixed
 
 - Cross-document governance and canonical references for documentation.
-
