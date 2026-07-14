@@ -9,7 +9,7 @@ El proyecto usa dos capas de persistencia con responsabilidades distintas:
 
 ## Base local Dexie
 
-La base FinanceDB está definida en src/database/db.ts y llega actualmente a la versión 22.
+La base FinanceDB está definida en src/database/db.ts y llega actualmente a la versión 23.
 
 ### Tablas locales confirmadas
 
@@ -24,6 +24,7 @@ La base FinanceDB está definida en src/database/db.ts y llega actualmente a la 
 - automationOutbox.
 - communicationChannels.
 - deviceIdentity.
+- financialSnapshots.
 
 ### Finalidad de tablas clave
 
@@ -38,6 +39,15 @@ La base FinanceDB está definida en src/database/db.ts y llega actualmente a la 
 - automationOutbox: cola local de eventos hacia Vercel/n8n.
 - communicationChannels: estado local del canal de comunicación en cliente.
 - deviceIdentity: userCode y deviceCode persistidos localmente.
+- financialSnapshots: artefactos Financial Snapshot sellados, persistidos de forma local y append-only; no forma parte del libro financiero operativo.
+
+### Financial Snapshot local (v23)
+
+`financialSnapshots` usa `snapshotId` content-addressed como clave primaria. Sus índices son `snapshotKey`, el índice único compuesto `[snapshotKey+revision]`, `sealedAt`, `status`, `scopeKind`, `scopePeriodStart` y `fingerprintValue`. Los campos de scope y fingerprint están denormalizados únicamente para consulta.
+
+La tabla admite exclusivamente inserciones. Hooks Dexie rechazan `update`, `put` sobre una identidad existente, `delete` y `clear`. El repositorio asigna la revisión dentro de una transacción de lectura-escritura y conserva todas las revisiones; no existe retención destructiva automática. La tabla queda deliberadamente fuera de los flujos de reset e importación/exportación del libro operativo, para que esos flujos no puedan reescribir ni eliminar la auditoría.
+
+La migración desde v22 solo crea la tabla, sin transformar ni borrar registros existentes. El rollback conceptual consiste en desplegar una versión que deje de leer/escribir la tabla v23 conservando IndexedDB; Dexie no ofrece downgrade automático y no se debe borrar la base para retroceder.
 
 ## Neon PostgreSQL
 
@@ -108,4 +118,3 @@ Estas referencias no sustituyen la arquitectura actual basada en communication_c
 
 - Parte del conocimiento de base remota vive en workflows n8n además del código TypeScript.
 - Hay divergencia entre tablas modernas del servidor y tablas legacy observadas en workflows antiguos.
-
