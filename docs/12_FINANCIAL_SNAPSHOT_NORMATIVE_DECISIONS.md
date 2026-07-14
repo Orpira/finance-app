@@ -1180,9 +1180,7 @@ Reconstruir bajo engine, ruleset o snapshotVersion diferente crea revisión nuev
 - encoding canónico en bytes;
 - algoritmo del identity digest;
 - agrupación canónica del multiset legacy;
-- representación canónica final de JSON numbers;
 - reglas exactas de orden de evidencia con IDs presentes;
-- canonical payload definitivo;
 - vectores de prueba canónicos.
 
 ### 16.2 A fingerprint y sellado
@@ -1270,8 +1268,8 @@ Antes de escribir Builder todavía será obligatorio reflejar estas decisiones e
 - [ ] Encoding de bytes.
 - [ ] Digest de snapshotKey.
 - [ ] Multiset canónico.
-- [ ] Representación canónica de números.
-- [ ] Canonical payload definitivo.
+- [x] Representación canónica de cero negativo cerrada para V1.
+- [x] Documento canónico versionado definido contractualmente.
 - [ ] Vectores de prueba de canonicalización.
 
 Builder podrá producir únicamente `SnapshotCandidate`; no podrá afirmar canonicalidad.
@@ -1428,3 +1426,114 @@ Este milestone queda cerrado cuando:
 - no existe modificación de Financial Engine, Dexie, Neon, n8n, workflows, UI o consumidores.
 
 La siguiente acción recomendada no es implementar Builder directamente. Es ejecutar un milestone pequeño de **alineación de contratos 3A** con estas decisiones, seguido de revisión y compilación. Solo después podrá diseñarse Snapshot Builder in-memory.
+
+## 22. Decisiones normativas de desbloqueo para canonicalización V1
+
+Esta sección tiene carácter vinculante para el Milestone 3C y prevalece sobre las referencias anteriores de este documento que describen estas materias como pendientes. No implementa canonicalización, fingerprint, sellado ni persistencia.
+
+### 22.1 Cero negativo
+
+Canonicalización V1 DEBE normalizar todo JSON number cuyo valor sea `-0` a `0`.
+
+Motivos:
+
+- JSON carece de una semántica interoperable que obligue a preservar la distinción IEEE-754 entre `-0` y `0` después de múltiples parsers y runtimes;
+- el dominio financiero actual no atribuye significado distinto a ambos valores;
+- dos resultados financieramente equivalentes no deben producir bytes canónicos distintos por una propiedad incidental del runtime;
+- la normalización estabiliza la futura preimagen del fingerprint sin redondear ni cambiar magnitud.
+
+Impacto normativo:
+
+- la regla se aplica recursivamente a cualquier número material del documento canónico;
+- `Object.is(value, -0)` es el criterio conceptual inequívoco para detectar el caso;
+- no se transforma ningún otro número;
+- no se redondean decimales;
+- no se convierten números a strings;
+- `NaN`, `Infinity` y `-Infinity` continúan siendo inválidos;
+- un campo ausente, un string vacío y un array vacío no se ven afectados.
+
+Compatibilidad y casos límite:
+
+- candidates que contengan `0` o `-0` son financieramente compatibles bajo V1 y producen el mismo valor canónico `0`;
+- arrays con varias ocurrencias conservan cantidad y posición semántica aunque sus ceros negativos se normalicen;
+- valores negativos distintos de cero, incluidos subnormales finitos, se preservan exactamente;
+- cambiar en el futuro esta política exige una nueva `canonicalizationVersion`.
+
+Efecto futuro:
+
+- los bytes canónicos de `-0` serán los mismos que los de `0`;
+- fingerprints calculados sobre esos bytes serán iguales cuando esa sea la única diferencia;
+- snapshots ya sellados bajo una versión futura distinta nunca se reinterpretarán in-place.
+
+### 22.2 Fase explícita `draft -> validated`
+
+Canonicalización solo podrá recibir `ValidatedSnapshotCandidate`. Un `DraftSnapshotCandidate` debe atravesar previamente la función pura:
+
+```text
+validateSnapshotCandidate(draft) -> ValidatedSnapshotCandidate
+```
+
+Decisiones vinculantes:
+
+- la función acepta exclusivamente estado `draft`;
+- entradas `validated` o `rejected` se rechazan con error determinista;
+- la salida conserva todo contenido material y cambia únicamente el discriminante a `validated`;
+- la salida es una copia estructural independiente;
+- la validación no recalcula finanzas, no canonicaliza, no genera fingerprint, no sella y no persiste;
+- la validación vuelve a comprobar invariantes aunque el candidate proceda del Builder, porque el contrato puede recibirse desde fronteras futuras;
+- un fallo no produce un candidate parcial ni modifica la entrada.
+
+Validaciones V1 autorizadas:
+
+- identidad del candidate presente;
+- versiones presentes y compatibilidad mínima declarada;
+- `snapshotVersion = financial-snapshot/1.0.0`;
+- `canonicalizationVersion = financial-snapshot-c14n/1.0.0`;
+- `rulesetVersion = engine-bundled/<engineVersion-verbatim>`;
+- scope completo, periodo creciente y límite `[start,end)`;
+- scope de temporada únicamente profesional y con `earningPeriodId`;
+- evidencia `embedded-v1`, tipos permitidos y conteos coherentes;
+- identidad y fecha lógica mínimas de evidencia;
+- `AppliedRule.order` contiguo desde cero, IDs únicos y versiones coherentes;
+- metadata local obligatoria;
+- estructura JSON sin `null`, `undefined`, `Date`, números no finitos, funciones, símbolos, bigint, clases ni ciclos.
+
+Estas comprobaciones son estructurales. No comparan evidencia con balances ni duplican fórmulas de Financial Engine.
+
+### 22.3 `CanonicalSnapshotDocument`
+
+La salida contractual de canonicalización V1 será un documento envolvente versionado:
+
+```text
+CanonicalSnapshotDocument {
+  canonicalizationVersion
+  payload: CanonicalFinancialSnapshotPayload
+}
+```
+
+Responsabilidades:
+
+- `canonicalizationVersion` identifica las reglas exactas que produjeron la representación;
+- `payload` contiene exclusivamente el contenido financiero canónico;
+- la separación permite evolucionar el proceso sin presentar metadata operacional como contenido financiero.
+
+Campos prohibidos en este documento:
+
+- fingerprint o algoritmo de fingerprint;
+- `sealedAt`;
+- revisión final;
+- `snapshotId`, `snapshotKey` o identidad content-addressed definitiva;
+- estado `sealed`, `persisted` o `published`;
+- metadata de persistencia.
+
+Crear este contrato no afirma que exista todavía una representación canónica. Solo fija la forma de salida que deberá producir el Milestone 3C. El documento no es un `SealedFinancialSnapshot`, no es persistible por sí mismo y no autoriza calcular fingerprints.
+
+### 22.4 Criterio de desbloqueo
+
+Milestone 3C queda normativamente desbloqueado cuando:
+
+- el contrato TypeScript de `CanonicalSnapshotDocument` compile;
+- el validador `draft -> validated` tenga pruebas de invariantes, determinismo e inmutabilidad;
+- canonicalización acepte posteriormente solo `ValidatedSnapshotCandidate`;
+- la política `-0 -> 0` se pruebe como regla de canonicalización V1;
+- no exista todavía fingerprint, sellado, revisión final o persistencia.
