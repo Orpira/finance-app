@@ -1830,3 +1830,18 @@ Compatibilidad V1 es cerrada: `financial-snapshot/1.0.0`, `financial-snapshot-c1
 La policy comprueba coherencia estructural de fingerprint, identidad y documento, pero no recalcula hashes ni canonicaliza. Comprueba `supersedes` solo dentro del artefacto: revisión 1 sin predecesor y revisión posterior con referencia no vacía. Existencia del predecesor, latest real, idempotencia y conflictos requieren contexto de repository y quedan expresamente fuera de esta función.
 
 La policy no lee Dexie, no usa red, reloj o aleatoriedad, no persiste, no repara y no promueve. Warnings declarados por el snapshot no bloquean por sí mismos. Snapshot continúa como artefacto derivado y no oficial.
+
+## 28. Decisiones normativas de ejecución controlada de promoción — Milestone 4C
+
+- El único consumidor autorizado es `homeBalanceSummaryService` para `home.balance.current-month`.
+- Solo el texto exacto de build `VITE_FINANCIAL_SNAPSHOT_HOME_ENABLED=true` habilita el intento. El flag es independiente de Financial Engine Home y Snapshot Shadow Mode.
+- El resultado oficial vigente se calcula y conserva antes de cualquier lectura. Es el fallback obligatorio ante todo fallo.
+- La promoción exige repository local, revisión latest única, cadena consecutiva desde revisión 1 y enlaces `supersedes` exactos.
+- Se recalcula el fingerprint del documento canónico y deben coincidir fingerprint, `fingerprintValue` y `snapshotId` content-addressed.
+- Scope kind, moneda, timezone, intervalo semiabierto, usage mode y `earningPeriodId` deben coincidir exactamente con la solicitud.
+- `engineVersion` y `rulesetVersion` deben coincidir con el Financial Engine vigente y `SnapshotPromotionPolicy` debe devolver `eligible = true`.
+- El `engineResult` debe satisfacer el contrato esperado antes de devolverse y se entrega como copia independiente.
+- El executor no calcula cifras, no compara métricas manualmente, no crea snapshots, no repara cadenas y no persiste la decisión.
+- Producción no emite logs ni telemetría. Desarrollo solo puede registrar fuente, key, revisión, versiones, scope kind, checks fallidos y razón normalizada.
+- Rollback: retirar o desactivar el flag, rebuild y redeploy. No requiere migración ni limpieza.
+- Financial Snapshot continúa sin autoridad global y no existe promoción automática.
