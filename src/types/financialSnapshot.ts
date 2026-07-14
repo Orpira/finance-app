@@ -108,7 +108,9 @@ export interface SnapshotRevision {
 
 export interface SnapshotFingerprint {
   readonly value: string
-  readonly algorithm: string
+  readonly algorithm: 'SHA-256'
+  readonly encoding: 'hex-lower'
+  readonly domain: 'private-balance:financial-snapshot:fingerprint:v1:'
   readonly fingerprintVersion: string
   readonly canonicalizationVersion: CanonicalizationVersion
 }
