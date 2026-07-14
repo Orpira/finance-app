@@ -11,6 +11,7 @@ import type { AppSettings } from '../types/settings'
 import type { AutomationOutboxRecord } from '../types/automation'
 import type { CommunicationChannel } from '../types/communicationChannel'
 import type { DeviceIdentity } from '../types/deviceIdentity'
+import type { PersistedFinancialSnapshot } from '../types/persistedFinancialSnapshot'
 import {
   resolveRecordUsageMode,
   resolveUsageMode,
@@ -68,6 +69,7 @@ export class FinanceDB extends Dexie {
   automationOutbox!: Table<AutomationOutboxRecord, string>
   communicationChannels!: Table<CommunicationChannel, CommunicationChannel['id']>
   deviceIdentity!: Table<DeviceIdentity, DeviceIdentity['id']>
+  financialSnapshots!: Table<PersistedFinancialSnapshot, PersistedFinancialSnapshot['snapshotId']>
 
   constructor() {
     super('finance-app')
@@ -559,6 +561,33 @@ export class FinanceDB extends Dexie {
       automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
       communicationChannels: 'id,type,provider,status,updatedAt',
       deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+    })
+
+    this.version(23).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt',
+      expenses:
+        '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+      communicationChannels: 'id,type,provider,status,updatedAt',
+      deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+      financialSnapshots:
+        'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+    })
+
+    this.financialSnapshots.hook('updating', () => {
+      throw new Error('SNAPSHOT_PERSISTENCE_APPEND_ONLY')
+    })
+    this.financialSnapshots.hook('deleting', () => {
+      throw new Error('SNAPSHOT_PERSISTENCE_APPEND_ONLY')
     })
   }
 }
