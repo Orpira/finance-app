@@ -16,7 +16,8 @@ import { UsageModeBadge } from '../../components/UsageModeBadge'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
-import { buildHomeBalanceSummary } from '../../services/homeBalanceSummaryService'
+import { buildHomeBalanceSummary, resolveHomeBalanceSummaryPromotion } from '../../services/homeBalanceSummaryService'
+import type { BalanceReportResult } from '../../services/balanceReportService'
 import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
@@ -88,6 +89,10 @@ export function HomePage() {
   const [previousExpenses, setPreviousExpenses] = useState<Expense[]>([])
   const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
   const [reportedCount, setReportedCount] = useState(0)
+  const [promotedCurrentSummary, setPromotedCurrentSummary] = useState<{
+    readonly requestId: UtcInstant
+    readonly summary: BalanceReportResult
+  } | null>(null)
   const [snapshotTime, setSnapshotTime] = useState<{
     instant: UtcInstant
     timezone: IanaTimeZone
@@ -206,7 +211,9 @@ export function HomePage() {
     }
 
     return {
-      current: buildHomeBalanceSummary({
+      current: promotedCurrentSummary !== null && promotedCurrentSummary.requestId === snapshotTime?.instant
+        ? promotedCurrentSummary.summary
+        : buildHomeBalanceSummary({
             incomes: currentIncomes,
             expenses: currentExpenses,
             currency: settings.defaultCurrency,
@@ -237,7 +244,35 @@ export function HomePage() {
         scope: 'home.previous-month',
       }),
     }
-  }, [activePeriod?.id, currentExpenses, currentIncomes, previousExpenses, previousIncomes, settings, snapshotTime])
+  }, [activePeriod?.id, currentExpenses, currentIncomes, previousExpenses, previousIncomes, promotedCurrentSummary, settings, snapshotTime])
+
+  useEffect(() => {
+    if (settings === null || snapshotTime === null) return
+    let active = true
+    const requestId = snapshotTime.instant
+    void resolveHomeBalanceSummaryPromotion({
+      incomes: currentIncomes,
+      expenses: currentExpenses,
+      currency: settings.defaultCurrency,
+      usageMode: settings.usageMode,
+      earningPeriodId: isBasicMode(settings) ? undefined : activePeriod?.id,
+      scope: 'home.current-month',
+      snapshotShadow: {
+        periodStart: snapshotTime.periodStart,
+        periodEndExclusive: snapshotTime.periodEndExclusive,
+        asOf: snapshotTime.instant,
+        timezone: snapshotTime.timezone,
+        candidateId: `home-current-month:${snapshotTime.periodStart}:${snapshotTime.instant}` as SnapshotCandidateId,
+        generatedAt: snapshotTime.instant,
+        sealedAt: snapshotTime.instant,
+        persistedAt: snapshotTime.instant,
+        revisionReasonCode: 'revision.source_changed' as SnapshotNormativeCode,
+      },
+    }).then(({ summary }) => {
+      if (active) setPromotedCurrentSummary({ requestId, summary })
+    })
+    return () => { active = false }
+  }, [activePeriod?.id, currentExpenses, currentIncomes, settings, snapshotTime])
 
   if (!settings || !totals || !balanceSummary) {
     return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando...</section>

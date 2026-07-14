@@ -10,6 +10,7 @@ import { fingerprintCanonicalSnapshotDocument } from '../../src/intelligence/fin
 import { deriveSnapshotKey, sealCanonicalSnapshot } from '../../src/intelligence/financial-snapshot/snapshotSealer'
 import { runSnapshotShadowMode } from '../../src/services/snapshotShadowModeService'
 import { runFinancialEngine } from '../../src/services/financialEngineAdapter'
+import { executeSnapshotPromotion } from '../../src/services/snapshotPromotionExecutor'
 import type { Expense } from '../../src/types/expense'
 import type { ServiceIncome } from '../../src/types/service'
 import type {
@@ -168,7 +169,48 @@ async function run() {
   assert(revisedShadow?.revision === 2, 'material shadow change creates next revision')
   const shadowRecords = await repository.listBySnapshotKey(shadowKey)
   assert(shadowRecords[1].supersedesSnapshotId === shadowRecords[0].snapshotId, 'real shadow revision supersedes previous snapshot')
+  const promotionInput = {
+    snapshotKey: shadowKey,
+    expectedScope: {
+      kind: 'monthly' as const,
+      periodStart: '2026-03-01' as CivilDate,
+      periodEndExclusive: '2026-04-01' as CivilDate,
+      timezone: 'Europe/Madrid' as IanaTimeZone,
+      usageMode: 'basic' as const,
+      currency: 'EUR' as const,
+    },
+    officialCurrentResult: shadowInput(changedIncome).financialEngineResult,
+    repository,
+    dev: false,
+  }
+  const promoted = await executeSnapshotPromotion({ ...promotionInput, featureEnabled: true })
+  assert(promoted.source === 'snapshot', 'valid persisted latest snapshot promotes with explicit flag')
+  assert((await executeSnapshotPromotion({ ...promotionInput, featureEnabled: false })).source === 'current', 'disabled promotion flag falls back immediately')
+  const corrupted = structuredClone(shadowRecords[1])
+  corrupted.fingerprintValue = '0'.repeat(64)
+  const corruptedRepository = {
+    getLatestBySnapshotKey: async () => corrupted,
+    listBySnapshotKey: async () => [shadowRecords[0], corrupted],
+  }
+  assert((await executeSnapshotPromotion({ ...promotionInput, featureEnabled: true, repository: corruptedRepository })).source === 'current', 'altered fingerprint falls back')
+  assert((await executeSnapshotPromotion({
+    ...promotionInput, featureEnabled: true,
+    expectedScope: { ...promotionInput.expectedScope, timezone: 'UTC' as IanaTimeZone },
+  })).source === 'current', 'incompatible scope falls back')
+  const staleRepository = {
+    getLatestBySnapshotKey: async () => shadowRecords[0],
+    listBySnapshotKey: async () => shadowRecords,
+  }
+  assert((await executeSnapshotPromotion({ ...promotionInput, featureEnabled: true, repository: staleRepository })).source === 'current', 'non-latest revision falls back')
   deepEqual({ services: await database.services.toArray(), expenses: await database.expenses.toArray() }, financialBefore, 'shadow pipeline leaves financial tables unchanged')
+
+  database.close()
+  database = new FinanceDB()
+  await database.open()
+  repository = new FinancialSnapshotRepository(database)
+  const reopenedPromotion = await executeSnapshotPromotion({ ...promotionInput, repository, featureEnabled: true })
+  assert(reopenedPromotion.source === promoted.source, 'promotion decision survives full close and reopen')
+  deepEqual({ services: await database.services.toArray(), expenses: await database.expenses.toArray() }, financialBefore, 'promotion leaves financial tables unchanged')
 
   const secondA = await sealed(20, 2, source.identity.snapshotId)
   const secondB = await sealed(30, 2, source.identity.snapshotId)

@@ -1379,3 +1379,13 @@ Los fallos se aíslan y no cambian el retorno de Home. Solo desarrollo registra 
 La evaluación cubre fingerprint estructural y versiones soportadas, identidad, estado, revisión, coherencia interna de `supersedes`, scope, metadata, evidencia embebida, conteos, reglas conocidas y ordenadas, documento canónico, valores permitidos y coherencia de las copias materiales del snapshot.
 
 Por prohibición del milestone, la policy no recalcula fingerprint ni canonicaliza. Tampoco consulta el repository; por tanto, no afirma existencia real del predecesor, idempotencia durable o ausencia de conflictos concurrentes. Estas limitaciones aparecen como warnings deterministas. La evaluación no modifica consumidores y no constituye promoción automática.
+
+## 34. Estado implementado — Milestone 4C
+
+`SnapshotPromotionExecutor` incorpora un piloto controlado y reversible exclusivamente para el resumen del mes actual de Home. Financial Snapshot no pasa a ser fuente global y no existe promoción automática. Reports y las cards que usan `calculateFinancialTotals` conservan su comportamiento.
+
+La lectura como fuente requiere el valor de build exacto `VITE_FINANCIAL_SNAPSHOT_HOME_ENABLED=true`. Ausencia, `false` o cualquier otro texto mantienen el resultado oficial vigente. El rollback consiste en desactivar el flag y ejecutar build y redeploy; no hay estado de promoción persistido, UI administrativa ni activación remota.
+
+Antes de seleccionar un snapshot, el executor conserva el resultado actual como fallback, deriva el `snapshotKey` del scope solicitado, lee la cadena completa y su última revisión, comprueba continuidad y `supersedes`, recalcula SHA-256 sobre el documento canónico, valida identidad y copias indexadas, compara scope y versiones, y exige `assessSnapshotPromotion(...).eligible === true`. Solo entonces devuelve una copia del `engineResult` persistido. Cualquier ausencia, incompatibilidad, corrupción, excepción o error de repository devuelve el resultado actual.
+
+La ejecución es local y de solo lectura. No construye snapshots, no persiste decisiones, no altera registros financieros y no usa Neon, n8n, workflows, WhatsApp ni red. Los logs se limitan en desarrollo a metadata segura y están desactivados en producción. Shadow Mode puede coexistir con este piloto porque conserva un flag y una responsabilidad independientes.
