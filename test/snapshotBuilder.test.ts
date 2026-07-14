@@ -23,8 +23,9 @@ import type {
 import type { UsageMode } from '../src/types/settings'
 
 const candidateId = 'candidate:local:test' as SnapshotCandidateId
-const snapshotVersion = 'snapshot/1' as SnapshotVersion
-const canonicalizationVersion = 'canonical/1' as CanonicalizationVersion
+const snapshotVersion = 'financial-snapshot/1.0.0' as SnapshotVersion
+const canonicalizationVersion =
+  'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion
 const engineVersion = '1.0.0-phase-1a-minimal' as EngineVersion
 const rulesetVersion = 'engine-bundled/1.0.0-phase-1a-minimal' as RulesetVersion
 const code = (value: string) => value as SnapshotNormativeCode

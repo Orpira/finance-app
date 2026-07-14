@@ -394,10 +394,20 @@ export type SnapshotBuildExecution<TEngineResult = SnapshotJsonObject> =
 
 /** Data shape reserved for a future canonicalization milestone. */
 export interface CanonicalFinancialSnapshotPayload<TEngineResult = SnapshotJsonObject> {
+  readonly snapshotVersion: SnapshotVersion
+  readonly engineVersion: EngineVersion
+  readonly rulesetVersion: RulesetVersion
   readonly scope: SnapshotScope
   readonly engineResult: TEngineResult
   readonly evidence: FinancialEvidence
   readonly appliedRules: readonly AppliedRule[]
+  readonly metadata: SnapshotCandidateMetadata
+}
+
+/** Versioned canonicalization output before fingerprinting or sealing. */
+export interface CanonicalSnapshotDocument<TEngineResult = SnapshotJsonObject> {
+  readonly canonicalizationVersion: CanonicalizationVersion
+  readonly payload: CanonicalFinancialSnapshotPayload<TEngineResult>
 }
 
 /** Final immutable artifact; no transient execution or candidate state is accepted. */
