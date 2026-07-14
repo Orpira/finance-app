@@ -1,0 +1,400 @@
+import { FinancialSnapshotRepository } from '../intelligence/financial-snapshot/financialSnapshotRepository'
+import { buildSnapshotCandidate } from '../intelligence/financial-snapshot/snapshotBuilder'
+import { validateSnapshotCandidate } from '../intelligence/financial-snapshot/snapshotCandidateValidator'
+import { canonicalizeValidatedSnapshotCandidate } from '../intelligence/financial-snapshot/snapshotCanonicalizer'
+import { fingerprintCanonicalSnapshotDocument } from '../intelligence/financial-snapshot/snapshotFingerprint'
+import { deriveSnapshotKey, sealCanonicalSnapshot } from '../intelligence/financial-snapshot/snapshotSealer'
+import type { FinancialEngineResult } from './financialEngineAdapter'
+import type { Expense } from '../types/expense'
+import type { PersistedFinancialSnapshot } from '../types/persistedFinancialSnapshot'
+import type { ServiceIncome } from '../types/service'
+import type {
+  AppliedRule,
+  CanonicalizationVersion,
+  CivilDate,
+  EngineVersion,
+  FinancialEvidence,
+  FinancialEvidenceRecord,
+  IanaTimeZone,
+  RulesetVersion,
+  SnapshotCandidateId,
+  SnapshotKey,
+  SnapshotNormativeCode,
+  SnapshotScope,
+  SnapshotVersion,
+  UtcInstant,
+} from '../types/financialSnapshot'
+import type { CurrencyCode, UsageMode } from '../types/settings'
+import { getIncomeType, isAdjustmentIncome } from '../utils/incomeTypes'
+
+const SNAPSHOT_VERSION = 'financial-snapshot/1.0.0' as SnapshotVersion
+const CANONICALIZATION_VERSION =
+  'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion
+
+export interface SnapshotShadowModeInput {
+  readonly consumer: 'home.balance.current-month'
+  readonly scope: {
+    readonly periodStart: CivilDate
+    readonly periodEndExclusive: CivilDate
+    readonly asOf: UtcInstant
+    readonly timezone: IanaTimeZone
+    readonly usageMode: UsageMode
+    readonly currency: CurrencyCode
+    readonly earningPeriodId?: number
+  }
+  readonly financialEngineResult: FinancialEngineResult
+  readonly incomes: readonly ServiceIncome[]
+  readonly expenses: readonly Expense[]
+  readonly candidateId: SnapshotCandidateId
+  readonly generatedAt: UtcInstant
+  readonly sealedAt: UtcInstant
+  readonly persistedAt: UtcInstant
+  readonly revisionReasonCode: SnapshotNormativeCode
+}
+
+export interface SnapshotShadowModeObservation {
+  readonly consumer: SnapshotShadowModeInput['consumer']
+  readonly snapshotKey: SnapshotKey
+  readonly revision: number
+  readonly idempotent: boolean
+  readonly fingerprintChanged: boolean
+  readonly divergentFields: readonly string[]
+  readonly engineVersion: string
+  readonly rulesetVersion: string
+  readonly counts: {
+    readonly incomes: number
+    readonly expenses: number
+    readonly adjustments: number
+  }
+  readonly warningCodes: readonly string[]
+  readonly qualityCodes: readonly string[]
+}
+
+interface SnapshotRepositoryPort {
+  persist(
+    snapshot: Parameters<FinancialSnapshotRepository['persist']>[0],
+    persistedAt: UtcInstant,
+  ): Promise<PersistedFinancialSnapshot>
+  getLatestBySnapshotKey(snapshotKey: SnapshotKey): Promise<PersistedFinancialSnapshot>
+}
+
+export interface SnapshotShadowModeOptions {
+  readonly enabled?: boolean
+  readonly dev?: boolean
+  readonly logger?: (message: string, details: Record<string, unknown>) => void
+  readonly repository?: SnapshotRepositoryPort
+  readonly pipeline?: Partial<{
+    build: typeof buildSnapshotCandidate
+    validate: typeof validateSnapshotCandidate
+    canonicalize: typeof canonicalizeValidatedSnapshotCandidate
+    fingerprint: typeof fingerprintCanonicalSnapshotDocument
+    seal: typeof sealCanonicalSnapshot
+    compare: typeof comparisonFields
+  }>
+}
+
+const inFlight = new Map<string, Promise<SnapshotShadowModeObservation | undefined>>()
+
+function code(value: string): SnapshotNormativeCode {
+  return value as SnapshotNormativeCode
+}
+
+function recordIdentity(record: ServiceIncome | Expense) {
+  return record.id === undefined
+    ? { identityKind: 'legacy-material' as const }
+    : { identityKind: 'persisted-id' as const, sourceId: record.id }
+}
+
+function incomeEvidence(income: ServiceIncome): FinancialEvidenceRecord {
+  const common = {
+    ...recordIdentity(income),
+    disposition: 'included' as const,
+    logicalDate: income.date as CivilDate,
+  }
+  const fields = {
+    resolvedType: getIncomeType(income),
+    ...(income.usageMode === undefined ? {} : { usageMode: income.usageMode }),
+    ...(income.earningPeriodId === undefined ? {} : { earningPeriodId: income.earningPeriodId }),
+    ...(income.seasonPeriodId === undefined ? {} : { seasonPeriodId: income.seasonPeriodId }),
+    duration: income.duration,
+    ...(income.actualDuration === undefined ? {} : { actualDuration: income.actualDuration }),
+    currency: income.currency,
+    ...(income.baseCurrency === undefined ? {} : { baseCurrency: income.baseCurrency }),
+    ...(income.baseCurrencyValue === undefined ? {} : { baseCurrencyValue: income.baseCurrencyValue }),
+    ...(income.secondaryCurrency === undefined ? {} : { secondaryCurrency: income.secondaryCurrency }),
+    ...(income.secondaryCurrencyValue === undefined ? {} : { secondaryCurrencyValue: income.secondaryCurrencyValue }),
+    eurValue: income.eurValue,
+    copValue: income.copValue,
+  }
+  return isAdjustmentIncome(income)
+    ? { ...common, kind: 'income-adjustment', fields: { ...fields, resolvedType: 'ajuste' } }
+    : { ...common, kind: 'income', fields: { ...fields, resolvedType: fields.resolvedType === 'ajuste' ? 'otro' : fields.resolvedType } }
+}
+
+function expenseEvidence(expense: Expense): FinancialEvidenceRecord {
+  const common = {
+    ...recordIdentity(expense),
+    disposition: 'included' as const,
+    logicalDate: expense.date as CivilDate,
+  }
+  const fields = {
+    type: expense.type,
+    ...(expense.usageMode === undefined ? {} : { usageMode: expense.usageMode }),
+    ...(expense.earningPeriodId === undefined ? {} : { earningPeriodId: expense.earningPeriodId }),
+    ...(expense.seasonPeriodId === undefined ? {} : { seasonPeriodId: expense.seasonPeriodId }),
+    currency: expense.currency,
+    ...(expense.baseCurrency === undefined ? {} : { baseCurrency: expense.baseCurrency }),
+    ...(expense.baseCurrencyValue === undefined ? {} : { baseCurrencyValue: expense.baseCurrencyValue }),
+    ...(expense.secondaryCurrency === undefined ? {} : { secondaryCurrency: expense.secondaryCurrency }),
+    ...(expense.secondaryCurrencyValue === undefined ? {} : { secondaryCurrencyValue: expense.secondaryCurrencyValue }),
+    eurValue: expense.eurValue,
+    copValue: expense.copValue,
+  }
+  return expense.type === 'ajuste'
+    ? { ...common, kind: 'expense-adjustment', fields: { ...fields, type: 'ajuste' } }
+    : { ...common, kind: 'expense', fields: { ...fields, type: 'gasto' } }
+}
+
+function buildEvidence(input: SnapshotShadowModeInput): FinancialEvidence {
+  const records = [
+    ...input.incomes.map(incomeEvidence),
+    ...input.expenses.map(expenseEvidence),
+  ]
+  const warningCodes = [
+    ...(records.some((record) => record.identityKind === 'legacy-material')
+      ? [code('legacy.id.unavailable')]
+      : []),
+    ...(input.incomes.some((record) => record.usageMode === undefined) ||
+    input.expenses.some((record) => record.usageMode === undefined)
+      ? [code('legacy.usage_mode.inferred')]
+      : []),
+  ]
+  return {
+    strategy: 'embedded-v1',
+    records,
+    context: [
+      {
+        kind: 'settings-context',
+        usageMode: input.scope.usageMode,
+        currency: input.scope.currency,
+        timezone: input.scope.timezone,
+      },
+      ...(input.scope.earningPeriodId === undefined
+        ? []
+        : [{ kind: 'earning-period-context' as const, earningPeriodId: input.scope.earningPeriodId }]),
+    ],
+    candidateRecordCount: records.length,
+    includedRecordCount: records.length,
+    excludedRecordCount: 0,
+    coverageCodes: [code(records.length === 0 ? 'coverage.empty_dataset' : 'coverage.complete')],
+    warningCodes,
+  }
+}
+
+function appliedRules(result: FinancialEngineResult): readonly AppliedRule[] {
+  const engineVersion = result.engineVersion as EngineVersion
+  const rulesetVersion = `engine-bundled/${result.engineVersion}` as RulesetVersion
+  return result.appliedRules.map((ruleId, order) => ({
+    ruleId,
+    order,
+    engineVersion,
+    rulesetVersion,
+    explanationCode: code(`rule.${ruleId}`),
+    affectedFields: [],
+    limitationCodes: [code('rule.version.unavailable')],
+    warningCodes: [],
+  }))
+}
+
+function safeLatest(
+  repository: SnapshotRepositoryPort,
+  snapshotKey: SnapshotKey,
+): Promise<PersistedFinancialSnapshot | undefined> {
+  return repository.getLatestBySnapshotKey(snapshotKey).catch(() => undefined)
+}
+
+function comparisonFields(
+  previous: PersistedFinancialSnapshot | undefined,
+  current: PersistedFinancialSnapshot,
+): string[] {
+  if (previous === undefined) return []
+  const before = previous.canonicalDocument.payload.engineResult as FinancialEngineResult | undefined
+  const after = current.canonicalDocument.payload.engineResult as FinancialEngineResult | undefined
+  const fields: Array<[string, unknown, unknown]> = [
+    ['snapshotId', previous.snapshotId, current.snapshotId],
+    ['fingerprint', previous.fingerprintValue, current.fingerprintValue],
+    ['revision', previous.revision, current.revision],
+    ['engineVersion', previous.engineVersion, current.engineVersion],
+    ['rulesetVersion', previous.rulesetVersion, current.rulesetVersion],
+    ['snapshotVersion', previous.snapshotVersion, current.snapshotVersion],
+    ['canonicalizationVersion', previous.canonicalizationVersion, current.canonicalizationVersion],
+    ['incomeCount', before?.incomeCount, after?.incomeCount],
+    ['expenseCount', before?.expenseCount, after?.expenseCount],
+    ['adjustmentCount', before?.adjustmentCount, after?.adjustmentCount],
+    ['generalBalance', before?.balanceReport.generalBalance, after?.balanceReport.generalBalance],
+    ['incomeGrossTotal', before?.balanceReport.incomeGrossTotal, after?.balanceReport.incomeGrossTotal],
+    ['expenseTotal', before?.balanceReport.expenseTotal, after?.balanceReport.expenseTotal],
+    ['scheduledMinutes', before?.scheduledMinutes, after?.scheduledMinutes],
+    ['actualMinutes', before?.actualMinutes, after?.actualMinutes],
+    ['warningCodes', JSON.stringify(previous.canonicalDocument.payload.metadata.warningCodes), JSON.stringify(current.canonicalDocument.payload.metadata.warningCodes)],
+    ['qualityCodes', JSON.stringify(previous.canonicalDocument.payload.metadata.qualityCodes), JSON.stringify(current.canonicalDocument.payload.metadata.qualityCodes)],
+  ]
+  return fields.filter(([, first, second]) => first !== second).map(([name]) => name)
+}
+
+async function execute(
+  input: SnapshotShadowModeInput,
+  options: SnapshotShadowModeOptions,
+): Promise<SnapshotShadowModeObservation> {
+  const repository = options.repository ?? new FinancialSnapshotRepository()
+  const pipeline = {
+    build: buildSnapshotCandidate,
+    validate: validateSnapshotCandidate,
+    canonicalize: canonicalizeValidatedSnapshotCandidate,
+    fingerprint: fingerprintCanonicalSnapshotDocument,
+    seal: sealCanonicalSnapshot,
+    compare: comparisonFields,
+    ...options.pipeline,
+  }
+  const evidence = buildEvidence(input)
+  const engineVersion = input.financialEngineResult.engineVersion as EngineVersion
+  const rulesetVersion = `engine-bundled/${engineVersion}` as RulesetVersion
+  const scope: SnapshotScope = {
+    kind: 'monthly',
+    periodStart: input.scope.periodStart,
+    periodEndExclusive: input.scope.periodEndExclusive,
+    periodBoundary: '[start,end)',
+    asOf: input.scope.asOf,
+    timezone: input.scope.timezone,
+    usageMode: input.scope.usageMode,
+    currency: input.scope.currency,
+    ...(input.scope.earningPeriodId === undefined ? {} : { earningPeriodId: input.scope.earningPeriodId }),
+    filters: {},
+  }
+  const draft = pipeline.build({
+    candidateIdentity: { candidateId: input.candidateId },
+    scope,
+    financialEngineResult: input.financialEngineResult,
+    evidence,
+    appliedRules: appliedRules(input.financialEngineResult),
+    snapshotVersion: SNAPSHOT_VERSION,
+    canonicalizationVersion: CANONICALIZATION_VERSION,
+    engineVersion,
+    rulesetVersion,
+    metadata: {
+      generatedAt: input.generatedAt,
+      generationReasonCode: code('generation.shadow_evaluation'),
+      provenance: 'local',
+      qualityCodes: [
+        code('quality.validated_structure'),
+        code('quality.readonly_input'),
+        code('quality.engine_result_preserved'),
+        code('quality.embedded_evidence_complete'),
+      ],
+      warningCodes: evidence.warningCodes,
+      limitationCodes: [code('rule.version.unavailable')],
+    },
+  })
+  const canonicalDocument = pipeline.canonicalize(
+    pipeline.validate(draft),
+  )
+  const fingerprint = await pipeline.fingerprint(canonicalDocument)
+  const snapshotKey = deriveSnapshotKey(canonicalDocument)
+  const previous = await safeLatest(repository, snapshotKey)
+
+  if (previous?.fingerprintValue === fingerprint.value) {
+    return {
+      consumer: input.consumer,
+      snapshotKey,
+      revision: previous.revision,
+      idempotent: true,
+      fingerprintChanged: false,
+      divergentFields: [],
+      engineVersion,
+      rulesetVersion,
+      counts: {
+        incomes: input.financialEngineResult.incomeCount,
+        expenses: input.financialEngineResult.expenseCount,
+        adjustments: input.financialEngineResult.adjustmentCount,
+      },
+      warningCodes: evidence.warningCodes,
+      qualityCodes: canonicalDocument.payload.metadata.qualityCodes,
+    }
+  }
+
+  const sealed = await pipeline.seal({
+    canonicalDocument,
+    fingerprint,
+    snapshotKey,
+    revision: (previous?.revision ?? 0) + 1,
+    revisionReasonCode: input.revisionReasonCode,
+    sealedAt: input.sealedAt,
+    ...(previous === undefined ? {} : { supersedesSnapshotId: previous.snapshotId }),
+  })
+  const persisted = await repository.persist(sealed, input.persistedAt)
+  return {
+    consumer: input.consumer,
+    snapshotKey,
+    revision: persisted.revision,
+    idempotent: false,
+    fingerprintChanged: previous !== undefined,
+    divergentFields: pipeline.compare(previous, persisted),
+    engineVersion,
+    rulesetVersion,
+    counts: {
+      incomes: input.financialEngineResult.incomeCount,
+      expenses: input.financialEngineResult.expenseCount,
+      adjustments: input.financialEngineResult.adjustmentCount,
+    },
+    warningCodes: evidence.warningCodes,
+    qualityCodes: canonicalDocument.payload.metadata.qualityCodes,
+  }
+}
+
+/** Runs the complete local pipeline without making Snapshot an official result. */
+export function runSnapshotShadowMode(
+  input: SnapshotShadowModeInput,
+  options: SnapshotShadowModeOptions = {},
+): Promise<SnapshotShadowModeObservation | undefined> {
+  const enabled = options.enabled ??
+    import.meta.env.VITE_FINANCIAL_SNAPSHOT_SHADOW_ENABLED === 'true'
+  if (!enabled) return Promise.resolve(undefined)
+
+  const dedupeKey = [
+    input.consumer,
+    input.scope.periodStart,
+    input.scope.periodEndExclusive,
+    input.scope.usageMode,
+    input.scope.currency,
+    input.scope.earningPeriodId ?? '',
+    JSON.stringify(input.financialEngineResult),
+  ].join('|')
+  const running = inFlight.get(dedupeKey)
+  if (running !== undefined) return running
+
+  const promise = execute(input, options)
+    .then((observation) => {
+      if (options.dev ?? import.meta.env.DEV) {
+        const logger = options.logger ?? console.info
+        logger('[financial-snapshot] Shadow observation', { ...observation })
+      }
+      return observation
+    })
+    .catch(() => {
+      if (options.dev ?? import.meta.env.DEV) {
+        const logger = options.logger ?? console.warn
+        logger('[financial-snapshot] Shadow execution failed', {
+          consumer: input.consumer,
+          scopeKind: 'monthly',
+          usageMode: input.scope.usageMode,
+          currency: input.scope.currency,
+          incomeCount: input.incomes.length,
+          expenseCount: input.expenses.length,
+        })
+      }
+      return undefined
+    })
+    .finally(() => inFlight.delete(dedupeKey))
+  inFlight.set(dedupeKey, promise)
+  return promise
+}
