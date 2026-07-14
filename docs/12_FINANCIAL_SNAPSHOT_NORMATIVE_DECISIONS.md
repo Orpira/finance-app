@@ -1537,3 +1537,268 @@ Milestone 3C queda normativamente desbloqueado cuando:
 - canonicalización acepte posteriormente solo `ValidatedSnapshotCandidate`;
 - la política `-0 -> 0` se pruebe como regla de canonicalización V1;
 - no exista todavía fingerprint, sellado, revisión final o persistencia.
+
+## 23. Decisiones normativas del fingerprint V1
+
+Esta sección es vinculante para el Milestone 3D. Define integridad determinista, no firma, autenticidad, identidad definitiva, revisión, sellado o persistencia.
+
+### 23.1 Algoritmo
+
+Fingerprint V1 DEBE utilizar **SHA-256** mediante Web Crypto API estándar.
+
+Justificación:
+
+- interoperabilidad entre navegadores modernos y el runtime Node usado por tests;
+- disponibilidad sin dependencias criptográficas externas;
+- algoritmo estable, ampliamente implementado y sin debilidades prácticas conocidas para integridad por colisión en este dominio;
+- salida fija de 256 bits adecuada para comparación y verificación futura.
+
+MD5, SHA-1 y algoritmos no criptográficos quedan prohibidos. El algoritmo no es configurable por usuario, entorno o consumidor. Cambiarlo exige una nueva `fingerprintVersion`.
+
+### 23.2 Encoding de entrada
+
+La entrada exacta al digest es:
+
+```text
+UTF8(domainSeparator + serializeCanonicalSnapshotDocument(document))
+```
+
+Reglas:
+
+- `serializeCanonicalSnapshotDocument` aporta el string canónico completo;
+- la concatenación no añade espacios, saltos de línea, terminadores ni BOM;
+- `TextEncoder` aplica UTF-8;
+- no se hashea la entrada original ni una serialización alternativa.
+
+### 23.3 Encoding de salida y versión
+
+El digest de 32 bytes se representa como **hexadecimal lowercase**:
+
+- exactamente 64 caracteres;
+- alfabeto `[0-9a-f]`;
+- dos caracteres por byte, incluidos ceros iniciales;
+- sin prefijo `0x`, separadores o padding.
+
+Decisión frente a base64url: hexadecimal lowercase es más simple de inspeccionar, copiar y comparar en auditorías, no requiere reglas de padding y mantiene representación textual inequívoca.
+
+Versión normativa inicial:
+
+```text
+financial-snapshot-fingerprint/1.0.0
+```
+
+`SnapshotFingerprint` declara algoritmo, encoding, dominio, versión de fingerprint, versión de canonicalización y valor.
+
+### 23.4 Domain separation
+
+Separador exacto, sensible a mayúsculas y con `:` final:
+
+```text
+private-balance:financial-snapshot:fingerprint:v1:
+```
+
+La preimagen se construye por concatenación directa:
+
+```text
+private-balance:financial-snapshot:fingerprint:v1:<canonical-document>
+```
+
+El separador evita que el mismo JSON y algoritmo se reutilicen accidentalmente como digest de otra entidad, protocolo o propósito. Cambiar cualquier carácter del dominio exige otra `fingerprintVersion` y produce necesariamente otra huella.
+
+### 23.5 Alcance exacto de la preimagen
+
+La preimagen incluye:
+
+- el domain separator completo;
+- el `CanonicalSnapshotDocument` completo;
+- `canonicalizationVersion`, por formar parte del documento;
+- todo el payload canónico: versiones, scope, resultado de Financial Engine, evidencia, reglas y metadata canónica.
+
+La preimagen no incluye:
+
+- reloj o timestamp generado por la operación de fingerprint;
+- salt, nonce, secreto o clave;
+- `snapshotId` o `snapshotKey` definitivo;
+- revisión final;
+- `sealedAt`;
+- estado de sellado o persistencia;
+- datos externos al documento canónico.
+
+El fingerprint no prueba autoría ni autenticidad. Solo permite verificar que la misma preimagen produce el mismo digest y detectar cambios materiales cubiertos por el documento.
+
+### 23.6 Contrato y errores
+
+La operación pública normativa es asíncrona porque Web Crypto devuelve una promesa:
+
+```text
+fingerprintCanonicalSnapshotDocument(document) -> Promise<SnapshotFingerprint>
+```
+
+Debe fallar de forma cerrada cuando:
+
+- Web Crypto o `subtle.digest` no estén disponibles;
+- el documento no pueda serializarse canónicamente;
+- SHA-256 no esté soportado por el runtime;
+- el digest no pueda convertirse al encoding normativo.
+
+Los errores no incluyen documento, preimagen, valores financieros ni stack serializado. La operación no muta, persiste, sella ni asigna identidad.
+
+## 24. Decisiones normativas del sellado in-memory V1
+
+Esta sección es vinculante para el Milestone 3E y prevalece sobre formatos históricos incompatibles descritos anteriormente, incluido el `snapshotId` basado en UUID. Sellar no implica persistir, publicar, sincronizar ni autenticar.
+
+### 24.1 `snapshotId` definitivo
+
+El identificador se deriva exclusivamente del fingerprint verificado:
+
+```text
+financial-snapshot:<fingerprintVersion>:<fingerprint.value>
+```
+
+Para V1:
+
+```text
+financial-snapshot:financial-snapshot-fingerprint/1.0.0:<64-hex-lower>
+```
+
+Propiedades:
+
+- determinista y content-addressed;
+- no usa UUID, reloj, aleatoriedad, contador o almacenamiento;
+- mismo documento y fingerprint producen el mismo `snapshotId`;
+- contenido diferente produce otro ID salvo colisión criptográfica;
+- no incluye revisión ni `sealedAt`.
+
+### 24.2 `snapshotKey` lógico
+
+V1 no dispone todavía de un sujeto local seudónimo aprobado. Por tanto, no se inventa user/device context. La key se deriva del `SnapshotScope` canónico completo:
+
+```text
+pbsk:v1:<scope-kind>:<percent-encoded-canonical-scope-json>
+```
+
+El scope canónico contiene exactamente:
+
+- kind;
+- `periodStart`;
+- `periodEndExclusive`;
+- límite `[start,end)`;
+- timezone;
+- usageMode;
+- currency;
+- `earningPeriodId` cuando exista;
+- filtros materiales.
+
+El percent-encoding usa `encodeURIComponent` sobre una proyección canónica de esas dimensiones, sin locale ni normalización adicional. No participan `asOf`, fingerprint, revisión, versiones de engine/ruleset/snapshot, metadata, notas o datos externos. `asOf` permanece material en el documento y fingerprint, pero su cambio dentro del mismo ámbito genera otra revisión bajo la misma key.
+
+El llamador suministra `snapshotKey`; el sellador deriva el valor esperado desde el documento y exige igualdad exacta. Esto permite integrar un contexto de sujeto futuro mediante una nueva versión de key sin aceptar claves arbitrarias hoy.
+
+### 24.3 Revisión y duplicados
+
+- `revision` es un JSON number entero finito mayor o igual que `1`;
+- se recibe explícitamente y nunca se consulta o infiere desde persistencia;
+- revisión `1` no admite `supersedesSnapshotId`;
+- revisión mayor que `1` exige `supersedesSnapshotId` no vacío;
+- `revisionReasonCode` es obligatorio y no vacío;
+- no se valida existencia del predecesor en esta fase.
+
+Dos sellados materialmente idénticos conservan el mismo fingerprint y `snapshotId`, incluso si el llamador declara revisiones diferentes. Esta fase no deduplica ni reserva revisiones. Persistencia deberá impedir cadenas ambiguas y decidir si una revisión duplicada se rechaza como no material.
+
+### 24.4 `sealedAt`
+
+`sealedAt` se recibe explícitamente como `UtcInstant` con formato V1 UTC RFC 3339 y milisegundos:
+
+```text
+YYYY-MM-DDTHH:mm:ss.sssZ
+```
+
+El sellador:
+
+- no consulta reloj;
+- no usa `Date`;
+- rechaza string vacío o formato distinto;
+- exige `sealedAt >= metadata.generatedAt` mediante comparación de strings normativos UTC.
+
+### 24.5 Supersedes y estado
+
+`supersedesSnapshotId` es opcional por ausencia y nunca `null`. Cuando existe:
+
+- debe ser string no vacío;
+- referencia conceptualmente la revisión inmediatamente anterior;
+- no se consulta almacenamiento para comprobar su existencia.
+
+El único estado producido por el sellador V1 es:
+
+```text
+sealed
+```
+
+`persisted`, `published`, `superseded` e `invalidated` no son salidas válidas de esta operación.
+
+### 24.6 Entrada y verificación
+
+`SnapshotSealingInput` contiene:
+
+- `canonicalDocument`;
+- `fingerprint` recibido;
+- `snapshotKey` esperado;
+- `revision`;
+- `revisionReasonCode`;
+- `sealedAt`;
+- `supersedesSnapshotId` opcional.
+
+Metadata final, scope, versiones, evidencia y reglas se obtienen exclusivamente del documento canónico para evitar copias divergentes.
+
+Antes de construir el artefacto, el sellador recalcula el fingerprint y compara exactamente:
+
+- algorithm;
+- encoding;
+- domain;
+- fingerprintVersion;
+- canonicalizationVersion;
+- value.
+
+Cualquier divergencia falla cerrado. El documento, fingerprint y entrada no se modifican, y la salida contiene copias estructurales independientes.
+
+## 25. Decisiones normativas de persistencia local append-only V1
+
+Esta sección es vinculante para el Milestone 3F. La persistencia es local y auditable; no modifica el libro financiero operativo, no publica el snapshot y no crea sincronización.
+
+### 25.1 Tabla, identidad e índices
+
+- La tabla Dexie se denomina `financialSnapshots` y nace en FinanceDB v23.
+- `snapshotId` es la clave primaria porque identifica contenido sellado y verificado.
+- El registro serializable `PersistedFinancialSnapshot` conserva el documento canónico, fingerprint, revisión, razón, sellado, persistencia y versiones.
+- Solo se denormalizan para índices `snapshotKey`, `revision`, `sealedAt`, `status`, `scopeKind`, `scopePeriodStart` y `fingerprintValue`.
+- `[snapshotKey+revision]` es único y constituye la barrera de cadena además de la clave primaria.
+
+No se incorpora ID local autoincremental: añadirlo permitiría duplicar una misma identidad content-addressed sin aportar semántica de dominio.
+
+### 25.2 Append-only y retención
+
+Solo `INSERT` está permitido. No existe API ordinaria de update o delete y la tabla instala hooks que rechazan modificación, borrado y clear. Todo reemplazo material crea otra revisión. V1 conserva todas las revisiones sin borrado automático.
+
+`financialSnapshots` no participa en reset, backup ni restore del libro operativo: dichos flujos no pueden borrar, reemplazar o importar una cadena de auditoría.
+
+### 25.3 Revisión, duplicados y concurrencia
+
+La siguiente revisión se obtiene dentro de la misma transacción Dexie que inserta el registro: primera revisión `1`; posteriores `latest + 1`. El repositorio no confía en una revisión propuesta para reservar posiciones y exige que una revisión posterior sellada coincida con la posición y predecesor reales.
+
+- mismo `snapshotId`: éxito idempotente y devolución de copia del registro existente;
+- mismo `[snapshotKey+revision]` con otro `snapshotId`: conflicto determinista;
+- mismo contenido solicitado como nueva revisión: conserva el mismo `snapshotId`, por tanto se resuelve idempotentemente y no crea una revisión no material;
+- dos escritores concurrentes: la transacción y el índice único permiten una sola inserción para la posición; una colisión restante falla como conflicto determinista.
+
+### 25.4 Cadena `supersedes`
+
+La revisión 1 no admite predecesor. Para revisiones posteriores, `supersedesSnapshotId` debe existir, pertenecer al mismo `snapshotKey`, ser la revisión inmediatamente anterior y ser el latest actual. Estas condiciones impiden bifurcaciones incompatibles. El registro persistido toma el predecesor comprobado, sin mutar el snapshot recibido.
+
+### 25.5 Integridad, tiempo y copias
+
+Antes de abrir la escritura, el repositorio invoca el sellador oficial, que recalcula y compara el fingerprint y deriva de nuevo identidad y key. No recalcula finanzas. `persistedAt` es obligatorio, explícito y con formato UTC V1; el repositorio no consulta reloj. Entradas y lecturas se clonan estructuralmente para impedir mutación posterior por referencia.
+
+### 25.6 Errores y rollback conceptual
+
+Los errores públicos son códigos deterministas sin contenido financiero: `SNAPSHOT_PERSISTENCE_REVISION_CONFLICT`, `SNAPSHOT_PERSISTENCE_INVALID_SUPERSEDES`, `SNAPSHOT_PERSISTENCE_INTEGRITY_FAILURE`, `SNAPSHOT_PERSISTENCE_NOT_FOUND` y `SNAPSHOT_PERSISTENCE_SCHEMA_ERROR`. La idempotencia es un resultado exitoso, no un error.
+
+Dexie no soporta downgrade automático. El rollback conceptual de v23 consiste en retirar consumidores/escritores manteniendo la base y la tabla intactas; nunca se borra IndexedDB para retroceder.
