@@ -416,14 +416,15 @@ export interface CanonicalSnapshotDocument<TEngineResult = SnapshotJsonObject> {
 export interface SealedFinancialSnapshot<TEngineResult = SnapshotJsonObject> {
   readonly identity: SealedSnapshotIdentity
   readonly revision: SnapshotRevision
-  readonly status: SealedFinancialSnapshotStatus
-  readonly canonicalPayload: CanonicalFinancialSnapshotPayload<TEngineResult>
+  readonly status: 'sealed'
+  readonly canonicalDocument: CanonicalSnapshotDocument<TEngineResult>
   readonly fingerprint: SnapshotFingerprint
   readonly sealedAt: UtcInstant
   readonly snapshotVersion: SnapshotVersion
   readonly canonicalizationVersion: CanonicalizationVersion
   readonly engineVersion: EngineVersion
   readonly rulesetVersion: RulesetVersion
+  readonly scope: SnapshotScope
   readonly evidence: FinancialEvidence
   readonly appliedRules: readonly AppliedRule[]
   readonly metadata: SealedFinancialSnapshotMetadata
