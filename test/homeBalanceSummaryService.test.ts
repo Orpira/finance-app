@@ -9,6 +9,8 @@ import { buildHomeBalanceSummary } from '../src/services/homeBalanceSummaryServi
 import type { Expense } from '../src/types/expense'
 import type { ServiceIncome } from '../src/types/service'
 import type { CurrencyCode, UsageMode } from '../src/types/settings'
+import type { SnapshotShadowModeInput } from '../src/services/snapshotShadowModeService'
+import type { CivilDate, IanaTimeZone, SnapshotCandidateId, SnapshotNormativeCode, UtcInstant } from '../src/types/financialSnapshot'
 
 function income(partial: Partial<ServiceIncome> = {}): ServiceIncome {
   return {
@@ -68,6 +70,20 @@ function divergentRunner(input: Parameters<typeof runFinancialEngine>[0]): Finan
       ...result.balanceReport,
       generalBalance: result.balanceReport.generalBalance + 0.01,
     },
+  }
+}
+
+function snapshotContext() {
+  return {
+    periodStart: '2026-07-01' as CivilDate,
+    periodEndExclusive: '2026-08-01' as CivilDate,
+    asOf: '2026-07-14T10:00:00.000Z' as UtcInstant,
+    timezone: 'Europe/Madrid' as IanaTimeZone,
+    candidateId: 'home:test' as SnapshotCandidateId,
+    generatedAt: '2026-07-14T10:00:00.000Z' as UtcInstant,
+    sealedAt: '2026-07-14T10:00:00.000Z' as UtcInstant,
+    persistedAt: '2026-07-14T10:00:00.000Z' as UtcInstant,
+    revisionReasonCode: 'revision.source_changed' as SnapshotNormativeCode,
   }
 }
 
@@ -193,5 +209,37 @@ describe('buildHomeBalanceSummary controlled pilot', () => {
       dev: false,
     })
     expect(JSON.stringify({ incomes, expenses })).toBe(before)
+  })
+
+  it('reuses the existing engine result for Snapshot and always returns the official result', () => {
+    vi.stubEnv('VITE_FINANCIAL_ENGINE_HOME_ENABLED', 'false')
+    const engineRunner = vi.fn(runFinancialEngine)
+    const snapshotRunner = vi.fn(async (input: SnapshotShadowModeInput) => input.consumer)
+    const result = buildHomeBalanceSummary({
+      ...homeInput(),
+      snapshotShadow: snapshotContext(),
+    }, { engineRunner, snapshotRunner, dev: false })
+    expect(result.generalBalance).toBe(80)
+    expect(engineRunner).toHaveBeenCalledOnce()
+    expect(snapshotRunner).toHaveBeenCalledWith(expect.objectContaining({
+      financialEngineResult: engineRunner.mock.results[0].value,
+    }))
+  })
+
+  it('keeps the official result when Snapshot fails synchronously or asynchronously', async () => {
+    vi.stubEnv('VITE_FINANCIAL_ENGINE_HOME_ENABLED', 'true')
+    const input = { ...homeInput(), snapshotShadow: snapshotContext() }
+    for (const snapshotRunner of [
+      () => { throw new Error('sync') },
+      async () => { throw new Error('async') },
+    ]) {
+      const result = buildHomeBalanceSummary(input, {
+        engineRunner: divergentRunner,
+        snapshotRunner,
+        dev: false,
+      })
+      expect(result.generalBalance).toBe(80.01)
+    }
+    await Promise.resolve()
   })
 })

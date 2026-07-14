@@ -11,6 +11,17 @@ import { validateFinancialParity } from '../utils/financialParityValidator'
 import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
 import type { CurrencyCode, UsageMode } from '../types/settings'
+import {
+  runSnapshotShadowMode,
+  type SnapshotShadowModeInput,
+} from './snapshotShadowModeService'
+import type {
+  CivilDate,
+  IanaTimeZone,
+  SnapshotCandidateId,
+  SnapshotNormativeCode,
+  UtcInstant,
+} from '../types/financialSnapshot'
 
 interface BuildHomeBalanceSummaryInput {
   readonly incomes: readonly ServiceIncome[]
@@ -19,6 +30,23 @@ interface BuildHomeBalanceSummaryInput {
   readonly usageMode: UsageMode
   readonly earningPeriodId?: number
   readonly scope: 'home.current-month' | 'home.previous-month'
+  readonly snapshotShadow?: {
+    readonly periodStart: CivilDate
+    readonly periodEndExclusive: CivilDate
+    readonly asOf: UtcInstant
+    readonly timezone: IanaTimeZone
+    readonly candidateId: SnapshotCandidateId
+    readonly generatedAt: UtcInstant
+    readonly sealedAt: UtcInstant
+    readonly persistedAt: UtcInstant
+    readonly revisionReasonCode: SnapshotNormativeCode
+  }
+}
+
+interface HomeBalanceSummaryOptions extends FinancialEngineShadowOptions {
+  readonly snapshotRunner?: (
+    input: SnapshotShadowModeInput,
+  ) => Promise<unknown>
 }
 
 function isHomeFinancialEngineEnabled() {
@@ -32,7 +60,7 @@ function isHomeFinancialEngineEnabled() {
  */
 export function buildHomeBalanceSummary(
   input: BuildHomeBalanceSummaryInput,
-  options: FinancialEngineShadowOptions = {},
+  options: HomeBalanceSummaryOptions = {},
 ): BalanceReportResult {
   const legacyBalanceReport = buildBalanceReport({
     incomes: [...input.incomes],
@@ -65,6 +93,36 @@ export function buildHomeBalanceSummary(
         field: 'balanceReport',
       },
     }, { dev: options.dev, logger: options.logger })
+
+    if (input.scope === 'home.current-month' && input.snapshotShadow !== undefined) {
+      const snapshotRunner = options.snapshotRunner ?? runSnapshotShadowMode
+      try {
+        void snapshotRunner({
+          consumer: 'home.balance.current-month',
+          scope: {
+            periodStart: input.snapshotShadow.periodStart,
+            periodEndExclusive: input.snapshotShadow.periodEndExclusive,
+            asOf: input.snapshotShadow.asOf,
+            timezone: input.snapshotShadow.timezone,
+            usageMode: input.usageMode,
+            currency: input.currency,
+            ...(input.earningPeriodId === undefined
+              ? {}
+              : { earningPeriodId: input.earningPeriodId }),
+          },
+          financialEngineResult: engineResult,
+          incomes: input.incomes,
+          expenses: input.expenses,
+          candidateId: input.snapshotShadow.candidateId,
+          generatedAt: input.snapshotShadow.generatedAt,
+          sealedAt: input.snapshotShadow.sealedAt,
+          persistedAt: input.snapshotShadow.persistedAt,
+          revisionReasonCode: input.snapshotShadow.revisionReasonCode,
+        }).catch(() => undefined)
+      } catch {
+        // Snapshot is observational and cannot alter the official Home result.
+      }
+    }
 
     return isHomeFinancialEngineEnabled()
       ? engineResult.balanceReport

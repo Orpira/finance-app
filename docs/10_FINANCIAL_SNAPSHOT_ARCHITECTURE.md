@@ -1359,3 +1359,23 @@ Financial Snapshot
 ```
 
 Financial Snapshot no crea una nueva contabilidad, no sustituye el libro local, no modifica movimientos y no autoriza capas futuras. Su primera implementación debe empezar por modelo, builder y reproducción en memoria; canonicalización, fingerprint, persistencia, shadow mode y promoción avanzarán únicamente mediante fases separadas y verificables.
+
+## 32. Estado implementado — Milestone 4A
+
+Financial Snapshot dispone de un primer shadow mode observacional local integrado exclusivamente en `homeBalanceSummaryService`, para el resumen del mes actual. Home fue elegido porque el servicio ya recibe el dataset financiero completo, moneda, modo, periodo profesional y el resultado de Financial Engine puede reutilizarse sin otra lectura ni cálculo. Reports conserva su comportamiento actual.
+
+El scope inicial es `monthly`, con intervalo `[periodStart, periodEndExclusive)`, `asOf`, timezone IANA, modo, moneda y `earningPeriodId` profesional explícitos. Los instantes de generación, sellado y persistencia son entradas; el servicio no consulta reloj.
+
+La ejecución requiere el valor de build exacto `VITE_FINANCIAL_SNAPSHOT_SHADOW_ENABLED=true`. Ausencia, `false` o cualquier otro texto la desactivan. El pipeline construye evidencia embebida mínima desde el dataset ya cargado, reutiliza el resultado de Financial Engine, valida, canonicaliza, calcula fingerprint, deriva key, sella, persiste mediante `FinancialSnapshotRepository` y compara metadata segura con la revisión previa.
+
+El fingerprint y el repository proporcionan idempotencia durable; una promesa en curso evita duplicados simultáneos dentro del ciclo de carga. Contenido idéntico reutiliza la revisión existente y contenido materialmente distinto crea la siguiente revisión enlazada por `supersedes`.
+
+Los fallos se aíslan y no cambian el retorno de Home. Solo desarrollo registra metadata observacional minimizada; producción no registra ni envía telemetría. Financial Snapshot continúa sin ser fuente oficial y no existe Promotion Policy de Snapshot en este milestone.
+
+## 33. Estado implementado — Milestone 4B
+
+`assessSnapshotPromotion` es una policy pura y determinista que evalúa un `SealedFinancialSnapshot` sin promoverlo, persistir decisiones ni consultar almacenamiento. Produce checks estructurados, checks fallidos y warnings; todos los checks obligatorios deben aprobar para obtener `eligible = true`. No existe score ni compensación entre fallos.
+
+La evaluación cubre fingerprint estructural y versiones soportadas, identidad, estado, revisión, coherencia interna de `supersedes`, scope, metadata, evidencia embebida, conteos, reglas conocidas y ordenadas, documento canónico, valores permitidos y coherencia de las copias materiales del snapshot.
+
+Por prohibición del milestone, la policy no recalcula fingerprint ni canonicaliza. Tampoco consulta el repository; por tanto, no afirma existencia real del predecesor, idempotencia durable o ausencia de conflictos concurrentes. Estas limitaciones aparecen como warnings deterministas. La evaluación no modifica consumidores y no constituye promoción automática.

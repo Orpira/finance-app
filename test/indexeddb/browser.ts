@@ -8,6 +8,10 @@ import {
 import { canonicalizeValidatedSnapshotCandidate } from '../../src/intelligence/financial-snapshot/snapshotCanonicalizer'
 import { fingerprintCanonicalSnapshotDocument } from '../../src/intelligence/financial-snapshot/snapshotFingerprint'
 import { deriveSnapshotKey, sealCanonicalSnapshot } from '../../src/intelligence/financial-snapshot/snapshotSealer'
+import { runSnapshotShadowMode } from '../../src/services/snapshotShadowModeService'
+import { runFinancialEngine } from '../../src/services/financialEngineAdapter'
+import type { Expense } from '../../src/types/expense'
+import type { ServiceIncome } from '../../src/types/service'
 import type {
   CanonicalizationVersion, CivilDate, EngineVersion, IanaTimeZone, RulesetVersion,
   SealedSnapshotId, SnapshotCandidateId, SnapshotNormativeCode,
@@ -116,6 +120,56 @@ async function run() {
   await expectReject(() => table.delete(persisted.snapshotId), 'Dexie deleting hook blocks physical deletion')
   assert(await table.count() === 1, 'append-only hooks leave stored record intact')
 
+  const shadowIncome: ServiceIncome = {
+    id: 101, date: '2026-03-10', duration: 60, totalAmount: 100,
+    currency: 'EUR', percentage: 50, realGain: 50, eurValue: 50,
+    copValue: 220000, exchangeRateUsed: 4400, usageMode: 'basic',
+  }
+  const shadowExpense: Expense = {
+    id: 102, type: 'gasto', date: '2026-03-11', category: 'General',
+    amount: 20, currency: 'EUR', eurValue: 20, copValue: 88000,
+    usageMode: 'basic', createdAt: '2026-03-11T00:00:00.000Z',
+  }
+  const shadowInput = (income: ServiceIncome) => ({
+    consumer: 'home.balance.current-month' as const,
+    scope: {
+      periodStart: '2026-03-01' as CivilDate,
+      periodEndExclusive: '2026-04-01' as CivilDate,
+      asOf: at,
+      timezone: 'Europe/Madrid' as IanaTimeZone,
+      usageMode: 'basic' as const,
+      currency: 'EUR' as const,
+    },
+    financialEngineResult: runFinancialEngine({ incomes: [income], expenses: [shadowExpense], currency: 'EUR', usageMode: 'basic' }),
+    incomes: [income], expenses: [shadowExpense],
+    candidateId: 'browser-shadow' as SnapshotCandidateId,
+    generatedAt: at, sealedAt: at, persistedAt: at,
+    revisionReasonCode: 'revision.source_changed' as SnapshotNormativeCode,
+  })
+  const financialBefore = {
+    services: await database.services.toArray(),
+    expenses: await database.expenses.toArray(),
+  }
+  const disabledCount = await table.count()
+  assert(await runSnapshotShadowMode(shadowInput(shadowIncome), { repository, dev: false }) === undefined, 'snapshot shadow flag is disabled by default')
+  assert(await table.count() === disabledCount, 'disabled shadow mode does not persist')
+  const firstShadow = await runSnapshotShadowMode(shadowInput(shadowIncome), { enabled: true, repository, dev: false })
+  assert(firstShadow?.revision === 1, 'real shadow pipeline persists first revision')
+  const shadowKey = firstShadow!.snapshotKey
+  database.close()
+
+  database = new FinanceDB()
+  await database.open()
+  repository = new FinancialSnapshotRepository(database)
+  const reopenedDuplicate = await runSnapshotShadowMode(shadowInput(shadowIncome), { enabled: true, repository, dev: false })
+  assert(reopenedDuplicate?.idempotent === true && reopenedDuplicate.revision === 1, 'shadow idempotence survives close and reopen')
+  const changedIncome = { ...shadowIncome, eurValue: 75 }
+  const revisedShadow = await runSnapshotShadowMode(shadowInput(changedIncome), { enabled: true, repository, dev: false })
+  assert(revisedShadow?.revision === 2, 'material shadow change creates next revision')
+  const shadowRecords = await repository.listBySnapshotKey(shadowKey)
+  assert(shadowRecords[1].supersedesSnapshotId === shadowRecords[0].snapshotId, 'real shadow revision supersedes previous snapshot')
+  deepEqual({ services: await database.services.toArray(), expenses: await database.expenses.toArray() }, financialBefore, 'shadow pipeline leaves financial tables unchanged')
+
   const secondA = await sealed(20, 2, source.identity.snapshotId)
   const secondB = await sealed(30, 2, source.identity.snapshotId)
   const concurrent = await Promise.allSettled([repository.persist(secondA, at), repository.persist(secondB, at)])
@@ -133,7 +187,7 @@ async function run() {
   database.close()
   database = new FinanceDB()
   await database.open()
-  assert(await database.financialSnapshots.count() === 2, 'second full reopen preserves both revisions')
+  assert(await database.financialSnapshots.count() === 4, 'second full reopen preserves repository and shadow revisions')
   database.close()
   await Dexie.delete(databaseName)
 }

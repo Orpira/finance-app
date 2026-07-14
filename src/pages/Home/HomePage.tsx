@@ -25,6 +25,13 @@ import { formatCurrency } from '../../utils/currency'
 import { calculateFinancialTotals } from '../../utils/financeStats'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
+import type {
+  CivilDate,
+  IanaTimeZone,
+  SnapshotCandidateId,
+  SnapshotNormativeCode,
+  UtcInstant,
+} from '../../types/financialSnapshot'
 import { getReportedCountByUsageMode } from '../../utils/reportStatus'
 import {
   isBasicMode,
@@ -36,10 +43,12 @@ function monthRange(offset: number) {
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth() + offset, 1)
   const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0)
+  const endExclusive = new Date(now.getFullYear(), now.getMonth() + offset + 1, 1)
 
   return {
     from: start.toLocaleDateString('en-CA'),
     to: end.toLocaleDateString('en-CA'),
+    endExclusive: endExclusive.toLocaleDateString('en-CA'),
   }
 }
 
@@ -79,6 +88,12 @@ export function HomePage() {
   const [previousExpenses, setPreviousExpenses] = useState<Expense[]>([])
   const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
   const [reportedCount, setReportedCount] = useState(0)
+  const [snapshotTime, setSnapshotTime] = useState<{
+    instant: UtcInstant
+    timezone: IanaTimeZone
+    periodStart: CivilDate
+    periodEndExclusive: CivilDate
+  } | null>(null)
   const { hidden, toggle } = useSensitiveValues()
 
   useEffect(() => {
@@ -131,6 +146,13 @@ export function HomePage() {
       ).filter(matchesActiveLocation)
 
       setSettings(resolvedSettings)
+      const explicitInstant = new Date().toISOString() as UtcInstant
+      setSnapshotTime({
+        instant: explicitInstant,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone as IanaTimeZone,
+        periodStart: current.from as CivilDate,
+        periodEndExclusive: current.endExclusive as CivilDate,
+      })
       setActivePeriod(period ?? null)
       setReportedCount(
         getReportedCountByUsageMode(
@@ -185,13 +207,28 @@ export function HomePage() {
 
     return {
       current: buildHomeBalanceSummary({
-        incomes: currentIncomes,
-        expenses: currentExpenses,
-        currency: settings.defaultCurrency,
-        usageMode: settings.usageMode,
-        earningPeriodId: isBasicMode(settings) ? undefined : activePeriod?.id,
-        scope: 'home.current-month',
-      }),
+            incomes: currentIncomes,
+            expenses: currentExpenses,
+            currency: settings.defaultCurrency,
+            usageMode: settings.usageMode,
+            earningPeriodId: isBasicMode(settings) ? undefined : activePeriod?.id,
+            scope: 'home.current-month',
+            ...(snapshotTime === null
+              ? {}
+              : {
+                  snapshotShadow: {
+                    periodStart: snapshotTime.periodStart,
+                    periodEndExclusive: snapshotTime.periodEndExclusive,
+                    asOf: snapshotTime.instant,
+                    timezone: snapshotTime.timezone,
+                    candidateId: `home-current-month:${snapshotTime.periodStart}:${snapshotTime.instant}` as SnapshotCandidateId,
+                    generatedAt: snapshotTime.instant,
+                    sealedAt: snapshotTime.instant,
+                    persistedAt: snapshotTime.instant,
+                    revisionReasonCode: 'revision.source_changed' as SnapshotNormativeCode,
+                  },
+                }),
+          }),
       previous: buildHomeBalanceSummary({
         incomes: previousIncomes,
         expenses: previousExpenses,
@@ -200,7 +237,7 @@ export function HomePage() {
         scope: 'home.previous-month',
       }),
     }
-  }, [activePeriod?.id, currentExpenses, currentIncomes, previousExpenses, previousIncomes, settings])
+  }, [activePeriod?.id, currentExpenses, currentIncomes, previousExpenses, previousIncomes, settings, snapshotTime])
 
   if (!settings || !totals || !balanceSummary) {
     return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando...</section>

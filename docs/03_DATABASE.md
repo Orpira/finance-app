@@ -49,6 +49,12 @@ La tabla admite exclusivamente inserciones. Hooks Dexie rechazan `update`, `put`
 
 La migración desde v22 solo crea la tabla, sin transformar ni borrar registros existentes. El rollback conceptual consiste en desplegar una versión que deje de leer/escribir la tabla v23 conservando IndexedDB; Dexie no ofrece downgrade automático y no se debe borrar la base para retroceder.
 
+### Escritura observacional desde Home
+
+Con `VITE_FINANCIAL_SNAPSHOT_SHADOW_ENABLED=true`, el resumen del mes actual de Home puede persistir snapshots derivados mediante `FinancialSnapshotRepository`. La operación solo escribe `financialSnapshots`; no modifica `services`, `expenses`, settings, periodos ni otras tablas financieras. El flag está desactivado por defecto y no existe sincronización remota.
+
+La misma key y fingerprint se resuelven idempotentemente incluso tras cerrar y reabrir IndexedDB. Un fingerprint materialmente distinto crea una revisión append-only cuyo `supersedesSnapshotId` referencia la revisión inmediatamente anterior.
+
 ## Neon PostgreSQL
 
 ### Tablas confirmadas por código servidor
