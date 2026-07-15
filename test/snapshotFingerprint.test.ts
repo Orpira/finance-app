@@ -46,8 +46,9 @@ function record(value = 10): FinancialEvidenceRecord {
 
 function candidate(
   records: readonly FinancialEvidenceRecord[] = [],
+  overrides: Partial<ValidatedSnapshotCandidate<{ readonly balance: number; readonly negativeZero: number }>> = {},
 ): ValidatedSnapshotCandidate<{ readonly balance: number; readonly negativeZero: number }> {
-  return {
+  const base: ValidatedSnapshotCandidate<{ readonly balance: number; readonly negativeZero: number }> = {
     status: 'validated',
     identity: {
       candidateId: 'candidate:local:fingerprint-test' as SnapshotCandidateId,
@@ -97,6 +98,13 @@ function candidate(
       warningCodes: [],
       limitationCodes: [],
     },
+  }
+
+  return {
+    ...base,
+    ...overrides,
+    scope: { ...base.scope, ...overrides.scope },
+    metadata: { ...base.metadata, ...overrides.metadata },
   }
 }
 
@@ -161,7 +169,7 @@ describe('fingerprintCanonicalSnapshotDocument', () => {
       {
         ...base,
         canonicalizationVersion:
-          'financial-snapshot-c14n/1.0.1' as CanonicalizationVersion,
+          'financial-snapshot-c14n/2.0.0' as CanonicalizationVersion,
       },
       {
         ...base,
@@ -234,6 +242,27 @@ describe('fingerprintCanonicalSnapshotDocument', () => {
     expect(await value(minimal)).toBe(
       'a109f2ff83d3c2cba0c0da6365bf5134faca67356a95f27fae22199a5df5928a',
     )
+  })
+
+  it('V2 separa metadata operacional y no colisiona con V1', async () => {
+    const v2First = canonicalizeValidatedSnapshotCandidate(candidate([], {
+      canonicalizationVersion: 'financial-snapshot-c14n/2.0.0' as CanonicalizationVersion,
+    }))
+    const v2Second = canonicalizeValidatedSnapshotCandidate(candidate([], {
+      canonicalizationVersion: 'financial-snapshot-c14n/2.0.0' as CanonicalizationVersion,
+      scope: { ...candidate().scope, asOf: '2026-02-20T15:00:00.000Z' as UtcInstant },
+      metadata: { ...candidate().metadata, generatedAt: '2026-02-20T16:00:00.000Z' as UtcInstant },
+    }))
+
+    const v1 = await fingerprintCanonicalSnapshotDocument(document())
+    const first = await fingerprintCanonicalSnapshotDocument(v2First)
+    const second = await fingerprintCanonicalSnapshotDocument(v2Second)
+
+    expect(first.fingerprintVersion).toBe('financial-snapshot-fingerprint/2.0.0')
+    expect(first.domain).toBe('private-balance:financial-snapshot:fingerprint:v2:')
+    expect(first.hashedComponent).toBe('material-payload')
+    expect(first.value).toBe(second.value)
+    expect(first.value).not.toBe(v1.value)
   })
 
   it('no muta el documento ni añade campos de fases posteriores', async () => {

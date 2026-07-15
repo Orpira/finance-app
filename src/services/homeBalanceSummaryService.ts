@@ -23,6 +23,7 @@ import type {
   UtcInstant,
 } from '../types/financialSnapshot'
 import { deriveSnapshotKey } from '../intelligence/financial-snapshot/snapshotSealer'
+import { DEFAULT_SNAPSHOT_CANONICALIZATION_VERSION } from '../intelligence/financial-snapshot/snapshotProtocol'
 import {
   executeSnapshotPromotion,
   isFinancialSnapshotHomeEnabled,
@@ -114,7 +115,7 @@ export async function resolveHomeBalanceSummaryPromotion(
     ...(input.earningPeriodId === undefined ? {} : { earningPeriodId: input.earningPeriodId }),
   }
   const snapshotKey = deriveSnapshotKey({
-    canonicalizationVersion: 'financial-snapshot-c14n/1.0.0' as never,
+    canonicalizationVersion: DEFAULT_SNAPSHOT_CANONICALIZATION_VERSION as never,
     payload: { scope: { ...expectedScope, periodBoundary: '[start,end)', asOf: context.asOf, filters: {} } } as never,
   })
   const decision = await executeSnapshotPromotion({
