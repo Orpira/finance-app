@@ -2,6 +2,9 @@ import type {
   AppliedRule,
   CanonicalFinancialSnapshotPayload,
   CanonicalSnapshotDocument,
+  CanonicalMaterialMetadataV2,
+  CanonicalMaterialScopeV2,
+  CanonicalOperationalMetadataV2,
   FinancialContextEvidence,
   FinancialEvidence,
   FinancialEvidenceRecord,
@@ -9,11 +12,16 @@ import type {
   SnapshotJsonValue,
   ValidatedSnapshotCandidate,
 } from '../../types/financialSnapshot'
-import { SUPPORTED_CANONICALIZATION_VERSION } from './snapshotCandidateValidator'
+import {
+  isCanonicalizationVersionV1,
+  isCanonicalizationVersionV2,
+  isSupportedCanonicalizationVersion,
+} from './snapshotProtocol'
 
 export type SnapshotCanonicalizationErrorCode =
   | 'SNAPSHOT_UNSUPPORTED_CANONICALIZATION_VERSION'
   | 'SNAPSHOT_CANONICALIZATION_INVALID_STATE'
+  | 'SNAPSHOT_CANONICALIZATION_UNSUPPORTED_SCOPE_POLICY'
   | 'SNAPSHOT_CANONICALIZATION_INVALID_VALUE'
   | 'SNAPSHOT_CANONICALIZATION_INVALID_RULE_ORDER'
   | 'SNAPSHOT_CANONICALIZATION_INVALID_EVIDENCE'
@@ -83,6 +91,10 @@ function canonicalizeValue(
 
 function canonicalString(value: unknown): string {
   return JSON.stringify(canonicalizeValue(value, new Set()))
+}
+
+export function serializeCanonicalSnapshotValue(value: unknown): string {
+  return canonicalString(value)
 }
 
 function sortStrings<T extends string>(values: readonly T[]): readonly T[] {
@@ -155,6 +167,49 @@ function canonicalizeMetadata(
   }, new Set()) as unknown as SnapshotCandidateMetadata
 }
 
+function canonicalizeMaterialMetadataV2(
+  metadata: SnapshotCandidateMetadata,
+): CanonicalMaterialMetadataV2 {
+  return canonicalizeValue({
+    generationReasonCode: metadata.generationReasonCode,
+    provenance: metadata.provenance,
+    qualityCodes: sortStrings(metadata.qualityCodes),
+    warningCodes: sortStrings(metadata.warningCodes),
+    limitationCodes: sortStrings(metadata.limitationCodes),
+  }, new Set()) as unknown as CanonicalMaterialMetadataV2
+}
+
+function canonicalizeMaterialScopeV2(
+  candidate: ValidatedSnapshotCandidate<unknown>,
+): CanonicalMaterialScopeV2 {
+  if (candidate.scope.kind !== 'monthly') {
+    fail('SNAPSHOT_CANONICALIZATION_UNSUPPORTED_SCOPE_POLICY')
+  }
+
+  return canonicalizeValue({
+    kind: candidate.scope.kind,
+    periodStart: candidate.scope.periodStart,
+    periodEndExclusive: candidate.scope.periodEndExclusive,
+    periodBoundary: candidate.scope.periodBoundary,
+    timezone: candidate.scope.timezone,
+    usageMode: candidate.scope.usageMode,
+    currency: candidate.scope.currency,
+    ...(candidate.scope.earningPeriodId === undefined
+      ? {}
+      : { earningPeriodId: candidate.scope.earningPeriodId }),
+    filters: candidate.scope.filters,
+  }, new Set()) as unknown as CanonicalMaterialScopeV2
+}
+
+function canonicalizeOperationalMetadataV2(
+  candidate: ValidatedSnapshotCandidate<unknown>,
+): CanonicalOperationalMetadataV2 {
+  return canonicalizeValue({
+    generatedAt: candidate.metadata.generatedAt,
+    sourceScopeAsOf: candidate.scope.asOf,
+  }, new Set()) as unknown as CanonicalOperationalMetadataV2
+}
+
 /** Produces the V1 canonical document without fingerprinting or sealing. */
 export function canonicalizeValidatedSnapshotCandidate<TEngineResult>(
   candidate: ValidatedSnapshotCandidate<TEngineResult>,
@@ -162,20 +217,40 @@ export function canonicalizeValidatedSnapshotCandidate<TEngineResult>(
   if ((candidate as { readonly status?: unknown }).status !== 'validated') {
     fail('SNAPSHOT_CANONICALIZATION_INVALID_STATE')
   }
-  if (candidate.canonicalizationVersion !== SUPPORTED_CANONICALIZATION_VERSION) {
+  if (!isSupportedCanonicalizationVersion(candidate.canonicalizationVersion)) {
     fail('SNAPSHOT_UNSUPPORTED_CANONICALIZATION_VERSION')
   }
 
-  const payload = canonicalizeValue({
-    snapshotVersion: candidate.snapshotVersion,
-    engineVersion: candidate.engineVersion,
-    rulesetVersion: candidate.rulesetVersion,
-    scope: candidate.scope,
-    engineResult: candidate.engineResult,
-    evidence: canonicalizeEvidence(candidate.evidence),
-    appliedRules: canonicalizeRules(candidate.appliedRules),
-    metadata: canonicalizeMetadata(candidate.metadata),
-  }, new Set()) as unknown as CanonicalFinancialSnapshotPayload<TEngineResult>
+  const payload = isCanonicalizationVersionV1(candidate.canonicalizationVersion)
+    ? canonicalizeValue({
+        snapshotVersion: candidate.snapshotVersion,
+        engineVersion: candidate.engineVersion,
+        rulesetVersion: candidate.rulesetVersion,
+        scope: candidate.scope,
+        engineResult: candidate.engineResult,
+        evidence: canonicalizeEvidence(candidate.evidence),
+        appliedRules: canonicalizeRules(candidate.appliedRules),
+        metadata: canonicalizeMetadata(candidate.metadata),
+      }, new Set()) as unknown as CanonicalFinancialSnapshotPayload<TEngineResult>
+    : canonicalizeValue({
+        snapshotVersion: candidate.snapshotVersion,
+        engineVersion: candidate.engineVersion,
+        rulesetVersion: candidate.rulesetVersion,
+        scope: canonicalizeMaterialScopeV2(candidate),
+        engineResult: candidate.engineResult,
+        evidence: canonicalizeEvidence(candidate.evidence),
+        appliedRules: canonicalizeRules(candidate.appliedRules),
+        metadata: canonicalizeMaterialMetadataV2(candidate.metadata),
+        asOfPolicy: 'monthly-render-as-of-operational',
+      }, new Set()) as unknown as CanonicalFinancialSnapshotPayload<TEngineResult>
+
+  if (isCanonicalizationVersionV2(candidate.canonicalizationVersion)) {
+    return canonicalizeValue({
+      canonicalizationVersion: candidate.canonicalizationVersion,
+      payload,
+      operationalMetadata: canonicalizeOperationalMetadataV2(candidate),
+    }, new Set()) as unknown as CanonicalSnapshotDocument<TEngineResult>
+  }
 
   return canonicalizeValue({
     canonicalizationVersion: candidate.canonicalizationVersion,
@@ -187,5 +262,5 @@ export function canonicalizeValidatedSnapshotCandidate<TEngineResult>(
 export function serializeCanonicalSnapshotDocument(
   document: CanonicalSnapshotDocument<unknown>,
 ): string {
-  return JSON.stringify(canonicalizeValue(document, new Set()))
+  return serializeCanonicalSnapshotValue(document)
 }

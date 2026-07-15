@@ -110,9 +110,10 @@ export interface SnapshotFingerprint {
   readonly value: string
   readonly algorithm: 'SHA-256'
   readonly encoding: 'hex-lower'
-  readonly domain: 'private-balance:financial-snapshot:fingerprint:v1:'
+  readonly domain: string
   readonly fingerprintVersion: string
   readonly canonicalizationVersion: CanonicalizationVersion
+  readonly hashedComponent?: 'material-payload'
 }
 
 export interface AppliedRule {
@@ -395,7 +396,7 @@ export type SnapshotBuildExecution<TEngineResult = SnapshotJsonObject> =
   | CancelledSnapshotBuildExecution
 
 /** Data shape reserved for a future canonicalization milestone. */
-export interface CanonicalFinancialSnapshotPayload<TEngineResult = SnapshotJsonObject> {
+export interface CanonicalFinancialSnapshotPayloadV1<TEngineResult = SnapshotJsonObject> {
   readonly snapshotVersion: SnapshotVersion
   readonly engineVersion: EngineVersion
   readonly rulesetVersion: RulesetVersion
@@ -406,11 +407,58 @@ export interface CanonicalFinancialSnapshotPayload<TEngineResult = SnapshotJsonO
   readonly metadata: SnapshotCandidateMetadata
 }
 
-/** Versioned canonicalization output before fingerprinting or sealing. */
-export interface CanonicalSnapshotDocument<TEngineResult = SnapshotJsonObject> {
-  readonly canonicalizationVersion: CanonicalizationVersion
-  readonly payload: CanonicalFinancialSnapshotPayload<TEngineResult>
+export interface CanonicalMaterialScopeV2 {
+  readonly kind: SnapshotScopeKind
+  readonly periodStart: CivilDate
+  readonly periodEndExclusive: CivilDate
+  readonly periodBoundary: '[start,end)'
+  readonly timezone: IanaTimeZone
+  readonly usageMode: UsageMode
+  readonly currency: CurrencyCode
+  readonly earningPeriodId?: number
+  readonly filters: SnapshotJsonObject
 }
+
+export interface CanonicalMaterialMetadataV2 {
+  readonly generationReasonCode: SnapshotNormativeCode
+  readonly provenance: 'local'
+  readonly qualityCodes: readonly SnapshotNormativeCode[]
+  readonly warningCodes: readonly SnapshotNormativeCode[]
+  readonly limitationCodes: readonly SnapshotNormativeCode[]
+}
+
+export interface CanonicalFinancialSnapshotPayloadV2<TEngineResult = SnapshotJsonObject> {
+  readonly snapshotVersion: SnapshotVersion
+  readonly engineVersion: EngineVersion
+  readonly rulesetVersion: RulesetVersion
+  readonly scope: CanonicalMaterialScopeV2
+  readonly engineResult: TEngineResult
+  readonly evidence: FinancialEvidence
+  readonly appliedRules: readonly AppliedRule[]
+  readonly metadata: CanonicalMaterialMetadataV2
+  readonly asOfPolicy: 'monthly-render-as-of-operational'
+}
+
+export type CanonicalFinancialSnapshotPayload<TEngineResult = SnapshotJsonObject> =
+  | CanonicalFinancialSnapshotPayloadV1<TEngineResult>
+  | CanonicalFinancialSnapshotPayloadV2<TEngineResult>
+
+export interface CanonicalOperationalMetadataV2 {
+  readonly generatedAt: UtcInstant
+  readonly sourceScopeAsOf: UtcInstant
+}
+
+/** Versioned canonicalization output before fingerprinting or sealing. */
+export type CanonicalSnapshotDocument<TEngineResult = SnapshotJsonObject> =
+  | {
+      readonly canonicalizationVersion: CanonicalizationVersion
+      readonly payload: CanonicalFinancialSnapshotPayloadV1<TEngineResult>
+    }
+  | {
+      readonly canonicalizationVersion: CanonicalizationVersion
+      readonly payload: CanonicalFinancialSnapshotPayloadV2<TEngineResult>
+      readonly operationalMetadata: CanonicalOperationalMetadataV2
+    }
 
 /** Final immutable artifact; no transient execution or candidate state is accepted. */
 export interface SealedFinancialSnapshot<TEngineResult = SnapshotJsonObject> {
