@@ -10,9 +10,17 @@ import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import { listEarningPeriods } from '../../services/earningPeriodService'
 import { buildBalanceReport } from '../../services/balanceReportService'
+import { runFinancialEngine } from '../../services/financialEngineAdapter'
 import { runFinancialEngineShadowMode } from '../../services/financialEngineShadowMode'
+import {
+  executeReportsSnapshotPromotion,
+  isFinancialSnapshotReportsEnabled,
+} from '../../services/reportsSnapshotPromotionExecutor'
+import { deriveSnapshotKey } from '../../intelligence/financial-snapshot/snapshotSealer'
+import { DEFAULT_SNAPSHOT_CANONICALIZATION_VERSION } from '../../intelligence/financial-snapshot/snapshotProtocol'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { Expense } from '../../types/expense'
+import type { CivilDate, IanaTimeZone, UtcInstant } from '../../types/financialSnapshot'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
 import { isBasicMode, recordBelongsToUsageMode } from '../../utils/usageMode'
@@ -91,6 +99,20 @@ function getPeriodRange(period: Period) {
   }
 
   return getCurrentMonthRange()
+}
+
+function deriveMonthlySnapshotPeriodStart(date: string): CivilDate | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return undefined
+  const [year, month] = date.split('-').map(Number)
+  if (!Number.isSafeInteger(year) || !Number.isSafeInteger(month)) return undefined
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-01` as CivilDate
+}
+
+function deriveNextMonthStart(periodStart: CivilDate): CivilDate {
+  const [year, month] = periodStart.split('-').map(Number)
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear = month === 12 ? year + 1 : year
+  return `${String(nextYear).padStart(4, '0')}-${String(nextMonth).padStart(2, '0')}-01` as CivilDate
 }
 
 function getCountryLabel(code: string): string {
@@ -193,6 +215,9 @@ export function ReportsPage() {
   const [periodExpenses, setPeriodExpenses] = useState<Expense[]>([])
   const [traceIncomes, setTraceIncomes] = useState<ServiceIncome[]>([])
   const [traceAdjustments, setTraceAdjustments] = useState<Expense[]>([])
+  const [reportsSnapshotBalance, setReportsSnapshotBalance] = useState<
+    ReturnType<typeof buildBalanceReport> | null
+  >(null)
   const [loadError, setLoadError] = useState('')
   const [seasons, setSeasons] = useState<EarningPeriod[]>([])
   const [selectedSeason, setSelectedSeason] = useState<string>('ALL')
@@ -404,6 +429,142 @@ export function ReportsPage() {
       scope: 'reports.balance',
     })
   }, [activeUsageMode, expenses, incomes, primaryCurrency, selectedSeason])
+
+  const currentMonthRange = useMemo(() => getCurrentMonthRange(), [])
+  const isMonthlyCurrentReportSelection =
+    period === 'month' &&
+    dateFrom === currentMonthRange.from &&
+    dateTo === currentMonthRange.to &&
+    selectedCountry === 'ALL' &&
+    selectedCity === 'ALL' &&
+    selectedPaymentType === 'ALL' &&
+    selectedCategory === 'ALL'
+
+  const reportsScopePeriodStart = useMemo(
+    () => deriveMonthlySnapshotPeriodStart(dateFrom),
+    [dateFrom],
+  )
+
+  const reportsScopePeriodEndExclusive = useMemo(
+    () =>
+      reportsScopePeriodStart === undefined
+        ? undefined
+        : deriveNextMonthStart(reportsScopePeriodStart),
+    [reportsScopePeriodStart],
+  )
+
+  const reportsScopeTimezone = useMemo(
+    () =>
+      ((settings as { timezone?: string } | null)?.timezone ??
+        Intl.DateTimeFormat().resolvedOptions().timeZone ??
+        'UTC') as IanaTimeZone,
+    [settings],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+
+    const clearSnapshotBalance = () => {
+      queueMicrotask(() => {
+        if (!cancelled) {
+          setReportsSnapshotBalance(null)
+        }
+      })
+    }
+
+    const eligible =
+      isMonthlyCurrentReportSelection &&
+      reportsScopePeriodStart !== undefined &&
+      reportsScopePeriodEndExclusive !== undefined
+
+    if (!eligible) {
+      clearSnapshotBalance()
+      return () => {
+        cancelled = true
+      }
+    }
+
+    clearSnapshotBalance()
+
+    async function resolveReportsSnapshot() {
+      const periodStart = reportsScopePeriodStart
+      const periodEndExclusive = reportsScopePeriodEndExclusive
+      if (periodStart === undefined || periodEndExclusive === undefined) {
+        return
+      }
+
+      const engineCurrentResult = runFinancialEngine({
+        incomes,
+        expenses,
+        currency: primaryCurrency,
+        usageMode: activeUsageMode,
+        earningPeriodId:
+          selectedSeason === 'ALL' ? undefined : Number(selectedSeason),
+      })
+      const officialCurrentResult = {
+        ...engineCurrentResult,
+        balanceReport,
+      }
+      const expectedScope = {
+        kind: 'monthly' as const,
+        periodStart,
+        periodEndExclusive,
+        timezone: reportsScopeTimezone,
+        usageMode: activeUsageMode,
+        currency: primaryCurrency,
+        ...(selectedSeason === 'ALL'
+          ? {}
+          : { earningPeriodId: Number(selectedSeason) }),
+      }
+      const snapshotKey = deriveSnapshotKey({
+        canonicalizationVersion:
+          DEFAULT_SNAPSHOT_CANONICALIZATION_VERSION as never,
+        payload: {
+          scope: {
+            ...expectedScope,
+            periodBoundary: '[start,end)',
+            asOf: new Date().toISOString() as UtcInstant,
+            filters: {},
+          },
+        } as never,
+      })
+      const decision = await executeReportsSnapshotPromotion({
+        snapshotKey,
+        expectedScope,
+        officialCurrentResult,
+        featureEnabled: isFinancialSnapshotReportsEnabled(),
+      })
+
+      if (!cancelled) {
+        setReportsSnapshotBalance(
+          decision.source === 'snapshot' ? decision.result.balanceReport : null,
+        )
+      }
+    }
+
+    void resolveReportsSnapshot().catch(() => {
+      if (!cancelled) {
+        setReportsSnapshotBalance(null)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeUsageMode,
+    balanceReport,
+    expenses,
+    incomes,
+    isMonthlyCurrentReportSelection,
+    primaryCurrency,
+    reportsScopePeriodEndExclusive,
+    reportsScopePeriodStart,
+    reportsScopeTimezone,
+    selectedSeason,
+  ])
+
+  const effectiveBalanceReport = reportsSnapshotBalance ?? balanceReport
 
   const incomesById = useMemo(
     () => new Map(traceIncomes.flatMap((income) => income.id ? [[income.id, income] as const] : [])),
@@ -841,7 +1002,7 @@ export function ReportsPage() {
   }
 
   function buildAdjustmentsSection() {
-    const adjustments = balanceReport.adjustments
+    const adjustments = effectiveBalanceReport.adjustments
     const adjustmentRows = adjustments
       .map(
         (adjustment) => `
@@ -879,9 +1040,9 @@ export function ReportsPage() {
         <tbody>${adjustmentRows}</tbody>
       </table>
       <div class="summary">
-        <div><span>Ajustes positivos</span><strong>${escapeHtml(formatCurrency(balanceReport.adjustmentsPositiveTotal, primaryCurrency))}</strong></div>
-        <div><span>Ajustes negativos</span><strong>-${escapeHtml(formatCurrency(balanceReport.adjustmentsNegativeTotal, primaryCurrency))}</strong></div>
-        <div><span>Impacto por ajustes</span><strong>${escapeHtml(formatCurrency(balanceReport.impactByAdjustments, primaryCurrency))}</strong></div>
+        <div><span>Ajustes positivos</span><strong>${escapeHtml(formatCurrency(effectiveBalanceReport.adjustmentsPositiveTotal, primaryCurrency))}</strong></div>
+        <div><span>Ajustes negativos</span><strong>-${escapeHtml(formatCurrency(effectiveBalanceReport.adjustmentsNegativeTotal, primaryCurrency))}</strong></div>
+        <div><span>Impacto por ajustes</span><strong>${escapeHtml(formatCurrency(effectiveBalanceReport.impactByAdjustments, primaryCurrency))}</strong></div>
       </div>
     `
   }
@@ -890,40 +1051,40 @@ export function ReportsPage() {
     return `
       <h2>Resumen general</h2>
       <div class="summary">
-        <div><span>Total ingresos brutos</span><strong>${escapeHtml(formatCurrency(balanceReport.incomeGrossTotal, primaryCurrency))}</strong></div>
-        <div><span>Total egresos</span><strong>${escapeHtml(formatCurrency(balanceReport.expenseTotal, primaryCurrency))}</strong></div>
-        <div><span>Ganancia real / neta</span><strong>${escapeHtml(formatCurrency(balanceReport.netProfit, primaryCurrency))}</strong></div>
-        <div><span>Balance general</span><strong>${escapeHtml(formatCurrency(balanceReport.generalBalance, primaryCurrency))}</strong></div>
+        <div><span>Total ingresos brutos</span><strong>${escapeHtml(formatCurrency(effectiveBalanceReport.incomeGrossTotal, primaryCurrency))}</strong></div>
+        <div><span>Total egresos</span><strong>${escapeHtml(formatCurrency(effectiveBalanceReport.expenseTotal, primaryCurrency))}</strong></div>
+        <div><span>Ganancia real / neta</span><strong>${escapeHtml(formatCurrency(effectiveBalanceReport.netProfit, primaryCurrency))}</strong></div>
+        <div><span>Balance general</span><strong>${escapeHtml(formatCurrency(effectiveBalanceReport.generalBalance, primaryCurrency))}</strong></div>
       </div>
-      ${buildGroupedTotalsTable('Ingresos por tipo', balanceReport.incomesByType)}
-      ${buildGroupedTotalsTable('Egresos por tipo', balanceReport.expensesByType)}
+      ${buildGroupedTotalsTable('Ingresos por tipo', effectiveBalanceReport.incomesByType)}
+      ${buildGroupedTotalsTable('Egresos por tipo', effectiveBalanceReport.expensesByType)}
       ${buildAdjustmentsSection()}
       <h2>Balance final</h2>
       <div class="subtotal">
         Fórmula aplicada: (Ingresos brutos - Egresos) + Impacto por ajustes = Balance general
       </div>
       <div class="summary">
-        <div><span>Neto sin ajustes</span><strong>${escapeHtml(formatCurrency(balanceReport.netProfit, primaryCurrency))}</strong></div>
-        <div><span>Impacto por ajustes</span><strong>${escapeHtml(formatCurrency(balanceReport.impactByAdjustments, primaryCurrency))}</strong></div>
-        <div><span>Balance general</span><strong>${escapeHtml(formatCurrency(balanceReport.generalBalance, primaryCurrency))}</strong></div>
+        <div><span>Neto sin ajustes</span><strong>${escapeHtml(formatCurrency(effectiveBalanceReport.netProfit, primaryCurrency))}</strong></div>
+        <div><span>Impacto por ajustes</span><strong>${escapeHtml(formatCurrency(effectiveBalanceReport.impactByAdjustments, primaryCurrency))}</strong></div>
+        <div><span>Balance general</span><strong>${escapeHtml(formatCurrency(effectiveBalanceReport.generalBalance, primaryCurrency))}</strong></div>
       </div>
     `
   }
 
   function buildBalanceSectionsText() {
-    const incomeByTypeText = balanceReport.incomesByType.length === 0
+    const incomeByTypeText = effectiveBalanceReport.incomesByType.length === 0
       ? 'Sin registros.'
-      : balanceReport.incomesByType
+      : effectiveBalanceReport.incomesByType
           .map((row) => `${row.label}: ${row.count} | ${formatCurrency(row.total, primaryCurrency)}`)
           .join('\n')
-    const expenseByTypeText = balanceReport.expensesByType.length === 0
+    const expenseByTypeText = effectiveBalanceReport.expensesByType.length === 0
       ? 'Sin registros.'
-      : balanceReport.expensesByType
+      : effectiveBalanceReport.expensesByType
           .map((row) => `${row.label}: ${row.count} | ${formatCurrency(row.total, primaryCurrency)}`)
           .join('\n')
-    const adjustmentsText = balanceReport.adjustments.length === 0
+    const adjustmentsText = effectiveBalanceReport.adjustments.length === 0
       ? 'Sin ajustes en el periodo seleccionado.'
-      : balanceReport.adjustments
+      : effectiveBalanceReport.adjustments
           .map(
             (adjustment) =>
               `${adjustment.date} | ${adjustment.origin === 'income' ? 'Ingreso' : 'Egreso'} | ${adjustment.label} | ${adjustment.kind === 'positive' ? 'Ajuste positivo' : 'Ajuste negativo'} | ${formatCurrency(adjustment.value, primaryCurrency)}`,
@@ -932,10 +1093,10 @@ export function ReportsPage() {
 
     return [
       'Resumen general',
-      `- Total ingresos brutos: ${formatCurrency(balanceReport.incomeGrossTotal, primaryCurrency)}`,
-      `- Total egresos: ${formatCurrency(balanceReport.expenseTotal, primaryCurrency)}`,
-      `- Ganancia real / neta: ${formatCurrency(balanceReport.netProfit, primaryCurrency)}`,
-      `- Balance general: ${formatCurrency(balanceReport.generalBalance, primaryCurrency)}`,
+      `- Total ingresos brutos: ${formatCurrency(effectiveBalanceReport.incomeGrossTotal, primaryCurrency)}`,
+      `- Total egresos: ${formatCurrency(effectiveBalanceReport.expenseTotal, primaryCurrency)}`,
+      `- Ganancia real / neta: ${formatCurrency(effectiveBalanceReport.netProfit, primaryCurrency)}`,
+      `- Balance general: ${formatCurrency(effectiveBalanceReport.generalBalance, primaryCurrency)}`,
       '',
       'Ingresos por tipo',
       incomeByTypeText,
@@ -945,13 +1106,13 @@ export function ReportsPage() {
       '',
       'Ajustes',
       adjustmentsText,
-      `Ajustes positivos: ${formatCurrency(balanceReport.adjustmentsPositiveTotal, primaryCurrency)}`,
-      `Ajustes negativos: -${formatCurrency(balanceReport.adjustmentsNegativeTotal, primaryCurrency)}`,
-      `Impacto por ajustes: ${formatCurrency(balanceReport.impactByAdjustments, primaryCurrency)}`,
+      `Ajustes positivos: ${formatCurrency(effectiveBalanceReport.adjustmentsPositiveTotal, primaryCurrency)}`,
+      `Ajustes negativos: -${formatCurrency(effectiveBalanceReport.adjustmentsNegativeTotal, primaryCurrency)}`,
+      `Impacto por ajustes: ${formatCurrency(effectiveBalanceReport.impactByAdjustments, primaryCurrency)}`,
       '',
       'Balance final',
       'Fórmula: (Ingresos brutos - Egresos) + Impacto por ajustes = Balance general',
-      `Balance general: ${formatCurrency(balanceReport.generalBalance, primaryCurrency)}`,
+      `Balance general: ${formatCurrency(effectiveBalanceReport.generalBalance, primaryCurrency)}`,
     ].join('\n')
   }
 
@@ -1185,10 +1346,10 @@ export function ReportsPage() {
         <div class="meta">${extraFilters}</div>
         <div class="summary">
           <div><span>Registros</span><strong>${totalRecords}</strong></div>
-          <div><span>Balance general</span><strong>${escapeHtml(formatCurrency(balanceReport.generalBalance, primaryCurrency))}</strong></div>
+          <div><span>Balance general</span><strong>${escapeHtml(formatCurrency(effectiveBalanceReport.generalBalance, primaryCurrency))}</strong></div>
         </div>
         ${
-          balanceReport.hasData
+          effectiveBalanceReport.hasData
             ? buildBalanceSectionsHtml()
             : '<p class="empty">No hay datos para construir el balance con los filtros seleccionados.</p>'
         }
@@ -1197,9 +1358,9 @@ export function ReportsPage() {
         title,
         textFilters,
         `Registros: ${totalRecords}`,
-        `Balance general: ${formatCurrency(balanceReport.generalBalance, primaryCurrency)}`,
+        `Balance general: ${formatCurrency(effectiveBalanceReport.generalBalance, primaryCurrency)}`,
         '',
-        balanceReport.hasData
+        effectiveBalanceReport.hasData
           ? buildBalanceSectionsText()
           : 'No hay datos para construir el balance con los filtros seleccionados.',
       ].join('\n')
