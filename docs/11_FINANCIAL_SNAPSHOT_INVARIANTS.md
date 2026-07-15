@@ -1093,3 +1093,12 @@ Milestone 3A.5 queda arquitectónicamente completo cuando:
 - el único cambio del milestone es este documento.
 
 Este documento no declara que los invariantes se cumplan en runtime. Declara las condiciones que una implementación futura deberá demostrar.
+
+## Addendum — Canonicalization V2 Material Idempotence
+
+Milestone 4D cierra los siguientes invariantes adicionales para snapshots mensuales V2:
+
+- La metadata operacional (`generatedAt`, `sealedAt`, `persistedAt`, `sourceScopeAsOf`, IDs de ejecución o candidato) NO DEBE alterar el fingerprint material.
+- En canonicalization V2 mensual, el `asOf` observado de render NO DEBE pertenecer al scope material fingerprinted; debe conservarse únicamente como metadata operacional verificable.
+- Dos ejecuciones con mismo contenido financiero material y distinta metadata operacional DEBEN conservar el mismo fingerprint V2 y el mismo `snapshotId`.
+- Snapshots V1 siguen siendo legibles y verificables, pero esa compatibilidad no obliga a declararlos elegibles para promoción.

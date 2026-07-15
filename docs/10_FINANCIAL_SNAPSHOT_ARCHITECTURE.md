@@ -1258,6 +1258,61 @@ No crea una segunda fuente de verdad porque:
 - [ ] Solo contenido validated puede sellarse.
 - [ ] El contenido sellado nunca se edita.
 - [ ] Cada cambio material altera el fingerprint.
+
+## 29. Canonicalization V2 para idempotencia material [IMPLEMENTADO]
+
+Milestone 4D introduce una corrección normativa del pipeline local de Snapshot sin reinterpretar ni reescribir historia V1.
+
+### 29.1 Causa del defecto V1
+
+En shadow mode observacional se verificó una secuencia real de recargas sin cambios financieros donde `snapshotKey` permaneció estable, pero se generaron revisiones nuevas porque el fingerprint V1 incluía dos campos temporales del documento canónico:
+
+- `canonicalDocument.payload.scope.asOf`
+- `canonicalDocument.payload.metadata.generatedAt`
+
+El repositorio actuó correctamente: recibió documentos y fingerprints distintos, por lo que conservó nuevas revisiones append-only. React StrictMode amplificó la observación, pero no fue la causa normativa.
+
+### 29.2 Regla de compatibilidad
+
+- Canonicalization V1 permanece inmutable.
+- Fingerprint V1 permanece inmutable.
+- Snapshots V1 existentes siguen siendo legibles y verificables.
+- No se migran ni se reescriben snapshots V1.
+
+### 29.3 Identificadores V2
+
+- `canonicalizationVersion = financial-snapshot-c14n/2.0.0`
+- `fingerprintVersion = financial-snapshot-fingerprint/2.0.0`
+- `fingerprint domain = private-balance:financial-snapshot:fingerprint:v2:`
+
+### 29.4 Proyección material y metadata operacional
+
+Canonicalization V2 separa explícitamente:
+
+- `payload`: proyección material sometida a fingerprint.
+- `operationalMetadata`: metadata operacional excluida del fingerprint material.
+
+En V2, `payload` conserva únicamente el contenido material del snapshot: scope lógico mensual, versiones, resultado del Financial Engine, evidencia financiera, reglas aplicadas y códigos materiales. `operationalMetadata` conserva `generatedAt` y el `sourceScopeAsOf` observado en render.
+
+### 29.5 Semántica final de asOf en V2
+
+Para snapshots mensuales V2 se adopta una política única y cerrada:
+
+- `asOf` de render NO forma parte del scope material mensual.
+- El scope material mensual queda definido por el intervalo civil semiabierto `[periodStart, periodEndExclusive)`, timezone, moneda, usageMode, `earningPeriodId` cuando aplica y filtros materiales.
+- El `asOf` observado se conserva solo como metadata operacional (`sourceScopeAsOf`).
+- Cualquier necesidad futura de snapshot intradía o corte material distinto requerirá otro scope o otra versión explícita.
+
+Esta política garantiza que recargar sin cambios financieros no altera fingerprint ni `snapshotId` por variaciones de reloj de render.
+
+### 29.6 Promotion matrix
+
+- V1: legible y verificable, pero no elegible para promoción del piloto Home.
+- V2: elegible solo si supera checks estructurales, de integridad, de scope, de versión y de cadena.
+
+### 29.7 Datos históricos existentes
+
+Los snapshots V1 observados bajo esta inestabilidad temporal deben clasificarse documentalmente como `legacy-v1-observational`. La clasificación no autoriza mutación, borrado ni compactación automática.
 - [ ] Metadata volátil no altera el fingerprint.
 - [ ] La reproducción recalcula la misma huella.
 - [ ] Revisiones enlazan sin sobrescribir historia.

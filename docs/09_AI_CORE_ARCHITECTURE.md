@@ -88,6 +88,7 @@ No existe actualmente un runtime de IA generativa en producción. Financial Engi
 
 - **Reports:** ejecuta Financial Engine en shadow mode y devuelve siempre el resultado legacy oficial.
 - **Home:** únicamente el resumen de balance puede devolver el resultado del adaptador cuando el build de Vite contiene el texto exacto `VITE_FINANCIAL_ENGINE_HOME_ENABLED=true`.
+- **Reports Snapshot Pilot:** para el reporte mensual actual, Reports puede consumir la última revisión elegible de Financial Snapshot cuando el build de Vite contiene exactamente `VITE_FINANCIAL_SNAPSHOT_REPORTS_ENABLED=true`; ante cualquier fallo, incompatibilidad o ausencia, Reports mantiene su flujo actual (fail-closed).
 - **Aislamiento del flag:** ausencia, `false` o cualquier valor distinto del texto exacto `true` mantienen legacy. No existe override programático.
 - **Rollback:** el flag se incorpora en build time; desactivarlo exige un nuevo build y redeploy. No requiere migración ni limpieza de datos.
 - **Autoridad:** legacy sigue siendo la fuente oficial por defecto. Financial Engine no es fuente global y no se han migrado nuevos consumidores.
