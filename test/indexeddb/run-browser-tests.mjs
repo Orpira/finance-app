@@ -7,6 +7,8 @@ import { createServer } from 'vite'
 
 const root = new URL('../..', import.meta.url).pathname
 const profile = await mkdtemp(join(tmpdir(), 'private-balance-indexeddb-'))
+const configHome = join(profile, 'config')
+const cacheHome = join(profile, 'cache')
 const server = await createServer({
   configFile: false,
   root,
@@ -24,33 +26,64 @@ try {
     '--headless=new',
     '--no-sandbox',
     '--disable-gpu',
+    '--disable-crash-reporter',
+    '--disable-breakpad',
+    '--no-first-run',
     `--user-data-dir=${profile}`,
     '--remote-debugging-port=0',
-    `http://127.0.0.1:${address.port}/test/indexeddb/browser.html`,
+    `http://127.0.0.1:${address.port}/test/indexeddb/browser.html?run=${Date.now()}`,
   ]
-  const child = spawn(chrome, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(chrome, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      HOME: profile,
+      XDG_CONFIG_HOME: configHome,
+      XDG_CACHE_HOME: cacheHome,
+    },
+  })
+  let stdout = ''
   let stderr = ''
+  let exited = false
+  child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
   child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
+  child.once('exit', () => { exited = true })
   child.once('error', (error) => { throw error })
 
   const browserSocket = await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Chrome debugging endpoint timeout\n${stderr}`)), 10000)
-    child.stderr.on('data', () => {
-      const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/)
+    const timeout = setTimeout(() => reject(new Error(`Chrome debugging endpoint timeout\nstdout:\n${stdout}\nstderr:\n${stderr}`)), 10000)
+    const onOutput = () => {
+      const match = `${stdout}\n${stderr}`.match(/DevTools listening on (ws:\/\/[^\s]+)/)
       if (match !== null) {
         clearTimeout(timeout)
+        child.stdout.off('data', onOutput)
+        child.stderr.off('data', onOutput)
         resolve(match[1])
       }
-    })
+    }
+    child.stdout.on('data', onOutput)
+    child.stderr.on('data', onOutput)
   })
   const endpoint = new URL(browserSocket)
   let pages = []
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    pages = await fetch(`http://${endpoint.host}/json/list`).then((response) => response.json())
-    if (pages.some((page) => page.url.includes('/test/indexeddb/browser.html'))) break
+  let endpointReady = false
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (exited) {
+      throw new Error(`Chrome exited before exposing the debugging endpoint\nstdout:\n${stdout}\nstderr:\n${stderr}`)
+    }
+    try {
+      pages = await fetch(`http://${endpoint.host}/json/list`, {
+        signal: AbortSignal.timeout(200),
+      }).then((response) => response.json())
+      endpointReady = true
+      if (pages.some((page) => page.url.includes('/test/indexeddb/browser.html?run='))) break
+    } catch {
+      // Chrome may still be booting.
+    }
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
-  const page = pages.find((candidate) => candidate.url.includes('/test/indexeddb/browser.html'))
+  if (!endpointReady) throw new Error(`Chrome debugging endpoint timeout\nstdout:\n${stdout}\nstderr:\n${stderr}`)
+  const page = pages.find((candidate) => candidate.url.includes('/test/indexeddb/browser.html?run='))
   if (page === undefined) throw new Error(`IndexedDB test page was not created\n${stderr}`)
 
   const socket = new WebSocket(page.webSocketDebuggerUrl)
