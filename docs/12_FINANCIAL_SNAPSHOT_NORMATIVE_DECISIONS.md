@@ -1845,3 +1845,86 @@ La policy no lee Dexie, no usa red, reloj o aleatoriedad, no persiste, no repara
 - Producción no emite logs ni telemetría. Desarrollo solo puede registrar fuente, key, revisión, versiones, scope kind, checks fallidos y razón normalizada.
 - Rollback: retirar o desactivar el flag, rebuild y redeploy. No requiere migración ni limpieza.
 - Financial Snapshot continúa sin autoridad global y no existe promoción automática.
+
+## 29. Decisiones normativas de Canonicalization V2 para idempotencia material
+
+Milestone 4D NO modifica Canonicalization V1 ni Fingerprint V1. Su objetivo exclusivo es corregir la creación artificial de revisiones provocada por metadata temporal dentro de la preimagen material del fingerprint.
+
+### 29.1 Versiones cerradas
+
+- `canonicalizationVersion = financial-snapshot-c14n/2.0.0`
+- `fingerprintVersion = financial-snapshot-fingerprint/2.0.0`
+- `fingerprint domain = private-balance:financial-snapshot:fingerprint:v2:`
+
+Cambiar cualquier elemento de esta triple definición exige otra versión.
+
+### 29.2 Causa normativa del defecto V1
+
+Se declara constatado el siguiente comportamiento real en shadow mode:
+
+- `snapshotKey` estable;
+- recargas equivalentes sin cambios financieros;
+- nuevas revisiones por divergencia exclusiva de `payload.scope.asOf` y `payload.metadata.generatedAt`.
+
+El repositorio no fue defectuoso. Su conducta append-only fue correcta porque recibió preimages y fingerprints distintos.
+
+### 29.3 Política definitiva de `asOf` para snapshots mensuales V2
+
+Se adopta la opción 3 evaluada durante el milestone:
+
+- eliminar `asOf` del scope material mensual V2;
+- conservar el `asOf` observado únicamente en metadata operacional.
+
+Por tanto, para snapshots mensuales V2:
+
+- el scope material queda definido por `kind`, `periodStart`, `periodEndExclusive`, `periodBoundary`, `timezone`, `usageMode`, `currency`, `earningPeriodId` cuando aplica y filtros materiales;
+- `sourceScopeAsOf` documenta el instante observado de render, pero NO participa en fingerprint;
+- un snapshot intradía futuro requerirá otra semántica y otra versión explícita.
+
+### 29.4 Contrato canónico V2
+
+Canonicalization V2 emite un documento versionado con separación explícita entre material y operación:
+
+```text
+CanonicalSnapshotDocumentV2 {
+    canonicalizationVersion
+    payload
+    operationalMetadata
+}
+```
+
+Reglas obligatorias:
+
+- `payload` es la única preimagen material permitida del fingerprint V2.
+- `operationalMetadata` puede conservar `generatedAt` y `sourceScopeAsOf`.
+- `sealedAt` y `persistedAt` permanecen fuera del payload material.
+
+### 29.5 Fingerprint V2
+
+Fingerprint V2 conserva SHA-256, UTF-8 y hex lowercase, pero cambia de forma incompatible y explícita:
+
+- dominio criptográfico;
+- versión de fingerprint;
+- componente hasheado (`material-payload`).
+
+V2 NO puede reutilizar la versión ni el dominio V1 porque la preimagen ya no es el documento canónico completo.
+
+### 29.6 Matriz de compatibilidad y elegibilidad
+
+| Artefacto | Lectura | Verificación | Elegible para promoción Home |
+| --- | --- | --- | --- |
+| V1 | Sí | Sí | No |
+| V2 | Sí | Sí | Sí, si todos los checks pasan |
+
+Promotion Executor DEBE respetar esta matriz y no seleccionar un snapshot V1 cuando la policy lo marque como no elegible.
+
+### 29.7 Datos históricos existentes
+
+Los snapshots V1 ya generados bajo esta inestabilidad temporal se clasifican documentalmente como `legacy-v1-observational`.
+
+La clasificación implica:
+
+- conservar append-only;
+- no reescribir registros;
+- no reinterpretar fingerprints V1;
+- planificar análisis posterior por cadena, revisión, `snapshotKey`, `canonicalizationVersion` y `fingerprintVersion`.
