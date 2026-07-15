@@ -4,6 +4,15 @@ import { validateSnapshotCandidate } from '../intelligence/financial-snapshot/sn
 import { canonicalizeValidatedSnapshotCandidate } from '../intelligence/financial-snapshot/snapshotCanonicalizer'
 import { fingerprintCanonicalSnapshotDocument } from '../intelligence/financial-snapshot/snapshotFingerprint'
 import { deriveSnapshotKey, sealCanonicalSnapshot } from '../intelligence/financial-snapshot/snapshotSealer'
+import {
+  auditCanonicalSnapshotMaterialDiff,
+  type SnapshotMaterialDiffAudit,
+} from '../intelligence/financial-snapshot/snapshotMaterialDiffAuditor'
+import {
+  DEFAULT_SNAPSHOT_CANONICALIZATION_VERSION,
+  isCanonicalizationVersionV2,
+  SUPPORTED_SNAPSHOT_VERSION,
+} from '../intelligence/financial-snapshot/snapshotProtocol'
 import type { FinancialEngineResult } from './financialEngineAdapter'
 import type { Expense } from '../types/expense'
 import type { PersistedFinancialSnapshot } from '../types/persistedFinancialSnapshot'
@@ -27,9 +36,9 @@ import type {
 import type { CurrencyCode, UsageMode } from '../types/settings'
 import { getIncomeType, isAdjustmentIncome } from '../utils/incomeTypes'
 
-const SNAPSHOT_VERSION = 'financial-snapshot/1.0.0' as SnapshotVersion
+const SNAPSHOT_VERSION = SUPPORTED_SNAPSHOT_VERSION as SnapshotVersion
 const CANONICALIZATION_VERSION =
-  'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion
+  DEFAULT_SNAPSHOT_CANONICALIZATION_VERSION as CanonicalizationVersion
 
 export interface SnapshotShadowModeInput {
   readonly consumer: 'home.balance.current-month'
@@ -68,6 +77,7 @@ export interface SnapshotShadowModeObservation {
   }
   readonly warningCodes: readonly string[]
   readonly qualityCodes: readonly string[]
+  readonly materialDiffAudit?: SnapshotMaterialDiffAudit
 }
 
 interface SnapshotRepositoryPort {
@@ -90,6 +100,7 @@ export interface SnapshotShadowModeOptions {
     fingerprint: typeof fingerprintCanonicalSnapshotDocument
     seal: typeof sealCanonicalSnapshot
     compare: typeof comparisonFields
+    audit: typeof auditCanonicalSnapshotMaterialDiff
   }>
 }
 
@@ -242,6 +253,12 @@ function comparisonFields(
   return fields.filter(([, first, second]) => first !== second).map(([name]) => name)
 }
 
+function safeSnapshotKey(snapshotKey: SnapshotKey): string {
+  const value = String(snapshotKey)
+  if (value.length <= 48) return value
+  return `${value.slice(0, 24)}...${value.slice(-12)}`
+}
+
 async function execute(
   input: SnapshotShadowModeInput,
   options: SnapshotShadowModeOptions,
@@ -254,8 +271,10 @@ async function execute(
     fingerprint: fingerprintCanonicalSnapshotDocument,
     seal: sealCanonicalSnapshot,
     compare: comparisonFields,
+    audit: auditCanonicalSnapshotMaterialDiff,
     ...options.pipeline,
   }
+  const developmentMode = options.dev ?? import.meta.env.DEV
   const evidence = buildEvidence(input)
   const engineVersion = input.financialEngineResult.engineVersion as EngineVersion
   const rulesetVersion = `engine-bundled/${engineVersion}` as RulesetVersion
@@ -301,6 +320,26 @@ async function execute(
   const fingerprint = await pipeline.fingerprint(canonicalDocument)
   const snapshotKey = deriveSnapshotKey(canonicalDocument)
   const previous = await safeLatest(repository, snapshotKey)
+  let materialDiffAudit: SnapshotMaterialDiffAudit | undefined
+
+  if (
+    developmentMode &&
+    previous !== undefined &&
+    isCanonicalizationVersionV2(previous.canonicalizationVersion) &&
+    isCanonicalizationVersionV2(canonicalDocument.canonicalizationVersion)
+  ) {
+    materialDiffAudit = pipeline.audit(previous.canonicalDocument, canonicalDocument)
+    const logger = options.logger ?? console.info
+    logger('[financial-snapshot] Material diff audit', {
+      consumer: input.consumer,
+      snapshotKey: safeSnapshotKey(snapshotKey),
+      previousRevision: previous.revision,
+      equivalent: materialDiffAudit.equivalent,
+      diffCount: materialDiffAudit.changedPaths.length,
+      summaryCodes: materialDiffAudit.summaryCodes,
+      changedPaths: materialDiffAudit.changedPaths,
+    })
+  }
 
   if (previous?.fingerprintValue === fingerprint.value) {
     return {
@@ -319,6 +358,7 @@ async function execute(
       },
       warningCodes: evidence.warningCodes,
       qualityCodes: canonicalDocument.payload.metadata.qualityCodes,
+      ...(materialDiffAudit === undefined ? {} : { materialDiffAudit }),
     }
   }
 
@@ -348,6 +388,7 @@ async function execute(
     },
     warningCodes: evidence.warningCodes,
     qualityCodes: canonicalDocument.payload.metadata.qualityCodes,
+    ...(materialDiffAudit === undefined ? {} : { materialDiffAudit }),
   }
 }
 

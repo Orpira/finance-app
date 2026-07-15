@@ -44,7 +44,13 @@ async function expectReject(action: () => Promise<unknown>, message: string, cod
   throw new Error(`Expected rejection: ${message}`)
 }
 
-async function sealed(balance: number, revision = 1, supersedesSnapshotId?: SealedSnapshotId) {
+async function sealed(
+  balance: number,
+  revision = 1,
+  supersedesSnapshotId?: SealedSnapshotId,
+  canonicalizationVersion: CanonicalizationVersion = 'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion,
+  scopeOverrides: Partial<ValidatedSnapshotCandidate<{ readonly balance: number }>['scope']> = {},
+) {
   const candidate: ValidatedSnapshotCandidate<{ readonly balance: number }> = {
     status: 'validated',
     identity: { candidateId: `browser-candidate:${balance}` as SnapshotCandidateId },
@@ -53,13 +59,14 @@ async function sealed(balance: number, revision = 1, supersedesSnapshotId?: Seal
       periodEndExclusive: '2026-02-01' as CivilDate, periodBoundary: '[start,end)',
       asOf: at, timezone: 'Europe/Madrid' as IanaTimeZone,
       usageMode: 'basic', currency: 'EUR', filters: {},
+      ...scopeOverrides,
     },
     engineResult: { balance },
     evidence: { strategy: 'embedded-v1', records: [], context: [], candidateRecordCount: 0, includedRecordCount: 0, excludedRecordCount: 0, coverageCodes: [], warningCodes: [] },
     appliedRules: [],
     metadata: { generatedAt: at, generationReasonCode: 'test' as SnapshotNormativeCode, provenance: 'local', qualityCodes: [], warningCodes: [], limitationCodes: [] },
     snapshotVersion: 'financial-snapshot/1.0.0' as SnapshotVersion,
-    canonicalizationVersion: 'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion,
+    canonicalizationVersion,
     engineVersion: 'engine/1' as EngineVersion,
     rulesetVersion: 'rules/1' as RulesetVersion,
   }
@@ -121,6 +128,27 @@ async function run() {
   await expectReject(() => table.delete(persisted.snapshotId), 'Dexie deleting hook blocks physical deletion')
   assert(await table.count() === 1, 'append-only hooks leave stored record intact')
 
+  const coexistenceV1 = await sealed(
+    30,
+    1,
+    undefined,
+    'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion,
+    { periodStart: '2026-05-01' as CivilDate, periodEndExclusive: '2026-06-01' as CivilDate },
+  )
+  await repository.persist(coexistenceV1, at)
+  const coexistenceV2 = await sealed(
+    30,
+    2,
+    coexistenceV1.identity.snapshotId,
+    'financial-snapshot-c14n/2.0.0' as CanonicalizationVersion,
+    { periodStart: '2026-05-01' as CivilDate, periodEndExclusive: '2026-06-01' as CivilDate },
+  )
+  await repository.persist(coexistenceV2, at)
+  const coexistenceRecords = await repository.listBySnapshotKey(coexistenceV1.identity.snapshotKey)
+  assert(coexistenceRecords.length === 2, 'indexeddb preserves V1 and V2 coexistence in one append-only chain')
+  assert(coexistenceRecords[0].canonicalizationVersion === 'financial-snapshot-c14n/1.0.0', 'indexeddb keeps legacy V1 snapshot readable')
+  assert(coexistenceRecords[1].canonicalizationVersion === 'financial-snapshot-c14n/2.0.0', 'indexeddb persists V2 beside V1 without rewrite')
+
   const shadowIncome: ServiceIncome = {
     id: 101, date: '2026-03-10', duration: 60, totalAmount: 100,
     currency: 'EUR', percentage: 50, realGain: 50, eurValue: 50,
@@ -131,20 +159,31 @@ async function run() {
     amount: 20, currency: 'EUR', eurValue: 20, copValue: 88000,
     usageMode: 'basic', createdAt: '2026-03-11T00:00:00.000Z',
   }
-  const shadowInput = (income: ServiceIncome) => ({
+  const shadowInput = (
+    income: ServiceIncome,
+    overrides: Partial<{
+      readonly candidateId: SnapshotCandidateId
+      readonly generatedAt: UtcInstant
+      readonly sealedAt: UtcInstant
+      readonly persistedAt: UtcInstant
+      readonly asOf: UtcInstant
+    }> = {},
+  ) => ({
     consumer: 'home.balance.current-month' as const,
     scope: {
       periodStart: '2026-03-01' as CivilDate,
       periodEndExclusive: '2026-04-01' as CivilDate,
-      asOf: at,
+      asOf: overrides.asOf ?? at,
       timezone: 'Europe/Madrid' as IanaTimeZone,
       usageMode: 'basic' as const,
       currency: 'EUR' as const,
     },
     financialEngineResult: runFinancialEngine({ incomes: [income], expenses: [shadowExpense], currency: 'EUR', usageMode: 'basic' }),
     incomes: [income], expenses: [shadowExpense],
-    candidateId: 'browser-shadow' as SnapshotCandidateId,
-    generatedAt: at, sealedAt: at, persistedAt: at,
+    candidateId: overrides.candidateId ?? 'browser-shadow' as SnapshotCandidateId,
+    generatedAt: overrides.generatedAt ?? at,
+    sealedAt: overrides.sealedAt ?? at,
+    persistedAt: overrides.persistedAt ?? at,
     revisionReasonCode: 'revision.source_changed' as SnapshotNormativeCode,
   })
   const financialBefore = {
@@ -152,7 +191,7 @@ async function run() {
     expenses: await database.expenses.toArray(),
   }
   const disabledCount = await table.count()
-  assert(await runSnapshotShadowMode(shadowInput(shadowIncome), { repository, dev: false }) === undefined, 'snapshot shadow flag is disabled by default')
+  await runSnapshotShadowMode(shadowInput(shadowIncome), { enabled: false, repository, dev: false })
   assert(await table.count() === disabledCount, 'disabled shadow mode does not persist')
   const firstShadow = await runSnapshotShadowMode(shadowInput(shadowIncome), { enabled: true, repository, dev: false })
   assert(firstShadow?.revision === 1, 'real shadow pipeline persists first revision')
@@ -162,12 +201,51 @@ async function run() {
   database = new FinanceDB()
   await database.open()
   repository = new FinancialSnapshotRepository(database)
-  const reopenedDuplicate = await runSnapshotShadowMode(shadowInput(shadowIncome), { enabled: true, repository, dev: false })
-  assert(reopenedDuplicate?.idempotent === true && reopenedDuplicate.revision === 1, 'shadow idempotence survives close and reopen')
+  const equivalentRuns = [
+    shadowInput(shadowIncome, {
+      candidateId: 'browser-shadow:2' as SnapshotCandidateId,
+      generatedAt: '2026-02-01T00:00:01.000Z' as UtcInstant,
+      sealedAt: '2026-02-01T00:00:02.000Z' as UtcInstant,
+      persistedAt: '2026-02-01T00:00:03.000Z' as UtcInstant,
+      asOf: '2026-02-01T00:00:04.000Z' as UtcInstant,
+    }),
+    shadowInput(shadowIncome, {
+      candidateId: 'browser-shadow:3' as SnapshotCandidateId,
+      generatedAt: '2026-02-01T01:00:00.000Z' as UtcInstant,
+      sealedAt: '2026-02-01T01:00:01.000Z' as UtcInstant,
+      persistedAt: '2026-02-01T01:00:02.000Z' as UtcInstant,
+      asOf: '2026-02-01T01:00:03.000Z' as UtcInstant,
+    }),
+    shadowInput(shadowIncome, {
+      candidateId: 'browser-shadow:4' as SnapshotCandidateId,
+      generatedAt: '2026-02-02T00:00:00.000Z' as UtcInstant,
+      sealedAt: '2026-02-02T00:00:01.000Z' as UtcInstant,
+      persistedAt: '2026-02-02T00:00:02.000Z' as UtcInstant,
+      asOf: '2026-02-02T00:00:03.000Z' as UtcInstant,
+    }),
+    shadowInput(shadowIncome, {
+      candidateId: 'browser-shadow:5' as SnapshotCandidateId,
+      generatedAt: '2026-02-03T09:30:00.000Z' as UtcInstant,
+      sealedAt: '2026-02-03T09:30:01.000Z' as UtcInstant,
+      persistedAt: '2026-02-03T09:30:02.000Z' as UtcInstant,
+      asOf: '2026-02-03T09:30:03.000Z' as UtcInstant,
+    }),
+  ]
+  for (const input of equivalentRuns) {
+    const duplicate = await runSnapshotShadowMode(input, { enabled: true, repository, dev: false })
+    assert(duplicate?.idempotent === true && duplicate.revision === 1, 'shadow idempotence survives varying generatedAt/sealedAt/persistedAt/asOf')
+  }
+  const stableShadowRecords = await repository.listBySnapshotKey(shadowKey)
+  assert(stableShadowRecords.length === 1, 'five equivalent shadow executions keep a single revision in indexeddb')
+  assert(stableShadowRecords[0].canonicalizationVersion === 'financial-snapshot-c14n/2.0.0', 'shadow mode persists V2 canonicalization in indexeddb')
+  assert(stableShadowRecords[0].fingerprint.fingerprintVersion === 'financial-snapshot-fingerprint/2.0.0', 'shadow mode persists V2 fingerprint version in indexeddb')
   const changedIncome = { ...shadowIncome, eurValue: 75 }
   const revisedShadow = await runSnapshotShadowMode(shadowInput(changedIncome), { enabled: true, repository, dev: false })
   assert(revisedShadow?.revision === 2, 'material shadow change creates next revision')
   const shadowRecords = await repository.listBySnapshotKey(shadowKey)
+  assert(shadowRecords.length === 2, 'material shadow change creates exactly one new indexeddb revision')
+  assert(shadowRecords[0].fingerprintValue !== shadowRecords[1].fingerprintValue, 'material shadow change updates fingerprint in indexeddb')
+  assert(shadowRecords[0].snapshotId !== shadowRecords[1].snapshotId, 'material shadow change updates snapshotId in indexeddb')
   assert(shadowRecords[1].supersedesSnapshotId === shadowRecords[0].snapshotId, 'real shadow revision supersedes previous snapshot')
   const promotionInput = {
     snapshotKey: shadowKey,
@@ -229,7 +307,7 @@ async function run() {
   database.close()
   database = new FinanceDB()
   await database.open()
-  assert(await database.financialSnapshots.count() === 4, 'second full reopen preserves repository and shadow revisions')
+  assert(await database.financialSnapshots.count() === 6, 'second full reopen preserves repository, coexistence and shadow revisions')
   database.close()
   await Dexie.delete(databaseName)
 }
