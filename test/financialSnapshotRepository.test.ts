@@ -78,6 +78,7 @@ async function sealed(
   balance: number,
   revision = 1,
   supersedesSnapshotId?: SealedSnapshotId,
+  canonicalizationVersion: CanonicalizationVersion = 'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion,
 ): Promise<SealedFinancialSnapshot<{ readonly balance: number }>> {
   const engineVersion = 'engine/1' as EngineVersion
   const rulesetVersion = 'rules/1' as RulesetVersion
@@ -95,7 +96,7 @@ async function sealed(
     appliedRules: [],
     metadata: { generatedAt: at, generationReasonCode: code('test'), provenance: 'local', qualityCodes: [], warningCodes: [], limitationCodes: [] },
     snapshotVersion: 'financial-snapshot/1.0.0' as SnapshotVersion,
-    canonicalizationVersion: 'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion,
+    canonicalizationVersion,
     engineVersion, rulesetVersion,
   }
   const canonicalDocument = canonicalizeValidatedSnapshotCandidate(candidate)
@@ -115,9 +116,9 @@ async function expectCode(action: () => Promise<unknown>, codeValue: FinancialSn
 }
 
 describe('FinancialSnapshotRepository', () => {
-  it('declara FinanceDB v23 y los índices normativos', () => {
+  it('declara FinanceDB v24 y los índices normativos', () => {
     const database = new FinanceDB()
-    expect(database.verno).toBe(23)
+    expect(database.verno).toBe(24)
     expect(database.financialSnapshots.schema.primKey.name).toBe('snapshotId')
     expect(database.financialSnapshots.schema.indexes.map((index) => index.name)).toEqual([
       'snapshotKey', '[snapshotKey+revision]', 'sealedAt', 'status', 'scopeKind',
@@ -144,6 +145,22 @@ describe('FinancialSnapshotRepository', () => {
     await repository.persist(second, at)
     expect((await repository.listBySnapshotKey(first.identity.snapshotKey)).map((item) => item.revision)).toEqual([1, 2])
     expect((await repository.getLatestBySnapshotKey(first.identity.snapshotKey)).snapshotId).toBe(second.identity.snapshotId)
+  })
+
+  it('preserva coexistencia V1 y V2 sin reescribir V1', async () => {
+    const { repository } = repositoryFixture()
+    const legacy = await sealed(10, 1, undefined, 'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion)
+    const legacyRecord = await repository.persist(legacy, at)
+    const v2 = await sealed(10, 2, legacy.identity.snapshotId, 'financial-snapshot-c14n/2.0.0' as CanonicalizationVersion)
+    await repository.persist(v2, at)
+
+    const records = await repository.listBySnapshotKey(legacy.identity.snapshotKey)
+    expect(records).toHaveLength(2)
+    expect(records[0]).toEqual(legacyRecord)
+    expect(records[1].canonicalizationVersion).toBe('financial-snapshot-c14n/2.0.0')
+    expect(records[1].fingerprint.fingerprintVersion).toBe('financial-snapshot-fingerprint/2.0.0')
+    expect(records[1].snapshotId).not.toBe(records[0].snapshotId)
+    expect(records[1].supersedesSnapshotId).toBe(records[0].snapshotId)
   })
 
   it('es idempotente para el mismo snapshotId y no duplica', async () => {

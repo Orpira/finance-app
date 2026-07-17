@@ -2,7 +2,11 @@ import type {
   CanonicalSnapshotDocument,
   SnapshotFingerprint,
 } from '../../types/financialSnapshot'
-import { serializeCanonicalSnapshotDocument } from './snapshotCanonicalizer'
+import {
+  serializeCanonicalSnapshotDocument,
+  serializeCanonicalSnapshotValue,
+} from './snapshotCanonicalizer'
+import { fingerprintSpecForCanonicalization } from './snapshotProtocol'
 
 export const SNAPSHOT_FINGERPRINT_ALGORITHM = 'SHA-256' as const
 export const SNAPSHOT_FINGERPRINT_ENCODING = 'hex-lower' as const
@@ -10,6 +14,15 @@ export const SNAPSHOT_FINGERPRINT_DOMAIN =
   'private-balance:financial-snapshot:fingerprint:v1:' as const
 export const SNAPSHOT_FINGERPRINT_VERSION =
   'financial-snapshot-fingerprint/1.0.0' as const
+
+function serializeFingerprintPreimage(
+  document: CanonicalSnapshotDocument<unknown>,
+): string {
+  const spec = fingerprintSpecForCanonicalization(document.canonicalizationVersion)
+  return spec.hashedComponent === 'material-payload'
+    ? serializeCanonicalSnapshotValue(document.payload)
+    : serializeCanonicalSnapshotDocument(document)
+}
 
 export type SnapshotFingerprintErrorCode =
   | 'SNAPSHOT_FINGERPRINT_UNSUPPORTED_ALGORITHM'
@@ -42,8 +55,9 @@ export async function fingerprintCanonicalSnapshotDocument(
   document: CanonicalSnapshotDocument<unknown>,
 ): Promise<SnapshotFingerprint> {
   let serialized: string
+  const spec = fingerprintSpecForCanonicalization(document.canonicalizationVersion)
   try {
-    serialized = serializeCanonicalSnapshotDocument(document)
+    serialized = serializeFingerprintPreimage(document)
   } catch {
     throw new SnapshotFingerprintError('SNAPSHOT_FINGERPRINT_INVALID_DOCUMENT')
   }
@@ -55,9 +69,7 @@ export async function fingerprintCanonicalSnapshotDocument(
 
   let preimage: Uint8Array<ArrayBuffer>
   try {
-    preimage = new TextEncoder().encode(
-      SNAPSHOT_FINGERPRINT_DOMAIN + serialized,
-    )
+    preimage = new TextEncoder().encode(spec.domain + serialized)
   } catch {
     throw new SnapshotFingerprintError('SNAPSHOT_FINGERPRINT_ENCODING_FAILED')
   }
@@ -79,9 +91,12 @@ export async function fingerprintCanonicalSnapshotDocument(
   return {
     algorithm: SNAPSHOT_FINGERPRINT_ALGORITHM,
     encoding: SNAPSHOT_FINGERPRINT_ENCODING,
-    domain: SNAPSHOT_FINGERPRINT_DOMAIN,
-    fingerprintVersion: SNAPSHOT_FINGERPRINT_VERSION,
+    domain: spec.domain,
+    fingerprintVersion: spec.fingerprintVersion,
     canonicalizationVersion: document.canonicalizationVersion,
+    ...(spec.hashedComponent === undefined
+      ? {}
+      : { hashedComponent: spec.hashedComponent }),
     value,
   }
 }
