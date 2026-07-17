@@ -1,14 +1,16 @@
 import type { SealedFinancialSnapshot } from '../../types/financialSnapshot'
-import {
-  SUPPORTED_CANONICALIZATION_VERSION,
-  SUPPORTED_SNAPSHOT_VERSION,
-} from './snapshotCandidateValidator'
+import { SUPPORTED_SNAPSHOT_VERSION } from './snapshotCandidateValidator'
 import {
   SNAPSHOT_FINGERPRINT_ALGORITHM,
-  SNAPSHOT_FINGERPRINT_DOMAIN,
   SNAPSHOT_FINGERPRINT_ENCODING,
-  SNAPSHOT_FINGERPRINT_VERSION,
 } from './snapshotFingerprint'
+import {
+  fingerprintSpecForCanonicalization,
+  isCanonicalizationVersionV2,
+  isSupportedCanonicalizationVersion,
+  materializeMetadataFromCanonicalDocument,
+  materializeScopeFromCanonicalDocument,
+} from './snapshotProtocol'
 
 export type SnapshotPromotionCheckCode =
   | 'fingerprint.present'
@@ -16,6 +18,7 @@ export type SnapshotPromotionCheckCode =
   | 'fingerprint.version_supported'
   | 'fingerprint.algorithm_supported'
   | 'canonicalization.version_supported'
+  | 'promotion.version_eligible'
   | 'snapshot.version_supported'
   | 'engine.version_supported'
   | 'ruleset.present_and_consistent'
@@ -130,13 +133,26 @@ function fingerprintPresent(snapshot: Record<string, unknown>): boolean {
 
 function fingerprintStructureValid(snapshot: Record<string, unknown>): boolean {
   const fingerprint = snapshot.fingerprint
-  return isRecord(fingerprint) &&
-    typeof fingerprint.value === 'string' &&
-    /^[0-9a-f]{64}$/.test(fingerprint.value) &&
-    nonEmpty(fingerprint.fingerprintVersion) &&
-    nonEmpty(fingerprint.canonicalizationVersion) &&
-    fingerprint.encoding === SNAPSHOT_FINGERPRINT_ENCODING &&
-    fingerprint.domain === SNAPSHOT_FINGERPRINT_DOMAIN
+  if (!isRecord(fingerprint) ||
+    typeof fingerprint.value !== 'string' ||
+    !/^[0-9a-f]{64}$/.test(fingerprint.value) ||
+    !nonEmpty(fingerprint.fingerprintVersion) ||
+    !nonEmpty(fingerprint.canonicalizationVersion) ||
+    fingerprint.encoding !== SNAPSHOT_FINGERPRINT_ENCODING) {
+    return false
+  }
+
+  try {
+    const spec = fingerprintSpecForCanonicalization(fingerprint.canonicalizationVersion)
+    return fingerprint.domain === spec.domain &&
+      fingerprint.fingerprintVersion === spec.fingerprintVersion &&
+      fingerprint.algorithm === SNAPSHOT_FINGERPRINT_ALGORITHM &&
+      (spec.hashedComponent === undefined
+        ? fingerprint.hashedComponent === undefined
+        : fingerprint.hashedComponent === spec.hashedComponent)
+  } catch {
+    return false
+  }
 }
 
 function canonicalDocument(snapshot: Record<string, unknown>): Record<string, unknown> | undefined {
@@ -242,15 +258,19 @@ function crossFieldsConsistent(snapshot: Record<string, unknown>): boolean {
   const payload = canonicalPayload(snapshot)
   const fingerprint = snapshot.fingerprint
   if (document === undefined || payload === undefined || !isRecord(fingerprint)) return false
-  return snapshot.snapshotVersion === payload.snapshotVersion &&
-    snapshot.canonicalizationVersion === document.canonicalizationVersion &&
-    snapshot.canonicalizationVersion === fingerprint.canonicalizationVersion &&
-    snapshot.engineVersion === payload.engineVersion &&
-    snapshot.rulesetVersion === payload.rulesetVersion &&
-    structuralEqual(snapshot.scope, payload.scope) &&
-    structuralEqual(snapshot.evidence, payload.evidence) &&
-    structuralEqual(snapshot.appliedRules, payload.appliedRules) &&
-    structuralEqual(snapshot.metadata, payload.metadata)
+  try {
+    return snapshot.snapshotVersion === payload.snapshotVersion &&
+      snapshot.canonicalizationVersion === document.canonicalizationVersion &&
+      snapshot.canonicalizationVersion === fingerprint.canonicalizationVersion &&
+      snapshot.engineVersion === payload.engineVersion &&
+      snapshot.rulesetVersion === payload.rulesetVersion &&
+      structuralEqual(snapshot.scope, materializeScopeFromCanonicalDocument(document as never)) &&
+      structuralEqual(snapshot.evidence, payload.evidence) &&
+      structuralEqual(snapshot.appliedRules, payload.appliedRules) &&
+      structuralEqual(snapshot.metadata, materializeMetadataFromCanonicalDocument(document as never))
+  } catch {
+    return false
+  }
 }
 
 function collectWarnings(snapshot: Record<string, unknown>): readonly string[] {
@@ -284,9 +304,16 @@ export function assessSnapshotPromotion(
   const checks: SnapshotPromotionCheck[] = [
     { code: 'fingerprint.present', passed: fingerprintPresent(snapshot) },
     { code: 'fingerprint.structure_valid', passed: fingerprintStructureValid(snapshot) },
-    { code: 'fingerprint.version_supported', passed: fingerprint?.fingerprintVersion === SNAPSHOT_FINGERPRINT_VERSION },
+    { code: 'fingerprint.version_supported', passed: isRecord(fingerprint) && isSupportedCanonicalizationVersion(String(fingerprint.canonicalizationVersion ?? '')) && (() => {
+      try {
+        return fingerprint.fingerprintVersion === fingerprintSpecForCanonicalization(String(fingerprint.canonicalizationVersion)).fingerprintVersion
+      } catch {
+        return false
+      }
+    })() },
     { code: 'fingerprint.algorithm_supported', passed: fingerprint?.algorithm === SNAPSHOT_FINGERPRINT_ALGORITHM },
-    { code: 'canonicalization.version_supported', passed: snapshot.canonicalizationVersion === SUPPORTED_CANONICALIZATION_VERSION && canonicalDocument(snapshot)?.canonicalizationVersion === SUPPORTED_CANONICALIZATION_VERSION },
+    { code: 'canonicalization.version_supported', passed: isSupportedCanonicalizationVersion(snapshot.canonicalizationVersion) && isSupportedCanonicalizationVersion(String(canonicalDocument(snapshot)?.canonicalizationVersion ?? '')) },
+    { code: 'promotion.version_eligible', passed: isCanonicalizationVersionV2(snapshot.canonicalizationVersion) && isCanonicalizationVersionV2(String(canonicalDocument(snapshot)?.canonicalizationVersion ?? '')) },
     { code: 'snapshot.version_supported', passed: snapshot.snapshotVersion === SUPPORTED_SNAPSHOT_VERSION && payload?.snapshotVersion === SUPPORTED_SNAPSHOT_VERSION },
     { code: 'engine.version_supported', passed: snapshot.engineVersion === SUPPORTED_ENGINE_VERSION && payload?.engineVersion === SUPPORTED_ENGINE_VERSION },
     { code: 'ruleset.present_and_consistent', passed: nonEmpty(snapshot.rulesetVersion) && snapshot.rulesetVersion === `engine-bundled/${snapshot.engineVersion}` && payload?.rulesetVersion === snapshot.rulesetVersion },

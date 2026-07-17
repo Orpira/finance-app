@@ -9,7 +9,7 @@ El proyecto usa dos capas de persistencia con responsabilidades distintas:
 
 ## Base local Dexie
 
-La base FinanceDB está definida en src/database/db.ts y llega actualmente a la versión 23.
+La base FinanceDB está definida en src/database/db.ts y llega actualmente a la versión 24.
 
 ### Tablas locales confirmadas
 
@@ -25,6 +25,7 @@ La base FinanceDB está definida en src/database/db.ts y llega actualmente a la 
 - communicationChannels.
 - deviceIdentity.
 - financialSnapshots.
+- knowledgeSnapshots.
 
 ### Finalidad de tablas clave
 
@@ -40,6 +41,7 @@ La base FinanceDB está definida en src/database/db.ts y llega actualmente a la 
 - communicationChannels: estado local del canal de comunicación en cliente.
 - deviceIdentity: userCode y deviceCode persistidos localmente.
 - financialSnapshots: artefactos Financial Snapshot sellados, persistidos de forma local y append-only; no forma parte del libro financiero operativo.
+- knowledgeSnapshots: artefactos Knowledge Snapshot sellados, persistidos localmente de forma transaccional, append-only e idempotente; no forma parte del libro financiero operativo.
 
 ### Financial Snapshot local (v23)
 
@@ -49,11 +51,29 @@ La tabla admite exclusivamente inserciones. Hooks Dexie rechazan `update`, `put`
 
 La migración desde v22 solo crea la tabla, sin transformar ni borrar registros existentes. El rollback conceptual consiste en desplegar una versión que deje de leer/escribir la tabla v23 conservando IndexedDB; Dexie no ofrece downgrade automático y no se debe borrar la base para retroceder.
 
+### Knowledge Snapshot local (v24)
+
+`knowledgeSnapshots` usa `knowledgeSnapshotId` content-addressed como clave primaria. Sus índices son `knowledgeSnapshotKey`, el índice único compuesto `[knowledgeSnapshotKey+revision]`, `sealedAt`, `status`, `sourceSnapshotId`, `sourceSnapshotKey`, `fingerprintValue`, `knowledgeVersion` y `projectionVersion`.
+
+El contrato persistido denormaliza solo material de consulta e índices (`sourceSnapshotId`, `sourceSnapshotKey`, `fingerprintValue`, versiones de Knowledge), manteniendo el documento canónico sellado y el fingerprint oficial.
+
+La persistencia se implementa en `KnowledgeSnapshotRepository` con transacciones Dexie `rw`, verificación de integridad vía sealer oficial, idempotencia por `knowledgeSnapshotId`, asignación de revisión dentro de transacción y validación estricta de cadena `supersedes` (misma key, revisión inmediatamente anterior, sin huecos).
+
+La tabla admite exclusivamente inserciones. Hooks Dexie rechazan `update` y `delete` para reforzar append-only físico.
+
+La migración v24 crea únicamente `knowledgeSnapshots` y preserva todas las tablas previas sin transformaciones financieras. El rollback conceptual es detener lectura/escritura de la tabla nueva en una versión posterior, sin downgrade automático de Dexie ni borrado de base.
+
+`knowledgeSnapshots` queda fuera de los flujos de reset e import/export financiero para preservar retención completa de revisiones.
+
 ### Escritura observacional desde Home
 
 Con `VITE_FINANCIAL_SNAPSHOT_SHADOW_ENABLED=true`, el resumen del mes actual de Home puede persistir snapshots derivados mediante `FinancialSnapshotRepository`. La operación solo escribe `financialSnapshots`; no modifica `services`, `expenses`, settings, periodos ni otras tablas financieras. El flag está desactivado por defecto y no existe sincronización remota.
 
 La misma key y fingerprint se resuelven idempotentemente incluso tras cerrar y reabrir IndexedDB. Un fingerprint materialmente distinto crea una revisión append-only cuyo `supersedesSnapshotId` referencia la revisión inmediatamente anterior.
+
+Con `VITE_KNOWLEDGE_SHADOW_ENABLED=true`, esa misma ruta observacional puede ejecutar a continuación el pipeline completo de Knowledge sobre el `SealedFinancialSnapshot` ya resuelto y persistir `knowledgeSnapshots` mediante `KnowledgeSnapshotRepository`. La operación sigue siendo local-first, append-only, idempotente y sin cambios sobre tablas financieras operativas.
+
+Knowledge Shadow Mode no crea UI, no altera Home ni Reports, no promueve Knowledge a fuente oficial y no introduce sincronización remota. Si el pipeline de Knowledge falla, `financialSnapshots` conserva su comportamiento observacional normal y no se persisten artefactos parciales en `knowledgeSnapshots`.
 
 ## Neon PostgreSQL
 

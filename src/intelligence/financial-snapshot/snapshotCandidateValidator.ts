@@ -5,10 +5,12 @@ import type {
   SnapshotJsonValue,
   ValidatedSnapshotCandidate,
 } from '../../types/financialSnapshot'
+import {
+  isSupportedCanonicalizationVersion,
+  isSupportedSnapshotVersion,
+} from './snapshotProtocol'
 
-export const SUPPORTED_SNAPSHOT_VERSION = 'financial-snapshot/1.0.0'
-export const SUPPORTED_CANONICALIZATION_VERSION =
-  'financial-snapshot-c14n/1.0.0'
+export { SUPPORTED_SNAPSHOT_VERSION } from './snapshotProtocol'
 
 export type SnapshotCandidateValidationErrorCode =
   | 'SNAPSHOT_VALIDATION_INVALID_STATE'
@@ -88,8 +90,8 @@ function validateVersions(candidate: DraftSnapshotCandidate<unknown>): void {
   requireNonEmpty(candidate.rulesetVersion, 'SNAPSHOT_VALIDATION_INVALID_VERSION')
 
   if (
-    candidate.snapshotVersion !== SUPPORTED_SNAPSHOT_VERSION ||
-    candidate.canonicalizationVersion !== SUPPORTED_CANONICALIZATION_VERSION
+    !isSupportedSnapshotVersion(candidate.snapshotVersion) ||
+    !isSupportedCanonicalizationVersion(candidate.canonicalizationVersion)
   ) {
     fail('SNAPSHOT_VALIDATION_INCOMPATIBLE_VERSION')
   }

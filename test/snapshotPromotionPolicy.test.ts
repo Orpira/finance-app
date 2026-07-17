@@ -72,7 +72,7 @@ async function validSnapshot(): Promise<SealedFinancialSnapshot> {
       limitationCodes: ['rule.version.unavailable' as SnapshotNormativeCode],
     },
     snapshotVersion: 'financial-snapshot/1.0.0' as SnapshotVersion,
-    canonicalizationVersion: 'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion,
+    canonicalizationVersion: 'financial-snapshot-c14n/2.0.0' as CanonicalizationVersion,
     engineVersion,
     rulesetVersion,
   }
@@ -122,7 +122,30 @@ describe('Snapshot Promotion Policy', () => {
     const assessment = assessSnapshotPromotion(valid)
     expect(assessment.eligible).toBe(true)
     expect(assessment.failedChecks).toEqual([])
-    expect(assessment.checks).toHaveLength(24)
+    expect(assessment.checks).toHaveLength(25)
+  })
+
+  it('keeps V1 readable and verifiable but not eligible for promotion', async () => {
+    const candidate = await validSnapshot()
+    const legacy = mutate(candidate, (item) => {
+      item.canonicalizationVersion = 'financial-snapshot-c14n/1.0.0'
+      ;(item.fingerprint as Record<string, unknown>).canonicalizationVersion = 'financial-snapshot-c14n/1.0.0'
+      ;(item.fingerprint as Record<string, unknown>).fingerprintVersion = 'financial-snapshot-fingerprint/1.0.0'
+      ;(item.fingerprint as Record<string, unknown>).domain = 'private-balance:financial-snapshot:fingerprint:v1:'
+      delete (item.fingerprint as Record<string, unknown>).hashedComponent
+      const document = item.canonicalDocument as Record<string, unknown>
+      document.canonicalizationVersion = 'financial-snapshot-c14n/1.0.0'
+      delete document.operationalMetadata
+      const payload = document.payload as Record<string, unknown>
+      payload.scope = { ...item.scope }
+      payload.metadata = { ...item.metadata }
+      ;(item.identity as Record<string, unknown>).snapshotId = `financial-snapshot:financial-snapshot-fingerprint/1.0.0:${(item.fingerprint as Record<string, unknown>).value}`
+    })
+
+    const assessment = assessSnapshotPromotion(legacy)
+    expect(assessment.failedChecks.map((check) => check.code)).toContain('promotion.version_eligible')
+    expect(assessment.failedChecks.map((check) => check.code)).not.toContain('canonicalization.version_supported')
+    expect(assessment.failedChecks.map((check) => check.code)).not.toContain('fingerprint.version_supported')
   })
 
   it('rejects an absent fingerprint', () => {
@@ -137,7 +160,7 @@ describe('Snapshot Promotion Policy', () => {
 
   it('rejects an incompatible fingerprint version', () => {
     expect(failed(mutate(valid, (item) => {
-      ;(item.fingerprint as Record<string, unknown>).fingerprintVersion = 'financial-snapshot-fingerprint/2.0.0'
+      ;(item.fingerprint as Record<string, unknown>).fingerprintVersion = 'financial-snapshot-fingerprint/3.0.0'
     }), 'fingerprint.version_supported')).toBe(true)
   })
 
@@ -149,7 +172,7 @@ describe('Snapshot Promotion Policy', () => {
 
   it('rejects incompatible canonicalization version', () => {
     expect(failed(mutate(valid, (item) => {
-      item.canonicalizationVersion = 'financial-snapshot-c14n/2.0.0'
+      item.canonicalizationVersion = 'financial-snapshot-c14n/3.0.0'
     }), 'canonicalization.version_supported')).toBe(true)
   })
 
