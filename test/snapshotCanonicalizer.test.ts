@@ -156,7 +156,7 @@ describe('canonicalizeValidatedSnapshotCandidate', () => {
     expectCode(
       () => canonicalizeValidatedSnapshotCandidate({
         ...validated(),
-        canonicalizationVersion: 'financial-snapshot-c14n/2.0.0' as CanonicalizationVersion,
+        canonicalizationVersion: 'financial-snapshot-c14n/3.0.0' as CanonicalizationVersion,
       }),
       'SNAPSHOT_UNSUPPORTED_CANONICALIZATION_VERSION',
     )

@@ -1,6 +1,10 @@
 import { FinancialSnapshotRepository } from '../intelligence/financial-snapshot/financialSnapshotRepository'
 import { fingerprintCanonicalSnapshotDocument } from '../intelligence/financial-snapshot/snapshotFingerprint'
 import { assessSnapshotPromotion, type SnapshotPromotionAssessment } from '../intelligence/financial-snapshot/snapshotPromotionPolicy'
+import {
+  materializeMetadataFromCanonicalDocument,
+  materializeScopeFromCanonicalDocument,
+} from '../intelligence/financial-snapshot/snapshotProtocol'
 import type { FinancialEngineResult } from './financialEngineAdapter'
 import type { PersistedFinancialSnapshot } from '../types/persistedFinancialSnapshot'
 import type {
@@ -102,10 +106,10 @@ function sealedView(record: PersistedFinancialSnapshot): SealedFinancialSnapshot
     canonicalizationVersion: record.canonicalizationVersion,
     engineVersion: record.engineVersion,
     rulesetVersion: record.rulesetVersion,
-    scope: payload.scope,
+    scope: materializeScopeFromCanonicalDocument(record.canonicalDocument),
     evidence: payload.evidence,
     appliedRules: payload.appliedRules,
-    metadata: payload.metadata,
+    metadata: materializeMetadataFromCanonicalDocument(record.canonicalDocument),
   }
 }
 
