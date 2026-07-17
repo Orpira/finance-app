@@ -9,6 +9,10 @@ import type {
 } from '../../types/financialSnapshot'
 import { serializeCanonicalSnapshotDocument } from './snapshotCanonicalizer'
 import { fingerprintCanonicalSnapshotDocument } from './snapshotFingerprint'
+import {
+  materializeMetadataFromCanonicalDocument,
+  materializeScopeFromCanonicalDocument,
+} from './snapshotProtocol'
 
 export type SnapshotSealErrorCode =
   | 'SNAPSHOT_SEAL_INVALID_FINGERPRINT'
@@ -138,7 +142,7 @@ export async function sealCanonicalSnapshot<TEngineResult>(
   }
   if (
     !UTC_INSTANT_PATTERN.test(input.sealedAt) ||
-    input.sealedAt < canonicalDocument.payload.metadata.generatedAt
+    input.sealedAt < materializeMetadataFromCanonicalDocument(canonicalDocument).generatedAt
   ) {
     fail('SNAPSHOT_SEAL_INVALID_TIME')
   }
@@ -154,6 +158,9 @@ export async function sealCanonicalSnapshot<TEngineResult>(
   const document = cloneCanonicalDocument(canonicalDocument)
   const snapshotId =
     `financial-snapshot:${fingerprint.fingerprintVersion}:${fingerprint.value}` as SealedSnapshotId
+
+  const scope = materializeScopeFromCanonicalDocument(document)
+  const metadata = materializeMetadataFromCanonicalDocument(document)
 
   return {
     identity: { snapshotId, snapshotKey: input.snapshotKey },
@@ -172,9 +179,9 @@ export async function sealCanonicalSnapshot<TEngineResult>(
     canonicalizationVersion: document.canonicalizationVersion,
     engineVersion: document.payload.engineVersion,
     rulesetVersion: document.payload.rulesetVersion,
-    scope: document.payload.scope,
+    scope,
     evidence: document.payload.evidence,
     appliedRules: document.payload.appliedRules,
-    metadata: { ...document.payload.metadata },
+    metadata,
   }
 }

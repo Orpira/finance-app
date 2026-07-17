@@ -31,7 +31,7 @@ function engine(balance = 10): FinancialEngineResult {
   return { ...result, balanceReport: { ...result.balanceReport, generalBalance: balance } }
 }
 
-async function record(options: { rules?: boolean; scope?: Partial<ValidatedSnapshotCandidate['scope']> } = {}) {
+async function record(options: { rules?: boolean; scope?: Partial<ValidatedSnapshotCandidate['scope']>; canonicalizationVersion?: CanonicalizationVersion } = {}) {
   const rules = options.rules === false ? [] : [{
     ruleId: 'balance.report.current', order: 0, engineVersion, rulesetVersion,
     explanationCode: 'rule.balance.report.current' as SnapshotNormativeCode,
@@ -56,7 +56,7 @@ async function record(options: { rules?: boolean; scope?: Partial<ValidatedSnaps
       warningCodes: [], limitationCodes: ['rule.version.unavailable' as SnapshotNormativeCode],
     },
     snapshotVersion: 'financial-snapshot/1.0.0' as SnapshotVersion,
-    canonicalizationVersion: 'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion,
+    canonicalizationVersion: options.canonicalizationVersion ?? 'financial-snapshot-c14n/2.0.0' as CanonicalizationVersion,
     engineVersion, rulesetVersion,
   }
   const canonicalDocument = canonicalizeValidatedSnapshotCandidate(candidate)
@@ -174,6 +174,13 @@ describe('SnapshotPromotionExecutor', () => {
     const decision = await execute(item)
     expect(decision).toMatchObject({ source: 'current', fallbackReason: 'snapshot_not_eligible' })
     expect(decision.assessment?.eligible).toBe(false)
+  })
+
+  it('does not promote a readable V1 snapshot when the matrix marks it ineligible', async () => {
+    const item = await record({ canonicalizationVersion: 'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion })
+    const decision = await execute(item)
+    expect(decision).toMatchObject({ source: 'current', fallbackReason: 'snapshot_not_eligible' })
+    expect(decision.assessment?.failedChecks.map((check) => check.code)).toContain('promotion.version_eligible')
   })
 
   it('falls back for a non-permitted persisted state or structural exception', async () => {
