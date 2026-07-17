@@ -1,9 +1,31 @@
 import { FinancialSnapshotRepository } from '../intelligence/financial-snapshot/financialSnapshotRepository'
+import {
+  materializeScopeFromCanonicalDocument,
+} from '../intelligence/financial-snapshot/snapshotProtocol'
 import { buildSnapshotCandidate } from '../intelligence/financial-snapshot/snapshotBuilder'
 import { validateSnapshotCandidate } from '../intelligence/financial-snapshot/snapshotCandidateValidator'
 import { canonicalizeValidatedSnapshotCandidate } from '../intelligence/financial-snapshot/snapshotCanonicalizer'
 import { fingerprintCanonicalSnapshotDocument } from '../intelligence/financial-snapshot/snapshotFingerprint'
 import { deriveSnapshotKey, sealCanonicalSnapshot } from '../intelligence/financial-snapshot/snapshotSealer'
+import {
+  auditCanonicalSnapshotMaterialDiff,
+  type SnapshotMaterialDiffAudit,
+} from '../intelligence/financial-snapshot/snapshotMaterialDiffAuditor'
+import {
+  DEFAULT_SNAPSHOT_CANONICALIZATION_VERSION,
+  isCanonicalizationVersionV2,
+  SUPPORTED_SNAPSHOT_VERSION,
+} from '../intelligence/financial-snapshot/snapshotProtocol'
+import { KnowledgeSnapshotRepository } from '../intelligence/knowledge-layer/knowledgeSnapshotRepository'
+import {
+  DEFAULT_KNOWLEDGE_SHADOW_VERSIONS,
+  isKnowledgeShadowEnabled,
+  runKnowledgeShadowMode,
+  type KnowledgeShadowModeInput,
+  type KnowledgeShadowModeOptions,
+  type KnowledgeShadowModeResult,
+  type KnowledgeShadowModeVersions,
+} from './knowledgeShadowModeService'
 import type { FinancialEngineResult } from './financialEngineAdapter'
 import type { Expense } from '../types/expense'
 import type { PersistedFinancialSnapshot } from '../types/persistedFinancialSnapshot'
@@ -27,9 +49,9 @@ import type {
 import type { CurrencyCode, UsageMode } from '../types/settings'
 import { getIncomeType, isAdjustmentIncome } from '../utils/incomeTypes'
 
-const SNAPSHOT_VERSION = 'financial-snapshot/1.0.0' as SnapshotVersion
+const SNAPSHOT_VERSION = SUPPORTED_SNAPSHOT_VERSION as SnapshotVersion
 const CANONICALIZATION_VERSION =
-  'financial-snapshot-c14n/1.0.0' as CanonicalizationVersion
+  DEFAULT_SNAPSHOT_CANONICALIZATION_VERSION as CanonicalizationVersion
 
 export interface SnapshotShadowModeInput {
   readonly consumer: 'home.balance.current-month'
@@ -68,6 +90,7 @@ export interface SnapshotShadowModeObservation {
   }
   readonly warningCodes: readonly string[]
   readonly qualityCodes: readonly string[]
+  readonly materialDiffAudit?: SnapshotMaterialDiffAudit
 }
 
 interface SnapshotRepositoryPort {
@@ -83,6 +106,13 @@ export interface SnapshotShadowModeOptions {
   readonly dev?: boolean
   readonly logger?: (message: string, details: Record<string, unknown>) => void
   readonly repository?: SnapshotRepositoryPort
+  readonly knowledgeShadow?: Partial<{
+    enabled: boolean
+    repository: ConstructorParameters<typeof KnowledgeSnapshotRepository>[0]
+    versions: KnowledgeShadowModeVersions
+    runner: typeof runKnowledgeShadowMode
+    options: KnowledgeShadowModeOptions
+  }>
   readonly pipeline?: Partial<{
     build: typeof buildSnapshotCandidate
     validate: typeof validateSnapshotCandidate
@@ -90,6 +120,7 @@ export interface SnapshotShadowModeOptions {
     fingerprint: typeof fingerprintCanonicalSnapshotDocument
     seal: typeof sealCanonicalSnapshot
     compare: typeof comparisonFields
+    audit: typeof auditCanonicalSnapshotMaterialDiff
   }>
 }
 
@@ -242,6 +273,71 @@ function comparisonFields(
   return fields.filter(([, first, second]) => first !== second).map(([name]) => name)
 }
 
+function safeSnapshotKey(snapshotKey: SnapshotKey): string {
+  const value = String(snapshotKey)
+  if (value.length <= 48) return value
+  return `${value.slice(0, 24)}...${value.slice(-12)}`
+}
+
+function toSealedSnapshot(
+  persisted: PersistedFinancialSnapshot<unknown>,
+): KnowledgeShadowModeInput['sealedFinancialSnapshot'] {
+  return {
+    identity: {
+      snapshotId: persisted.snapshotId,
+      snapshotKey: persisted.snapshotKey,
+    },
+    revision: {
+      revision: persisted.revision,
+    },
+    status: 'sealed',
+    canonicalDocument: structuredClone(persisted.canonicalDocument) as KnowledgeShadowModeInput['sealedFinancialSnapshot']['canonicalDocument'],
+    fingerprint: { ...persisted.fingerprint },
+    snapshotVersion: persisted.snapshotVersion,
+    canonicalizationVersion: persisted.canonicalizationVersion,
+    engineVersion: persisted.engineVersion,
+    rulesetVersion: persisted.rulesetVersion,
+    scope: materializeScopeFromCanonicalDocument(
+      persisted.canonicalDocument,
+    ) as KnowledgeShadowModeInput['sealedFinancialSnapshot']['scope'],
+    evidence: structuredClone(persisted.canonicalDocument.payload.evidence),
+    appliedRules: structuredClone(persisted.canonicalDocument.payload.appliedRules),
+  }
+}
+
+async function observeKnowledgeShadow(
+  input: SnapshotShadowModeInput,
+  snapshot: KnowledgeShadowModeInput['sealedFinancialSnapshot'],
+  options: SnapshotShadowModeOptions,
+): Promise<KnowledgeShadowModeResult | undefined> {
+  const runner = options.knowledgeShadow?.runner ?? runKnowledgeShadowMode
+  try {
+    return await runner(
+      {
+        sealedFinancialSnapshot: snapshot,
+        versions: options.knowledgeShadow?.versions ?? DEFAULT_KNOWLEDGE_SHADOW_VERSIONS,
+        sealedAt: input.sealedAt,
+        persistedAt: input.persistedAt,
+        revisionReasonCode: input.revisionReasonCode as unknown as KnowledgeShadowModeInput['revisionReasonCode'],
+        repository:
+          options.knowledgeShadow?.repository === undefined
+            ? new KnowledgeSnapshotRepository()
+            : new KnowledgeSnapshotRepository(options.knowledgeShadow.repository),
+        consumer: input.consumer,
+        diagnosticScope: `${input.scope.periodStart}:${input.scope.periodEndExclusive}:${input.scope.usageMode}:${input.scope.currency}`,
+        featureEnabled: options.knowledgeShadow?.enabled ?? isKnowledgeShadowEnabled(),
+      },
+      {
+        dev: options.knowledgeShadow?.options?.dev ?? options.dev,
+        logger: options.knowledgeShadow?.options?.logger ?? options.logger,
+        pipeline: options.knowledgeShadow?.options?.pipeline,
+      },
+    )
+  } catch {
+    return undefined
+  }
+}
+
 async function execute(
   input: SnapshotShadowModeInput,
   options: SnapshotShadowModeOptions,
@@ -254,8 +350,10 @@ async function execute(
     fingerprint: fingerprintCanonicalSnapshotDocument,
     seal: sealCanonicalSnapshot,
     compare: comparisonFields,
+    audit: auditCanonicalSnapshotMaterialDiff,
     ...options.pipeline,
   }
+  const developmentMode = options.dev ?? import.meta.env.DEV
   const evidence = buildEvidence(input)
   const engineVersion = input.financialEngineResult.engineVersion as EngineVersion
   const rulesetVersion = `engine-bundled/${engineVersion}` as RulesetVersion
@@ -301,8 +399,29 @@ async function execute(
   const fingerprint = await pipeline.fingerprint(canonicalDocument)
   const snapshotKey = deriveSnapshotKey(canonicalDocument)
   const previous = await safeLatest(repository, snapshotKey)
+  let materialDiffAudit: SnapshotMaterialDiffAudit | undefined
+
+  if (
+    developmentMode &&
+    previous !== undefined &&
+    isCanonicalizationVersionV2(previous.canonicalizationVersion) &&
+    isCanonicalizationVersionV2(canonicalDocument.canonicalizationVersion)
+  ) {
+    materialDiffAudit = pipeline.audit(previous.canonicalDocument, canonicalDocument)
+    const logger = options.logger ?? console.info
+    logger('[financial-snapshot] Material diff audit', {
+      consumer: input.consumer,
+      snapshotKey: safeSnapshotKey(snapshotKey),
+      previousRevision: previous.revision,
+      equivalent: materialDiffAudit.equivalent,
+      diffCount: materialDiffAudit.changedPaths.length,
+      summaryCodes: materialDiffAudit.summaryCodes,
+      changedPaths: materialDiffAudit.changedPaths,
+    })
+  }
 
   if (previous?.fingerprintValue === fingerprint.value) {
+    await observeKnowledgeShadow(input, toSealedSnapshot(previous), options)
     return {
       consumer: input.consumer,
       snapshotKey,
@@ -319,6 +438,7 @@ async function execute(
       },
       warningCodes: evidence.warningCodes,
       qualityCodes: canonicalDocument.payload.metadata.qualityCodes,
+      ...(materialDiffAudit === undefined ? {} : { materialDiffAudit }),
     }
   }
 
@@ -332,6 +452,7 @@ async function execute(
     ...(previous === undefined ? {} : { supersedesSnapshotId: previous.snapshotId }),
   })
   const persisted = await repository.persist(sealed, input.persistedAt)
+  await observeKnowledgeShadow(input, toSealedSnapshot(persisted), options)
   return {
     consumer: input.consumer,
     snapshotKey,
@@ -348,6 +469,7 @@ async function execute(
     },
     warningCodes: evidence.warningCodes,
     qualityCodes: canonicalDocument.payload.metadata.qualityCodes,
+    ...(materialDiffAudit === undefined ? {} : { materialDiffAudit }),
   }
 }
 

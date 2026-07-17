@@ -114,8 +114,67 @@ describe('Snapshot shadow mode observational pipeline', () => {
     expect(result).toMatchObject({ revision: 1, idempotent: false, fingerprintChanged: false })
     const stored = await repository.getLatestBySnapshotKey(result!.snapshotKey)
     expect(stored.snapshotId).toMatch(/^financial-snapshot:/)
+    expect(stored.canonicalizationVersion).toBe('financial-snapshot-c14n/2.0.0')
+    expect(stored.fingerprint.fingerprintVersion).toBe('financial-snapshot-fingerprint/2.0.0')
+    expect(stored.fingerprint.domain).toBe('private-balance:financial-snapshot:fingerprint:v2:')
     expect(stored.canonicalDocument.payload.engineResult).toEqual(fixture().financialEngineResult)
     expect(stored.canonicalDocument.payload.scope.kind).toBe('monthly')
+  })
+
+  it('keeps one material revision across five equivalent executions with varying operational times', async () => {
+    const { repository } = repositoryFixture()
+    const base = fixture()
+    const variants = [
+      base,
+      fixture({
+        candidateId: 'home:2026-07:2' as SnapshotCandidateId,
+        generatedAt: '2026-07-14T10:00:01.000Z' as UtcInstant,
+        sealedAt: '2026-07-14T10:00:02.000Z' as UtcInstant,
+        persistedAt: '2026-07-14T10:00:03.000Z' as UtcInstant,
+        scope: { ...base.scope, asOf: '2026-07-14T10:00:04.000Z' as UtcInstant },
+      }),
+      fixture({
+        candidateId: 'home:2026-07:3' as SnapshotCandidateId,
+        generatedAt: '2026-07-14T11:00:00.000Z' as UtcInstant,
+        sealedAt: '2026-07-14T11:00:01.000Z' as UtcInstant,
+        persistedAt: '2026-07-14T11:00:02.000Z' as UtcInstant,
+        scope: { ...base.scope, asOf: '2026-07-14T11:00:03.000Z' as UtcInstant },
+      }),
+      fixture({
+        candidateId: 'home:2026-07:4' as SnapshotCandidateId,
+        generatedAt: '2026-07-15T00:00:00.000Z' as UtcInstant,
+        sealedAt: '2026-07-15T00:00:01.000Z' as UtcInstant,
+        persistedAt: '2026-07-15T00:00:02.000Z' as UtcInstant,
+        scope: { ...base.scope, asOf: '2026-07-15T00:00:03.000Z' as UtcInstant },
+      }),
+      fixture({
+        candidateId: 'home:2026-07:5' as SnapshotCandidateId,
+        generatedAt: '2026-07-16T09:30:00.000Z' as UtcInstant,
+        sealedAt: '2026-07-16T09:30:01.000Z' as UtcInstant,
+        persistedAt: '2026-07-16T09:30:02.000Z' as UtcInstant,
+        scope: { ...base.scope, asOf: '2026-07-16T09:30:03.000Z' as UtcInstant },
+      }),
+    ]
+
+    const observations = []
+    for (const input of variants) {
+      observations.push(await runSnapshotShadowMode(input, { enabled: true, repository, dev: false }))
+    }
+
+    expect(observations[0]).toMatchObject({ revision: 1, idempotent: false })
+    for (const observation of observations.slice(1)) {
+      expect(observation).toMatchObject({
+        revision: 1,
+        idempotent: true,
+        fingerprintChanged: false,
+        divergentFields: [],
+      })
+    }
+
+    const records = await repository.listBySnapshotKey(observations[0]!.snapshotKey)
+    expect(records).toHaveLength(1)
+    expect(new Set(records.map((record) => record.snapshotId)).size).toBe(1)
+    expect(new Set(records.map((record) => record.fingerprintValue)).size).toBe(1)
   })
 
   it('is idempotent across repeated executions and creates a linked material revision', async () => {
@@ -143,6 +202,48 @@ describe('Snapshot shadow mode observational pipeline', () => {
     ])
     expect(first).toBe(second)
     expect(database.financialSnapshots.records.size).toBe(1)
+  })
+
+  it.each([
+    ['income', fixture({ incomes: [income({ eurValue: 75 })], financialEngineResult: runFinancialEngine({ incomes: [income({ eurValue: 75 })], expenses: [expense()], currency: 'EUR', usageMode: 'basic' }) })],
+    ['expense', fixture({ expenses: [expense({ eurValue: 25 })], financialEngineResult: runFinancialEngine({ incomes: [income()], expenses: [expense({ eurValue: 25 })], currency: 'EUR', usageMode: 'basic' }) })],
+    ['adjustment', fixture({ incomes: [income({ type: 'ajuste', eurValue: 5 })], financialEngineResult: runFinancialEngine({ incomes: [income({ type: 'ajuste', eurValue: 5 })], expenses: [expense()], currency: 'EUR', usageMode: 'basic' }) })],
+  ])('creates a new revision for material %s changes', async (_label, changedInput) => {
+    const { repository } = repositoryFixture()
+    const first = await runSnapshotShadowMode(fixture(), { enabled: true, repository, dev: false })
+    const second = await runSnapshotShadowMode(changedInput, { enabled: true, repository, dev: false })
+    const records = await repository.listBySnapshotKey(first!.snapshotKey)
+
+    expect(second).toMatchObject({ revision: 2, idempotent: false, fingerprintChanged: true })
+    expect(records).toHaveLength(2)
+    expect(records[1].snapshotId).not.toBe(records[0].snapshotId)
+    expect(records[1].supersedesSnapshotId).toBe(records[0].snapshotId)
+  })
+
+  it.each([
+    ['currency', fixture({
+      scope: { ...fixture().scope, currency: 'USD' as const },
+      incomes: [income({ currency: 'USD' })],
+      expenses: [expense({ currency: 'USD' })],
+      financialEngineResult: runFinancialEngine({ incomes: [income({ currency: 'USD' })], expenses: [expense({ currency: 'USD' })], currency: 'USD', usageMode: 'basic' }),
+    })],
+    ['usageMode', fixture({
+      scope: { ...fixture().scope, usageMode: 'professional' as const, earningPeriodId: 9 },
+      incomes: [income({ usageMode: 'professional', earningPeriodId: 9 })],
+      expenses: [expense({ usageMode: 'professional', earningPeriodId: 9 })],
+      financialEngineResult: runFinancialEngine({ incomes: [income({ usageMode: 'professional', earningPeriodId: 9 })], expenses: [expense({ usageMode: 'professional', earningPeriodId: 9 })], currency: 'EUR', usageMode: 'professional', earningPeriodId: 9 }),
+    })],
+    ['period', fixture({
+      scope: { ...fixture().scope, periodStart: '2026-06-01' as CivilDate, periodEndExclusive: '2026-07-01' as CivilDate },
+    })],
+  ])('changes snapshotKey for material scope %s changes', async (_label, changedInput) => {
+    const { repository } = repositoryFixture()
+    const first = await runSnapshotShadowMode(fixture(), { enabled: true, repository, dev: false })
+    const second = await runSnapshotShadowMode(changedInput, { enabled: true, repository, dev: false })
+
+    expect(second!.snapshotKey).not.toBe(first!.snapshotKey)
+    expect((await repository.listBySnapshotKey(first!.snapshotKey))).toHaveLength(1)
+    expect((await repository.listBySnapshotKey(second!.snapshotKey))).toHaveLength(1)
   })
 
   it.each(['build', 'validate', 'canonicalize', 'fingerprint', 'seal'] as const)(
@@ -196,6 +297,86 @@ describe('Snapshot shadow mode observational pipeline', () => {
     expect(serialized).not.toMatch(/[0-9a-f]{64}/)
   })
 
+  it('runs material diff audit only in development and logs safe summary', async () => {
+    const logger = vi.fn()
+    const { repository } = repositoryFixture()
+    const first = await runSnapshotShadowMode(fixture(), {
+      enabled: true,
+      repository,
+      dev: false,
+    })
+    expect(first).toBeDefined()
+
+    const audit = vi.fn().mockReturnValue({
+      equivalent: true,
+      previousCanonicalizationVersion: 'financial-snapshot-c14n/2.0.0',
+      currentCanonicalizationVersion: 'financial-snapshot-c14n/2.0.0',
+      changedPaths: [],
+      summaryCodes: ['diff.none'],
+    })
+
+    const second = await runSnapshotShadowMode(
+      fixture({ candidateId: 'home:2026-07:dev-audit' as SnapshotCandidateId }),
+      {
+        enabled: true,
+        repository,
+        dev: true,
+        logger,
+        pipeline: { audit },
+      },
+    )
+
+    expect(second).toMatchObject({ idempotent: true, revision: 1 })
+    expect(audit).toHaveBeenCalledTimes(1)
+    expect(logger).toHaveBeenCalledWith(
+      '[financial-snapshot] Material diff audit',
+      expect.objectContaining({
+        equivalent: true,
+        previousRevision: 1,
+        summaryCodes: ['diff.none'],
+      }),
+    )
+    const serialized = JSON.stringify(logger.mock.calls)
+    expect(serialized).not.toContain('PRIVATE PERSON')
+    expect(serialized).not.toContain('PRIVATE ADDRESS')
+    expect(serialized).not.toMatch(/[0-9a-f]{64}/)
+  })
+
+  it('does not run material diff audit in production', async () => {
+    const logger = vi.fn()
+    const { repository } = repositoryFixture()
+    await runSnapshotShadowMode(fixture(), {
+      enabled: true,
+      repository,
+      dev: false,
+    })
+
+    const audit = vi.fn().mockReturnValue({
+      equivalent: true,
+      previousCanonicalizationVersion: 'financial-snapshot-c14n/2.0.0',
+      currentCanonicalizationVersion: 'financial-snapshot-c14n/2.0.0',
+      changedPaths: [],
+      summaryCodes: ['diff.none'],
+    })
+
+    await runSnapshotShadowMode(
+      fixture({ candidateId: 'home:2026-07:prod-no-audit' as SnapshotCandidateId }),
+      {
+        enabled: true,
+        repository,
+        dev: false,
+        logger,
+        pipeline: { audit },
+      },
+    )
+
+    expect(audit).not.toHaveBeenCalled()
+    expect(logger).not.toHaveBeenCalledWith(
+      '[financial-snapshot] Material diff audit',
+      expect.anything(),
+    )
+  })
+
   it.each([
     ['empty', [], [], 'basic' as const, undefined],
     ['professional season', [income({ usageMode: 'professional', earningPeriodId: 9 })], [expense({ usageMode: 'professional', earningPeriodId: 9 })], 'professional' as const, 9],
@@ -214,5 +395,47 @@ describe('Snapshot shadow mode observational pipeline', () => {
     const before = JSON.stringify(input)
     await expect(runSnapshotShadowMode(input, { enabled: true, dev: false, repository: repositoryFixture().repository })).resolves.toBeDefined()
     expect(JSON.stringify(input)).toBe(before)
+  })
+
+  it('runs knowledge shadow mode from the snapshot service after resolving the sealed snapshot', async () => {
+    const { repository } = repositoryFixture()
+    const knowledgeRunner = vi.fn().mockResolvedValue({ status: 'observed', revision: 1 })
+
+    const result = await runSnapshotShadowMode(fixture(), {
+      enabled: true,
+      repository,
+      dev: false,
+      knowledgeShadow: {
+        enabled: true,
+        runner: knowledgeRunner,
+      },
+    })
+
+    expect(result).toMatchObject({ revision: 1, idempotent: false })
+    expect(knowledgeRunner).toHaveBeenCalledOnce()
+    expect(knowledgeRunner.mock.calls[0][0]).toMatchObject({
+      featureEnabled: true,
+      consumer: 'home.balance.current-month',
+      sealedFinancialSnapshot: expect.objectContaining({ status: 'sealed' }),
+    })
+  })
+
+  it('keeps snapshot observation stable when knowledge shadow mode fails', async () => {
+    const { repository } = repositoryFixture()
+    const knowledgeRunner = vi.fn().mockRejectedValue(new Error('knowledge failed'))
+
+    const result = await runSnapshotShadowMode(fixture(), {
+      enabled: true,
+      repository,
+      dev: false,
+      knowledgeShadow: {
+        enabled: true,
+        runner: knowledgeRunner,
+      },
+    })
+
+    expect(result).toMatchObject({ revision: 1, idempotent: false, fingerprintChanged: false })
+    expect(knowledgeRunner).toHaveBeenCalledOnce()
+    expect(await repository.listBySnapshotKey(result!.snapshotKey)).toHaveLength(1)
   })
 })
