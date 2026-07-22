@@ -308,6 +308,11 @@ export function createAIConversationApplicationService(
       input.onStateChange?.('Sending')
 
       const session = input.session
+      if (session === null) {
+        input.onStateChange?.('Error')
+        return failure('CONVERSATION_NOT_FOUND', 'No hay una conversación activa para enviar mensajes.')
+      }
+
       const createdAt = now()
       const userMessage = dependencies.conversationService.createUserMessage({
         id: `message:user:${normalizeIdentifierFragment(`${session.sessionId}:${session.messages.length}:${createdAt}`)}`,

@@ -274,11 +274,16 @@ function createFetchTransport(): OpenAITransport {
 
         if (!response.ok) {
           const body = await safeReadJson(response)
-          const error = new Error('OpenAI request failed') as OpenAIHttpError
-          error.status = response.status
+          const error = Object.assign(new Error('OpenAI request failed'), {
+            status: response.status,
+          }) as OpenAIHttpError
           if (isRecord(body) && isRecord(body.error)) {
-            error.code = typeof body.error.code === 'string' ? body.error.code : undefined
-            error.type = typeof body.error.type === 'string' ? body.error.type : undefined
+            const providerError = Object.assign(new Error('OpenAI request failed'), {
+              status: response.status,
+              code: typeof body.error.code === 'string' ? body.error.code : undefined,
+              type: typeof body.error.type === 'string' ? body.error.type : undefined,
+            }) as OpenAIHttpError
+            throw providerError
           }
           throw error
         }
