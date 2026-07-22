@@ -38,6 +38,15 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 - Adapter financiero + shadow/promotion controlados.
 - Snapshot/Knowledge pipelines implementados como derivados.
 - Dashboard Insights (7F) integrado en modo profesional.
+- Vertical Slice conversacional 9H integrado en UI con AIConversationService.
+- Prompt Builder 10A implementado como dominio independiente provider-neutral con agregado estructurado, segmentos tipados, prioridades, validador fail-closed y builder inmutable.
+- Context Builder 10B implementado como dominio independiente provider-neutral con agregado estructurado, secciones tipadas, sources explicitos, prioridades, validador fail-closed y builder inmutable.
+- Context Resolution 10C implementado como dominio independiente provider-neutral con AIResolvedContext inmutable, estrategias explicitas y resolver determinista fail-closed.
+- AI Provider Adapter 10D implementado como dominio independiente provider-neutral con `AIProvider`, request/response/capabilities canónicos, factory centralizada y adaptador OpenAI desacoplado del dominio.
+- AI Execution Pipeline 10E implementado como dominio de orquestación determinista con `execute()`, puertos inyectables y coordinación estricta entre conversación, contexto, prompt y provider.
+- AI Execution Inspector 10F implementado como observador pasivo del pipeline con trazas, stages, snapshots inmutables, exportación read-only y pantalla Debug dedicada.
+- AI Conversation Integration 11A implementado como `AIConversationApplicationService` sobre `AIExecutionPipeline`, con `ConversationPage` desacoplada del motor y consumo real del flujo completo de IA.
+- AI Provider Production Activation 11B implementado reutilizando el `OpenAIProviderAdapter` certificado mediante una composition root dedicada y un proxy serverless autorizado que mantiene la API key solo en servidor/edge.
 
 ## 3) Estado de calidad
 
@@ -59,4 +68,4 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 
 ## 6) Veredicto de fase documental
 
-Estado de entrega documental: completo y listo para certificación de la fase definida como 8A.
+Estado de entrega documental: completo para 11B y listo para iniciar 11C sobre la integración conversacional ya certificada.
