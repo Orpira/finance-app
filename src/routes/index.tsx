@@ -14,6 +14,7 @@ import HomePage from '../pages/Home/HomePage'
 import IncomeListPage from '../pages/Income/IncomeListPage'
 import IncomePage from '../pages/Income/IncomePage'
 import IncomeDetailPage from '../pages/Income/IncomeDetailPage'
+import InsightDashboardPage from '../pages/Insights/InsightDashboardPage'
 import MorePage from '../pages/More/MorePage'
 import ReportPreviewPage from '../pages/Reports/ReportPreviewPage'
 import ReportsPage from '../pages/Reports/ReportsPage'
@@ -23,10 +24,12 @@ import SettingsPage from '../pages/Settings/SettingsPage'
 import SettingsSecurityPage from '../pages/Settings/SettingsSecurityPage'
 import SettingsLicensePage from '../pages/Settings/SettingsLicensePage'
 import CommunicationChannelsPage from '../pages/Settings/CommunicationChannelsPage'
+import AIExecutionInspectorPage from '../pages/Debug/AIExecutionInspectorPage'
 import DebugPage from '../pages/Debug/DebugPage'
 import SeasonsPage from '../pages/Seasons/SeasonsPage'
 import SeasonFormPage from '../pages/Seasons/SeasonFormPage'
 import SeasonDetailPage from '../pages/Seasons/SeasonDetailPage'
+import ConversationPage from '../pages/Conversation/ConversationPage'
 
 export function RouterProvider() {
   return (
@@ -37,7 +40,7 @@ export function RouterProvider() {
           <Route element={<AppLayout />}>
             <Route index element={<HomePage />} />
             <Route path="resumen-completo" element={<UsageModeGuard allowed={['professional']}><FullSummaryPage /></UsageModeGuard>} />
-            <Route path="dashboard" element={<Navigate replace to="/resumen-completo" />} />
+            <Route path="dashboard" element={<UsageModeGuard allowed={['professional']}><InsightDashboardPage /></UsageModeGuard>} />
             <Route
               path="resumen-completo/historial-mejores-dias"
               element={<UsageModeGuard allowed={['professional']}><BestDaysHistoryPage /></UsageModeGuard>}
@@ -70,7 +73,9 @@ export function RouterProvider() {
             <Route path="settings/communication-channels" element={<CommunicationChannelsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="more" element={<MorePage />} />
+            <Route path="conversation" element={<ConversationPage />} />
             <Route path="debug" element={<DebugPage />} />
+            <Route path="debug/ai-execution-inspector" element={<AIExecutionInspectorPage />} />
           </Route>
           </Routes>
         </PinGate>

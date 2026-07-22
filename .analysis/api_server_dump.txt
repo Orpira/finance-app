@@ -1,0 +1,1829 @@
+=== API ENDPOINTS ===
+--- api/automation-token.ts ---
+     1	/// <reference types="node" />
+     2	
+     3	import { z } from 'zod'
+     4	
+     5	import {
+     6	  rejectInvalidRequest,
+     7	  type VercelRequest,
+     8	  type VercelResponse,
+     9	} from '../server/apiUtils.js'
+    10	import {
+    11	  getSignedLicenseKey,
+    12	  issueAutomationJwt,
+    13	  verifySignedLicenseForDevice,
+    14	} from '../server/automationSecurity.js'
+    15	import {
+    16	  authorizeLicenseDevice,
+    17	  LicenseRegistryError,
+    18	} from '../server/licenseDeviceRegistry.js'
+    19	
+    20	const requestSchema = z.object({
+    21	  activationCode: z.string().min(20).max(4096),
+    22	  deviceCode: z.union([
+    23	    z.string().regex(/^PB-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}$/),
+    24	    z.string().regex(/^PB-DEVICE-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+    25	  ]),
+    26	  userCode: z.string().min(1).max(100),
+    27	  deviceName: z.string().max(200).optional(),
+    28	  platform: z.enum(['web', 'android', 'ios', 'unknown']).optional(),
+    29	}).strict()
+    30	
+    31	export default async function handler(
+    32	  request: VercelRequest,
+    33	  response: VercelResponse,
+    34	) {
+    35	  if (rejectInvalidRequest(request, response, 8 * 1024)) return
+    36	
+    37	  try {
+    38	    const input = requestSchema.parse(request.body)
+    39	    const license = verifySignedLicenseForDevice(
+    40	      input.activationCode,
+    41	      input.deviceCode,
+    42	    )
+    43	    await authorizeLicenseDevice({
+    44	      licenseKey: getSignedLicenseKey(input.activationCode),
+    45	      userCode: input.userCode,
+    46	      deviceCode: input.deviceCode,
+    47	      deviceName: input.deviceName,
+    48	      platform: input.platform,
+    49	      licenseType: license.licenseType,
+    50	      expiresAt: license.expiresAt,
+    51	      devicePolicy: license.devicePolicy ?? 'multi',
+    52	    })
+    53	    const jwt = issueAutomationJwt(
+    54	      input.deviceCode,
+    55	      license.licenseType,
+    56	      license.expiresAt,
+    57	    )
+    58	
+    59	    response.status(200).json(jwt)
+    60	  } catch (error) {
+    61	    if (error instanceof LicenseRegistryError) {
+    62	      const status = error.code === 'device-limit-reached' ? 409 : 403
+    63	      response.status(status).json({ error: error.message })
+    64	      return
+    65	    }
+    66	    response.status(401).json({ error: 'No se pudo autorizar este dispositivo.' })
+    67	  }
+    68	}
+--- api/automation.ts ---
+     1	/// <reference types="node" />
+     2	
+     3	import { randomUUID } from 'node:crypto'
+     4	
+     5	import { z } from 'zod'
+     6	
+     7	import {
+     8	  rejectInvalidRequest,
+     9	  type VercelRequest,
+    10	  type VercelResponse,
+    11	} from '../server/apiUtils.js'
+    12	import {
+    13	  dispatchAutomationEvent,
+    14	} from '../server/automation/eventDispatcher.js'
+    15	import {
+    16	  AUTOMATION_EVENT_TYPES,
+    17	  type AutomationEnvelope,
+    18	} from '../server/automation/eventTypes.js'
+    19	import {
+    20	  hasWebhookRoute,
+    21	  WebhookDispatchError,
+    22	} from '../server/automation/webhookDispatcher.js'
+    23	import { verifyAutomationJwt } from '../server/automationSecurity.js'
+    24	
+    25	const identityCodesSchema = z.object({
+    26	  userCode: z.string().regex(/^PB-USER-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+    27	  deviceCode: z.string().regex(/^PB-DEVICE-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+    28	})
+    29	
+    30	const envelopeSchema = z.object({
+    31	  eventId: z.string().uuid().optional(),
+    32	  event: z.enum(AUTOMATION_EVENT_TYPES),
+    33	  createdAt: z.iso.datetime().default(() => new Date().toISOString()),
+    34	  schemaVersion: z.literal(1),
+    35	  source: z.literal('private-balance-pwa').optional(),
+    36	  data: z.record(z.string(), z.unknown()),
+    37	  userCode: z.string().optional(),
+    38	  deviceCode: z.string().optional(),
+    39	  timezone: z.string().optional(),
+    40	  locale: z.string().optional(),
+    41	})
+    42	
+    43	const whatsappConnectRequestSchema = identityCodesSchema.extend({
+    44	  event: z.literal('device.whatsapp.connect.requested'),
+    45	  phoneNumber: z.string().regex(/^\d{7,20}$/).optional(),
+    46	  timezone: z.string().optional(),
+    47	  locale: z.string().optional(),
+    48	}).strict()
+    49	
+    50	function getBearerToken(request: VercelRequest) {
+    51	  const authorization = request.headers.authorization
+    52	  if (typeof authorization !== 'string' || !authorization.startsWith('Bearer ')) {
+    53	    throw new Error('Autorización ausente.')
+    54	  }
+    55	
+    56	  return authorization.slice('Bearer '.length).trim()
+    57	}
+    58	
+    59	function getRequestEventId(request: VercelRequest) {
+    60	  const privateBalanceEventId = request.headers['x-private-balance-event-id']
+    61	  const idempotencyKey = request.headers['idempotency-key']
+    62	  const payloadEventId = typeof request.body === 'object' && request.body !== null
+    63	    ? (request.body as Record<string, unknown>).eventId
+    64	    : undefined
+    65	  const parsedKey = z.string().uuid().safeParse(
+    66	    privateBalanceEventId ?? idempotencyKey ?? payloadEventId,
+    67	  )
+    68	  return parsedKey.success ? parsedKey.data : randomUUID()
+    69	}
+    70	
+    71	function parseGatewayRequest(request: VercelRequest): AutomationEnvelope | null {
+    72	  const envelopeResult = envelopeSchema.safeParse(request.body)
+    73	  if (envelopeResult.success) {
+    74	    return {
+    75	      ...envelopeResult.data,
+    76	      eventId: getRequestEventId(request),
+    77	    }
+    78	  }
+    79	
+    80	  const connectResult = whatsappConnectRequestSchema.safeParse(request.body)
+    81	  if (!connectResult.success) return null
+    82	
+    83	  return {
+    84	    eventId: getRequestEventId(request),
+    85	    event: connectResult.data.event,
+    86	    createdAt: new Date().toISOString(),
+    87	    schemaVersion: 1,
+    88	    source: 'private-balance-pwa',
+    89	    data: {
+    90	      userCode: connectResult.data.userCode,
+    91	      deviceCode: connectResult.data.deviceCode,
+    92	      ...(connectResult.data.phoneNumber
+    93	        ? { phoneNumber: connectResult.data.phoneNumber }
+    94	        : {}),
+    95	    },
+    96	    timezone: connectResult.data.timezone,
+    97	    locale: connectResult.data.locale,
+    98	  }
+    99	}
+   100	
+   101	export default async function handler(
+   102	  request: VercelRequest,
+   103	  response: VercelResponse,
+   104	) {
+   105	  if (rejectInvalidRequest(request, response, 256 * 1024)) return
+   106	
+   107	  let claims
+   108	  try {
+   109	    claims = verifyAutomationJwt(getBearerToken(request))
+   110	  } catch {
+   111	    response.status(401).json({ error: 'Autorización inválida o expirada.' })
+   112	    return
+   113	  }
+   114	
+   115	  const envelope = parseGatewayRequest(request)
+   116	  console.log('===== ENVELOPE RECIBIDO =====');
+   117	  console.log(JSON.stringify(envelope, null, 2));   
+   118	  if (!envelope || !hasWebhookRoute(envelope.event)) {
+   119	    response.status(422).json({ error: 'Evento no válido.' })
+   120	    return
+   121	  }
+   122	
+   123	  try {
+   124	    const result = await dispatchAutomationEvent({
+   125	      envelope,
+   126	      licenseDeviceCode: claims.sub,
+   127	    })
+   128	
+   129	    if (result.empty) {
+   130	      response.status(result.status).end()
+   131	      return
+   132	    }
+   133	
+   134	    response.status(result.status).json(result.body)
+   135	  } catch (error) {
+   136	    if (error instanceof z.ZodError) {
+   137	      response.status(422).json({ error: 'Evento no válido.' })
+   138	      return
+   139	    }
+   140	
+   141	    if (error instanceof WebhookDispatchError) {
+   142	      response.status(error.status).json({ error: error.message })
+   143	      return
+   144	    }
+   145	
+   146	    response.status(504).json({ error: 'No se pudo contactar con n8n.' })
+   147	  }
+   148	}
+--- api/communication-channel.ts ---
+     1	/// <reference types="node" />
+     2	
+     3	import { z } from 'zod'
+     4	
+     5	import {
+     6	  rejectInvalidRequest,
+     7	  type VercelRequest,
+     8	  type VercelResponse,
+     9	} from '../server/apiUtils.js'
+    10	import { verifyAutomationJwt } from '../server/automationSecurity.js'
+    11	import {
+    12	  getCommunicationChannel,
+    13	} from '../server/communicationChannelStore.js'
+    14	
+    15	const userCodeHeaderSchema = z.string().min(1)
+    16	
+    17	function getUserCode(request: VercelRequest) {
+    18	  const headerValue = request.headers['x-private-balance-user-code']
+    19	  const parsed = userCodeHeaderSchema.safeParse(headerValue)
+    20	  if (!parsed.success) {
+    21	    throw new Error('Falta el encabezado X-Private-Balance-User-Code.')
+    22	  }
+    23	  return parsed.data
+    24	}
+    25	
+    26	function mapChannelToResponse(channel: Awaited<ReturnType<typeof getCommunicationChannel>>) {
+    27	  if (!channel) return null
+    28	
+    29	  return {
+    30	    id: channel.id,
+    31	    userCode: channel.userCode,
+    32	    deviceCode: channel.deviceCode,
+    33	    provider: channel.provider,
+    34	    instanceName: channel.instanceName,
+    35	    instanceId: channel.instanceId,
+    36	    phoneNumber: channel.phoneNumber,
+    37	    ownerJid: channel.ownerJid,
+    38	    profileName: channel.profileName,
+    39	    profilePhoto: channel.profilePhoto,
+    40	    status: channel.status,
+    41	    pairingCode: channel.pairingCode,
+    42	    providerMetadata: channel.providerMetadata,
+    43	    connectedAt: channel.connectedAt,
+    44	    lastSeenAt: channel.lastSeenAt,
+    45	    createdAt: channel.createdAt,
+    46	    updatedAt: channel.updatedAt,
+    47	  }
+    48	}
+    49	
+    50	export default async function handler(request: VercelRequest, response: VercelResponse) {
+    51	  if (rejectInvalidRequest(request, response, 0, {
+    52	    allowedMethods: ['GET'],
+    53	    requireJsonContentType: false,
+    54	  })) return
+    55	
+    56	  try {
+    57	    const claims = verifyAutomationJwt(extractBearer(request))
+    58	    const userCode = getUserCode(request)
+    59	    const channel = await getCommunicationChannel(userCode, claims.sub)
+    60	    response.status(200).json({ channel: mapChannelToResponse(channel) })
+    61	  } catch (error) {
+    62	    const message = error instanceof Error ? error.message : 'No se pudo obtener el canal.'
+    63	    const status = message.includes('encabezado') ? 400 : message.includes('JWT') ? 401 : 500
+    64	    response.status(status).json({ error: message })
+    65	  }
+    66	}
+    67	
+    68	function extractBearer(request: VercelRequest) {
+    69	  const authorization = request.headers.authorization
+    70	  if (typeof authorization !== 'string' || !authorization.startsWith('Bearer ')) {
+    71	    throw new Error('Autorización ausente.')
+    72	  }
+    73	
+    74	  const token = authorization.slice('Bearer '.length).trim()
+    75	  if (!token) throw new Error('Autorización ausente.')
+    76	  return token
+    77	}
+--- api/license-activate.ts ---
+     1	/// <reference types="node" />
+     2	
+     3	import { z } from 'zod'
+     4	
+     5	import {
+     6	  rejectInvalidRequest,
+     7	  type VercelRequest,
+     8	  type VercelResponse,
+     9	} from '../server/apiUtils.js'
+    10	import {
+    11	  getSignedLicenseKey,
+    12	  verifySignedLicenseForDevice,
+    13	} from '../server/automationSecurity.js'
+    14	import {
+    15	  authorizeLicenseDevice,
+    16	  LicenseRegistryError,
+    17	} from '../server/licenseDeviceRegistry.js'
+    18	
+    19	const requestSchema = z.object({
+    20	  activationCode: z.string().min(20).max(4096),
+    21	  userCode: z.string().min(1).max(100),
+    22	  deviceCode: z.union([
+    23	    z.string().regex(/^PB-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}$/),
+    24	    z.string().regex(/^PB-DEVICE-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+    25	  ]),
+    26	  deviceName: z.string().max(200).optional(),
+    27	  platform: z.enum(['web', 'android', 'ios', 'unknown']),
+    28	}).strict()
+    29	
+    30	export default async function handler(
+    31	  request: VercelRequest,
+    32	  response: VercelResponse,
+    33	) {
+    34	  if (rejectInvalidRequest(request, response, 8 * 1024)) return
+    35	
+    36	  try {
+    37	    const input = requestSchema.parse(request.body)
+    38	    const license = verifySignedLicenseForDevice(
+    39	      input.activationCode,
+    40	      input.deviceCode,
+    41	    )
+    42	    const authorization = await authorizeLicenseDevice({
+    43	      licenseKey: getSignedLicenseKey(input.activationCode),
+    44	      userCode: input.userCode,
+    45	      deviceCode: input.deviceCode,
+    46	      deviceName: input.deviceName,
+    47	      platform: input.platform,
+    48	      licenseType: license.licenseType,
+    49	      expiresAt: license.expiresAt,
+    50	      devicePolicy: license.devicePolicy ?? 'multi',
+    51	    })
+    52	
+    53	    response.status(200).json(authorization)
+    54	  } catch (error) {
+    55	    if (error instanceof LicenseRegistryError) {
+    56	      const status = error.code === 'device-limit-reached' ? 409 : 403
+    57	      response.status(status).json({ error: error.message })
+    58	      return
+    59	    }
+    60	
+    61	    response.status(401).json({
+    62	      error: error instanceof Error
+    63	        ? error.message
+    64	        : 'No se pudo validar la licencia.',
+    65	    })
+    66	  }
+    67	}
+
+=== SERVER TS ===
+--- server/apiUtils.ts ---
+     1	/// <reference types="node" />
+     2	
+     3	import type { IncomingMessage, ServerResponse } from 'node:http'
+     4	
+     5	export interface VercelRequest extends IncomingMessage {
+     6	  body?: unknown
+     7	}
+     8	
+     9	export interface VercelResponse extends ServerResponse {
+    10	  status(statusCode: number): VercelResponse
+    11	  json(body: unknown): VercelResponse
+    12	}
+    13	
+    14	interface RequestValidationOptions {
+    15	  allowedMethods?: string[]
+    16	  requireJsonContentType?: boolean
+    17	}
+    18	
+    19	const DEFAULT_ALLOWED_NATIVE_ORIGINS = new Set([
+    20	  'capacitor://localhost',
+    21	  'http://localhost',
+    22	  'https://localhost',
+    23	])
+    24	
+    25	function isAllowedLocalOrigin(origin: string) {
+    26	  try {
+    27	    const url = new URL(origin)
+    28	    return (
+    29	      ['http:', 'https:'].includes(url.protocol) &&
+    30	      ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+    31	    )
+    32	  } catch {
+    33	    return false
+    34	  }
+    35	}
+    36	
+    37	function configuredOrigins() {
+    38	  return new Set(
+    39	    (process.env.PRIVATE_BALANCE_ALLOWED_ORIGINS ?? '')
+    40	      .split(',')
+    41	      .map((origin) => origin.trim())
+    42	      .filter(Boolean),
+    43	  )
+    44	}
+    45	
+    46	export function applyApiSecurityHeaders(
+    47	  request: VercelRequest,
+    48	  response: VercelResponse,
+    49	  options: RequestValidationOptions = {},
+    50	) {
+    51	  const origin = typeof request.headers.origin === 'string'
+    52	    ? request.headers.origin
+    53	    : undefined
+    54	  const host = request.headers['x-forwarded-host'] ?? request.headers.host
+    55	  const sameOrigin = origin && host
+    56	    ? origin === `https://${host}` || origin === `http://${host}`
+    57	    : false
+    58	  const allowed = origin && (
+    59	    sameOrigin ||
+    60	    DEFAULT_ALLOWED_NATIVE_ORIGINS.has(origin) ||
+    61	    isAllowedLocalOrigin(origin) ||
+    62	    configuredOrigins().has(origin)
+    63	  )
+    64	
+    65	  const allowedMethods = options.allowedMethods ?? ['POST']
+    66	
+    67	  if (allowed) {
+    68	    response.setHeader('Access-Control-Allow-Origin', origin)
+    69	    response.setHeader('Vary', 'Origin')
+    70	  }
+    71	
+    72	  response.setHeader(
+    73	    'Access-Control-Allow-Methods',
+    74	    [...new Set([...allowedMethods.map((method) => method.toUpperCase()), 'OPTIONS'])].join(', '),
+    75	  )
+    76	  response.setHeader(
+    77	    'Access-Control-Allow-Headers',
+    78	    'Authorization, Content-Type, Idempotency-Key, X-Private-Balance-Event-Id, X-Private-Balance-User-Code',
+    79	  )
+    80	  response.setHeader('Cache-Control', 'no-store')
+    81	  response.setHeader(
+    82	    'Content-Security-Policy',
+    83	    "default-src 'none'; frame-ancestors 'none'",
+    84	  )
+    85	  response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+    86	  response.setHeader(
+    87	    'Permissions-Policy',
+    88	    'camera=(), microphone=(), geolocation=()',
+    89	  )
+    90	  response.setHeader('Referrer-Policy', 'no-referrer')
+    91	  response.setHeader('X-Content-Type-Options', 'nosniff')
+    92	
+    93	  return !origin || Boolean(allowed)
+    94	}
+    95	
+    96	export function rejectInvalidRequest(
+    97	  request: VercelRequest,
+    98	  response: VercelResponse,
+    99	  maxBodyBytes: number,
+   100	  options: RequestValidationOptions = {},
+   101	) {
+   102	  const allowedMethods = options.allowedMethods ?? ['POST']
+   103	  const requireJsonContentType = options.requireJsonContentType ?? true
+   104	
+   105	  if (!applyApiSecurityHeaders(request, response, { allowedMethods })) {
+   106	    response.status(403).json({ error: 'Origen no permitido.' })
+   107	    return true
+   108	  }
+   109	
+   110	  if (request.method === 'OPTIONS') {
+   111	    response.status(204).end()
+   112	    return true
+   113	  }
+   114	
+   115	  const requestMethod = request.method?.toUpperCase() ?? ''
+   116	  if (!allowedMethods.map((method) => method.toUpperCase()).includes(requestMethod)) {
+   117	    response.setHeader('Allow', [...allowedMethods.map((method) => method.toUpperCase()), 'OPTIONS'].join(', '))
+   118	    response.status(405).json({ error: 'Método no permitido.' })
+   119	    return true
+   120	  }
+   121	
+   122	  if (requireJsonContentType && ['POST', 'PUT', 'PATCH'].includes(requestMethod)) {
+   123	    const contentType = request.headers['content-type']
+   124	    if (
+   125	      typeof contentType !== 'string' ||
+   126	      !contentType.toLowerCase().startsWith('application/json')
+   127	    ) {
+   128	      response.status(415).json({ error: 'Content-Type no permitido.' })
+   129	      return true
+   130	    }
+   131	  }
+   132	
+   133	  const contentLength = Number(request.headers['content-length'] ?? 0)
+   134	  if (Number.isFinite(contentLength) && contentLength > maxBodyBytes) {
+   135	    response.status(413).json({ error: 'Solicitud demasiado grande.' })
+   136	    return true
+   137	  }
+   138	
+   139	  return false
+   140	}
+--- server/automation/communicationResolver.ts ---
+     1	import { neon } from '@neondatabase/serverless'
+     2	
+     3	export interface ActiveCommunicationChannel {
+     4	  id: string
+     5	  userCode: string
+     6	  provider: string
+     7	  status: string
+     8	  instanceName?: string
+     9	  instanceId?: string
+    10	  phoneNumber?: string
+    11	  ownerJid?: string
+    12	  profileName?: string
+    13	  profilePhoto?: string
+    14	  connectedAt?: string
+    15	  lastSeenAt?: string
+    16	  preferences?: unknown
+    17	  providerMetadata?: unknown
+    18	}
+    19	
+    20	interface CommunicationChannelRow {
+    21	  id: string | number
+    22	  user_code: string
+    23	  provider: string
+    24	  instance_name: string | null
+    25	  instance_id: string | null
+    26	  phone_number: string | null
+    27	  owner_jid: string | null
+    28	  profile_name: string | null
+    29	  profile_photo: string | null
+    30	  connected_at: string | null
+    31	  last_seen_at: string | null
+    32	  status: string
+    33	  preferences: unknown
+    34	  provider_metadata: unknown
+    35	}
+    36	
+    37	function isMissingCommunicationTable(error: unknown) {
+    38	  if (!error || typeof error !== 'object') return false
+    39	  const databaseError = error as { code?: string; message?: string }
+    40	  return databaseError.code === '42P01' ||
+    41	    databaseError.message?.includes('communication_channels') === true
+    42	}
+    43	
+    44	function isMissingLicenseDevicesTable(error: unknown) {
+    45	  if (!error || typeof error !== 'object') return false
+    46	  const databaseError = error as { code?: string; message?: string }
+    47	  return databaseError.code === '42P01' ||
+    48	    databaseError.message?.includes('license_devices') === true
+    49	}
+    50	
+    51	export function normalizeCommunicationInstanceName(value: string | null) {
+    52	  return value?.replace(/^=+/, '').trim() || undefined
+    53	}
+    54	
+    55	function mapCommunicationChannelRow(row: CommunicationChannelRow) {
+    56	  return {
+    57	    id: String(row.id),
+    58	    userCode: row.user_code,
+    59	    provider: row.provider,
+    60	    status: row.status,
+    61	    instanceName: normalizeCommunicationInstanceName(row.instance_name),
+    62	    instanceId: row.instance_id ?? undefined,
+    63	    phoneNumber: row.phone_number ?? undefined,
+    64	    ownerJid: row.owner_jid ?? undefined,
+    65	    profileName: row.profile_name ?? undefined,
+    66	    profilePhoto: row.profile_photo ?? undefined,
+    67	    connectedAt: row.connected_at ?? undefined,
+    68	    lastSeenAt: row.last_seen_at ?? undefined,
+    69	    preferences: row.preferences,
+    70	    providerMetadata: row.provider_metadata,
+    71	  }
+    72	}
+    73	
+    74	export async function ensureCommunicationSchema() {
+    75	  const databaseUrl = process.env.DATABASE_URL?.trim()
+    76	  if (!databaseUrl) return
+    77	
+    78	  const sql = neon(databaseUrl)
+    79	
+    80	  await sql`
+    81	    CREATE TABLE IF NOT EXISTS communication_channels (
+    82	      id BIGSERIAL PRIMARY KEY,
+    83	      user_code TEXT NOT NULL,
+    84	      device_code TEXT,
+    85	      provider TEXT NOT NULL
+    86	        CHECK (provider IN ('whatsapp', 'email', 'telegram', 'signal', 'sms')),
+    87	      instance_name TEXT,
+    88	      instance_id TEXT,
+    89	      phone_number TEXT,
+    90	      status TEXT NOT NULL DEFAULT 'not_configured'
+    91	        CHECK (status IN ('not_configured', 'pending', 'connecting', 'connected', 'disconnected', 'revoked', 'error')),
+    92	      preferences JSONB NOT NULL DEFAULT '{}',
+    93	      provider_metadata JSONB NOT NULL DEFAULT '{}',
+    94	      owner_jid TEXT,
+    95	      profile_name TEXT,
+    96	      profile_photo TEXT,
+    97	      connected_at TIMESTAMPTZ,
+    98	      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    99	      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+   100	      last_seen_at TIMESTAMPTZ,
+   101	      UNIQUE (user_code, device_code, provider)
+   102	    )
+   103	  `
+   104	
+   105	  await sql`
+   106	    ALTER TABLE communication_channels
+   107	      ADD COLUMN IF NOT EXISTS instance_id TEXT,
+   108	      ADD COLUMN IF NOT EXISTS owner_jid TEXT,
+   109	      ADD COLUMN IF NOT EXISTS profile_name TEXT,
+   110	      ADD COLUMN IF NOT EXISTS profile_photo TEXT,
+   111	      ADD COLUMN IF NOT EXISTS connected_at TIMESTAMPTZ
+   112	  `
+   113	
+   114	  await sql`
+   115	    DO $$
+   116	    DECLARE
+   117	      legacy_constraint_name TEXT;
+   118	    BEGIN
+   119	      SELECT conname INTO legacy_constraint_name
+   120	      FROM pg_constraint
+   121	      WHERE conrelid = 'communication_channels'::regclass
+   122	        AND contype = 'u'
+   123	        AND pg_get_constraintdef(oid) ILIKE '%(user_code, provider, instance_name)%'
+   124	      LIMIT 1;
+   125	
+   126	      IF legacy_constraint_name IS NOT NULL THEN
+   127	        EXECUTE format(
+   128	          'ALTER TABLE communication_channels DROP CONSTRAINT %I',
+   129	          legacy_constraint_name
+   130	        );
+   131	      END IF;
+   132	    END $$;
+   133	  `
+   134	
+   135	  await sql`
+   136	    CREATE UNIQUE INDEX IF NOT EXISTS communication_channels_user_device_provider_idx
+   137	      ON communication_channels (user_code, device_code, provider)
+   138	  `
+   139	
+   140	  await sql`
+   141	    CREATE INDEX IF NOT EXISTS communication_channels_user_provider_idx
+   142	      ON communication_channels (user_code, provider)
+   143	  `
+   144	
+   145	  await sql`
+   146	    CREATE INDEX IF NOT EXISTS communication_channels_status_idx
+   147	      ON communication_channels (status)
+   148	  `
+   149	}
+   150	
+   151	export async function resolveActiveCommunicationChannels(
+   152	  userCode: string,
+   153	): Promise<ActiveCommunicationChannel[]> {
+   154	  const databaseUrl = process.env.DATABASE_URL?.trim()
+   155	  if (!databaseUrl) return []
+   156	
+   157	  try {
+   158	    const sql = neon(databaseUrl)
+   159	    const rows = await sql`
+   160	      SELECT id, user_code, provider, instance_name, instance_id, phone_number,
+   161	        owner_jid, profile_name, profile_photo, connected_at, last_seen_at,
+   162	        status, preferences, provider_metadata
+   163	      FROM communication_channels
+   164	      WHERE user_code = ${userCode}
+   165	        AND status = 'connected'
+   166	    ` as CommunicationChannelRow[]
+   167	
+   168	    return rows.map(mapCommunicationChannelRow)
+   169	  } catch (error) {
+   170	    if (isMissingCommunicationTable(error)) return []
+   171	    throw error
+   172	  }
+   173	}
+   174	
+   175	export async function resolveActiveWhatsappChannel(userCode: string) {
+   176	  const databaseUrl = process.env.DATABASE_URL?.trim()
+   177	  if (!databaseUrl) return null
+   178	
+   179	  try {
+   180	    const sql = neon(databaseUrl)
+   181	    const rows = await sql`
+   182	      SELECT id, user_code, provider, instance_name, instance_id, phone_number,
+   183	        owner_jid, profile_name, profile_photo, connected_at, last_seen_at,
+   184	        status, preferences, provider_metadata
+   185	      FROM communication_channels
+   186	      WHERE user_code = ${userCode}
+   187	        AND provider = 'whatsapp'
+   188	        AND status = 'connected'
+   189	      ORDER BY updated_at DESC
+   190	      LIMIT 1
+   191	    ` as CommunicationChannelRow[]
+   192	
+   193	    const row = rows[0]
+   194	    if (!row) return null
+   195	
+   196	    return mapCommunicationChannelRow(row)
+   197	  } catch (error) {
+   198	    if (isMissingCommunicationTable(error)) return null
+   199	    throw error
+   200	  }
+   201	}
+   202	
+   203	export async function resolveUserCodeFromDeviceCode(deviceCode: string): Promise<string | null> {
+   204	  const databaseUrl = process.env.DATABASE_URL?.trim()
+   205	  if (!databaseUrl) return null
+   206	
+   207	  try {
+   208	    const sql = neon(databaseUrl)
+   209	    const rows = await sql`
+   210	      SELECT user_code
+   211	      FROM license_devices
+   212	      WHERE device_code = ${deviceCode}
+   213	        AND status = 'active'
+   214	      ORDER BY last_seen_at DESC
+   215	      LIMIT 1
+   216	    ` as Array<{ user_code: string }>
+   217	
+   218	    const row = rows[0]
+   219	    if (!row) return null
+   220	
+   221	    return row.user_code
+   222	  } catch (error) {
+   223	    if (isMissingLicenseDevicesTable(error)) return null
+   224	    throw error
+   225	  }
+   226	}
+--- server/automation/eventDispatcher.ts ---
+     1	import { z } from 'zod'
+     2	
+     3	import {
+     4	  isSynchronousAutomationEvent,
+     5	  type AutomationEnvelope,
+     6	} from './eventTypes.js'
+     7	import { dispatchWebhook } from './webhookDispatcher.js'
+     8	import { resolveActiveWhatsappChannel, resolveUserCodeFromDeviceCode } from './communicationResolver.js'
+     9	
+    10	const identityCodesSchema = z.object({
+    11	  userCode: z.string().regex(/^PB-USER-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+    12	  deviceCode: z.string().regex(/^PB-DEVICE-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+    13	})
+    14	
+    15	const whatsappConnectDataSchema = identityCodesSchema.extend({
+    16	  phoneNumber: z.string().regex(/^\d{7,20}$/).optional(),
+    17	})
+    18	
+    19	function nestedRecord(value: unknown): Record<string, unknown> | undefined {
+    20	  return typeof value === 'object' && value !== null
+    21	    ? value as Record<string, unknown>
+    22	    : undefined
+    23	}
+    24	
+    25	function firstString(...values: unknown[]): string | undefined {
+    26	  return values.find((value): value is string => typeof value === 'string')
+    27	}
+    28	
+    29	async function resolveEnvelopeUserCode(
+    30	  envelope: AutomationEnvelope,
+    31	  fallbackDeviceCode?: string,
+    32	): Promise<string | undefined> {
+    33	  const nestedData = nestedRecord(envelope.data.data)
+    34	  const payload = nestedRecord(envelope.data.payload)
+    35	  const userCode = firstString(
+    36	    envelope.data.userCode,
+    37	    nestedData?.userCode,
+    38	    payload?.userCode,
+    39	    envelope.userCode,
+    40	  )
+    41	  const deviceCode = firstString(
+    42	    envelope.data.deviceCode,
+    43	    nestedData?.deviceCode,
+    44	    payload?.deviceCode,
+    45	    envelope.deviceCode,
+    46	    fallbackDeviceCode,
+    47	  )
+    48	
+    49	  if (userCode) return userCode
+    50	  if (!deviceCode) return undefined
+    51	  const resolvedUserCode = await resolveUserCodeFromDeviceCode(deviceCode)
+    52	  return resolvedUserCode ?? undefined
+    53	}
+    54	
+    55	const provisionIdentityDataSchema = identityCodesSchema.extend({
+    56	  deviceName: z.string().min(1).max(200).optional(),
+    57	  platform: z.enum(['web', 'android', 'ios', 'unknown']).default('unknown'),
+    58	  appVersion: z.string().min(1).max(100).optional(),
+    59	}).passthrough()
+    60	
+    61	export interface AutomationDispatchResult {
+    62	  status: number
+    63	  body?: unknown
+    64	  empty: boolean
+    65	}
+    66	
+    67	export function buildN8nPayload(
+    68	  envelope: AutomationEnvelope,
+    69	  licenseDeviceCode: string,
+    70	  communicationChannel?: {
+    71	    provider: string
+    72	    instanceName?: string
+    73	    instanceId?: string
+    74	    phoneNumber?: string
+    75	    ownerJid?: string
+    76	    profileName?: string
+    77	    profilePhoto?: string
+    78	    connectedAt?: string
+    79	    lastSeenAt?: string
+    80	    status: string
+    81	    preferences?: unknown
+    82	    providerMetadata?: unknown
+    83	  },
+    84	) {
+    85	  if (envelope.event === 'device.whatsapp.connect.requested') {
+    86	    const identity = whatsappConnectDataSchema.parse(envelope.data)
+    87	    return {
+    88	      event: envelope.event,
+    89	      userCode: identity.userCode,
+    90	      deviceCode: identity.deviceCode,
+    91	      phoneNumber: identity.phoneNumber ?? null,
+    92	      timezone: envelope.timezone,
+    93	      locale: envelope.locale,
+    94	    }
+    95	  }
+    96	
+    97	  if (envelope.event === 'device.provision.requested') {
+    98	    const identity = provisionIdentityDataSchema.parse(envelope.data)
+    99	    return {
+   100	      event: envelope.event,
+   101	      userCode: identity.userCode,
+   102	      deviceCode: identity.deviceCode,
+   103	      deviceName: identity.deviceName ?? null,
+   104	      platform: identity.platform ?? 'unknown',
+   105	      appVersion: identity.appVersion ?? null,
+   106	      timezone: envelope.timezone,
+   107	      locale: envelope.locale,
+   108	    }
+   109	  }
+   110	
+   111	  const payload = {
+   112	    ...envelope,
+   113	    deviceCode: licenseDeviceCode,
+   114	    receivedAt: new Date().toISOString(),
+   115	    source: envelope.source ?? 'private-balance-pwa',
+   116	  }
+   117	
+   118	  if (communicationChannel) {
+   119	    return {
+   120	      ...payload,
+   121	      communicationChannel,
+   122	      instanceName: communicationChannel.instanceName,
+   123	      whatsappNumber: communicationChannel.phoneNumber,
+   124	    }
+   125	  }
+   126	
+   127	  return payload
+   128	}
+   129	
+   130	export async function dispatchAutomationEvent(input: {
+   131	  envelope: AutomationEnvelope
+   132	  licenseDeviceCode: string
+   133	}): Promise<AutomationDispatchResult> {
+   134	  let communicationChannel
+   135	
+   136	  if (
+   137	    input.envelope.event === 'income.created' ||
+   138	    input.envelope.event === 'service.completed' ||
+   139	    input.envelope.event === 'expense.created' ||
+   140	    input.envelope.event === 'calendar.created'
+   141	  ) {
+   142	    const userCode = await resolveEnvelopeUserCode(input.envelope, input.licenseDeviceCode)
+   143	    if (typeof userCode === 'string') {
+   144	      const channel = await resolveActiveWhatsappChannel(userCode)
+   145	      if (channel) {
+   146	        communicationChannel = {
+   147	          provider: channel.provider,
+   148	          instanceName: channel.instanceName,
+   149	          instanceId: channel.instanceId,
+   150	          phoneNumber: channel.phoneNumber,
+   151	          ownerJid: channel.ownerJid,
+   152	          profileName: channel.profileName,
+   153	          profilePhoto: channel.profilePhoto,
+   154	          connectedAt: channel.connectedAt,
+   155	          lastSeenAt: channel.lastSeenAt,
+   156	          status: channel.status,
+   157	          preferences: channel.preferences,
+   158	          providerMetadata: channel.providerMetadata,
+   159	        }
+   160	      }
+   161	    }
+   162	  }
+   163	
+   164	  const payloadToN8N = buildN8nPayload(
+   165	    input.envelope,
+   166	    input.licenseDeviceCode,
+   167	    communicationChannel,
+   168	  )
+   169	  const webhook = await dispatchWebhook({
+   170	    event: input.envelope.event,
+   171	    eventId: input.envelope.eventId,
+   172	    payload: payloadToN8N,
+   173	  })
+   174	
+   175	  if (!webhook.successful || isSynchronousAutomationEvent(input.envelope.event)) {
+   176	    return {
+   177	      status: webhook.status,
+   178	      body: webhook.body,
+   179	      empty: webhook.empty,
+   180	    }
+   181	  }
+   182	
+   183	  return {
+   184	    status: 202,
+   185	    body: { accepted: true, eventId: input.envelope.eventId },
+   186	    empty: false,
+   187	  }
+   188	}
+--- server/automation/eventTypes.ts ---
+     1	export const AUTOMATION_EVENT_TYPES = [
+     2	  'income.created',
+     3	  'service.completed',
+     4	  'expense.created',
+     5	  'calendar.created',
+     6	  'device.provision.requested',
+     7	  'device.whatsapp.connect.requested',
+     8	  // Compatibility for QR requests already persisted by older clients.
+     9	  'communication.whatsapp.qr.requested',
+    10	  'communication.whatsapp.status.requested',
+    11	  'communication.whatsapp.disconnect.requested',
+    12	  'communication.whatsapp.test.requested',
+    13	  'communication.whatsapp.preferences.updated',
+    14	] as const
+    15	
+    16	export type AutomationEvent = (typeof AUTOMATION_EVENT_TYPES)[number]
+    17	
+    18	export interface AutomationEnvelope {
+    19	  eventId: string
+    20	  event: AutomationEvent
+    21	  createdAt: string
+    22	  schemaVersion: 1
+    23	  source?: 'private-balance-pwa'
+    24	  data: Record<string, unknown>
+    25	  userCode?: string
+    26	  deviceCode?: string
+    27	  timezone?: string
+    28	  locale?: string
+    29	}
+    30	
+    31	const SYNCHRONOUS_EVENTS = new Set<AutomationEvent>([
+    32	  'device.whatsapp.connect.requested',
+    33	  'communication.whatsapp.qr.requested',
+    34	  'communication.whatsapp.status.requested',
+    35	  'communication.whatsapp.disconnect.requested',
+    36	  'communication.whatsapp.test.requested',
+    37	  'communication.whatsapp.preferences.updated',
+    38	])
+    39	
+    40	export function isSynchronousAutomationEvent(event: AutomationEvent) {
+    41	  return SYNCHRONOUS_EVENTS.has(event)
+    42	}
+--- server/automationSecurity.ts ---
+     1	/// <reference types="node" />
+     2	
+     3	import {
+     4	  createHash,
+     5	  createHmac,
+     6	  createPublicKey,
+     7	  randomUUID,
+     8	  timingSafeEqual,
+     9	  verify,
+    10	} from 'node:crypto'
+    11	
+    12	const SIGNED_LICENSE_PREFIX = 'PB-LIC-V2'
+    13	const LICENSE_APP_ID = 'private-balance'
+    14	const LICENSE_VERSION = 2
+    15	const JWT_ISSUER = 'private-balance-automation'
+    16	const JWT_AUDIENCE = 'private-balance-automation-proxy'
+    17	const JWT_TTL_SECONDS = 15 * 60
+    18	const ALLOWED_LICENSE_TYPES = new Set([
+    19	  'demo',
+    20	  'monthly',
+    21	  'annual',
+    22	  'lifetime',
+    23	])
+    24	
+    25	const publicLicenseKeyJwk = {
+    26	  key_ops: ['verify'],
+    27	  ext: true,
+    28	  kty: 'EC',
+    29	  x: 'DYNiVDNSdO_PV1g6QE4n2xtPkZXdlxuY2T0FV2md7fs',
+    30	  y: 'LLO8InWuxK-EZDBqDegKqK8WQlvnnnzFSLqxynmqlzU',
+    31	  crv: 'P-256',
+    32	} as const
+    33	
+    34	export interface SignedLicensePayload {
+    35	  app: string
+    36	  version: number
+    37	  deviceCode: string
+    38	  licenseType: string
+    39	  issuedAt: string
+    40	  expiresAt: string | null
+    41	  features: unknown
+    42	  devicePolicy?: 'multi' | 'single'
+    43	}
+    44	
+    45	export interface AutomationJwtClaims {
+    46	  iss: typeof JWT_ISSUER
+    47	  aud: typeof JWT_AUDIENCE
+    48	  sub: string
+    49	  jti: string
+    50	  licenseType: string
+    51	  iat: number
+    52	  exp: number
+    53	}
+    54	
+    55	function encodeBase64Url(value: string | Buffer) {
+    56	  return Buffer.from(value).toString('base64url')
+    57	}
+    58	
+    59	function decodeJson<T>(value: string) {
+    60	  return JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as T
+    61	}
+    62	
+    63	function requireJwtSecret() {
+    64	  const secret = process.env.AUTOMATION_JWT_SECRET?.trim()
+    65	
+    66	  if (!secret || secret.length < 32) {
+    67	    throw new Error('AUTOMATION_JWT_SECRET debe tener al menos 32 caracteres.')
+    68	  }
+    69	
+    70	  return secret
+    71	}
+    72	
+    73	function isValidIsoDate(value: unknown) {
+    74	  return typeof value === 'string' && Number.isFinite(new Date(value).getTime())
+    75	}
+    76	
+    77	export function getSignedLicenseKey(activationCode: string) {
+    78	  return createHash('sha256')
+    79	    .update(activationCode.trim().replace(/\s+/g, ''))
+    80	    .digest('hex')
+    81	}
+    82	
+    83	export function verifySignedLicense(activationCode: string) {
+    84	  const normalizedCode = activationCode.trim().replace(/\s+/g, '')
+    85	  const parts = normalizedCode.split('.')
+    86	
+    87	  if (parts.length !== 3 || parts[0] !== SIGNED_LICENSE_PREFIX) {
+    88	    throw new Error('La licencia firmada no tiene un formato válido.')
+    89	  }
+    90	
+    91	  const [, payloadBase64Url, signatureBase64Url] = parts
+    92	  if (!payloadBase64Url || !signatureBase64Url) {
+    93	    throw new Error('La licencia firmada está incompleta.')
+    94	  }
+    95	
+    96	  const publicKey = createPublicKey({
+    97	    key: publicLicenseKeyJwk,
+    98	    format: 'jwk',
+    99	  })
+   100	  const validSignature = verify(
+   101	    'sha256',
+   102	    Buffer.from(payloadBase64Url),
+   103	    { key: publicKey, dsaEncoding: 'ieee-p1363' },
+   104	    Buffer.from(signatureBase64Url, 'base64url'),
+   105	  )
+   106	
+   107	  if (!validSignature) {
+   108	    throw new Error('La firma digital de la licencia no es válida.')
+   109	  }
+   110	
+   111	  const payload = decodeJson<Partial<SignedLicensePayload>>(payloadBase64Url)
+   112	
+   113	  if (payload.app !== LICENSE_APP_ID || payload.version !== LICENSE_VERSION) {
+   114	    throw new Error('La licencia no pertenece a Private Balance.')
+   115	  }
+   116	  if (typeof payload.deviceCode !== 'string') {
+   117	    throw new Error('La licencia no contiene un dispositivo inicial válido.')
+   118	  }
+   119	  if (!payload.licenseType || !ALLOWED_LICENSE_TYPES.has(payload.licenseType)) {
+   120	    throw new Error('El tipo de licencia no es válido.')
+   121	  }
+   122	  if (!isValidIsoDate(payload.issuedAt) || !Array.isArray(payload.features)) {
+   123	    throw new Error('El contenido de la licencia no es válido.')
+   124	  }
+   125	  if (
+   126	    payload.devicePolicy !== undefined &&
+   127	    !['multi', 'single'].includes(payload.devicePolicy)
+   128	  ) {
+   129	    throw new Error('La política de dispositivos no es válida.')
+   130	  }
+   131	  if (payload.licenseType === 'lifetime') {
+   132	    if (payload.expiresAt !== null) {
+   133	      throw new Error('La licencia lifetime no es válida.')
+   134	    }
+   135	  } else if (
+   136	    !isValidIsoDate(payload.expiresAt) ||
+   137	    new Date(payload.expiresAt as string).getTime() <= Date.now()
+   138	  ) {
+   139	    throw new Error('La licencia ha expirado.')
+   140	  }
+   141	
+   142	  return payload as SignedLicensePayload
+   143	}
+   144	
+   145	export function verifySignedLicenseForDevice(
+   146	  activationCode: string,
+   147	  deviceCode: string,
+   148	) {
+   149	  const payload = verifySignedLicense(activationCode)
+   150	  const devicePolicy = payload.devicePolicy ?? 'multi'
+   151	
+   152	  if (
+   153	    devicePolicy === 'single' &&
+   154	    payload.deviceCode.trim().toUpperCase() !== deviceCode.trim().toUpperCase()
+   155	  ) {
+   156	    throw new Error('Esta licencia pertenece a otro dispositivo.')
+   157	  }
+   158	
+   159	  return payload
+   160	}
+   161	
+   162	export function issueAutomationJwt(
+   163	  deviceCode: string,
+   164	  licenseType: string,
+   165	  licenseExpiresAt: string | null,
+   166	) {
+   167	  const now = Math.floor(Date.now() / 1000)
+   168	  const licenseExpiration = licenseExpiresAt
+   169	    ? Math.floor(new Date(licenseExpiresAt).getTime() / 1000)
+   170	    : Number.POSITIVE_INFINITY
+   171	  const claims: AutomationJwtClaims = {
+   172	    iss: JWT_ISSUER,
+   173	    aud: JWT_AUDIENCE,
+   174	    sub: deviceCode,
+   175	    jti: randomUUID(),
+   176	    licenseType,
+   177	    iat: now,
+   178	    exp: Math.min(now + JWT_TTL_SECONDS, licenseExpiration),
+   179	  }
+   180	  const header = { alg: 'HS256', typ: 'JWT' }
+   181	  const unsignedToken = `${encodeBase64Url(JSON.stringify(header))}.${encodeBase64Url(JSON.stringify(claims))}`
+   182	  const signature = createHmac('sha256', requireJwtSecret())
+   183	    .update(unsignedToken)
+   184	    .digest('base64url')
+   185	
+   186	  return {
+   187	    token: `${unsignedToken}.${signature}`,
+   188	    expiresAt: new Date(claims.exp * 1000).toISOString(),
+   189	  }
+   190	}
+   191	
+   192	export function verifyAutomationJwt(token: string) {
+   193	  const parts = token.split('.')
+   194	  if (parts.length !== 3) throw new Error('JWT inválido.')
+   195	
+   196	  const [headerPart, claimsPart, signaturePart] = parts
+   197	  if (!headerPart || !claimsPart || !signaturePart) {
+   198	    throw new Error('JWT incompleto.')
+   199	  }
+   200	
+   201	  const header = decodeJson<{ alg?: string; typ?: string }>(headerPart)
+   202	  if (header.alg !== 'HS256' || header.typ !== 'JWT') {
+   203	    throw new Error('Algoritmo JWT no permitido.')
+   204	  }
+   205	
+   206	  const unsignedToken = `${headerPart}.${claimsPart}`
+   207	  const expectedSignature = createHmac('sha256', requireJwtSecret())
+   208	    .update(unsignedToken)
+   209	    .digest()
+   210	  const actualSignature = Buffer.from(signaturePart, 'base64url')
+   211	
+   212	  if (
+   213	    expectedSignature.length !== actualSignature.length ||
+   214	    !timingSafeEqual(expectedSignature, actualSignature)
+   215	  ) {
+   216	    throw new Error('Firma JWT inválida.')
+   217	  }
+   218	
+   219	  const claims = decodeJson<AutomationJwtClaims>(claimsPart)
+   220	  const now = Math.floor(Date.now() / 1000)
+   221	  if (
+   222	    claims.iss !== JWT_ISSUER ||
+   223	    claims.aud !== JWT_AUDIENCE ||
+   224	    typeof claims.sub !== 'string' ||
+   225	    !claims.sub.startsWith('PB-') ||
+   226	    typeof claims.exp !== 'number' ||
+   227	    claims.exp <= now ||
+   228	    typeof claims.iat !== 'number' ||
+   229	    claims.iat > now + 60
+   230	  ) {
+   231	    throw new Error('Claims JWT inválidos.')
+   232	  }
+   233	
+   234	  return claims
+   235	}
+--- server/automation/webhookDispatcher.ts ---
+     1	/// <reference types="node" />
+     2	
+     3	import type { AutomationEvent } from './eventTypes.js'
+     4	
+     5	type N8nWebhookEnvironment =
+     6	  | 'N8N_AUTOMATION_WEBHOOK_URL'
+     7	  | 'N8N_DEVICE_PROVISIONING_WEBHOOK_URL'
+     8	  | 'N8N_WHATSAPP_WEBHOOK_URL'
+     9	
+    10	const EVENT_WEBHOOKS: Record<AutomationEvent, N8nWebhookEnvironment> = {
+    11	  'income.created': 'N8N_AUTOMATION_WEBHOOK_URL',
+    12	  'service.completed': 'N8N_AUTOMATION_WEBHOOK_URL',
+    13	  'expense.created': 'N8N_AUTOMATION_WEBHOOK_URL',
+    14	  'calendar.created': 'N8N_AUTOMATION_WEBHOOK_URL',
+    15	  'device.provision.requested': 'N8N_DEVICE_PROVISIONING_WEBHOOK_URL',
+    16	  'device.whatsapp.connect.requested': 'N8N_WHATSAPP_WEBHOOK_URL',
+    17	  'communication.whatsapp.qr.requested': 'N8N_WHATSAPP_WEBHOOK_URL',
+    18	  'communication.whatsapp.status.requested': 'N8N_WHATSAPP_WEBHOOK_URL',
+    19	  'communication.whatsapp.disconnect.requested': 'N8N_WHATSAPP_WEBHOOK_URL',
+    20	  'communication.whatsapp.test.requested': 'N8N_WHATSAPP_WEBHOOK_URL',
+    21	  'communication.whatsapp.preferences.updated': 'N8N_WHATSAPP_WEBHOOK_URL',
+    22	}
+    23	
+    24	const N8N_TIMEOUT_MS = 10_000
+    25	const MAX_N8N_RESPONSE_BYTES = 2_100_000
+    26	
+    27	export interface WebhookDispatchResult {
+    28	  status: number
+    29	  body?: unknown
+    30	  empty: boolean
+    31	  successful: boolean
+    32	}
+    33	
+    34	export class WebhookDispatchError extends Error {
+    35	  constructor(
+    36	    message: string,
+    37	    readonly status: number,
+    38	    options?: ErrorOptions,
+    39	  ) {
+    40	    super(message, options)
+    41	  }
+    42	}
+    43	
+    44	export function hasWebhookRoute(event: AutomationEvent) {
+    45	  return Boolean(EVENT_WEBHOOKS[event])
+    46	}
+    47	
+    48	function getN8nConfiguration(event: AutomationEvent) {
+    49	  const environmentName = EVENT_WEBHOOKS[event]
+    50	  const rawUrl = process.env[environmentName]?.trim()
+    51	  const token = process.env.N8N_INTERNAL_TOKEN?.trim()
+    52	
+    53	  if (!rawUrl || !token) {
+    54	    throw new Error(`Falta configurar ${environmentName} o N8N_INTERNAL_TOKEN.`)
+    55	  }
+    56	
+    57	  const url = new URL(rawUrl)
+    58	  if (url.protocol !== 'https:') {
+    59	    throw new Error(`${environmentName} debe utilizar HTTPS.`)
+    60	  }
+    61	
+    62	  return { url: url.href, token }
+    63	}
+    64	
+    65	async function readN8nResponse(response: Response) {
+    66	  const contentLength = Number(response.headers.get('content-length') ?? 0)
+    67	  if (Number.isFinite(contentLength) && contentLength > MAX_N8N_RESPONSE_BYTES) {
+    68	    throw new Error('La respuesta de n8n es demasiado grande.')
+    69	  }
+    70	
+    71	  const text = await response.text()
+    72	  if (Buffer.byteLength(text, 'utf8') > MAX_N8N_RESPONSE_BYTES) {
+    73	    throw new Error('La respuesta de n8n es demasiado grande.')
+    74	  }
+    75	
+    76	  if (!text) return { text, json: undefined }
+    77	
+    78	  try {
+    79	    return { text, json: JSON.parse(text) as unknown }
+    80	  } catch {
+    81	    return { text, json: undefined }
+    82	  }
+    83	}
+    84	
+    85	function mapDispatchError(error: unknown) {
+    86	  const message = error instanceof Error
+    87	    ? error.message
+    88	    : 'No se pudo contactar con n8n.'
+    89	  const status = message.includes('configurar') || message.includes('HTTPS')
+    90	    ? 503
+    91	    : message.includes('demasiado grande') ||
+    92	        message.includes('respuesta JSON válida')
+    93	      ? 502
+    94	      : 504
+    95	
+    96	  return new WebhookDispatchError(
+    97	    message,
+    98	    status,
+    99	    error instanceof Error ? { cause: error } : undefined,
+   100	  )
+   101	}
+   102	
+   103	export async function dispatchWebhook(input: {
+   104	  event: AutomationEvent
+   105	  eventId: string
+   106	  payload: unknown
+   107	}): Promise<WebhookDispatchResult> {
+   108	  const controller = new AbortController()
+   109	  const timeoutId = setTimeout(() => controller.abort(), N8N_TIMEOUT_MS)
+   110	
+   111	  try {
+   112	    const n8n = getN8nConfiguration(input.event)
+   113	    const response = await fetch(n8n.url, {
+   114	      method: 'POST',
+   115	      headers: {
+   116	        Authorization: `Bearer ${n8n.token}`,
+   117	        'Content-Type': 'application/json',
+   118	        'Idempotency-Key': input.eventId,
+   119	        'X-Private-Balance-Event-Id': input.eventId,
+   120	      },
+   121	      body: JSON.stringify(input.payload),
+   122	      signal: controller.signal,
+   123	    })
+   124	    const responseBody = await readN8nResponse(response)
+   125	
+   126	    if (response.status === 204) {
+   127	      return { status: 204, empty: true, successful: true }
+   128	    }
+   129	
+   130	    if (response.ok || response.status === 409) {
+   131	      if (responseBody.json === undefined) {
+   132	        throw new Error('n8n no devolvió una respuesta JSON válida.')
+   133	      }
+   134	
+   135	      return {
+   136	        status: response.status,
+   137	        body: responseBody.json,
+   138	        empty: false,
+   139	        successful: true,
+   140	      }
+   141	    }
+   142	
+   143	    const errorBody = responseBody.json ?? {
+   144	      error: responseBody.text || `n8n devolvió el estado ${response.status}.`,
+   145	    }
+   146	    console.error(
+   147	      `Automation Gateway: n8n devolvió ${response.status} para ${input.event}.`,
+   148	      errorBody,
+   149	    )
+   150	
+   151	    return {
+   152	      status: response.status,
+   153	      body: errorBody,
+   154	      empty: false,
+   155	      successful: false,
+   156	    }
+   157	  } catch (error) {
+   158	    if (error instanceof WebhookDispatchError) throw error
+   159	    throw mapDispatchError(error)
+   160	  } finally {
+   161	    clearTimeout(timeoutId)
+   162	  }
+   163	}
+--- server/communicationChannelStore.ts ---
+     1	import { randomUUID } from 'node:crypto'
+     2	
+     3	import { getNeonClient } from './neonClient.js'
+     4	
+     5	export interface CommunicationChannelRecord {
+     6	  id: string
+     7	  userCode: string
+     8	  deviceCode: string
+     9	  provider: 'whatsapp'
+    10	  instanceName: string
+    11	  instanceId: string | null
+    12	  phoneNumber: string | null
+    13	  ownerJid: string | null
+    14	  profileName: string | null
+    15	  profilePhoto: string | null
+    16	  status: string
+    17	  pairingCode: string | null
+    18	  providerMetadata: Record<string, unknown> | null
+    19	  connectedAt: string | null
+    20	  lastSeenAt: string | null
+    21	  createdAt: string
+    22	  updatedAt: string
+    23	}
+    24	
+    25	const PROVIDER = 'whatsapp'
+    26	
+    27	async function migrate(sql: ReturnType<typeof getNeonClient>) {
+    28	  await sql`CREATE TABLE IF NOT EXISTS communication_channels (
+    29	    id TEXT PRIMARY KEY,
+    30	    user_code TEXT NOT NULL,
+    31	    device_code TEXT NOT NULL,
+    32	    provider TEXT NOT NULL,
+    33	    instance_name TEXT NOT NULL,
+    34	    instance_id TEXT,
+    35	    phone_number TEXT,
+    36	    owner_jid TEXT,
+    37	    profile_name TEXT,
+    38	    profile_photo TEXT,
+    39	    status TEXT NOT NULL,
+    40	    pairing_code TEXT,
+    41	    provider_metadata JSONB,
+    42	    connected_at TIMESTAMPTZ,
+    43	    last_seen_at TIMESTAMPTZ,
+    44	    created_at TIMESTAMPTZ NOT NULL,
+    45	    updated_at TIMESTAMPTZ NOT NULL
+    46	  )`
+    47	  await sql`CREATE UNIQUE INDEX IF NOT EXISTS communication_channels_unique ON communication_channels (user_code, device_code, provider)`
+    48	}
+    49	
+    50	async function getSqlClient() {
+    51	  const sql = getNeonClient()
+    52	  await migrate(sql)
+    53	  return sql
+    54	}
+    55	
+    56	function mapRow(row: Record<string, unknown>): CommunicationChannelRecord {
+    57	  return {
+    58	    id: String(row.id),
+    59	    userCode: String(row.user_code),
+    60	    deviceCode: String(row.device_code),
+    61	    provider: 'whatsapp',
+    62	    instanceName: String(row.instance_name ?? ''),
+    63	    instanceId: row.instance_id === null || row.instance_id === undefined ? null : String(row.instance_id),
+    64	    phoneNumber: row.phone_number === null || row.phone_number === undefined ? null : String(row.phone_number),
+    65	    ownerJid: row.owner_jid === null || row.owner_jid === undefined ? null : String(row.owner_jid),
+    66	    profileName: row.profile_name === null || row.profile_name === undefined ? null : String(row.profile_name),
+    67	    profilePhoto: row.profile_photo === null || row.profile_photo === undefined ? null : String(row.profile_photo),
+    68	    status: String(row.status ?? 'not_configured'),
+    69	    pairingCode: row.pairing_code === null || row.pairing_code === undefined ? null : String(row.pairing_code),
+    70	    providerMetadata: row.provider_metadata === null || row.provider_metadata === undefined ? null : (row.provider_metadata as Record<string, unknown>),
+    71	    connectedAt: row.connected_at === null || row.connected_at === undefined ? null : new Date(row.connected_at as string).toISOString(),
+    72	    lastSeenAt: row.last_seen_at === null || row.last_seen_at === undefined ? null : new Date(row.last_seen_at as string).toISOString(),
+    73	    createdAt: new Date(row.created_at as string).toISOString(),
+    74	    updatedAt: new Date(row.updated_at as string).toISOString(),
+    75	  }
+    76	}
+    77	
+    78	export async function getCommunicationChannel(userCode: string, deviceCode: string) {
+    79	  const sql = await getSqlClient()
+    80	  const rows = await sql`
+    81	    SELECT * FROM communication_channels
+    82	    WHERE user_code = ${userCode}
+    83	      AND device_code = ${deviceCode}
+    84	      AND provider = ${PROVIDER}
+    85	    LIMIT 1
+    86	  ` as Record<string, unknown>[]
+    87	  if (rows.length === 0) return null
+    88	  return mapRow(rows[0])
+    89	}
+    90	
+    91	export interface UpsertChannelInput {
+    92	  userCode: string
+    93	  deviceCode: string
+    94	  instanceName: string
+    95	  status: string
+    96	  pairingCode?: string | null
+    97	  instanceId?: string | null
+    98	  providerMetadata?: Record<string, unknown> | null
+    99	  phoneNumber?: string | null
+   100	  ownerJid?: string | null
+   101	  profileName?: string | null
+   102	  profilePhoto?: string | null
+   103	  connectedAt?: string | null
+   104	  lastSeenAt?: string | null
+   105	}
+   106	
+   107	export async function upsertCommunicationChannel(input: UpsertChannelInput) {
+   108	  const sql = await getSqlClient()
+   109	  const now = new Date().toISOString()
+   110	  const id = randomUUID()
+   111	  const rows = await sql`
+   112	    INSERT INTO communication_channels (
+   113	      id, user_code, device_code, provider,
+   114	      instance_name, status, pairing_code, provider_metadata,
+   115	      instance_id, phone_number, owner_jid, profile_name, profile_photo,
+   116	      connected_at, last_seen_at,
+   117	      created_at, updated_at
+   118	    ) VALUES (
+   119	      ${id}, ${input.userCode}, ${input.deviceCode}, ${PROVIDER},
+   120	      ${input.instanceName}, ${input.status}, ${input.pairingCode ?? null}, ${input.providerMetadata ?? null},
+   121	      ${input.instanceId ?? null}, ${input.phoneNumber ?? null}, ${input.ownerJid ?? null}, ${input.profileName ?? null}, ${input.profilePhoto ?? null},
+   122	      ${input.connectedAt ?? null}, ${input.lastSeenAt ?? null},
+   123	      ${now}, ${now}
+   124	    )
+   125	    ON CONFLICT (user_code, device_code, provider)
+   126	    DO UPDATE SET
+   127	      instance_name = EXCLUDED.instance_name,
+   128	      status = EXCLUDED.status,
+   129	      pairing_code = EXCLUDED.pairing_code,
+   130	      provider_metadata = EXCLUDED.provider_metadata,
+   131	      instance_id = EXCLUDED.instance_id,
+   132	      phone_number = EXCLUDED.phone_number,
+   133	      owner_jid = EXCLUDED.owner_jid,
+   134	      profile_name = EXCLUDED.profile_name,
+   135	      profile_photo = EXCLUDED.profile_photo,
+   136	      connected_at = EXCLUDED.connected_at,
+   137	      last_seen_at = EXCLUDED.last_seen_at,
+   138	      updated_at = ${now}
+   139	    RETURNING *
+   140	  ` as Record<string, unknown>[]
+   141	  return mapRow(rows[0])
+   142	}
+   143	
+   144	export interface UpdateChannelInput {
+   145	  userCode: string
+   146	  deviceCode: string
+   147	  updates: Partial<Omit<CommunicationChannelRecord, 'id' | 'userCode' | 'deviceCode' | 'provider' | 'createdAt'>>
+   148	}
+   149	
+   150	export async function updateCommunicationChannel(input: UpdateChannelInput) {
+   151	  const sql = await getSqlClient()
+   152	  const now = new Date().toISOString()
+   153	  const current = await getCommunicationChannel(input.userCode, input.deviceCode)
+   154	  if (!current) return null
+   155	
+   156	  const merged: CommunicationChannelRecord = {
+   157	    ...current,
+   158	    ...input.updates,
+   159	    updatedAt: now,
+   160	  }
+   161	
+   162	  await sql`
+   163	    UPDATE communication_channels SET
+   164	      instance_name = ${merged.instanceName},
+   165	      status = ${merged.status},
+   166	      pairing_code = ${merged.pairingCode},
+   167	      provider_metadata = ${merged.providerMetadata},
+   168	      instance_id = ${merged.instanceId},
+   169	      phone_number = ${merged.phoneNumber},
+   170	      owner_jid = ${merged.ownerJid},
+   171	      profile_name = ${merged.profileName},
+   172	      profile_photo = ${merged.profilePhoto},
+   173	      connected_at = ${merged.connectedAt},
+   174	      last_seen_at = ${merged.lastSeenAt},
+   175	      updated_at = ${now}
+   176	    WHERE user_code = ${input.userCode}
+   177	      AND device_code = ${input.deviceCode}
+   178	      AND provider = ${PROVIDER}
+   179	  `
+   180	
+   181	  return merged
+   182	}
+--- server/licenseDeviceRegistry.ts ---
+     1	import { neon } from '@neondatabase/serverless'
+     2	
+     3	export type LicenseDevicePlatform = 'web' | 'android' | 'ios' | 'unknown'
+     4	
+     5	export interface LicenseRegistryInput {
+     6	  licenseKey: string
+     7	  userCode: string
+     8	  deviceCode: string
+     9	  deviceName?: string
+    10	  platform?: LicenseDevicePlatform
+    11	  licenseType: string
+    12	  expiresAt: string | null
+    13	  devicePolicy: 'multi' | 'single'
+    14	}
+    15	
+    16	export interface LicenseDeviceAuthorization {
+    17	  licenseKey: string
+    18	  deviceAuthorization: 'existing' | 'registered'
+    19	  activeDevices: number
+    20	  maxDevices: number
+    21	}
+    22	
+    23	export class LicenseRegistryError extends Error {
+    24	  constructor(
+    25	    message: string,
+    26	    readonly code:
+    27	      | 'database-unavailable'
+    28	      | 'license-revoked'
+    29	      | 'device-revoked'
+    30	      | 'device-limit-reached',
+    31	  ) {
+    32	    super(message)
+    33	  }
+    34	}
+    35	
+    36	let schemaRequest: Promise<void> | undefined
+    37	
+    38	export const AUTHORIZE_DEVICE_FUNCTION_SQL = `
+    39	  CREATE OR REPLACE FUNCTION authorize_license_device(
+    40	    p_license_key TEXT,
+    41	    p_user_code TEXT,
+    42	    p_device_code TEXT,
+    43	    p_device_name TEXT,
+    44	    p_platform TEXT,
+    45	    p_license_type TEXT,
+    46	    p_expires_at TIMESTAMPTZ,
+    47	    p_device_policy TEXT,
+    48	    p_max_devices INTEGER
+    49	  )
+    50	  RETURNS TABLE (
+    51	    license_status TEXT,
+    52	    device_status TEXT,
+    53	    device_authorization TEXT,
+    54	    active_devices INTEGER,
+    55	    max_devices INTEGER
+    56	  )
+    57	  LANGUAGE plpgsql
+    58	  AS $$
+    59	  DECLARE
+    60	    current_license_status TEXT;
+    61	    current_license_user_code TEXT;
+    62	    current_device_status TEXT;
+    63	    configured_max_devices INTEGER;
+    64	    current_active_devices INTEGER;
+    65	  BEGIN
+    66	    IF p_user_code IS NULL OR BTRIM(p_user_code) = '' THEN
+    67	      RAISE EXCEPTION 'user_code is required'
+    68	        USING ERRCODE = '23502';
+    69	    END IF;
+    70	
+    71	    INSERT INTO licenses (
+    72	      license_key,
+    73	      user_code,
+    74	      license_type,
+    75	      expires_at,
+    76	      device_policy,
+    77	      max_devices
+    78	    ) VALUES (
+    79	      p_license_key,
+    80	      p_user_code,
+    81	      p_license_type,
+    82	      p_expires_at,
+    83	      p_device_policy,
+    84	      p_max_devices
+    85	    )
+    86	    ON CONFLICT (license_key) DO UPDATE SET
+    87	      user_code = COALESCE(licenses.user_code, EXCLUDED.user_code),
+    88	      license_type = EXCLUDED.license_type,
+    89	      expires_at = EXCLUDED.expires_at,
+    90	      device_policy = EXCLUDED.device_policy,
+    91	      max_devices = EXCLUDED.max_devices,
+    92	      updated_at = NOW();
+    93	
+    94	    SELECT status, licenses.max_devices, licenses.user_code
+    95	      INTO current_license_status, configured_max_devices, current_license_user_code
+    96	    FROM licenses
+    97	    WHERE license_key = p_license_key
+    98	    FOR UPDATE;
+    99	
+   100	    IF current_license_status = 'revoked' THEN
+   101	      RETURN QUERY SELECT
+   102	        current_license_status, NULL::TEXT, NULL::TEXT, 0, configured_max_devices;
+   103	      RETURN;
+   104	    END IF;
+   105	
+   106	    SELECT status
+   107	      INTO current_device_status
+   108	    FROM license_devices
+   109	    WHERE license_key = p_license_key
+   110	      AND device_code = p_device_code;
+   111	
+   112	    IF FOUND THEN
+   113	      UPDATE license_devices SET
+   114	        user_code = current_license_user_code,
+   115	        updated_at = NOW()
+   116	      WHERE license_key = p_license_key
+   117	        AND device_code = p_device_code
+   118	        AND user_code IS NULL;
+   119	
+   120	      IF current_device_status = 'active' THEN
+   121	        UPDATE license_devices SET
+   122	          device_name = COALESCE(p_device_name, device_name),
+   123	          platform = p_platform,
+   124	          last_seen_at = NOW(),
+   125	          updated_at = NOW()
+   126	        WHERE license_key = p_license_key
+   127	          AND device_code = p_device_code;
+   128	      END IF;
+   129	
+   130	      SELECT COUNT(*)::INTEGER INTO current_active_devices
+   131	      FROM license_devices
+   132	      WHERE license_key = p_license_key
+   133	        AND status = 'active';
+   134	
+   135	      RETURN QUERY SELECT
+   136	        current_license_status,
+   137	        current_device_status,
+   138	        CASE WHEN current_device_status = 'active' THEN 'existing' ELSE NULL END,
+   139	        current_active_devices,
+   140	        configured_max_devices;
+   141	      RETURN;
+   142	    END IF;
+   143	
+   144	    SELECT COUNT(*)::INTEGER INTO current_active_devices
+   145	    FROM license_devices
+   146	    WHERE license_key = p_license_key
+   147	      AND status = 'active';
+   148	
+   149	    IF current_active_devices >= configured_max_devices THEN
+   150	      RETURN QUERY SELECT
+   151	        current_license_status, NULL::TEXT, NULL::TEXT,
+   152	        current_active_devices, configured_max_devices;
+   153	      RETURN;
+   154	    END IF;
+   155	
+   156	    INSERT INTO license_devices (
+   157	      license_key,
+   158	      user_code,
+   159	      device_code,
+   160	      device_name,
+   161	      platform,
+   162	      status,
+   163	      created_at,
+   164	      updated_at,
+   165	      last_seen_at
+   166	    ) VALUES (
+   167	      p_license_key,
+   168	      current_license_user_code,
+   169	      p_device_code,
+   170	      p_device_name,
+   171	      p_platform,
+   172	      'active',
+   173	      NOW(),
+   174	      NOW(),
+   175	      NOW()
+   176	    );
+   177	
+   178	    RETURN QUERY SELECT
+   179	      current_license_status, 'active'::TEXT, 'registered'::TEXT,
+   180	      current_active_devices + 1, configured_max_devices;
+   181	  END;
+   182	  $$
+   183	`
+   184	
+   185	export const BACKFILL_DEVICE_USER_CODES_FROM_LICENSES_SQL = `
+   186	  UPDATE license_devices AS device
+   187	  SET
+   188	    user_code = license.user_code,
+   189	    updated_at = NOW()
+   190	  FROM licenses AS license
+   191	  WHERE device.license_key = license.license_key
+   192	    AND device.user_code IS NULL
+   193	    AND license.user_code IS NOT NULL;
+   194	`
+   195	
+   196	export const BACKFILL_LICENSE_USER_CODES_FROM_DEVICES_SQL = `
+   197	  UPDATE licenses AS license
+   198	  SET
+   199	    user_code = source.user_code,
+   200	    updated_at = NOW()
+   201	  FROM (
+   202	    SELECT license_key, MIN(user_code) AS user_code
+   203	    FROM license_devices
+   204	    WHERE user_code IS NOT NULL
+   205	    GROUP BY license_key
+   206	    HAVING COUNT(DISTINCT user_code) = 1
+   207	  ) AS source
+   208	  WHERE license.license_key = source.license_key
+   209	    AND license.user_code IS NULL;
+   210	`
+   211	
+   212	export const BACKFILL_FROM_COMMUNICATION_CHANNELS_SQL = `
+   213	  DO $migration$
+   214	  BEGIN
+   215	    IF to_regclass('public.communication_channels') IS NOT NULL THEN
+   216	      EXECUTE $backfill$
+   217	        UPDATE license_devices AS device
+   218	        SET
+   219	          user_code = channel.user_code,
+   220	          updated_at = NOW()
+   221	        FROM (
+   222	          SELECT device_code, MIN(user_code) AS user_code
+   223	          FROM communication_channels
+   224	          WHERE device_code IS NOT NULL
+   225	            AND user_code IS NOT NULL
+   226	          GROUP BY device_code
+   227	          HAVING COUNT(DISTINCT user_code) = 1
+   228	        ) AS channel
+   229	        WHERE device.device_code = channel.device_code
+   230	          AND device.user_code IS NULL
+   231	      $backfill$;
+   232	    END IF;
+   233	  END;
+   234	  $migration$;
+   235	`
+   236	
+   237	function getDatabaseUrl() {
+   238	  const databaseUrl = process.env.DATABASE_URL?.trim()
+   239	  if (!databaseUrl) {
+   240	    throw new LicenseRegistryError(
+   241	      'El registro de licencias no está configurado.',
+   242	      'database-unavailable',
+   243	    )
+   244	  }
+   245	  return databaseUrl
+   246	}
+   247	
+   248	function getConfiguredDeviceLimit() {
+   249	  const value = Number(process.env.MAX_DEVICES_PER_LICENSE ?? 3)
+   250	  return Number.isInteger(value) && value >= 1 && value <= 50 ? value : 3
+   251	}
+   252	
+   253	async function ensureSchema() {
+   254	  const sql = neon(getDatabaseUrl())
+   255	
+   256	  await sql`
+   257	    CREATE TABLE IF NOT EXISTS licenses (
+   258	      license_key TEXT PRIMARY KEY,
+   259	      user_code TEXT,
+   260	      license_type TEXT NOT NULL,
+--- server/neonClient.ts ---
+     1	import { neon } from '@neondatabase/serverless'
+     2	
+     3	let cachedClient: ReturnType<typeof neon> | undefined
+     4	
+     5	export function getNeonClient() {
+     6	  if (cachedClient) return cachedClient
+     7	
+     8	  const connectionString =
+     9	    process.env.DATABASE_URL?.trim() ||
+    10	    process.env.NEON_DATABASE_URL?.trim()
+    11	  if (!connectionString) {
+    12	    throw new Error('DATABASE_URL (o NEON_DATABASE_URL) no está configurado.')
+    13	  }
+    14	
+    15	  cachedClient = neon(connectionString)
+    16	  return cachedClient
+    17	}

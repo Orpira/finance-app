@@ -1,0 +1,280 @@
+=== SERVICE USAGE MAP ===
+## adapterInterfaces
+  src/pages/Insights/insightDashboardComposition.ts:60:} from '../../services/adapterInterfaces'
+  test/knowledgeIntegration.test.ts:34:} from '../src/services/adapterInterfaces'
+  test/runtimeAdapter.test.ts:18:} from '../src/services/adapterInterfaces'
+
+## appointmentCompletionService
+  src/components/ServiceTimeAlert.tsx:11:} from '../services/appointmentCompletionService'
+  src/pages/Agenda/AgendaPage.tsx:24:import { completeAppointmentAsIncome } from '../../services/appointmentCompletionService'
+
+## appointmentService
+  src/components/AppointmentReminderAlert.tsx:5:import { listAppointments } from '../services/appointmentService'
+  src/components/ServiceTimeAlert.tsx:7:} from '../services/appointmentService'
+  src/pages/Agenda/AppointmentFormPage.tsx:11:} from '../../services/appointmentService'
+  src/pages/Agenda/AgendaPage.tsx:23:} from '../../services/appointmentService'
+
+## automationHubService
+  src/pages/Settings/SettingsLicensePage.tsx:5:import { clearAutomationAuthorization } from '../../services/automationHubService'
+
+## automationOutboxService
+  src/app/AppLayout.tsx:25:import { initializeAutomationOutbox } from '../services/automationOutboxService'
+  src/pages/Settings/SettingsLicensePage.tsx:6:import { scheduleAutomationOutboxFlush } from '../../services/automationOutboxService'
+
+## backupService
+  src/app/AppLayout.tsx:24:} from '../services/backupService'
+  src/pages/Settings/SettingsBackupPage.tsx:20:} from '../../services/backupService'
+  test/backupService.test.ts:7:} from '../src/services/backupService'
+
+## balanceReportService
+  src/pages/Home/HomePage.tsx:20:import type { BalanceReportResult } from '../../services/balanceReportService'
+  src/pages/Reports/ReportsPage.tsx:12:import { buildBalanceReport } from '../../services/balanceReportService'
+  test/balanceReportService.test.ts:3:import { buildBalanceReport } from '../src/services/balanceReportService'
+  test/financialEngineAdapter.test.ts:3:import { buildBalanceReport } from '../src/services/balanceReportService'
+  test/financialEngineShadowMode.test.ts:3:import { buildBalanceReport } from '../src/services/balanceReportService'
+  test/homeBalanceSummaryService.test.ts:3:import { buildBalanceReport } from '../src/services/balanceReportService'
+
+## communicationChannelService
+  src/pages/Settings/CommunicationChannelsPage.tsx:21:} from '../../services/communicationChannelService'
+  test/communicationChannelService.test.ts:6:} from '../src/services/communicationChannelService'
+
+## currencyConversionService
+  src/pages/Income/IncomePage.tsx:20:} from '../../services/currencyConversionService'
+  src/pages/Expenses/ExpensesPage.tsx:12:} from '../../services/currencyConversionService'
+
+## cutoffReportService
+
+## deviceIdentityService
+  src/app/AppLayout.tsx:26:import { provisionDeviceIdentity } from '../services/deviceIdentityService'
+  src/components/security/LicenseGuard.tsx:4:import { getOrCreateDeviceIdentity } from '../../services/deviceIdentityService'
+
+## earningPeriodService
+  src/app/AppLayout.tsx:27:import { migrateLegacyRecordsToSeasons } from '../services/earningPeriodService'
+  src/pages/Home/HomePage.tsx:27:import { getActiveEarningPeriod } from '../../services/earningPeriodService'
+  src/pages/Agenda/AppointmentFormPage.tsx:25:import { getActiveEarningPeriod, isEarningPeriodClosed } from '../../services/earningPeriodService'
+  src/pages/Agenda/AgendaPage.tsx:26:import { listClosedEarningPeriods } from '../../services/earningPeriodService'
+  src/pages/Reports/ReportsPage.tsx:11:import { listEarningPeriods } from '../../services/earningPeriodService'
+  src/pages/Income/IncomeDetailPage.tsx:8:import { isEarningPeriodClosed } from '../../services/earningPeriodService'
+  src/pages/Income/IncomePage.tsx:15:import { getActiveEarningPeriod, isEarningPeriodClosed } from '../../services/earningPeriodService'
+  src/pages/Income/IncomeListPage.tsx:16:import { getActiveEarningPeriod } from '../../services/earningPeriodService'
+  src/pages/Insights/insightDashboardComposition.ts:1:import { getActiveEarningPeriod } from '../../services/earningPeriodService'
+  src/pages/Expenses/ExpenseListPage.tsx:18:import { getActiveEarningPeriod } from '../../services/earningPeriodService'
+  src/pages/Expenses/ExpensesPage.tsx:32:import { getActiveEarningPeriod, isEarningPeriodClosed } from '../../services/earningPeriodService'
+  src/pages/Summary/FullSummaryPage.tsx:19:import { getActiveEarningPeriod } from '../../services/earningPeriodService'
+  src/pages/Summary/BestDaysHistoryPage.tsx:7:} from '../../services/earningPeriodService'
+  src/pages/Seasons/SeasonDetailPage.tsx:6:import { getEarningPeriodById, getSeasonStatistics, listSeasonRecords, updateActiveEarningPeriod, type SeasonStatistics } from '../../services/earningPeriodService'
+  src/pages/Seasons/SeasonFormPage.tsx:6:import { closeActiveEarningPeriod, createEarningPeriod, getActiveEarningPeriod, getEarningPeriodById } from '../../services/earningPeriodService'
+  src/pages/Seasons/SeasonsPage.tsx:12:} from '../../services/earningPeriodService'
+
+## encryptionService
+
+## exchangeRateService
+  src/pages/Income/IncomePage.tsx:13:import { saveExchangeRate } from '../../services/exchangeRateService'
+  src/pages/Expenses/ExpensesPage.tsx:13:import { saveExchangeRate } from '../../services/exchangeRateService'
+
+## expenseService
+  src/pages/Home/HomePage.tsx:17:import { listExpenses } from '../../services/expenseService'
+  src/pages/Reports/ReportsPage.tsx:8:import { listExpenses } from '../../services/expenseService'
+  src/pages/Income/IncomeDetailPage.tsx:9:import { listExpenseAdjustmentsForIncome } from '../../services/expenseService'
+  src/pages/Income/IncomeListPage.tsx:15:import { listExpenses } from '../../services/expenseService'
+  src/pages/Expenses/ExpenseListPage.tsx:15:import { deleteExpense, listExpenses, updateExpense } from '../../services/expenseService'
+  src/pages/Expenses/ExpensesPage.tsx:19:} from '../../services/expenseService'
+  src/pages/Summary/FullSummaryPage.tsx:18:import { listExpenses } from '../../services/expenseService'
+
+## financialEngineAdapter
+  src/intelligence/financial-snapshot/snapshotBuilder.ts:1:import type { FinancialEngineResult } from '../../services/financialEngineAdapter'
+  test/snapshotPromotionExecutor.test.ts:6:import { runFinancialEngine, type FinancialEngineResult } from '../src/services/financialEngineAdapter'
+  test/snapshotBuilder.test.ts:8:import { runFinancialEngine } from '../src/services/financialEngineAdapter'
+  test/indexeddb/browser.ts:15:import { runFinancialEngine } from '../../src/services/financialEngineAdapter'
+  test/snapshotCanonicalizer.test.ts:13:import { runFinancialEngine } from '../src/services/financialEngineAdapter'
+  test/financialEngineAdapter.test.ts:4:import { runFinancialEngine, type FinancialEngineInput } from '../src/services/financialEngineAdapter'
+  test/financialEngineShadowMode.test.ts:7:} from '../src/services/financialEngineAdapter'
+  test/snapshotCandidateValidator.test.ts:11:import { runFinancialEngine } from '../src/services/financialEngineAdapter'
+  test/snapshotShadowModeService.test.ts:20:import { runFinancialEngine } from '../src/services/financialEngineAdapter'
+  test/homeBalanceSummaryService.test.ts:7:} from '../src/services/financialEngineAdapter'
+
+## financialEnginePromotionPolicy
+  test/financialEnginePromotionPolicy.test.ts:6:} from '../src/services/financialEnginePromotionPolicy'
+
+## financialEngineShadowMode
+  src/pages/Reports/ReportsPage.tsx:13:import { runFinancialEngineShadowMode } from '../../services/financialEngineShadowMode'
+  test/financialEngineShadowMode.test.ts:8:import { runFinancialEngineShadowMode } from '../src/services/financialEngineShadowMode'
+
+## googleDriveBackupService
+  src/pages/Settings/SettingsBackupPage.tsx:25:} from '../../services/googleDriveBackupService'
+
+## homeBalanceSummaryService
+  src/pages/Home/HomePage.tsx:19:import { buildHomeBalanceSummary, resolveHomeBalanceSummaryPromotion } from '../../services/homeBalanceSummaryService'
+  test/homeBalanceSummaryService.test.ts:8:import { buildHomeBalanceSummary } from '../src/services/homeBalanceSummaryService'
+
+## incomeService
+  src/pages/Home/HomePage.tsx:18:import { listServiceIncomes } from '../../services/incomeService'
+  src/pages/Reports/ReportsPage.tsx:9:import { listServiceIncomes } from '../../services/incomeService'
+  src/pages/Income/IncomeDetailPage.tsx:10:import { getServiceIncomeById } from '../../services/incomeService'
+  src/pages/Income/IncomePage.tsx:12:} from '../../services/incomeService'
+  src/pages/Income/IncomeListPage.tsx:13:} from '../../services/incomeService'
+  src/pages/Expenses/ExpenseListPage.tsx:16:import { listServiceIncomes } from '../../services/incomeService'
+  src/pages/Expenses/ExpensesPage.tsx:20:import { listServiceIncomes } from '../../services/incomeService'
+  src/pages/Summary/FullSummaryPage.tsx:20:import { listServiceIncomes } from '../../services/incomeService'
+
+## index
+
+## insightExecutionInterfaces
+  src/pages/Insights/insightDashboardController.ts:3:} from '../../services/insightExecutionInterfaces'
+  test/insightExecutionService.test.ts:9:} from '../src/services/insightExecutionInterfaces'
+
+## insightExecutionResult
+  src/pages/Insights/insightDashboardController.ts:6:} from '../../services/insightExecutionResult'
+  src/pages/Insights/insightDashboardState.ts:3:} from '../../services/insightExecutionResult'
+  src/pages/Insights/insightDashboardComposition.ts:7:} from '../../services/insightExecutionResult'
+  test/insightExecutionService.test.ts:13:} from '../src/services/insightExecutionResult'
+  test/insightDashboardIntegration.test.ts:12:import type { InsightExecutionRequest } from '../src/services/insightExecutionResult'
+
+## insightExecutionService
+  src/pages/Insights/insightDashboardComposition.ts:4:} from '../../services/insightExecutionService'
+  test/insightExecutionService.test.ts:5:import { createInsightExecutionService } from '../src/services/insightExecutionService'
+
+## insightReadModels
+  src/pages/Insights/insightDashboardComposition.ts:8:import { createInsightReadModels } from '../../services/insightReadModels'
+  test/insightDashboardIntegration.test.ts:11:import { createInsightReadModels } from '../src/services/insightReadModels'
+  test/insightReadModels.test.ts:15:import { createInsightReadModels } from '../src/services/insightReadModels'
+
+## knowledgeIntegrationInterfaces
+  src/pages/Insights/insightDashboardComposition.ts:14:} from '../../services/knowledgeIntegrationInterfaces'
+  test/knowledgeIntegration.test.ts:26:} from '../src/services/knowledgeIntegrationInterfaces'
+
+## knowledgeIntegrationResult
+  test/knowledgeIntegration.test.ts:30:} from '../src/services/knowledgeIntegrationResult'
+  test/insightExecutionService.test.ts:26:} from '../src/services/knowledgeIntegrationResult'
+
+## knowledgeIntegration
+  src/pages/Insights/insightDashboardComposition.ts:11:} from '../../services/knowledgeIntegration'
+  test/knowledgeIntegration.test.ts:23:} from '../src/services/knowledgeIntegration'
+
+## knowledgePromotionExecutor
+  test/indexeddb/browser.ts:17:import { executeKnowledgePromotion } from '../../src/services/knowledgePromotionExecutor'
+  test/knowledgePromotionExecutor.test.ts:23:} from '../src/services/knowledgePromotionExecutor'
+
+## knowledgeShadowModeService
+  test/knowledgeShadowModeService.test.ts:33:} from '../src/services/knowledgeShadowModeService'
+
+## licenseAuthorizationService
+
+## licenseDeviceService
+
+## licenseService
+  src/components/security/LicenseGuard.tsx:8:} from '../../services/licenseService'
+  src/pages/License/LicenseActivationPage.tsx:7:} from '../../services/licenseService'
+  src/pages/Settings/SettingsLicensePage.tsx:10:} from '../../services/licenseService'
+
+## locationService
+  src/pages/Settings/SettingsBusinessPage.tsx:10:import { listCityOptions } from '../../services/locationService'
+  src/pages/Seasons/SeasonDetailPage.tsx:7:import { listCityOptions } from '../../services/locationService'
+  src/pages/Seasons/SeasonFormPage.tsx:7:import { listCityOptions } from '../../services/locationService'
+
+## pinService
+  src/components/PinGate.tsx:8:import { verifyPin } from '../services/pinService'
+  src/pages/Settings/SettingsSecurityPage.tsx:9:} from '../../services/pinService'
+
+## playIntegrityService
+  src/app/AppLayout.tsx:28:import { getRuntimeIntegrityStatus } from '../services/playIntegrityService'
+
+## readModelInterfaces
+  src/pages/Insights/insightDashboardController.ts:9:} from '../../services/readModelInterfaces'
+  src/pages/Insights/insightDashboardState.ts:6:} from '../../services/readModelInterfaces'
+  src/pages/Insights/InsightList.tsx:3:} from '../../services/readModelInterfaces'
+  src/pages/Insights/InsightSummary.tsx:3:} from '../../services/readModelInterfaces'
+  test/insightDashboardIntegration.test.ts:16:} from '../src/services/readModelInterfaces'
+  test/insightReadModels.test.ts:20:} from '../src/services/readModelInterfaces'
+
+## reminderService
+  src/app/AppLayout.tsx:29:import { initializeReminderNotifications } from '../services/reminderService'
+  src/pages/Agenda/AppointmentFormPage.tsx:12:import { scheduleAppointmentReminders } from '../../services/reminderService'
+
+## reportShareService
+
+## runtimeAdapter
+  src/pages/Insights/insightDashboardComposition.ts:17:} from '../../services/runtimeAdapter'
+  test/runtimeAdapter.test.ts:13:} from '../src/services/runtimeAdapter'
+
+## securityRecoveryService
+  src/components/PinGate.tsx:6:import { resetLocalAppForPinRecovery } from '../services/securityRecoveryService'
+
+## serviceTimerNotificationService
+
+## serviceTimerService
+  src/components/ServiceCompletionAlert.tsx:12:} from '../services/serviceTimerService'
+
+## settingsService
+  src/app/AppLayout.tsx:30:import { applyTheme, getSettings, updateSettings } from '../services/settingsService'
+  src/components/ServiceTimeAlert.tsx:12:import { getSettings } from '../services/settingsService'
+  src/components/PinGate.tsx:7:import { getSettings } from '../services/settingsService'
+  src/components/security/UsageModeGuard.tsx:4:import { getSettings } from '../../services/settingsService'
+  src/pages/More/MorePage.tsx:13:import { getSettings } from '../../services/settingsService'
+  src/pages/Home/HomePage.tsx:21:import { getSettings } from '../../services/settingsService'
+  src/pages/Agenda/AppointmentFormPage.tsx:13:import { getSettings, updateSettings } from '../../services/settingsService'
+  src/pages/Agenda/AgendaPage.tsx:25:import { getSettings } from '../../services/settingsService'
+  src/pages/Reports/ReportsPage.tsx:10:import { getSettings } from '../../services/settingsService'
+  src/pages/Income/IncomeDetailPage.tsx:11:import { getSettings } from '../../services/settingsService'
+  src/pages/Income/IncomePage.tsx:14:import { getSettings } from '../../services/settingsService'
+  src/pages/Income/IncomeListPage.tsx:14:import { getSettings } from '../../services/settingsService'
+  src/pages/Settings/SettingsPage.tsx:13:import { getSettings } from '../../services/settingsService'
+  src/pages/Settings/SettingsBackupPage.tsx:26:import { getSettings, updateSettings } from '../../services/settingsService'
+  src/pages/Settings/SettingsBusinessPage.tsx:9:} from '../../services/settingsService'
+  src/pages/Settings/SettingsSecurityPage.tsx:10:import { getSettings } from '../../services/settingsService'
+  src/pages/Insights/insightDashboardComposition.ts:22:import { getSettings } from '../../services/settingsService'
+  src/pages/Expenses/ExpenseListPage.tsx:17:import { getSettings } from '../../services/settingsService'
+  src/pages/Expenses/ExpensesPage.tsx:21:import { getSettings } from '../../services/settingsService'
+  src/pages/Summary/FullSummaryPage.tsx:21:import { getSettings } from '../../services/settingsService'
+  src/pages/Summary/BestDaysHistoryPage.tsx:8:import { getSettings } from '../../services/settingsService'
+  src/pages/Seasons/SeasonFormPage.tsx:8:import { getSettings } from '../../services/settingsService'
+
+## signedLicenseService
+  src/pages/Settings/SettingsLicensePage.tsx:14:} from '../../services/signedLicenseService'
+
+## snapshotKnowledgeIntegrationInterfaces
+  test/insightExecutionService.test.ts:16:} from '../src/services/snapshotKnowledgeIntegrationInterfaces'
+  test/snapshotKnowledgeIntegration.test.ts:12:} from '../src/services/snapshotKnowledgeIntegrationInterfaces'
+
+## snapshotKnowledgeIntegrationResult
+  test/insightExecutionService.test.ts:21:} from '../src/services/snapshotKnowledgeIntegrationResult'
+  test/snapshotKnowledgeIntegration.test.ts:16:} from '../src/services/snapshotKnowledgeIntegrationResult'
+
+## snapshotKnowledgeIntegration
+  src/pages/Insights/insightDashboardComposition.ts:21:} from '../../services/snapshotKnowledgeIntegration'
+  test/snapshotKnowledgeIntegration.test.ts:8:} from '../src/services/snapshotKnowledgeIntegration'
+
+## snapshotPromotionExecutor
+  test/snapshotPromotionExecutor.test.ts:12:} from '../src/services/snapshotPromotionExecutor'
+  test/indexeddb/browser.ts:16:import { executeSnapshotPromotion } from '../../src/services/snapshotPromotionExecutor'
+
+## snapshotShadowModeService
+  test/indexeddb/browser.ts:14:import { runSnapshotShadowMode } from '../../src/services/snapshotShadowModeService'
+  test/snapshotShadowModeService.test.ts:6:} from '../src/services/snapshotShadowModeService'
+  test/homeBalanceSummaryService.test.ts:12:import type { SnapshotShadowModeInput } from '../src/services/snapshotShadowModeService'
+
+=== REPOSITORY USAGE MAP ===
+## financialSnapshotRepository
+  src/services/snapshotShadowModeService.ts:1:import { FinancialSnapshotRepository } from '../intelligence/financial-snapshot/financialSnapshotRepository'
+  src/services/snapshotPromotionExecutor.ts:1:import { FinancialSnapshotRepository } from '../intelligence/financial-snapshot/financialSnapshotRepository'
+  src/pages/Insights/insightDashboardComposition.ts:38:} from '../../intelligence/financial-snapshot/financialSnapshotRepository'
+  test/knowledgeSnapshotRepository.test.ts:11:} from '../src/intelligence/financial-snapshot/financialSnapshotRepository'
+  test/indexeddb/browser.ts:4:import { FinancialSnapshotRepository } from '../../src/intelligence/financial-snapshot/financialSnapshotRepository'
+  test/snapshotShadowModeService.test.ts:7:import { FinancialSnapshotRepository, type FinancialSnapshotDatabase } from '../src/intelligence/financial-snapshot/financialSnapshotRepository'
+  test/financialSnapshotRepository.test.ts:8:} from '../src/intelligence/financial-snapshot/financialSnapshotRepository'
+
+## knowledgeSnapshotRepository
+  src/services/snapshotShadowModeService.ts:19:import { KnowledgeSnapshotRepository } from '../intelligence/knowledge-layer/knowledgeSnapshotRepository'
+  src/services/knowledgeShadowModeService.ts:15:} from '../intelligence/knowledge-layer/knowledgeSnapshotRepository'
+  src/services/knowledgePromotionExecutor.ts:6:import { KnowledgeSnapshotRepository } from '../intelligence/knowledge-layer/knowledgeSnapshotRepository'
+  test/knowledgeSnapshotRepository.test.ts:23:} from '../src/intelligence/knowledge-layer/knowledgeSnapshotRepository'
+  test/indexeddb/browser.ts:12:import { KnowledgeSnapshotRepository } from '../../src/intelligence/knowledge-layer/knowledgeSnapshotRepository'
+  test/knowledgeShadowModeService.test.ts:23:} from '../src/intelligence/knowledge-layer/knowledgeSnapshotRepository'
+
+## insightRepository
+  src/pages/Insights/insightDashboardComposition.ts:28:} from '../../insight/insightRepository'
+  test/insightRepository.test.ts:3:import { createInsightRepository } from '../src/insight/insightRepository'
+  test/insightRuntime.test.ts:6:import { createInsightRepository } from '../src/insight/insightRepository'
+  test/insightEngine.test.ts:8:import { createInsightRepository } from '../src/insight/insightRepository'
+  test/runtimeAdapter.test.ts:4:import { createInsightRepository } from '../src/insight/insightRepository'
+

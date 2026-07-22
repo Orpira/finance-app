@@ -98,6 +98,42 @@ Los iconos Android se generan en `android/app/src/main/res/`.
 - `Expenses`: registro de gastos por categoría.
 - `Agenda`: gestión de citas y cronometrado.
 - `Reports`: visualización y exportación de reportes.
+- `Conversación AI (Preview)`: envío y recepción de mensajes usando AIConversationService.
+- `Prompt Builder AI`: agregado de dominio provider-neutral para ensamblar prompts estructurados a partir de segmentos tipados e inmutables.
+- `Context Builder AI`: agregado de dominio provider-neutral para ensamblar contexto estructurado con secciones tipadas e inmutables consumibles por Prompt Builder.
+- `Context Resolution AI`: agregado de dominio provider-neutral para resolver contexto relevante por estrategia y producir AIResolvedContext inmutable para Prompt Builder.
+- `AI Provider Adapter`: frontera estable provider-neutral para ejecutar `AIPrompt` contra proveedores externos y obtener `AIProviderResponse` canónico, con adaptador OpenAI inicial desacoplado.
+- `AI Execution Pipeline`: orquestador puro y determinista que coordina Conversation, Context Builder, Context Resolution, Prompt Builder y AIProvider mediante puertos inyectables.
+- `AI Execution Inspector`: capa de observabilidad pasiva con trazas exportables, snapshots de dominio y pantalla Debug de solo lectura para inspeccionar cada etapa del pipeline.
+- `AI Conversation Integration`: capa de aplicación que conecta `ConversationPage` con el motor de IA usando exclusivamente `AIConversationApplicationService` y manteniendo Conversation como fuente de verdad.
+- `AI Provider Production Activation`: composición segura del provider remoto real reutilizando `OpenAIProviderAdapter` mediante un proxy serverless autorizado sin exponer la API key al frontend.
+
+## Configuración del provider remoto real
+
+La conversation root de producción cambió en:
+
+- `src/application/ai-conversation/aiConversationApplicationComposition.ts`
+- `api/ai-provider-openai.ts`
+
+La credencial privada del proveedor vive exclusivamente en entorno servidor/edge:
+
+- `OPENAI_API_KEY`
+
+Configuración mínima adicional:
+
+- Cliente: `VITE_API_BASE_URL`, `VITE_AI_PROVIDER=OPENAI`, `VITE_AI_OPENAI_MODEL`, `VITE_AI_OPENAI_TIMEOUT_MS`
+- Servidor/edge: `OPENAI_MODEL`, `OPENAI_TIMEOUT_MS` opcional, `OPENAI_BASE_URL` opcional, `AUTOMATION_JWT_SECRET`
+
+Nunca se debe exponer `OPENAI_API_KEY` en variables `VITE_`, en el bundle ni en logs.
+
+## Prueba manual con proveedor remoto real
+
+1. Configura en el entorno servidor `OPENAI_API_KEY`, `OPENAI_MODEL` y `AUTOMATION_JWT_SECRET`.
+2. Configura en el cliente `VITE_API_BASE_URL`, `VITE_AI_PROVIDER=OPENAI` y `VITE_AI_OPENAI_MODEL` con el mismo modelo permitido por servidor.
+3. Inicia la app con una licencia V2 activa para que el cliente pueda solicitar el JWT temporal reutilizado por el gateway.
+4. Abre `/conversation`, envía un mensaje y verifica que se renderice la respuesta del asistente.
+5. Abre `/debug/ai-execution-inspector` y actualiza la traza para confirmar `PROVIDER_REQUEST` y `PROVIDER_RESPONSE` de la ejecución real.
+6. Desconfigura cualquiera de `VITE_AI_PROVIDER`, `VITE_AI_OPENAI_MODEL` u `OPENAI_API_KEY` y verifica que el flujo falle en cerrado sin volver al preview.
 - `Settings`: configuración del negocio, moneda, tema y PIN.
 - `Debug`: herramientas internas para migraciones y mantenimiento.
 

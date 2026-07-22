@@ -1,0 +1,434 @@
+=== SERVICES EXPORTS ===
+src/services/homeBalanceSummaryService.ts:68:export async function resolveHomeBalanceSummaryPromotion(
+src/services/homeBalanceSummaryService.ts:137:export function buildHomeBalanceSummary(
+src/services/communicationChannelService.ts:33:export interface CommunicationChannelActionResult {
+src/services/communicationChannelService.ts:40:export interface NormalizedWhatsAppConnectResponse {
+src/services/communicationChannelService.ts:61:export function normalizeWhatsAppPhoneNumber(value: string) {
+src/services/communicationChannelService.ts:181:export async function getWhatsAppChannel() {
+src/services/communicationChannelService.ts:206:export async function createOrUpdateWhatsAppChannel(
+src/services/communicationChannelService.ts:368:export function normalizeWhatsAppConnectResponse(
+src/services/communicationChannelService.ts:531:export async function connectWhatsApp(
+src/services/communicationChannelService.ts:574:export const requestWhatsAppQr = connectWhatsApp
+src/services/communicationChannelService.ts:576:export async function refreshWhatsAppStatus(): Promise<CommunicationChannelActionResult> {
+src/services/communicationChannelService.ts:607:export async function disconnectWhatsApp(): Promise<CommunicationChannelActionResult> {
+src/services/communicationChannelService.ts:625:export async function changeWhatsAppAccount() {
+src/services/communicationChannelService.ts:649:export async function testWhatsAppNotification(): Promise<CommunicationChannelActionResult> {
+src/services/communicationChannelService.ts:656:export async function updateWhatsAppNotificationPreferences(
+src/services/financialEngineShadowMode.ts:13:export interface FinancialEngineShadowInput extends FinancialEngineInput {
+src/services/financialEngineShadowMode.ts:18:export interface FinancialEngineShadowOptions {
+src/services/financialEngineShadowMode.ts:34:export function runFinancialEngineShadowMode(
+src/services/appointmentCompletionService.ts:35:export function getAppointmentActualDuration(
+src/services/appointmentCompletionService.ts:59:export async function completeAppointmentAsIncome(
+src/services/snapshotShadowModeService.ts:56:export interface SnapshotShadowModeInput {
+src/services/snapshotShadowModeService.ts:77:export interface SnapshotShadowModeObservation {
+src/services/snapshotShadowModeService.ts:104:export interface SnapshotShadowModeOptions {
+src/services/snapshotShadowModeService.ts:477:export function runSnapshotShadowMode(
+src/services/insightExecutionInterfaces.ts:14:export interface InsightExecutionSnapshotIntegrationPort {
+src/services/insightExecutionInterfaces.ts:20:export interface InsightExecutionKnowledgeIntegrationPort {
+src/services/insightExecutionInterfaces.ts:26:export interface InsightExecutionDependencies {
+src/services/insightExecutionInterfaces.ts:31:export interface InsightExecutionService {
+src/services/insightExecutionResult.ts:22:export type InsightExecutionStage =
+src/services/insightExecutionResult.ts:28:export interface InsightExecutionRequest {
+src/services/insightExecutionResult.ts:38:export type InsightExecutionFailureCode =
+src/services/insightExecutionResult.ts:52:export interface InsightExecutionTraceability {
+src/services/insightExecutionResult.ts:73:export interface InsightExecutionSuccess {
+src/services/insightExecutionResult.ts:87:export interface InsightExecutionFailure {
+src/services/insightExecutionResult.ts:103:export type InsightExecutionResult =
+src/services/locationService.ts:74:export async function listCityOptions() {
+src/services/playIntegrityService.ts:3:export interface PlayIntegrityResult {
+src/services/playIntegrityService.ts:9:export interface RuntimeIntegrityResult {
+src/services/playIntegrityService.ts:16:export async function checkPlayIntegrity(): Promise<PlayIntegrityResult> {
+src/services/playIntegrityService.ts:41:export async function getRuntimeIntegrityStatus(): Promise<RuntimeIntegrityResult> {
+src/services/earningPeriodService.ts:10:export const NO_ACTIVE_SEASON_MESSAGE =
+src/services/earningPeriodService.ts:12:export const CLOSED_SEASON_MESSAGE =
+src/services/earningPeriodService.ts:15:export interface CreateSeasonInput {
+src/services/earningPeriodService.ts:26:export interface SeasonStatistics {
+src/services/earningPeriodService.ts:54:export async function listEarningPeriods() {
+src/services/earningPeriodService.ts:58:export async function listClosedEarningPeriods() {
+src/services/earningPeriodService.ts:63:export function getEarningPeriodById(id: number) {
+src/services/earningPeriodService.ts:67:export async function getActiveEarningPeriod() {
+src/services/earningPeriodService.ts:73:export async function ensureActiveEarningPeriod(_settings?: AppSettings) {
+src/services/earningPeriodService.ts:80:export async function requireActiveEarningPeriod() {
+src/services/earningPeriodService.ts:84:export async function isEarningPeriodClosed(periodId?: number) {
+src/services/earningPeriodService.ts:89:export async function assertRecordIsMutable(record?: {
+src/services/earningPeriodService.ts:98:export async function seasonHasActivity(periodId: number) {
+src/services/earningPeriodService.ts:107:export async function createEarningPeriod(input: CreateSeasonInput) {
+src/services/earningPeriodService.ts:148:export async function updateActiveEarningPeriod(
+src/services/earningPeriodService.ts:179:export async function closeActiveEarningPeriod(endDate = new Date().toLocaleDateString('en-CA')) {
+src/services/earningPeriodService.ts:193:export async function closeActiveEarningPeriodAndCreateNext(
+src/services/earningPeriodService.ts:210:export async function listSeasonRecords(periodId: number) {
+src/services/earningPeriodService.ts:219:export async function getSeasonStatistics(periodId: number): Promise<SeasonStatistics> {
+src/services/earningPeriodService.ts:252:export async function listServiceIncomesByEarningPeriod(periodId: number) {
+src/services/earningPeriodService.ts:256:export async function migrateLegacyRecordsToSeasons() {
+src/services/incomeService.ts:30:export type CreateServiceIncomeInput = Omit<ServiceIncome, 'id'>
+src/services/incomeService.ts:31:export type UpdateServiceIncomeInput = Partial<CreateServiceIncomeInput>
+src/services/incomeService.ts:33:export interface ServiceIncomeListOptions extends DateRangeListOptions {
+src/services/incomeService.ts:45:export async function createServiceIncome(input: CreateServiceIncomeInput) {
+src/services/incomeService.ts:92:export async function getServiceIncomeById(id: number) {
+src/services/incomeService.ts:97:export async function listServiceIncomes(options: ServiceIncomeListOptions = {}) {
+src/services/incomeService.ts:142:export async function updateServiceIncome(
+src/services/incomeService.ts:185:export async function deleteServiceIncome(id: number) {
+src/services/deviceIdentityService.ts:240:export async function getDeviceIdentity() {
+src/services/deviceIdentityService.ts:269:export function getOrCreateDeviceIdentity() {
+src/services/deviceIdentityService.ts:338:export function provisionDeviceIdentity() {
+src/services/deviceIdentityService.ts:348:export async function resetDeviceIdentityForDebugOnly() {
+src/services/googleDriveBackupService.ts:30:export interface DriveBackupFile {
+src/services/googleDriveBackupService.ts:36:export interface EncryptedBackupUpload {
+src/services/googleDriveBackupService.ts:198:export async function connectGoogleDrive(clientId: string) {
+src/services/googleDriveBackupService.ts:220:export function disconnectGoogleDrive() {
+src/services/googleDriveBackupService.ts:224:export function getGoogleAccessToken() {
+src/services/googleDriveBackupService.ts:239:export function isGoogleDriveConnected() {
+src/services/googleDriveBackupService.ts:243:export async function uploadBackupToAppFolder(upload: EncryptedBackupUpload) {
+src/services/googleDriveBackupService.ts:262:export async function listBackupsFromAppFolder() {
+src/services/googleDriveBackupService.ts:283:export async function downloadLatestBackupFromAppFolder() {
+src/services/runtimeAdapter.ts:320:export function createRuntimeAdapter(
+src/services/appointmentService.ts:19:export interface AppointmentListOptions extends DateRangeListOptions {
+src/services/appointmentService.ts:24:export type CreateAppointmentInput = Omit<Appointment, 'id'>
+src/services/appointmentService.ts:25:export type UpdateAppointmentInput = Partial<CreateAppointmentInput>
+src/services/appointmentService.ts:27:export async function createAppointment(input: CreateAppointmentInput) {
+src/services/appointmentService.ts:51:export async function getAppointmentById(id: number) {
+src/services/appointmentService.ts:56:export async function listAppointments(options: AppointmentListOptions = {}) {
+src/services/appointmentService.ts:79:export async function updateAppointment(
+src/services/appointmentService.ts:101:export async function markAppointmentCompleted(id: number, completed = true) {
+src/services/appointmentService.ts:110:export async function deleteAppointment(id: number) {
+src/services/serviceTimerService.ts:29:export function buildInitialServiceTimerState(
+src/services/serviceTimerService.ts:47:export function isServiceTimerDue(income: Pick<ServiceIncome, 'timerStatus' | 'timerEndsAt'>, now = new Date()) {
+src/services/serviceTimerService.ts:81:export async function listTrackedServiceIncomes() {
+src/services/serviceTimerService.ts:95:export async function markServiceTimerCompleted(incomeId: number, completedAt = new Date()) {
+src/services/serviceTimerService.ts:145:export async function dismissServiceTimer(incomeId: number) {
+src/services/settingsService.ts:11:export type UpdateSettingsInput = Partial<
+src/services/settingsService.ts:15:export interface UpdateSettingsOptions {
+src/services/settingsService.ts:45:export function applyTheme(theme: AppSettings['theme']) {
+src/services/settingsService.ts:67:export async function getSettings() {
+src/services/settingsService.ts:96:export async function updateSettings(
+src/services/settingsService.ts:135:export function enablePin(pinHash: string) {
+src/services/settingsService.ts:142:export function disablePin() {
+src/services/adapterInterfaces.ts:21:export interface RuntimeAdapterEngineResult {
+src/services/adapterInterfaces.ts:32:export type RuntimeAdapterSourceSnapshot =
+src/services/adapterInterfaces.ts:35:export interface RuntimeAdapterVersions {
+src/services/adapterInterfaces.ts:42:export interface RuntimeAdapterInput {
+src/services/adapterInterfaces.ts:50:export interface RuntimeAdapterRuntimePort {
+src/services/adapterInterfaces.ts:54:export interface RuntimeAdapterKnowledgeBuilderPort {
+src/services/adapterInterfaces.ts:60:export interface RuntimeAdapterKnowledgeValidatorPort {
+src/services/adapterInterfaces.ts:64:export interface RuntimeAdapterDependencies {
+src/services/adapterInterfaces.ts:70:export type RuntimeAdapterFailureCode =
+src/services/adapterInterfaces.ts:79:export interface RuntimeAdapterFailure {
+src/services/adapterInterfaces.ts:90:export interface RuntimeAdapterSuccess {
+src/services/adapterInterfaces.ts:100:export interface RuntimeAdapterRuntimeFailure {
+src/services/adapterInterfaces.ts:110:export type RuntimeAdapterResult =
+src/services/adapterInterfaces.ts:115:export interface RuntimeAdapter {
+src/services/knowledgeShadowModeService.ts:72:export interface KnowledgeShadowModeVersions {
+src/services/knowledgeShadowModeService.ts:88:export interface KnowledgeShadowModeResult {
+src/services/knowledgeShadowModeService.ts:114:export interface KnowledgeShadowModeInput {
+src/services/knowledgeShadowModeService.ts:126:export interface KnowledgeShadowModeOptions {
+src/services/knowledgeShadowModeService.ts:385:export function isKnowledgeShadowEnabled(): boolean {
+src/services/knowledgeShadowModeService.ts:389:export function runKnowledgeShadowMode(
+src/services/knowledgeShadowModeService.ts:420:export type { KnowledgeBuilderError }
+src/services/licenseService.ts:21:export type LicenseAccessStatus = LicenseStatus | 'clock-tampered'
+src/services/licenseService.ts:23:export interface LicenseStatusResult {
+src/services/licenseService.ts:28:export interface ActivationValidationResult {
+src/services/licenseService.ts:51:export function getCurrentLicense() {
+src/services/licenseService.ts:60:export function validateActivationCode(
+src/services/licenseService.ts:90:export async function activateLicense(code: string) {
+src/services/licenseService.ts:118:export async function markLicenseExpired() {
+src/services/licenseService.ts:137:export async function getLicenseStatus(): Promise<LicenseStatusResult> {
+src/services/licenseService.ts:194:export async function isLicenseValid() {
+src/services/knowledgePromotionExecutor.ts:20:export interface KnowledgePromotionSupportedVersions extends KnowledgeCollectionVersions {
+src/services/knowledgePromotionExecutor.ts:24:export type KnowledgePromotionFallbackReason =
+src/services/knowledgePromotionExecutor.ts:40:export interface KnowledgePromotionExecutionResult {
+src/services/knowledgePromotionExecutor.ts:48:export interface KnowledgePromotionRepositoryPort {
+src/services/knowledgePromotionExecutor.ts:57:export interface KnowledgePromotionExecutionInput {
+src/services/knowledgePromotionExecutor.ts:70:export function isKnowledgePromotionEnabled(): boolean {
+src/services/knowledgePromotionExecutor.ts:301:export async function executeKnowledgePromotion(
+src/services/insightReadModels.ts:351:export function createInsightReadModels(): InsightReadModels {
+src/services/snapshotPromotionExecutor.ts:19:export interface SnapshotPromotionExpectedScope {
+src/services/snapshotPromotionExecutor.ts:29:export type SnapshotPromotionFallbackReason =
+src/services/snapshotPromotionExecutor.ts:41:export interface SnapshotPromotionDecision {
+src/services/snapshotPromotionExecutor.ts:48:export interface SnapshotPromotionRepositoryPort {
+src/services/snapshotPromotionExecutor.ts:63:export function isFinancialSnapshotHomeEnabled(): boolean {
+src/services/snapshotPromotionExecutor.ts:171:export async function executeSnapshotPromotion(
+src/services/knowledgeIntegration.ts:378:export function createKnowledgeIntegration(
+src/services/financialEngineAdapter.ts:9:export interface FinancialEngineInput {
+src/services/financialEngineAdapter.ts:18:export interface FinancialEngineResult {
+src/services/financialEngineAdapter.ts:54:export function runFinancialEngine(input: FinancialEngineInput): FinancialEngineResult {
+src/services/serviceTimerNotificationService.ts:36:export async function notifyServiceCompleted(income: ServiceIncome) {
+src/services/expenseService.ts:24:export interface ExpenseListOptions extends DateRangeListOptions {
+src/services/expenseService.ts:31:export type CreateExpenseInput = Omit<Expense, 'id' | 'createdAt'> & {
+src/services/expenseService.ts:34:export type UpdateExpenseInput = Partial<CreateExpenseInput>
+src/services/expenseService.ts:46:export async function createExpense(input: CreateExpenseInput) {
+src/services/expenseService.ts:88:export async function getExpenseById(id: number) {
+src/services/expenseService.ts:93:export async function listExpenses(options: ExpenseListOptions = {}) {
+src/services/expenseService.ts:128:export async function updateExpense(id: number, updates: UpdateExpenseInput) {
+src/services/expenseService.ts:163:export async function getAdjustmentCapacity(
+src/services/expenseService.ts:175:export function listExpenseAdjustmentsForIncome(incomeId: number) {
+src/services/expenseService.ts:184:export async function deleteExpense(id: number) {
+src/services/backupService.ts:28:export interface BackupData {
+src/services/backupService.ts:42:export interface EncryptedBackupFile {
+src/services/backupService.ts:56:export function buildBackupFilename(generatedAt: string) {
+src/services/backupService.ts:71:export function shouldCreateDailyBackup(
+src/services/backupService.ts:88:export function getDelayUntilNextDailyBackupCheck(now: Date = new Date()) {
+src/services/backupService.ts:111:export async function exportBackup() {
+src/services/backupService.ts:118:export async function importBackup(file: File) {
+src/services/backupService.ts:140:export async function generateBackupData(): Promise<BackupData> {
+src/services/backupService.ts:177:export async function encryptBackup(
+src/services/backupService.ts:190:export async function exportEncryptedBackup(passwordOrKey: string) {
+src/services/backupService.ts:204:export async function decryptBackup(
+src/services/backupService.ts:228:export async function restoreBackupData(backupData: BackupData) {
+src/services/backupService.ts:233:export async function importEncryptedBackup(file: File, passwordOrKey: string) {
+src/services/backupService.ts:243:export async function shouldRunAutomaticBackup() {
+src/services/backupService.ts:261:export async function runDriveBackupNow() {
+src/services/backupService.ts:295:export async function restoreLatestDriveBackup() {
+src/services/backupService.ts:324:export async function runAutomaticDriveBackupIfNeeded() {
+src/services/licenseDeviceService.ts:4:export const CURRENT_LICENSE_ID = 'current'
+src/services/licenseDeviceService.ts:48:export function getDeviceCode() {
+src/services/licenseDeviceService.ts:58:export function logLicenseValidatedForExistingDeviceCode(deviceCode: string) {
+src/services/financialEnginePromotionPolicy.ts:1:export const FINANCIAL_ENGINE_HOME_CONSUMER = 'homeBalanceSummaryService'
+src/services/financialEnginePromotionPolicy.ts:3:export interface FinancialEnginePromotionCriteria {
+src/services/financialEnginePromotionPolicy.ts:20:export type FinancialEnginePromotionCriterion = keyof FinancialEnginePromotionCriteria
+src/services/financialEnginePromotionPolicy.ts:22:export interface FinancialEnginePromotionAssessment {
+src/services/financialEnginePromotionPolicy.ts:34:export function assessFinancialEnginePromotion(input: {
+src/services/exchangeRateService.ts:8:export interface SaveExchangeRateInput {
+src/services/exchangeRateService.ts:16:export async function saveExchangeRate(input: SaveExchangeRateInput) {
+src/services/exchangeRateService.ts:26:export function listExchangeRates() {
+src/services/exchangeRateService.ts:30:export async function getExchangeRate(
+src/services/exchangeRateService.ts:41:export async function getLatestExchangeRate(
+src/services/exchangeRateService.ts:56:export function deleteExchangeRate(id: number) {
+src/services/currencyConversionService.ts:26:export type ExchangeRateResolutionSource = 'api' | 'offline' | 'default' | 'manual'
+src/services/currencyConversionService.ts:33:export interface ResolveExchangeRateOptions {
+src/services/currencyConversionService.ts:39:export interface ResolveEurCopRateOptions extends ResolveExchangeRateOptions {
+src/services/currencyConversionService.ts:43:export interface ResolvedExchangeRate {
+src/services/currencyConversionService.ts:48:export interface ConvertedCurrencyValues {
+src/services/currencyConversionService.ts:55:export interface ConvertedCurrencyPairValues {
+src/services/currencyConversionService.ts:97:export async function resolveExchangeRate(
+src/services/currencyConversionService.ts:146:export async function convertCurrency(
+src/services/currencyConversionService.ts:165:export async function convertCurrencyPair(
+src/services/currencyConversionService.ts:186:export async function resolveEurCopExchangeRate(
+src/services/currencyConversionService.ts:197:export async function convertCurrencyToEurCop(
+src/services/securityRecoveryService.ts:8:export async function resetLocalAppForPinRecovery() {
+src/services/automationOutboxService.ts:42:export function createAutomationOutboxRecord(
+src/services/automationOutboxService.ts:59:export function enqueueAutomationEvent(record: AutomationOutboxRecord) {
+src/services/automationOutboxService.ts:141:export function flushAutomationOutbox() {
+src/services/automationOutboxService.ts:151:export function scheduleAutomationOutboxFlush() {
+src/services/automationOutboxService.ts:155:export function initializeAutomationOutbox() {
+src/services/insightExecutionService.ts:641:export function createInsightExecutionService(
+src/services/encryptionService.ts:63:export interface EncryptedPayload {
+src/services/encryptionService.ts:72:export async function encryptJsonPayload(
+src/services/encryptionService.ts:103:export async function decryptJsonPayload<T>(
+src/services/knowledgeIntegrationResult.ts:16:export interface KnowledgeIntegrationRequest {
+src/services/knowledgeIntegrationResult.ts:24:export type KnowledgeIntegrationFailureCode =
+src/services/knowledgeIntegrationResult.ts:34:export interface KnowledgeRuntimeTraceability {
+src/services/knowledgeIntegrationResult.ts:58:export interface KnowledgeIntegrationSuccess {
+src/services/knowledgeIntegrationResult.ts:68:export interface KnowledgeIntegrationFailure {
+src/services/knowledgeIntegrationResult.ts:80:export type KnowledgeIntegrationResult =
+src/services/signedLicenseService.ts:30:export type SignedLicenseAccessStatus = LicenseStatus | 'clock-tampered'
+src/services/signedLicenseService.ts:32:export interface SignedLicenseStatusResult {
+src/services/signedLicenseService.ts:37:export interface SignedLicensePayload {
+src/services/signedLicenseService.ts:48:export interface SignedLicenseValidationResult {
+src/services/signedLicenseService.ts:206:export async function verifySignedLicense(code: string, deviceCode: string) {
+src/services/signedLicenseService.ts:210:export async function activateSignedLicense(code: string) {
+src/services/signedLicenseService.ts:272:export async function getSignedLicenseStatus(): Promise<SignedLicenseStatusResult> {
+src/services/signedLicenseService.ts:343:export async function isSignedLicenseValid() {
+src/services/automationHubService.ts:14:export interface AutomationDeliveryResult {
+src/services/automationHubService.ts:35:export function getAutomationApiBaseUrl() {
+src/services/automationHubService.ts:255:export async function sendAutomationEvent(
+src/services/automationHubService.ts:306:export function clearAutomationAuthorization() {
+src/services/automationHubService.ts:311:export async function getAutomationGatewayConfig() {
+src/services/automationHubService.ts:319:export async function automationGatewayRequest(
+src/services/balanceReportService.ts:19:export interface BalanceAdjustmentRecord extends BaseRecordSummary {
+src/services/balanceReportService.ts:24:export interface BalanceGroupedTotal {
+src/services/balanceReportService.ts:31:export interface BalanceReportResult {
+src/services/balanceReportService.ts:82:export function buildBalanceReport(input: BuildBalanceReportInput): BalanceReportResult {
+src/services/knowledgeIntegrationInterfaces.ts:16:export interface KnowledgeIntegrationRuntimeAdapterPort {
+src/services/knowledgeIntegrationInterfaces.ts:20:export interface KnowledgeIntegrationDependencies {
+src/services/knowledgeIntegrationInterfaces.ts:26:export interface KnowledgeIntegration {
+src/services/licenseAuthorizationService.ts:11:export interface LicenseDeviceAuthorizationResult {
+src/services/licenseAuthorizationService.ts:34:export async function authorizeSignedLicenseDevice(
+src/services/snapshotKnowledgeIntegrationResult.ts:14:export interface SnapshotKnowledgeIntegrationRequest {
+src/services/snapshotKnowledgeIntegrationResult.ts:20:export type SnapshotKnowledgeIntegrationFailureCode =
+src/services/snapshotKnowledgeIntegrationResult.ts:31:export interface SnapshotKnowledgeTraceability {
+src/services/snapshotKnowledgeIntegrationResult.ts:53:export interface SnapshotKnowledgeIntegrationSuccess {
+src/services/snapshotKnowledgeIntegrationResult.ts:63:export interface SnapshotKnowledgeIntegrationFailure {
+src/services/snapshotKnowledgeIntegrationResult.ts:75:export type SnapshotKnowledgeIntegrationResult =
+src/services/snapshotKnowledgeIntegration.ts:458:export function createSnapshotKnowledgeIntegration(
+src/services/snapshotKnowledgeIntegration.ts:563:export function createSnapshotKnowledgeLayerPort(): SnapshotKnowledgeLayerPort {
+src/services/readModelInterfaces.ts:15:export type InsightReadModelFailureCode =
+src/services/readModelInterfaces.ts:18:export type InsightReadModelConfidenceMode = Insight['confidence']['mode']
+src/services/readModelInterfaces.ts:20:export interface InsightReadModelSummary {
+src/services/readModelInterfaces.ts:29:export interface InsightReadModelTraceabilityItem {
+src/services/readModelInterfaces.ts:41:export interface InsightReadModelInsight {
+src/services/readModelInterfaces.ts:64:export interface InsightReadModelStatistics {
+src/services/readModelInterfaces.ts:75:export interface InsightReadModelConfidenceIndicators {
+src/services/readModelInterfaces.ts:83:export interface InsightReadModelUpdateMetadata {
+src/services/readModelInterfaces.ts:96:export interface InsightReadModelRuntimeFailure {
+src/services/readModelInterfaces.ts:103:export interface InsightReadModelProjection {
+src/services/readModelInterfaces.ts:123:export interface InsightReadModelFailure {
+src/services/readModelInterfaces.ts:132:export type InsightReadModelResult =
+src/services/readModelInterfaces.ts:136:export interface InsightReadModels {
+src/services/pinService.ts:4:export async function setPin(pin: string) {
+src/services/pinService.ts:14:export async function verifyPin(pin: string) {
+src/services/pinService.ts:24:export async function changePin(currentPin: string, nextPin: string) {
+src/services/pinService.ts:34:export async function removePin(currentPin: string) {
+src/services/snapshotKnowledgeIntegrationInterfaces.ts:12:export interface SnapshotKnowledgeLayerEngineResult {
+src/services/snapshotKnowledgeIntegrationInterfaces.ts:23:export type SnapshotKnowledgeLayerSnapshot =
+src/services/snapshotKnowledgeIntegrationInterfaces.ts:26:export interface SnapshotKnowledgeLayerInput {
+src/services/snapshotKnowledgeIntegrationInterfaces.ts:31:export interface SnapshotKnowledgeLayerPort {
+src/services/snapshotKnowledgeIntegrationInterfaces.ts:37:export interface SnapshotKnowledgeIntegrationDependencies {
+src/services/snapshotKnowledgeIntegrationInterfaces.ts:41:export interface SnapshotKnowledgeIntegration {
+src/services/snapshotKnowledgeIntegrationInterfaces.ts:47:export type SnapshotKnowledgeInputSnapshot = SealedFinancialSnapshot<unknown>
+src/services/reminderService.ts:40:export async function initializeReminderNotifications() {
+src/services/reminderService.ts:77:export async function scheduleAppointmentReminders(appointment: Appointment): Promise<void> {
+src/services/reminderService.ts:127:export async function cancelAppointmentReminders(appointmentId: number) {
+src/services/reportShareService.ts:217:export async function shareReportPdf(options: ShareReportPdfOptions) {
+src/services/cutoffReportService.ts:77:export function getCurrentCutoffRange(settings: AppSettings): PeriodRange {
+src/services/cutoffReportService.ts:183:export async function generateDueCutoffReports() {
+src/services/cutoffReportService.ts:206:export async function listCutoffReports() {
+
+=== INTELLIGENCE EXPORTS ===
+src/intelligence/knowledge-layer/knowledgeCanonicalizer.ts:51:export class KnowledgeCanonicalizationError extends Error {
+src/intelligence/knowledge-layer/knowledgeCanonicalizer.ts:414:export function canonicalizeValidatedKnowledgeCollection(
+src/intelligence/knowledge-layer/knowledgeCanonicalizer.ts:436:export function serializeCanonicalKnowledgeDocument(
+src/intelligence/knowledge-layer/knowledgeCollectionValidator.ts:111:export class KnowledgeValidationError extends Error {
+src/intelligence/knowledge-layer/knowledgeCollectionValidator.ts:322:export function validateKnowledgeCollection(
+src/intelligence/knowledge-layer/knowledgePromotionPolicy.ts:7:export type KnowledgePromotionAssessmentStatus = 'eligible' | 'ineligible'
+src/intelligence/knowledge-layer/knowledgePromotionPolicy.ts:9:export type KnowledgePromotionCheckCode =
+src/intelligence/knowledge-layer/knowledgePromotionPolicy.ts:43:export interface KnowledgePromotionCheck {
+src/intelligence/knowledge-layer/knowledgePromotionPolicy.ts:48:export interface KnowledgePromotionWarning {
+src/intelligence/knowledge-layer/knowledgePromotionPolicy.ts:54:export interface KnowledgePromotionFailure {
+src/intelligence/knowledge-layer/knowledgePromotionPolicy.ts:58:export interface KnowledgePromotionAssessment {
+src/intelligence/knowledge-layer/knowledgePromotionPolicy.ts:66:export type KnowledgePromotionPolicyErrorCode =
+src/intelligence/knowledge-layer/knowledgePromotionPolicy.ts:71:export class KnowledgePromotionPolicyError extends Error {
+src/intelligence/knowledge-layer/knowledgePromotionPolicy.ts:490:export function assessKnowledgeSnapshotPromotion(
+src/intelligence/knowledge-layer/knowledgeSealer.ts:37:export class KnowledgeSealError extends Error {
+src/intelligence/knowledge-layer/knowledgeSealer.ts:225:export function deriveKnowledgeSnapshotKey(
+src/intelligence/knowledge-layer/knowledgeSealer.ts:284:export async function sealCanonicalKnowledgeDocument(
+src/intelligence/knowledge-layer/knowledgeFingerprint.ts:8:export const KNOWLEDGE_FINGERPRINT_ALGORITHM = 'SHA-256' as const
+src/intelligence/knowledge-layer/knowledgeFingerprint.ts:9:export const KNOWLEDGE_FINGERPRINT_ENCODING = 'hex-lower' as const
+src/intelligence/knowledge-layer/knowledgeFingerprint.ts:10:export const KNOWLEDGE_FINGERPRINT_DOMAIN =
+src/intelligence/knowledge-layer/knowledgeFingerprint.ts:12:export const KNOWLEDGE_FINGERPRINT_VERSION =
+src/intelligence/knowledge-layer/knowledgeFingerprint.ts:15:export class KnowledgeFingerprintError extends Error {
+src/intelligence/knowledge-layer/knowledgeFingerprint.ts:75:export function serializeKnowledgeFingerprintPreimage(
+src/intelligence/knowledge-layer/knowledgeFingerprint.ts:106:export async function fingerprintCanonicalKnowledgeDocument(
+src/intelligence/knowledge-layer/knowledgeFactsBuilder.ts:18:export type KnowledgeBuilderErrorCode =
+src/intelligence/knowledge-layer/knowledgeFactsBuilder.ts:26:export class KnowledgeBuilderError extends Error {
+src/intelligence/knowledge-layer/knowledgeFactsBuilder.ts:335:export function buildKnowledgeCollectionFromSnapshot(
+src/intelligence/knowledge-layer/knowledgeFactsBuilder.ts:372:export type {
+src/intelligence/knowledge-layer/knowledgeSnapshotRepository.ts:16:export type KnowledgePersistenceErrorCode =
+src/intelligence/knowledge-layer/knowledgeSnapshotRepository.ts:24:export class KnowledgePersistenceError extends Error {
+src/intelligence/knowledge-layer/knowledgeSnapshotRepository.ts:34:export interface KnowledgePersistenceResult {
+src/intelligence/knowledge-layer/knowledgeSnapshotRepository.ts:40:export interface KnowledgeSnapshotDatabase {
+src/intelligence/knowledge-layer/knowledgeSnapshotRepository.ts:120:export class KnowledgeSnapshotRepository {
+src/intelligence/financial-snapshot/snapshotMaterialDiffAuditor.ts:4:export type SnapshotChangedPathType =
+src/intelligence/financial-snapshot/snapshotMaterialDiffAuditor.ts:11:export type SnapshotChangedPathClassification =
+src/intelligence/financial-snapshot/snapshotMaterialDiffAuditor.ts:21:export type SnapshotDiffCode =
+src/intelligence/financial-snapshot/snapshotMaterialDiffAuditor.ts:33:export interface SnapshotChangedPath {
+src/intelligence/financial-snapshot/snapshotMaterialDiffAuditor.ts:39:export interface SnapshotMaterialDiffAudit {
+src/intelligence/financial-snapshot/snapshotMaterialDiffAuditor.ts:257:export function auditCanonicalSnapshotMaterialDiff(
+src/intelligence/financial-snapshot/snapshotSealer.ts:17:export type SnapshotSealErrorCode =
+src/intelligence/financial-snapshot/snapshotSealer.ts:27:export class SnapshotSealError extends Error {
+src/intelligence/financial-snapshot/snapshotSealer.ts:37:export interface SnapshotSealingInput<TEngineResult = unknown> {
+src/intelligence/financial-snapshot/snapshotSealer.ts:65:export function deriveSnapshotKey(
+src/intelligence/financial-snapshot/snapshotSealer.ts:108:export async function sealCanonicalSnapshot<TEngineResult>(
+src/intelligence/financial-snapshot/financialSnapshotRepository.ts:16:export type FinancialSnapshotPersistenceErrorCode =
+src/intelligence/financial-snapshot/financialSnapshotRepository.ts:23:export class FinancialSnapshotPersistenceError extends Error {
+src/intelligence/financial-snapshot/financialSnapshotRepository.ts:33:export interface FinancialSnapshotDatabase {
+src/intelligence/financial-snapshot/financialSnapshotRepository.ts:75:export class FinancialSnapshotRepository {
+src/intelligence/financial-snapshot/snapshotFingerprint.ts:11:export const SNAPSHOT_FINGERPRINT_ALGORITHM = 'SHA-256' as const
+src/intelligence/financial-snapshot/snapshotFingerprint.ts:12:export const SNAPSHOT_FINGERPRINT_ENCODING = 'hex-lower' as const
+src/intelligence/financial-snapshot/snapshotFingerprint.ts:13:export const SNAPSHOT_FINGERPRINT_DOMAIN =
+src/intelligence/financial-snapshot/snapshotFingerprint.ts:15:export const SNAPSHOT_FINGERPRINT_VERSION =
+src/intelligence/financial-snapshot/snapshotFingerprint.ts:27:export type SnapshotFingerprintErrorCode =
+src/intelligence/financial-snapshot/snapshotFingerprint.ts:33:export class SnapshotFingerprintError extends Error {
+src/intelligence/financial-snapshot/snapshotFingerprint.ts:54:export async function fingerprintCanonicalSnapshotDocument(
+src/intelligence/financial-snapshot/snapshotCandidateValidator.ts:15:export type SnapshotCandidateValidationErrorCode =
+src/intelligence/financial-snapshot/snapshotCandidateValidator.ts:27:export class SnapshotCandidateValidationError extends Error {
+src/intelligence/financial-snapshot/snapshotCandidateValidator.ts:200:export function validateSnapshotCandidate<TEngineResult>(
+src/intelligence/financial-snapshot/snapshotCanonicalizer.ts:21:export type SnapshotCanonicalizationErrorCode =
+src/intelligence/financial-snapshot/snapshotCanonicalizer.ts:30:export class SnapshotCanonicalizationError extends Error {
+src/intelligence/financial-snapshot/snapshotCanonicalizer.ts:96:export function serializeCanonicalSnapshotValue(value: unknown): string {
+src/intelligence/financial-snapshot/snapshotCanonicalizer.ts:214:export function canonicalizeValidatedSnapshotCandidate<TEngineResult>(
+src/intelligence/financial-snapshot/snapshotCanonicalizer.ts:262:export function serializeCanonicalSnapshotDocument(
+src/intelligence/financial-snapshot/snapshotProtocol.ts:9:export const SUPPORTED_SNAPSHOT_VERSION = 'financial-snapshot/1.0.0'
+src/intelligence/financial-snapshot/snapshotProtocol.ts:11:export const SNAPSHOT_CANONICALIZATION_VERSION_V1 =
+src/intelligence/financial-snapshot/snapshotProtocol.ts:13:export const SNAPSHOT_CANONICALIZATION_VERSION_V2 =
+src/intelligence/financial-snapshot/snapshotProtocol.ts:15:export const DEFAULT_SNAPSHOT_CANONICALIZATION_VERSION =
+src/intelligence/financial-snapshot/snapshotProtocol.ts:18:export const SNAPSHOT_FINGERPRINT_DOMAIN_V1 =
+src/intelligence/financial-snapshot/snapshotProtocol.ts:20:export const SNAPSHOT_FINGERPRINT_DOMAIN_V2 =
+src/intelligence/financial-snapshot/snapshotProtocol.ts:23:export const SNAPSHOT_FINGERPRINT_VERSION_V1 =
+src/intelligence/financial-snapshot/snapshotProtocol.ts:25:export const SNAPSHOT_FINGERPRINT_VERSION_V2 =
+src/intelligence/financial-snapshot/snapshotProtocol.ts:28:export function isSupportedSnapshotVersion(version: string): boolean {
+src/intelligence/financial-snapshot/snapshotProtocol.ts:32:export function isCanonicalizationVersionV1(version: string): boolean {
+src/intelligence/financial-snapshot/snapshotProtocol.ts:36:export function isCanonicalizationVersionV2(version: string): boolean {
+src/intelligence/financial-snapshot/snapshotProtocol.ts:40:export function isSupportedCanonicalizationVersion(version: string): boolean {
+src/intelligence/financial-snapshot/snapshotProtocol.ts:44:export function fingerprintSpecForCanonicalization(version: string): {
+src/intelligence/financial-snapshot/snapshotProtocol.ts:65:export function materializeScopeFromCanonicalDocument(
+src/intelligence/financial-snapshot/snapshotProtocol.ts:83:export function materializeMetadataFromCanonicalDocument(
+src/intelligence/financial-snapshot/snapshotPromotionPolicy.ts:15:export type SnapshotPromotionCheckCode =
+src/intelligence/financial-snapshot/snapshotPromotionPolicy.ts:42:export interface SnapshotPromotionCheck {
+src/intelligence/financial-snapshot/snapshotPromotionPolicy.ts:47:export interface SnapshotPromotionAssessment {
+src/intelligence/financial-snapshot/snapshotPromotionPolicy.ts:293:export function assessSnapshotPromotion(
+src/intelligence/financial-snapshot/snapshotBuilder.ts:16:export type SnapshotBuilderErrorCode =
+src/intelligence/financial-snapshot/snapshotBuilder.ts:26:export class SnapshotBuilderError extends Error {
+src/intelligence/financial-snapshot/snapshotBuilder.ts:36:export interface SnapshotBuilderInput {
+src/intelligence/financial-snapshot/snapshotBuilder.ts:178:export function buildSnapshotCandidate(
+
+=== INSIGHT EXPORTS ===
+src/insight/insightEngine.ts:132:export function createInsightEngine(
+src/insight/insightRepository.ts:258:export function createInsightRepository(
+src/insight/validationReport.ts:6:export type ValidationReportStatus = 'valid' | 'invalid'
+src/insight/validationReport.ts:8:export interface ValidationReport {
+src/insight/validationReport.ts:71:export function createValidationReport(
+src/insight/engineInterfaces.ts:10:export interface InsightEngineBuilderPort {
+src/insight/engineInterfaces.ts:14:export interface InsightEngineValidatorPort {
+src/insight/engineInterfaces.ts:18:export interface InsightEngineDependencies {
+src/insight/engineInterfaces.ts:23:export interface RunInsightEngineInput {
+src/insight/engineInterfaces.ts:29:export interface InsightEngine {
+src/insight/runtimeResponse.ts:7:export type InsightRuntimeFailureCode =
+src/insight/runtimeResponse.ts:17:export type InsightRuntimeFailureKind =
+src/insight/runtimeResponse.ts:22:export interface InsightRuntimeSuccess {
+src/insight/runtimeResponse.ts:34:export interface InsightRuntimeFailure {
+src/insight/runtimeResponse.ts:46:export type InsightRuntimeResponse =
+src/insight/types.ts:27:export type InsightId = string & {
+src/insight/types.ts:31:export type InsightBuilderAssessmentStatus = 'ok' | 'blocked'
+src/insight/types.ts:33:export type InsightBuilderFailureCode =
+src/insight/types.ts:37:export type InsightRuleExecutionStatus = 'generated' | 'skipped'
+src/insight/types.ts:39:export type InsightRuleSkipReasonCode =
+src/insight/types.ts:45:export type InsightRuleCompatibilityCheckCode =
+src/insight/types.ts:61:export interface InsightRuleCompatibilityCheck {
+src/insight/types.ts:66:export interface InsightEvidenceFactReference {
+src/insight/types.ts:77:export interface InsightEvidence {
+src/insight/types.ts:87:export interface InsightConfidence {
+src/insight/types.ts:93:export interface InsightTraceability {
+src/insight/types.ts:102:export interface Insight {
+src/insight/types.ts:115:export interface InsightRuleExecutionTrace {
+src/insight/types.ts:124:export interface InsightCollection {
+src/insight/types.ts:136:export interface InsightBuilderFailure {
+src/insight/types.ts:142:export interface InsightBuildAssessment {
+src/insight/types.ts:149:export interface InsightBuildResult {
+src/insight/insightBuilder.ts:472:export function buildInsightCollection(
+src/insight/insightRuntime.ts:601:export function createInsightRuntime(
+src/insight/validationIssue.ts:1:export const INSIGHT_VALIDATION_ISSUE_CODES = [
+src/insight/validationIssue.ts:17:export type ValidationIssueCode = (typeof INSIGHT_VALIDATION_ISSUE_CODES)[number]
+src/insight/validationIssue.ts:19:export interface ValidationIssue {
+src/insight/runtimeRequest.ts:7:export interface InsightRuntimeRequest {
+src/insight/engineResult.ts:8:export type InsightEngineStatus = 'accepted' | 'rejected'
+src/insight/engineResult.ts:10:export interface InsightEngineResult {
+src/insight/repositoryInterfaces.ts:14:export interface InsightScopeFilter {
+src/insight/repositoryInterfaces.ts:21:export interface InsightConfidenceFilter {
+src/insight/repositoryInterfaces.ts:26:export interface InsightRepository {
+src/insight/interfaces.ts:10:export interface InsightConfidenceEvaluationContext {
+src/insight/interfaces.ts:16:export interface InsightRuleEnablement {
+src/insight/interfaces.ts:20:export interface InsightConfidencePolicyResolver {
+src/insight/interfaces.ts:27:export interface InsightBuilderDependencies {
+src/insight/interfaces.ts:32:export interface BuildInsightCollectionInput {
+src/insight/runtimeInterfaces.ts:21:export interface InsightRuntimeSnapshot {
+src/insight/runtimeInterfaces.ts:30:export type InsightRuntimeQuery =
+src/insight/runtimeInterfaces.ts:59:export interface InsightRuntimeInsightsQueryResult {
+src/insight/runtimeInterfaces.ts:66:export interface InsightRuntimeStatisticsQueryResult {
+src/insight/runtimeInterfaces.ts:73:export type InsightRuntimeQueryResult =
+src/insight/runtimeInterfaces.ts:77:export interface InsightRuntimeDependencies {
+src/insight/runtimeInterfaces.ts:82:export interface InsightRuntime {
+src/insight/insightValidator.ts:53:export interface ValidateInsightCollectionInput {
+src/insight/insightValidator.ts:447:export function validateInsightCollection(
+src/insight/repositoryStatistics.ts:17:export interface InsightRepositoryStatistics {
+src/insight/repositoryStatistics.ts:41:export function createEmptyInsightRepositoryStatistics(): InsightRepositoryStatistics {
+src/insight/repositoryStatistics.ts:54:export function buildInsightRepositoryStatistics(

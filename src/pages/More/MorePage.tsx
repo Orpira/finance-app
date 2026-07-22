@@ -1,7 +1,9 @@
 import {
+  MessagesSquare,
   ChartNoAxesCombined,
   ChevronRight,
   DatabaseBackup,
+  Lightbulb,
   Settings,
   CalendarRange,
 } from 'lucide-react'
@@ -14,6 +16,12 @@ import type { UsageMode } from '../../types/settings'
 
 const moreLinks = [
   {
+    description: 'Envia mensajes y recibe respuestas usando AIConversationService.',
+    href: '/conversation',
+    icon: MessagesSquare,
+    label: 'Conversacion AI (Preview)',
+  },
+  {
     description: 'Crea, finaliza y consulta ciclos de actividad y sus estadísticas.',
     href: '/temporadas',
     icon: CalendarRange,
@@ -24,6 +32,12 @@ const moreLinks = [
     href: '/reports',
     icon: ChartNoAxesCombined,
     label: 'Reportes y exportaciones',
+  },
+  {
+    description: 'Visualiza insights proyectados desde el motor con estado seguro.',
+    href: '/dashboard',
+    icon: Lightbulb,
+    label: 'Dashboard de insights',
   },
   {
     description: 'Administra negocio, monedas, seguridad y preferencias.',
@@ -60,7 +74,7 @@ export function MorePage() {
 
   const visibleLinks =
     usageMode === 'basic'
-      ? moreLinks.filter((link) => link.href !== '/temporadas')
+      ? moreLinks.filter((link) => link.href !== '/temporadas' && link.href !== '/dashboard')
       : moreLinks
 
   return (

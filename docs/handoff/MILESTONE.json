@@ -1,0 +1,16 @@
+{
+  "project": "Private Balance",
+  "completedMilestone": "11B",
+  "nextMilestone": "11C",
+  "architectureVersion": "2.0",
+  "documentationVersion": "2.9",
+  "scope": "AI Provider Production Activation",
+  "quality": {
+    "scopedTypecheck": "PASS",
+    "runtimeSmoke": "NOT_EXECUTED",
+    "vitestSuite": "PASS",
+    "globalBuild": "PASS",
+    "scopedLint": "PASS",
+    "globalLint": "HISTORICAL_DEBT_OUTSIDE_SCOPE"
+  }
+}
