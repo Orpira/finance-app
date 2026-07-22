@@ -1,4 +1,5 @@
 import type { AIConversationApplicationService } from '../../application/ai-conversation'
+import type { AIConversationSessionSnapshot } from '../../intelligence/ai-conversation/session'
 import {
   createInitialConversationUiState,
   type ConversationUiState,
@@ -6,7 +7,7 @@ import {
 
 export interface ConversationControllerDependencies {
   readonly service: AIConversationApplicationService
-  readonly recoverSession?: () => Promise<ConversationUiState['session']>
+  readonly recoverSession?: () => Promise<AIConversationSessionSnapshot | null>
 }
 
 export interface ConversationController {
@@ -109,17 +110,17 @@ export function createConversationController(
         emit({
           status: 'loading',
           session: state.session,
-          messages: state.session?.messages ?? state.messages,
+          messages: state.messages,
           errorMessage: null,
         })
 
-        let recoveredSession: ConversationUiState['session'] = null
+        let recoveredSession: AIConversationSessionSnapshot | null = null
 
         if (dependencies.recoverSession !== undefined) {
           try {
             recoveredSession = await dependencies.recoverSession()
           } catch {
-            recoveredSession = null
+            /* recoveredSession = null */
           }
 
           if (recoveredSession !== null) {

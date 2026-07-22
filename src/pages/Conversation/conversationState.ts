@@ -4,9 +4,9 @@ import type { AIConversationSessionSnapshot } from '../../intelligence/ai-conver
 export type ConversationUiStatus =
   | 'idle'
   | 'loading'
+  | 'ready'
   | 'sending'
   | 'receiving'
-  | 'success'
   | 'error'
 
 export interface ConversationUiState {

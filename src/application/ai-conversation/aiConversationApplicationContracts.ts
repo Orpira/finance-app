@@ -63,6 +63,7 @@ export interface AIConversationApplicationServiceDependencies {
   readonly conversationService: Pick<
     AIConversationService,
     | 'startConversation'
+    | 'createAssistantMessage'
     | 'createUserMessage'
     | 'appendMessage'
   >
