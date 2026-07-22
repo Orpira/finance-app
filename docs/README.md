@@ -2,6 +2,10 @@
 
 Este directorio contiene la documentación oficial del proyecto. La fuente canónica es [PRIVATE_BALANCE_CONSTITUTION.md](PRIVATE_BALANCE_CONSTITUTION.md).
 
+## Documento rector
+
+- [`00_SYSTEM_ARCHITECTURE_MASTER.md`](00_SYSTEM_ARCHITECTURE_MASTER.md): mapa integral de producto, arquitectura, bounded contexts, dependencias, seguridad, calidad, deuda y roadmap. Debe leerse inmediatamente después de la Constitución.
+
 ## Mapa de documentos
 
 - [PRIVATE_BALANCE_CONSTITUTION.md](PRIVATE_BALANCE_CONSTITUTION.md) - Constitución técnica y fuente principal de verdad.

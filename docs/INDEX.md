@@ -49,12 +49,13 @@ Este índice centraliza la documentación canónica existente y el paquete de ha
 ## 5) Orden de lectura recomendado
 
 1. `docs/PRIVATE_BALANCE_CONSTITUTION.md`
-2. `docs/AI_CONTEXT.md`
-3. `docs/architecture/01_ARCHITECTURE.md`
-4. `docs/architecture/03_DATA_MODEL.md`
-5. `docs/architecture/04_APPLICATION_FLOW.md`
-6. `docs/context/CURRENT_STATE.md`
-7. `docs/HANDOFF.md`
+2. `docs/00_SYSTEM_ARCHITECTURE_MASTER.md`
+3. `docs/AI_CONTEXT.md`
+4. `docs/architecture/01_ARCHITECTURE.md`
+5. `docs/architecture/03_DATA_MODEL.md`
+6. `docs/architecture/04_APPLICATION_FLOW.md`
+7. `docs/context/CURRENT_STATE.md`
+8. `docs/HANDOFF.md`
 
 ## 6) Regla de gobernanza documental
 
@@ -64,3 +65,34 @@ Si hay conflicto entre documentos:
 2. ADRs de `docs/DECISIONS.md`.
 3. Este paquete architecture/context/handoff.
 4. Documentación auxiliar restante.
+
+## Engineering Governance and AI Interaction Platform
+
+- [Engineering Governance](./02_ENGINEERING_GOVERNANCE.md)
+- [Roadmap Master](./03_ROADMAP_MASTER.md)
+- [Official Glossary](./04_GLOSSARY.md)
+- [AI Interaction Architecture](./architecture/AI_INTERACTION_ARCHITECTURE.md)
+- [ADR-010 — AI Interaction Platform](./adr/ADR-010-AI-INTERACTION-PLATFORM.md)
+- [ADR-011 — AI Interaction Policies](./adr/ADR-011-AI-INTERACTION-POLICIES.md)
+- [ADR-012 — AI Interaction Lifecycle](./adr/ADR-012-AI-Interaction-Lifecycle.md)
+- [ADR-013 — AI Conversation Contracts](./adr/ADR-013-AI-Conversation-Contracts.md)
+- [ADR-014 — AI Conversation Session](./adr/ADR-014-AI-Conversation-Session.md)
+- [ADR-015 — AI Conversation Message](./adr/ADR-015-AI-Conversation-Message.md)
+- [ADR-016 — AI Conversation Service](./adr/ADR-016-AI-Conversation-Service.md)
+- [ADR-017 — AI Conversation Vertical Slice](./adr/ADR-017-AI-Conversation-Vertical-Slice.md)
+- [ADR-018 — AI Prompt Builder](./adr/ADR-018-AI-Prompt-Builder.md)
+- [ADR-019 — AI Context Builder](./adr/ADR-019-AI-Context-Builder.md)
+- [ADR-020 — AI Context Resolution](./adr/ADR-020-AI-Context-Resolution.md)
+- [ADR-021 — AI Provider Adapter](./adr/ADR-021-AI-Provider-Adapter.md)
+- [ADR-022 — AI Execution Pipeline](./adr/ADR-022-AI-Execution-Pipeline.md)
+- [ADR-023 — AI Execution Inspector](./adr/ADR-023-AI-Execution-Inspector.md)
+- [ADR-024 — AI Conversation Integration](./adr/ADR-024-AI-Conversation-Integration.md)
+- [ADR-025 — AI Provider Production Activation](./adr/ADR-025-AI-Provider-Production-Activation.md)
+- [AI Interaction Domain](./domains/ai-interaction/README.md)
+- [AI Conversation Domain](./domains/ai-conversation/README.md)
+- [Prompt Builder Domain](./domains/prompt-builder/README.md)
+- [Context Builder Domain](./domains/context-builder/README.md)
+- [Context Resolution Domain](./domains/context-resolution/README.md)
+- [Provider Adapter Domain](./domains/provider/README.md)
+- [Execution Pipeline Domain](./domains/execution-pipeline/README.md)
+- [Execution Inspector Domain](./domains/execution-inspector/README.md)

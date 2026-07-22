@@ -1,0 +1,526 @@
+=== DB SCHEMA ===
+     1	import Dexie, { type Table } from 'dexie'
+     2	
+     3	import type { Appointment } from '../types/appointment'
+     4	import type { CutoffReport } from '../types/cutoffReport'
+     5	import type { EarningPeriod } from '../types/earningPeriod'
+     6	import type { ExchangeRate } from '../types/exchangeRate'
+     7	import type { Expense } from '../types/expense'
+     8	import type { AppLicense } from '../types/license'
+     9	import type { ServiceIncome } from '../types/service'
+    10	import type { AppSettings } from '../types/settings'
+    11	import type { AutomationOutboxRecord } from '../types/automation'
+    12	import type { CommunicationChannel } from '../types/communicationChannel'
+    13	import type { DeviceIdentity } from '../types/deviceIdentity'
+    14	import type { PersistedFinancialSnapshot } from '../types/persistedFinancialSnapshot'
+    15	import type { PersistedKnowledgeSnapshot } from '../types/persistedKnowledgeSnapshot'
+    16	import {
+    17	  resolveRecordUsageMode,
+    18	  resolveUsageMode,
+    19	  toLegacyUserType,
+    20	} from '../utils/usageMode'
+    21	import { assertAllExpenseAdjustmentsAreValid } from '../utils/expenseAdjustments'
+    22	import { getIncomeType, normalizeAdjustmentIncome } from '../utils/incomeTypes'
+    23	import { getNumericDurationLabel } from '../utils/serviceDuration'
+    24	import { normalizeReportStatus } from '../catalogs/reportStatuses'
+    25	
+    26	export const DEFAULT_SETTINGS_ID = 'app'
+    27	
+    28	export function createDefaultSettings(): AppSettings {
+    29	  const now = new Date().toISOString()
+    30	
+    31	  return {
+    32	    id: DEFAULT_SETTINGS_ID,
+    33	    businessName: '',
+    34	    country: 'ES',
+    35	    city: '',
+    36	    defaultCurrency: 'EUR',
+    37	    secondaryCurrency: 'COP',
+    38	    incomePercentage: 50,
+    39	    rateMode: 'manual',
+    40	    usageMode: 'professional',
+    41	    userType: 'primary',
+    42	    theme: 'system',
+    43	    pinEnabled: false,
+    44	    backupEncryptionKey: '',
+    45	    driveBackupEnabled: false,
+    46	    driveBackupFrequency: 'daily',
+    47	    cutoffFrequency: 'weekly',
+    48	    cutoffWeekStart: 1,
+    49	    cutoffAnchorDate: now.slice(0, 10),
+    50	    googleDriveClientId: '',
+    51	    googleDriveConnected: false,
+    52	    googleDriveLastBackupAt: undefined,
+    53	    googleDriveLastBackupStatus: undefined,
+    54	    closedLocationSeasons: [],
+    55	    reopenedLocationSeasons: [],
+    56	    createdAt: now,
+    57	    updatedAt: now,
+    58	  }
+    59	}
+    60	
+    61	export class FinanceDB extends Dexie {
+    62	  services!: Table<ServiceIncome, number>
+    63	  expenses!: Table<Expense, number>
+    64	  appointments!: Table<Appointment, number>
+    65	  settings!: Table<AppSettings, AppSettings['id']>
+    66	  exchangeRates!: Table<ExchangeRate, number>
+    67	  cutoffReports!: Table<CutoffReport, number>
+    68	  earningPeriods!: Table<EarningPeriod, number>
+    69	  licenses!: Table<AppLicense, AppLicense['id']>
+    70	  automationOutbox!: Table<AutomationOutboxRecord, string>
+    71	  communicationChannels!: Table<CommunicationChannel, CommunicationChannel['id']>
+    72	  deviceIdentity!: Table<DeviceIdentity, DeviceIdentity['id']>
+    73	  financialSnapshots!: Table<PersistedFinancialSnapshot, PersistedFinancialSnapshot['snapshotId']>
+    74	  knowledgeSnapshots!: Table<
+    75	    PersistedKnowledgeSnapshot,
+    76	    PersistedKnowledgeSnapshot['knowledgeSnapshotId']
+    77	  >
+    78	
+    79	  constructor() {
+    80	    super('finance-app')
+    81	
+    82	    this.version(1).stores({
+    83	      services: '++id,date',
+    84	      expenses: '++id,date',
+    85	      appointments: '++id,dateTime',
+    86	      settings: 'id',
+    87	    })
+    88	
+    89	    this.version(2).stores({
+    90	      services: '++id,date,currency',
+    91	      expenses: '++id,date,category,currency',
+    92	      appointments: '++id,dateTime,completed,currency',
+    93	      settings: 'id',
+    94	      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+    95	    })
+    96	
+    97	    this.version(3).stores({
+    98	      services: '++id,date,currency,country',
+    99	      expenses: '++id,date,category,currency,country',
+   100	      appointments: '++id,dateTime,completed,currency',
+   101	      settings: 'id',
+   102	      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+   103	    })
+   104	
+   105	    this.version(4)
+   106	      .stores({
+   107	        services: '++id,date,currency,country,status',
+   108	        expenses: '++id,date,category,currency,country',
+   109	        appointments: '++id,dateTime,completed,currency',
+   110	        settings: 'id',
+   111	        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+   112	      })
+   113	      .upgrade((transaction) =>
+   114	        transaction
+   115	          .table<ServiceIncome, number>('services')
+   116	          .toCollection()
+   117	          .modify((service) => {
+   118	            service.status ??= 'PENDIENTE'
+   119	          }),
+   120	      )
+   121	
+   122	    this.version(5)
+   123	      .stores({
+   124	        services: '++id,date,currency,country,status',
+   125	        expenses: '++id,date,category,currency,country',
+   126	        appointments: '++id,dateTime,completed,currency',
+   127	        settings: 'id',
+   128	        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+   129	      })
+   130	      .upgrade((transaction) =>
+   131	        transaction
+   132	          .table<Appointment & { clientName?: string }, number>('appointments')
+   133	          .toCollection()
+   134	          .modify((appointment) => {
+   135	            delete appointment.clientName
+   136	          }),
+   137	      )
+   138	
+   139	    this.version(6)
+   140	      .stores({
+   141	        services: '++id,date,currency,country,status',
+   142	        expenses: '++id,date,category,currency,country',
+   143	        appointments: '++id,dateTime,completed,currency',
+   144	        settings: 'id',
+   145	        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+   146	      })
+   147	      .upgrade((transaction) =>
+   148	        transaction
+   149	          .table<Appointment, number>('appointments')
+   150	          .toCollection()
+   151	          .modify((appointment) => {
+   152	            appointment.reminders ??= []
+   153	          }),
+   154	      )
+   155	
+   156	    this.version(7)
+   157	      .stores({
+   158	        services: '++id,date,currency,country,status',
+   159	        expenses: '++id,date,category,currency,country',
+   160	        appointments: '++id,dateTime,completed,currency',
+   161	        settings: 'id',
+   162	        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+   163	      })
+   164	      .upgrade(async (transaction) => {
+   165	        const settings = await transaction
+   166	          .table<AppSettings, AppSettings['id']>('settings')
+   167	          .get(DEFAULT_SETTINGS_ID)
+   168	
+   169	        await transaction
+   170	          .table<Appointment, number>('appointments')
+   171	          .toCollection()
+   172	          .modify((appointment) => {
+   173	            appointment.country ??= settings?.country
+   174	            appointment.city ??= settings?.city
+   175	          })
+   176	      })
+   177	
+   178	    this.version(8).stores({
+   179	      services: '++id,date,currency,country,status',
+   180	      expenses: '++id,date,category,currency,country',
+   181	      appointments: '++id,dateTime,completed,currency',
+   182	      settings: 'id',
+   183	      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+   184	      cutoffReports:
+   185	        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+   186	    })
+   187	
+   188	    this.version(9).stores({
+   189	      services: '++id,date,currency,country,status,earningPeriodId',
+   190	      expenses: '++id,date,category,currency,country',
+   191	      appointments: '++id,dateTime,completed,currency',
+   192	      settings: 'id',
+   193	      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+   194	      cutoffReports:
+   195	        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+   196	      earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+   197	    })
+   198	
+   199	    this.version(10)
+   200	      .stores({
+   201	        services: '++id,date,currency,country,status,earningPeriodId',
+   202	        expenses:
+   203	          '++id,type,date,category,currency,country,relatedIncomeId,createdAt',
+   204	        appointments: '++id,dateTime,completed,currency',
+   205	        settings: 'id',
+   206	        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+   207	        cutoffReports:
+   208	          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+   209	        earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+   210	      })
+   211	      .upgrade((transaction) =>
+   212	        transaction
+   213	          .table<Expense, number>('expenses')
+   214	          .toCollection()
+   215	          .modify((expense) => {
+   216	            expense.type ??= 'gasto'
+   217	            expense.createdAt ??= `${expense.date}T00:00:00`
+   218	          }),
+   219	      )
+   220	
+   221	    this.version(11).stores({
+   222	      services: '++id,date,currency,country,status,earningPeriodId',
+   223	      expenses:
+   224	        '++id,type,date,category,currency,country,relatedIncomeId,createdAt',
+   225	      appointments: '++id,dateTime,completed,currency',
+   226	      settings: 'id',
+   227	      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+   228	      cutoffReports:
+   229	        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+   230	      earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+   231	      licenses: 'id,deviceCode,status,expirationDate',
+   232	    })
+   233	
+   234	    this.version(12)
+   235	      .stores({
+   236	        services:
+   237	          '++id,date,currency,country,status,earningPeriodId,seasonPeriodId',
+   238	        expenses:
+   239	          '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId',
+   240	        appointments:
+   241	          '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId',
+   242	        settings: 'id',
+   243	        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+   244	        cutoffReports:
+   245	          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+   246	        earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+   247	        licenses: 'id,deviceCode,status,expirationDate',
+   248	      })
+   249	      .upgrade(async (transaction) => {
+   250	        const periodsTable = transaction.table<EarningPeriod, number>('earningPeriods')
+   251	        let periods = await periodsTable.toArray()
+   252	        const servicesTable = transaction.table<ServiceIncome, number>('services')
+   253	        const expensesTable = transaction.table<Expense, number>('expenses')
+   254	        const appointmentsTable = transaction.table<Appointment, number>('appointments')
+   255	        const settings = await transaction
+   256	          .table<AppSettings, AppSettings['id']>('settings')
+   257	          .get(DEFAULT_SETTINGS_ID)
+   258	
+   259	        if (resolveUsageMode(settings) === 'basic') {
+   260	          return
+   261	        }
+   262	
+   263	        const [services, expenses, appointments] = await Promise.all([
+   264	          servicesTable.toArray(),
+   265	          expensesTable.toArray(),
+   266	          appointmentsTable.toArray(),
+   267	        ])
+   268	
+   269	        if (periods.length === 0 && (services.length || expenses.length || appointments.length)) {
+   270	          const dates = [
+   271	            ...services.map((item) => item.date),
+   272	            ...expenses.map((item) => item.date),
+   273	            ...appointments.map((item) => item.dateTime.slice(0, 10)),
+   274	          ].filter(Boolean).sort()
+   275	          const now = new Date().toISOString()
+   276	          const id = await periodsTable.add({
+   277	            name: 'Temporada inicial migrada',
+   278	            percentage: settings?.incomePercentage ?? 50,
+   279	            startDate: `${dates[0] ?? now.slice(0, 10)}T00:00:00.000Z`,
+   280	            status: 'active',
+   281	            country: settings?.country,
+   282	            countryCode: settings?.country,
+   283	            city: settings?.city,
+   284	            baseCurrency: settings?.defaultCurrency,
+   285	            createdAt: now,
+   286	            updatedAt: now,
+   287	          })
+   288	          periods = (await periodsTable.get(id)) ? [await periodsTable.get(id) as EarningPeriod] : []
+   289	        }
+   290	
+   291	        const sortedPeriods = periods.sort((a, b) => a.startDate.localeCompare(b.startDate))
+   292	        const periodForDate = (date: string, existing?: number) => {
+   293	          if (existing) return existing
+   294	          const match = [...sortedPeriods].reverse().find((period) => {
+   295	            const start = period.startDate.slice(0, 10)
+   296	            const end = period.endDate?.slice(0, 10)
+   297	            return date >= start && (!end || date <= end)
+   298	          })
+   299	          return match?.id ?? sortedPeriods.at(-1)?.id
+   300	        }
+   301	
+   302	        await Promise.all([
+   303	          servicesTable.toCollection().modify((item) => {
+   304	            const id = periodForDate(item.date, item.earningPeriodId ?? item.seasonPeriodId)
+   305	            item.earningPeriodId = id
+   306	            item.seasonPeriodId = id
+   307	          }),
+   308	          expensesTable.toCollection().modify((item) => {
+   309	            const id = periodForDate(item.date, item.earningPeriodId ?? item.seasonPeriodId)
+   310	            item.earningPeriodId = id
+   311	            item.seasonPeriodId = id
+   312	          }),
+   313	          appointmentsTable.toCollection().modify((item) => {
+   314	            const id = periodForDate(item.dateTime.slice(0, 10), item.earningPeriodId ?? item.seasonPeriodId)
+   315	            item.earningPeriodId = id
+   316	            item.seasonPeriodId = id
+   317	          }),
+   318	        ])
+   319	      })
+   320	
+
+=== SERVER MIGRATIONS ===
+--- server/migrations/001_license_devices.sql ---
+     1	CREATE TABLE IF NOT EXISTS licenses (
+     2	  license_key TEXT PRIMARY KEY,
+     3	  user_code TEXT,
+     4	  license_type TEXT NOT NULL,
+     5	  expires_at TIMESTAMPTZ,
+     6	  status TEXT NOT NULL DEFAULT 'active'
+     7	    CHECK (status IN ('active', 'revoked')),
+     8	  device_policy TEXT NOT NULL DEFAULT 'multi'
+     9	    CHECK (device_policy IN ('multi', 'single')),
+    10	  max_devices INTEGER NOT NULL DEFAULT 3 CHECK (max_devices >= 1),
+    11	  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    12	  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    13	);
+    14	
+    15	CREATE TABLE IF NOT EXISTS license_devices (
+    16	  id BIGSERIAL PRIMARY KEY,
+    17	  license_key TEXT NOT NULL REFERENCES licenses(license_key) ON DELETE CASCADE,
+    18	  user_code TEXT,
+    19	  device_code TEXT NOT NULL,
+    20	  device_name TEXT,
+    21	  platform TEXT NOT NULL DEFAULT 'unknown',
+    22	  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    23	  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    24	  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    25	  status TEXT NOT NULL DEFAULT 'active'
+    26	    CHECK (status IN ('active', 'revoked')),
+    27	  UNIQUE (license_key, device_code)
+    28	);
+    29	
+    30	CREATE INDEX IF NOT EXISTS license_devices_active_idx
+    31	  ON license_devices (license_key, status);
+    32	
+    33	-- Runtime installs the concurrency-safe authorize_license_device function.
+--- server/migrations/002_communication_channels.sql ---
+     1	CREATE TABLE IF NOT EXISTS communication_channels (
+     2	  id BIGSERIAL PRIMARY KEY,
+     3	  user_code TEXT NOT NULL,
+     4	  device_code TEXT,
+     5	  provider TEXT NOT NULL CHECK (provider IN ('whatsapp', 'email', 'telegram', 'signal', 'sms')),
+     6	  instance_name TEXT,
+     7	  instance_id TEXT,
+     8	  phone_number TEXT,
+     9	  status TEXT NOT NULL DEFAULT 'not_configured' CHECK (status IN ('not_configured', 'pending', 'connecting', 'connected', 'disconnected', 'revoked', 'error')),
+    10	  preferences JSONB NOT NULL DEFAULT '{}',
+    11	  provider_metadata JSONB NOT NULL DEFAULT '{}',
+    12	  owner_jid TEXT,
+    13	  profile_name TEXT,
+    14	  profile_photo TEXT,
+    15	  connected_at TIMESTAMPTZ,
+    16	  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    17	  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    18	  last_seen_at TIMESTAMPTZ,
+    19	  UNIQUE (user_code, provider, instance_name)
+    20	);
+    21	
+    22	CREATE INDEX IF NOT EXISTS communication_channels_user_provider_idx
+    23	  ON communication_channels (user_code, provider);
+    24	
+    25	CREATE INDEX IF NOT EXISTS communication_channels_status_idx
+    26	  ON communication_channels (status);
+--- server/migrations/003_backfill_license_device_user_codes.sql ---
+     1	ALTER TABLE license_devices
+     2	ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+     3	
+     4	UPDATE license_devices AS device
+     5	SET
+     6	  user_code = license.user_code,
+     7	  updated_at = NOW()
+     8	FROM licenses AS license
+     9	WHERE device.license_key = license.license_key
+    10	  AND device.user_code IS NULL
+    11	  AND license.user_code IS NOT NULL;
+    12	
+    13	DO $migration$
+    14	BEGIN
+    15	  IF to_regclass('public.communication_channels') IS NOT NULL THEN
+    16	    EXECUTE $backfill$
+    17	      UPDATE license_devices AS device
+    18	      SET
+    19	        user_code = channel.user_code,
+    20	        updated_at = NOW()
+    21	      FROM (
+    22	        SELECT device_code, MIN(user_code) AS user_code
+    23	        FROM communication_channels
+    24	        WHERE device_code IS NOT NULL
+    25	          AND user_code IS NOT NULL
+    26	        GROUP BY device_code
+    27	        HAVING COUNT(DISTINCT user_code) = 1
+    28	      ) AS channel
+    29	      WHERE device.device_code = channel.device_code
+    30	        AND device.user_code IS NULL
+    31	    $backfill$;
+    32	  END IF;
+    33	END;
+    34	$migration$;
+    35	
+    36	UPDATE licenses AS license
+    37	SET
+    38	  user_code = source.user_code,
+    39	  updated_at = NOW()
+    40	FROM (
+    41	  SELECT license_key, MIN(user_code) AS user_code
+    42	  FROM license_devices
+    43	  WHERE user_code IS NOT NULL
+    44	  GROUP BY license_key
+    45	  HAVING COUNT(DISTINCT user_code) = 1
+    46	) AS source
+    47	WHERE license.license_key = source.license_key
+    48	  AND license.user_code IS NULL;
+    49	
+    50	UPDATE license_devices AS device
+    51	SET
+    52	  user_code = license.user_code,
+    53	  updated_at = NOW()
+    54	FROM licenses AS license
+    55	WHERE device.license_key = license.license_key
+    56	  AND device.user_code IS NULL
+    57	  AND license.user_code IS NOT NULL;
+--- server/migrations/004_whatsapp_channel_sessions.sql ---
+     1	ALTER TABLE communication_channels
+     2	  ADD COLUMN IF NOT EXISTS instance_id TEXT,
+     3	  ADD COLUMN IF NOT EXISTS owner_jid TEXT,
+     4	  ADD COLUMN IF NOT EXISTS profile_name TEXT,
+     5	  ADD COLUMN IF NOT EXISTS profile_photo TEXT,
+     6	  ADD COLUMN IF NOT EXISTS connected_at TIMESTAMPTZ;
+     7	
+     8	DO $migration$
+     9	DECLARE
+    10	  constraint_name TEXT;
+    11	BEGIN
+    12	  SELECT conname INTO constraint_name
+    13	  FROM pg_constraint
+    14	  WHERE conrelid = 'communication_channels'::regclass
+    15	    AND contype = 'c'
+    16	    AND pg_get_constraintdef(oid) ILIKE '%status%';
+    17	
+    18	  IF constraint_name IS NOT NULL THEN
+    19	    EXECUTE format(
+    20	      'ALTER TABLE communication_channels DROP CONSTRAINT %I',
+    21	      constraint_name
+    22	    );
+    23	  END IF;
+    24	
+    25	  ALTER TABLE communication_channels
+    26	    ADD CONSTRAINT communication_channels_status_check
+    27	    CHECK (status IN (
+    28	      'not_configured',
+    29	      'pending',
+    30	      'connecting',
+    31	      'connected',
+    32	      'disconnected',
+    33	      'revoked',
+    34	      'error'
+    35	    ));
+    36	END;
+    37	$migration$;
+    38	
+    39	UPDATE communication_channels AS channel
+    40	SET
+    41	  instance_name = REGEXP_REPLACE(BTRIM(channel.instance_name), '^=+', ''),
+    42	  updated_at = NOW()
+    43	WHERE channel.instance_name ~ '^=+'
+    44	  AND NOT EXISTS (
+    45	    SELECT 1
+    46	    FROM communication_channels AS existing
+    47	    WHERE existing.id <> channel.id
+    48	      AND existing.user_code = channel.user_code
+    49	      AND existing.provider = channel.provider
+    50	      AND existing.instance_name = REGEXP_REPLACE(BTRIM(channel.instance_name), '^=+', '')
+    51	  );
+    52	
+    53	CREATE INDEX IF NOT EXISTS communication_channels_device_provider_idx
+    54	  ON communication_channels (device_code, provider);
+    55	
+    56	CREATE INDEX IF NOT EXISTS communication_channels_instance_idx
+    57	  ON communication_channels (provider, instance_name);
+--- server/migrations/005_communication_channel_device_scope.sql ---
+     1	DO $migration$
+     2	DECLARE
+     3	  legacy_constraint_name TEXT;
+     4	BEGIN
+     5	  SELECT conname INTO legacy_constraint_name
+     6	  FROM pg_constraint
+     7	  WHERE conrelid = 'communication_channels'::regclass
+     8	    AND contype = 'u'
+     9	    AND pg_get_constraintdef(oid) ILIKE '%(user_code, provider, instance_name)%'
+    10	  LIMIT 1;
+    11	
+    12	  IF legacy_constraint_name IS NOT NULL THEN
+    13	    EXECUTE format(
+    14	      'ALTER TABLE communication_channels DROP CONSTRAINT %I',
+    15	      legacy_constraint_name
+    16	    );
+    17	  END IF;
+    18	END;
+    19	$migration$;
+    20	
+    21	CREATE UNIQUE INDEX IF NOT EXISTS communication_channels_user_device_provider_idx
+    22	  ON communication_channels (user_code, device_code, provider);
+    23	
+    24	CREATE INDEX IF NOT EXISTS communication_channels_device_provider_idx
+    25	  ON communication_channels (device_code, provider);
