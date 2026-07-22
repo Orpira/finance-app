@@ -237,15 +237,19 @@ export function AppLayout() {
   }, [])
 
   useEffect(() => {
+  const startTimeoutId = window.setTimeout(() => {
     setIsUsageModeTransitioning(true)
-    const timeoutId = window.setTimeout(() => {
-      setIsUsageModeTransitioning(false)
-    }, 260)
+  }, 0)
 
-    return () => {
-      window.clearTimeout(timeoutId)
-    }
-  }, [usageMode])
+  const endTimeoutId = window.setTimeout(() => {
+    setIsUsageModeTransitioning(false)
+  }, 260)
+
+  return () => {
+    window.clearTimeout(startTimeoutId)
+    window.clearTimeout(endTimeoutId)
+  }
+}, [usageMode])
 
   async function toggleTheme() {
     const nextTheme: ThemeMode = isDarkTheme ? 'light' : 'dark'

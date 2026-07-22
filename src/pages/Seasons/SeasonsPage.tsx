@@ -32,19 +32,59 @@ export function SeasonsPage() {
   const [activeStats, setActiveStats] = useState<SeasonStatistics | null>(null)
   const [loading, setLoading] = useState(true)
 
+  async function getSeasonsData() {
+  const [current, old] = await Promise.all([
+    getActiveEarningPeriod(),
+    listClosedEarningPeriods(),
+  ])
+  const [currentStats, oldStats] = await Promise.all([
+    current?.id ? getSeasonStatistics(current.id) : null,
+    Promise.all(
+      old.map(async (period) => ({
+        period,
+        stats: await getSeasonStatistics(period.id!),
+      })),
+    ),
+  ])
+  return {
+    active: current ?? null,
+    activeStats: currentStats,
+    closed: oldStats,
+  }
+}
+
+
   async function load() {
-    const [current, old] = await Promise.all([getActiveEarningPeriod(), listClosedEarningPeriods()])
-    const [currentStats, oldStats] = await Promise.all([
-      current?.id ? getSeasonStatistics(current.id) : null,
-      Promise.all(old.map(async (period) => ({ period, stats: await getSeasonStatistics(period.id!) }))),
-    ])
-    setActive(current ?? null)
-    setActiveStats(currentStats)
-    setClosed(oldStats)
+  const data = await getSeasonsData()
+
+  setActive(data.active)
+  setActiveStats(data.activeStats)
+  setClosed(data.closed)
+  setLoading(false)
+}
+
+  useEffect(() => {
+  let cancelled = false
+
+  async function initialize() {
+    const data = await getSeasonsData()
+
+    if (cancelled) {
+      return
+    }
+
+    setActive(data.active)
+    setActiveStats(data.activeStats)
+    setClosed(data.closed)
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  void initialize()
+
+  return () => {
+    cancelled = true
+  }
+}, [])
 
   async function startNewSeason() {
     if (!active) {
