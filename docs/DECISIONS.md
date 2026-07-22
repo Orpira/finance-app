@@ -59,3 +59,11 @@ Format used: one ADR per section with Context, Decision, Status and Consequences
 - Context: the deterministic adapter needs production-shaped validation without changing the official financial source globally.
 - Decision: legacy remains official by default; Reports runs only in shadow mode, and the Home balance-summary pilot is enabled exclusively by the exact Vite build value `VITE_FINANCIAL_ENGINE_HOME_ENABLED=true`.
 - Consequences: there is no programmatic override or runtime toggle. Absence, `false` and invalid values select legacy. Rollback requires rebuild and redeploy. Financial Engine is not a global source, no additional consumer is migrated, and Financial Snapshot, Rule Registry, Knowledge Layer and Insight Engine remain unimplemented target architecture.
+
+
+## ADR-009: System Architecture Master as the integrated architecture map
+
+- Status: accepted.
+- Context: the Constitution is normative, but the repository also needs one current map connecting implemented architecture, bounded contexts, dependency rules, quality gates, risks and roadmap.
+- Decision: [`00_SYSTEM_ARCHITECTURE_MASTER.md`](00_SYSTEM_ARCHITECTURE_MASTER.md) is adopted as the integrated architecture map and mandatory onboarding document immediately after the Constitution.
+- Consequences: the Constitution remains the highest normative authority; the Master must distinguish implemented capabilities from target architecture and be updated whenever a structural milestone, source of truth, major risk or roadmap state changes.

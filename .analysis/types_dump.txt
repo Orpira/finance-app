@@ -1,0 +1,1465 @@
+=== TYPES FILES ===
+src/types/appointment.ts
+src/types/automation.ts
+src/types/communicationChannel.ts
+src/types/cutoffReport.ts
+src/types/dataAccess.ts
+src/types/deviceIdentity.ts
+src/types/earningPeriod.ts
+src/types/exchangeRate.ts
+src/types/expense.ts
+src/types/financialSnapshot.ts
+src/types/insightRule.ts
+src/types/knowledgeLayer.ts
+src/types/license.ts
+src/types/persistedFinancialSnapshot.ts
+src/types/persistedKnowledgeSnapshot.ts
+src/types/service.ts
+src/types/settings.ts
+
+--- src/types/appointment.ts ---
+     1	import type { ReportStatusCode, ReportStatusLabel } from '../catalogs/reportStatuses'
+     2	
+     3	export type AppointmentReminderUnit = 'minutes' | 'hours' | 'days';
+     4	
+     5	export type AppointmentReminderType = 'local' | 'inApp';
+     6	
+     7	export interface AppointmentReminder {
+     8	  id: string;
+     9	
+    10	  amount: number;
+    11	
+    12	  unit: AppointmentReminderUnit;
+    13	
+    14	  type: AppointmentReminderType;
+    15	}
+    16	
+    17	export interface Appointment {
+    18	  id?: number;
+    19	
+    20	  dateTime: string;
+    21	
+    22	  duration: number;
+    23	
+    24	  durationLabel?: string;
+    25	
+    26	  expectedAmount: number;
+    27	
+    28	  currency: string;
+    29	
+    30	  country?: string;
+    31	
+    32	  city?: string;
+    33	
+    34	  earningPeriodId?: number;
+    35	
+    36	  seasonPeriodId?: number;
+    37	
+    38	  notes?: string;
+    39	
+    40	  reminders: AppointmentReminder[];
+    41	
+    42	  completed: boolean;
+    43	
+    44	  timerStartedAt?: string;
+    45	
+    46	  timerStoppedAt?: string;
+    47	
+    48	  actualDuration?: number;
+    49	
+    50	  timerMode?: 'automatic' | 'manual' | 'manualPending';
+    51	
+    52	  reportStatusCode?: ReportStatusCode;
+    53	  reportStatusLabel?: ReportStatusLabel;
+    54	  reportedAt?: string;
+    55	}
+
+--- src/types/automation.ts ---
+     1	export const PRIVATE_BALANCE_AUTOMATION_EVENTS = [
+     2	  'income.created',
+     3	  'service.completed',
+     4	  'expense.created',
+     5	  'calendar.created',
+     6	  'device.provision.requested',
+     7	  'device.whatsapp.connect.requested',
+     8	  'communication.whatsapp.qr.requested',
+     9	  'communication.whatsapp.status.requested',
+    10	  'communication.whatsapp.disconnect.requested',
+    11	  'communication.whatsapp.test.requested',
+    12	  'communication.whatsapp.preferences.updated',
+    13	] as const
+    14	
+    15	export type PrivateBalanceEvent =
+    16	  (typeof PRIVATE_BALANCE_AUTOMATION_EVENTS)[number]
+    17	
+    18	export interface AutomationEventEnvelope {
+    19	  eventId: string
+    20	  event: PrivateBalanceEvent
+    21	  createdAt: string
+    22	  schemaVersion: 1
+    23	  source?: 'private-balance-pwa'
+    24	  data: Record<string, unknown>
+    25	}
+    26	
+    27	export interface AutomationOutboxRecord extends AutomationEventEnvelope {
+    28	  attempts: number
+    29	  nextAttemptAt: string
+    30	  lastAttemptAt?: string
+    31	  lastError?: string
+    32	}
+
+--- src/types/communicationChannel.ts ---
+     1	export type CommunicationChannelStatus =
+     2	  | 'not_configured'
+     3	  | 'connecting'
+     4	  | 'connected'
+     5	  | 'disconnected'
+     6	  | 'error'
+     7	
+     8	export interface CommunicationChannel {
+     9	  id: 'whatsapp'
+    10	  type: 'whatsapp'
+    11	  provider: 'evolution-api'
+    12	  instanceName: string
+    13	  instanceId?: string
+    14	  status: CommunicationChannelStatus
+    15	  qrCode?: string
+    16	  phoneNumber?: string
+    17	  connectedNumber?: string
+    18	  pairingCode?: string
+    19	  ownerJid?: string
+    20	  profileName?: string
+    21	  profilePhoto?: string
+    22	  providerMetadata?: Record<string, unknown>
+    23	  connectedAt?: string
+    24	  lastSeenAt?: string
+    25	  notifyIncomeCreated: boolean
+    26	  notifyExpenseCreated: boolean
+    27	  notifyCalendarReminder: boolean
+    28	  notifyBackupCompleted: boolean
+    29	  createdAt: string
+    30	  updatedAt: string
+    31	}
+    32	
+    33	export type WhatsAppNotificationPreferences = Pick<
+    34	  CommunicationChannel,
+    35	  | 'notifyIncomeCreated'
+    36	  | 'notifyExpenseCreated'
+    37	  | 'notifyCalendarReminder'
+    38	  | 'notifyBackupCompleted'
+    39	>
+
+--- src/types/cutoffReport.ts ---
+     1	import type { CurrencyCode } from './settings'
+     2	
+     3	export type CutoffFrequency = 'weekly' | 'biweekly' | 'monthly'
+     4	
+     5	export interface CutoffReport {
+     6	  id?: number
+     7	  frequency: CutoffFrequency
+     8	  periodStart: string
+     9	  periodEnd: string
+    10	  generatedAt: string
+    11	  currency: CurrencyCode
+    12	  incomeTotal: number
+    13	  expenseTotal: number
+    14	  netTotal: number
+    15	  incomeCount: number
+    16	  expenseCount: number
+    17	  serviceMinutes: number
+    18	  paymentTypeTotals: Record<string, number>
+    19	  expenseCategoryTotals: Record<string, number>
+    20	}
+
+--- src/types/dataAccess.ts ---
+     1	export interface DateRange {
+     2	  from?: string
+     3	  to?: string
+     4	}
+     5	
+     6	export interface ListOptions {
+     7	  newestFirst?: boolean
+     8	}
+     9	
+    10	export interface DateRangeListOptions extends DateRange, ListOptions {}
+
+--- src/types/deviceIdentity.ts ---
+     1	export type DeviceIdentityPlatform = 'web' | 'android' | 'ios' | 'unknown'
+     2	
+     3	export type DeviceProvisioningStatus = 'pending' | 'provisioned' | 'error'
+     4	
+     5	export interface DeviceIdentity {
+     6	  id: 'current'
+     7	  userCode: string
+     8	  deviceCode: string
+     9	  deviceName?: string
+    10	  platform: DeviceIdentityPlatform
+    11	  appVersion?: string
+    12	  provisioningStatus?: DeviceProvisioningStatus
+    13	  provisionedAt?: string
+    14	  lastProvisioningError?: string
+    15	  createdAt: string
+    16	  updatedAt: string
+    17	}
+
+--- src/types/earningPeriod.ts ---
+     1	import type { CountryCode, CurrencyCode } from './settings'
+     2	
+     3	export type EarningPeriodStatus = 'active' | 'closed'
+     4	
+     5	export interface EarningPeriod {
+     6	  id?: number
+     7	  name: string
+     8	  percentage: number
+     9	  startDate: string
+    10	  endDate?: string
+    11	  status: EarningPeriodStatus
+    12	  country?: string
+    13	  countryCode?: CountryCode
+    14	  city?: string
+    15	  baseCurrency?: CurrencyCode
+    16	  notes?: string
+    17	  createdAt: string
+    18	  updatedAt?: string
+    19	  closedAt?: string
+    20	}
+    21	
+    22	export type SeasonPeriod = EarningPeriod
+
+--- src/types/exchangeRate.ts ---
+     1	import type { CurrencyCode } from './settings'
+     2	
+     3	export type ExchangeRateSource = 'manual' | 'api'
+     4	
+     5	export interface ExchangeRate {
+     6	  id?: number
+     7	  baseCurrency: CurrencyCode
+     8	  targetCurrency: CurrencyCode
+     9	  rate: number
+    10	  date: string
+    11	  source: ExchangeRateSource
+    12	  createdAt: string
+    13	}
+
+--- src/types/expense.ts ---
+     1	import type { ReportStatusCode, ReportStatusLabel } from '../catalogs/reportStatuses'
+     2	import type { UsageMode } from './settings'
+     3	
+     4	export type ExpenseType = 'gasto' | 'ajuste'
+     5	
+     6	export interface Expense {
+     7	  id?: number;
+     8	
+     9	  type: ExpenseType;
+    10	
+    11	  usageMode?: UsageMode;
+    12	
+    13	  date: string;
+    14	
+    15	  category: string;
+    16	
+    17	  amount: number;
+    18	
+    19	  currency: string;
+    20	
+    21	  eurValue: number;
+    22	
+    23	  copValue: number;
+    24	
+    25	  baseCurrency?: string;
+    26	
+    27	  secondaryCurrency?: string;
+    28	
+    29	  baseCurrencyValue?: number;
+    30	
+    31	  secondaryCurrencyValue?: number;
+    32	
+    33	  exchangeRateBaseToSecondary?: number;
+    34	
+    35	  exchangeRateUsed?: number;
+    36	
+    37	  eurCopExchangeRateUsed?: number;
+    38	
+    39	  relatedIncomeId?: number;
+    40	
+    41	  earningPeriodId?: number;
+    42	
+    43	  seasonPeriodId?: number;
+    44	
+    45	  notes?: string;
+    46	
+    47	  createdAt: string;
+    48	
+    49	  country?: string;
+    50	
+    51	  city?: string;
+    52	
+    53	  reportStatusCode?: ReportStatusCode;
+    54	  reportStatusLabel?: ReportStatusLabel;
+    55	  reportedAt?: string;
+    56	}
+
+--- src/types/financialSnapshot.ts ---
+     1	import type { CurrencyCode, UsageMode } from './settings'
+     2	
+     3	declare const civilDateBrand: unique symbol
+     4	declare const utcInstantBrand: unique symbol
+     5	declare const ianaTimeZoneBrand: unique symbol
+     6	declare const snapshotVersionBrand: unique symbol
+     7	declare const canonicalizationVersionBrand: unique symbol
+     8	declare const engineVersionBrand: unique symbol
+     9	declare const rulesetVersionBrand: unique symbol
+    10	declare const executionIdBrand: unique symbol
+    11	declare const candidateIdBrand: unique symbol
+    12	declare const snapshotIdBrand: unique symbol
+    13	declare const snapshotKeyBrand: unique symbol
+    14	declare const normativeCodeBrand: unique symbol
+    15	
+    16	/** Calendar date serialized as YYYY-MM-DD. */
+    17	export type CivilDate = string & { readonly [civilDateBrand]: 'CivilDate' }
+    18	
+    19	/** UTC instant serialized as RFC 3339 with milliseconds. */
+    20	export type UtcInstant = string & { readonly [utcInstantBrand]: 'UtcInstant' }
+    21	
+    22	/** Case-sensitive IANA timezone identifier. */
+    23	export type IanaTimeZone = string & { readonly [ianaTimeZoneBrand]: 'IanaTimeZone' }
+    24	
+    25	export type SnapshotVersion = string & {
+    26	  readonly [snapshotVersionBrand]: 'SnapshotVersion'
+    27	}
+    28	
+    29	export type CanonicalizationVersion = string & {
+    30	  readonly [canonicalizationVersionBrand]: 'CanonicalizationVersion'
+    31	}
+    32	
+    33	export type EngineVersion = string & {
+    34	  readonly [engineVersionBrand]: 'EngineVersion'
+    35	}
+    36	
+    37	export type RulesetVersion = string & {
+    38	  readonly [rulesetVersionBrand]: 'RulesetVersion'
+    39	}
+    40	
+    41	export type SnapshotBuildExecutionId = string & {
+    42	  readonly [executionIdBrand]: 'SnapshotBuildExecutionId'
+    43	}
+    44	
+    45	export type SnapshotCandidateId = string & {
+    46	  readonly [candidateIdBrand]: 'SnapshotCandidateId'
+    47	}
+    48	
+    49	export type SealedSnapshotId = string & {
+    50	  readonly [snapshotIdBrand]: 'SealedSnapshotId'
+    51	}
+    52	
+    53	export type SnapshotKey = string & {
+    54	  readonly [snapshotKeyBrand]: 'SnapshotKey'
+    55	}
+    56	
+    57	export type SnapshotNormativeCode = string & {
+    58	  readonly [normativeCodeBrand]: 'SnapshotNormativeCode'
+    59	}
+    60	
+    61	export type SnapshotJsonPrimitive = string | number | boolean
+    62	
+    63	export type SnapshotJsonValue =
+    64	  | SnapshotJsonPrimitive
+    65	  | SnapshotJsonObject
+    66	  | readonly SnapshotJsonValue[]
+    67	
+    68	export interface SnapshotJsonObject {
+    69	  readonly [key: string]: SnapshotJsonValue
+    70	}
+    71	
+    72	export type SnapshotScopeKind =
+    73	  | 'daily'
+    74	  | 'weekly'
+    75	  | 'monthly'
+    76	  | 'season'
+    77	  | 'year'
+    78	  | 'custom'
+    79	
+    80	/** Financial interval with an inclusive start and exclusive end. */
+    81	export interface SnapshotScope {
+    82	  readonly kind: SnapshotScopeKind
+    83	  readonly periodStart: CivilDate
+    84	  readonly periodEndExclusive: CivilDate
+    85	  readonly periodBoundary: '[start,end)'
+    86	  readonly asOf: UtcInstant
+    87	  readonly timezone: IanaTimeZone
+    88	  readonly usageMode: UsageMode
+    89	  readonly currency: CurrencyCode
+    90	  readonly earningPeriodId?: number
+    91	  readonly filters: SnapshotJsonObject
+    92	}
+    93	
+    94	export interface SnapshotCandidateIdentity {
+    95	  readonly candidateId: SnapshotCandidateId
+    96	}
+    97	
+    98	export interface SealedSnapshotIdentity {
+    99	  readonly snapshotId: SealedSnapshotId
+   100	  readonly snapshotKey: SnapshotKey
+   101	}
+   102	
+   103	export interface SnapshotRevision {
+   104	  readonly revision: number
+   105	  readonly supersedesSnapshotId?: SealedSnapshotId
+   106	  readonly reasonCode: SnapshotNormativeCode
+   107	}
+   108	
+   109	export interface SnapshotFingerprint {
+   110	  readonly value: string
+   111	  readonly algorithm: 'SHA-256'
+   112	  readonly encoding: 'hex-lower'
+   113	  readonly domain: string
+   114	  readonly fingerprintVersion: string
+   115	  readonly canonicalizationVersion: CanonicalizationVersion
+   116	  readonly hashedComponent?: 'material-payload'
+   117	}
+   118	
+   119	export interface AppliedRule {
+   120	  readonly ruleId: string
+   121	  /** Zero-based contiguous position emitted by Financial Engine. */
+   122	  readonly order: number
+   123	  readonly engineVersion: EngineVersion
+   124	  readonly rulesetVersion: RulesetVersion
+   125	  readonly explanationCode: SnapshotNormativeCode
+   126	  readonly affectedFields: readonly string[]
+   127	  readonly limitationCodes: readonly SnapshotNormativeCode[]
+   128	  readonly warningCodes: readonly SnapshotNormativeCode[]
+   129	}
+   130	
+   131	export type FinancialEvidenceDisposition =
+   132	  | {
+   133	      readonly disposition: 'included'
+   134	    }
+   135	  | {
+   136	      readonly disposition: 'excluded'
+   137	      readonly exclusionCode: SnapshotNormativeCode
+   138	    }
+   139	
+   140	export interface FinancialEvidenceIdentity {
+   141	  readonly sourceId?: string | number
+   142	  readonly identityKind: 'persisted-id' | 'legacy-material'
+   143	  readonly logicalDate: CivilDate
+   144	}
+   145	
+   146	export interface IncomeFinancialEvidenceFields {
+   147	  readonly resolvedType: 'ingreso' | 'otro'
+   148	  readonly usageMode?: UsageMode
+   149	  readonly earningPeriodId?: number
+   150	  readonly seasonPeriodId?: number
+   151	  readonly duration: number
+   152	  readonly actualDuration?: number
+   153	  readonly currency: string
+   154	  readonly baseCurrency?: string
+   155	  readonly baseCurrencyValue?: number
+   156	  readonly secondaryCurrency?: string
+   157	  readonly secondaryCurrencyValue?: number
+   158	  readonly eurValue: number
+   159	  readonly copValue: number
+   160	}
+   161	
+   162	/** Minimal embedded material evidence for a non-adjustment income. */
+   163	export type IncomeFinancialEvidenceRecord = FinancialEvidenceIdentity &
+   164	  FinancialEvidenceDisposition & {
+   165	    readonly kind: 'income'
+   166	    readonly fields: IncomeFinancialEvidenceFields
+   167	  }
+   168	
+   169	export interface IncomeAdjustmentEvidenceFields {
+   170	  readonly resolvedType: 'ajuste'
+   171	  readonly usageMode?: UsageMode
+   172	  readonly earningPeriodId?: number
+   173	  readonly seasonPeriodId?: number
+   174	  readonly duration: number
+   175	  readonly actualDuration?: number
+   176	  readonly currency: string
+   177	  readonly baseCurrency?: string
+   178	  readonly baseCurrencyValue?: number
+   179	  readonly secondaryCurrency?: string
+   180	  readonly secondaryCurrencyValue?: number
+   181	  readonly eurValue: number
+   182	  readonly copValue: number
+   183	  readonly effectiveFinancialLabel?: string
+   184	}
+   185	
+   186	/** Income-origin adjustment; it remains distinct from ordinary income. */
+   187	export type IncomeAdjustmentEvidenceRecord = FinancialEvidenceIdentity &
+   188	  FinancialEvidenceDisposition & {
+   189	    readonly kind: 'income-adjustment'
+   190	    readonly fields: IncomeAdjustmentEvidenceFields
+   191	  }
+   192	
+   193	export interface ExpenseFinancialEvidenceFields {
+   194	  readonly type: 'gasto'
+   195	  readonly usageMode?: UsageMode
+   196	  readonly earningPeriodId?: number
+   197	  readonly seasonPeriodId?: number
+   198	  readonly currency: string
+   199	  readonly baseCurrency?: string
+   200	  readonly baseCurrencyValue?: number
+   201	  readonly secondaryCurrency?: string
+   202	  readonly secondaryCurrencyValue?: number
+   203	  readonly eurValue: number
+   204	  readonly copValue: number
+   205	}
+   206	
+   207	/** Minimal embedded material evidence for an ordinary expense. */
+   208	export type ExpenseFinancialEvidenceRecord = FinancialEvidenceIdentity &
+   209	  FinancialEvidenceDisposition & {
+   210	    readonly kind: 'expense'
+   211	    readonly fields: ExpenseFinancialEvidenceFields
+   212	  }
+   213	
+   214	export interface ExpenseAdjustmentEvidenceFields {
+   215	  readonly type: 'ajuste'
+   216	  readonly usageMode?: UsageMode
+   217	  readonly earningPeriodId?: number
+   218	  readonly seasonPeriodId?: number
+   219	  readonly currency: string
+   220	  readonly baseCurrency?: string
+   221	  readonly baseCurrencyValue?: number
+   222	  readonly secondaryCurrency?: string
+   223	  readonly secondaryCurrencyValue?: number
+   224	  readonly eurValue: number
+   225	  readonly copValue: number
+   226	  readonly effectiveFinancialLabel?: string
+   227	}
+   228	
+   229	/** Expense-origin adjustment; it remains distinct from ordinary expense. */
+   230	export type ExpenseAdjustmentEvidenceRecord = FinancialEvidenceIdentity &
+   231	  FinancialEvidenceDisposition & {
+   232	    readonly kind: 'expense-adjustment'
+   233	    readonly fields: ExpenseAdjustmentEvidenceFields
+   234	  }
+   235	
+   236	export type FinancialEvidenceRecord =
+   237	  | IncomeFinancialEvidenceRecord
+   238	  | IncomeAdjustmentEvidenceRecord
+   239	  | ExpenseFinancialEvidenceRecord
+   240	  | ExpenseAdjustmentEvidenceRecord
+   241	
+   242	export interface EarningPeriodContextEvidence {
+   243	  readonly kind: 'earning-period-context'
+   244	  readonly earningPeriodId: number
+   245	}
+   246	
+   247	export interface SettingsContextEvidence {
+   248	  readonly kind: 'settings-context'
+   249	  readonly usageMode: UsageMode
+   250	  readonly currency: CurrencyCode
+   251	  readonly timezone: IanaTimeZone
+   252	}
+   253	
+   254	export type FinancialContextEvidence =
+   255	  | EarningPeriodContextEvidence
+   256	  | SettingsContextEvidence
+   257	
+   258	/** Complete embedded evidence for v1; appointments are intentionally excluded. */
+   259	export interface FinancialEvidence {
+   260	  readonly strategy: 'embedded-v1'
+
+--- src/types/insightRule.ts ---
+     1	import type { IanaTimeZone } from './financialSnapshot'
+     2	import type {
+     3	  KnowledgeFactId,
+     4	  KnowledgeRevision,
+     5	  KnowledgeSnapshotKey,
+     6	  KnowledgeVersion,
+     7	} from './knowledgeLayer'
+     8	import type { CurrencyCode } from './settings'
+     9	
+    10	declare const insightRuleIdBrand: unique symbol
+    11	declare const insightRuleVersionBrand: unique symbol
+    12	declare const insightRuleParameterIdBrand: unique symbol
+    13	declare const insightRuleDependencyIdBrand: unique symbol
+    14	declare const insightRuleTitleCodeBrand: unique symbol
+    15	declare const insightRuleMessageCodeBrand: unique symbol
+    16	declare const insightRuleSummaryCodeBrand: unique symbol
+    17	declare const insightRulePolicyCodeBrand: unique symbol
+    18	declare const insightRuleCatalogVersionBrand: unique symbol
+    19	
+    20	export const INSIGHT_RULE_PROTOCOL_VERSION = 1 as const
+    21	
+    22	export type InsightRuleProtocolVersion = number
+    23	
+    24	export const INSIGHT_RULE_CATEGORIES = [
+    25	  'cash-flow',
+    26	  'spending',
+    27	  'income',
+    28	  'savings',
+    29	  'balance',
+    30	  'trend',
+    31	  'anomaly',
+    32	  'recurring',
+    33	  'data-quality',
+    34	] as const
+    35	
+    36	export const INSIGHT_RULE_SEVERITIES = [
+    37	  'info',
+    38	  'notice',
+    39	  'warning',
+    40	  'critical',
+    41	] as const
+    42	
+    43	export const INSIGHT_RULE_STATUSES = [
+    44	  'draft',
+    45	  'active',
+    46	  'deprecated',
+    47	  'retired',
+    48	] as const
+    49	
+    50	export const INSIGHT_RULE_SNAPSHOT_TYPES = ['knowledge'] as const
+    51	
+    52	export const INSIGHT_RULE_SCOPE_KINDS = ['aggregate', 'account'] as const
+    53	
+    54	export const INSIGHT_RULE_FACT_MATCH_POLICIES = [
+    55	  'all-required',
+    56	  'any-required',
+    57	  'at-least-one',
+    58	] as const
+    59	
+    60	export const INSIGHT_RULE_EVIDENCE_TYPES = [
+    61	  'knowledge-fact-set',
+    62	  'knowledge-fact-link',
+    63	  'knowledge-snapshot-derivation',
+    64	] as const
+    65	
+    66	export const INSIGHT_RULE_PARAMETER_KINDS = [
+    67	  'string',
+    68	  'integer',
+    69	  'boolean',
+    70	  'enum',
+    71	  'string-list',
+    72	  'integer-list',
+    73	  'json-object',
+    74	] as const
+    75	
+    76	export const INSIGHT_RULE_OUTPUT_KINDS = [
+    77	  'observation',
+    78	  'warning',
+    79	  'anomaly',
+    80	  'trend',
+    81	] as const
+    82	
+    83	export const INSIGHT_RULE_FAIL_CLOSED_INVARIANTS = [
+    84	  'duplicate-rule-identity',
+    85	  'incompatible-protocol-version',
+    86	  'unknown-rule-category',
+    87	  'missing-dependency-contract',
+    88	  'missing-message-code',
+    89	  'missing-title-code',
+    90	  'invalid-confidence-policy',
+    91	  'incompatible-facts-contract',
+    92	] as const
+    93	
+    94	export type InsightRuleCategory = (typeof INSIGHT_RULE_CATEGORIES)[number]
+    95	
+    96	export type InsightRuleSeverity = (typeof INSIGHT_RULE_SEVERITIES)[number]
+    97	
+    98	export type InsightRuleStatus = (typeof INSIGHT_RULE_STATUSES)[number]
+    99	
+   100	export type InsightRuleSnapshotType =
+   101	  (typeof INSIGHT_RULE_SNAPSHOT_TYPES)[number]
+   102	
+   103	export type InsightRuleScopeKind = (typeof INSIGHT_RULE_SCOPE_KINDS)[number]
+   104	
+   105	export type InsightRuleFactMatchPolicy =
+   106	  (typeof INSIGHT_RULE_FACT_MATCH_POLICIES)[number]
+   107	
+   108	export type InsightRuleEvidenceType =
+   109	  (typeof INSIGHT_RULE_EVIDENCE_TYPES)[number]
+   110	
+   111	export type InsightRuleParameterKind =
+   112	  (typeof INSIGHT_RULE_PARAMETER_KINDS)[number]
+   113	
+   114	export type InsightRuleOutputKind = (typeof INSIGHT_RULE_OUTPUT_KINDS)[number]
+   115	
+   116	export type InsightRuleFailClosedInvariant =
+   117	  (typeof INSIGHT_RULE_FAIL_CLOSED_INVARIANTS)[number]
+   118	
+   119	export type InsightRuleId = string & {
+   120	  readonly [insightRuleIdBrand]: 'InsightRuleId'
+   121	}
+   122	
+   123	export type InsightRuleVersion = string & {
+   124	  readonly [insightRuleVersionBrand]: 'InsightRuleVersion'
+   125	}
+   126	
+   127	export type InsightRuleParameterId = string & {
+   128	  readonly [insightRuleParameterIdBrand]: 'InsightRuleParameterId'
+   129	}
+   130	
+   131	export type InsightRuleDependencyId = string & {
+   132	  readonly [insightRuleDependencyIdBrand]: 'InsightRuleDependencyId'
+   133	}
+   134	
+   135	export type InsightRuleTitleCode = string & {
+   136	  readonly [insightRuleTitleCodeBrand]: 'InsightRuleTitleCode'
+   137	}
+   138	
+   139	export type InsightRuleMessageCode = string & {
+   140	  readonly [insightRuleMessageCodeBrand]: 'InsightRuleMessageCode'
+   141	}
+   142	
+   143	export type InsightRuleSummaryCode = string & {
+   144	  readonly [insightRuleSummaryCodeBrand]: 'InsightRuleSummaryCode'
+   145	}
+   146	
+   147	export type InsightRulePolicyCode = string & {
+   148	  readonly [insightRulePolicyCodeBrand]: 'InsightRulePolicyCode'
+   149	}
+   150	
+   151	export type InsightRuleCatalogVersion = string & {
+   152	  readonly [insightRuleCatalogVersionBrand]: 'InsightRuleCatalogVersion'
+   153	}
+   154	
+   155	export type InsightRuleJsonPrimitive = string | number | boolean | null
+   156	
+   157	export type InsightRuleJsonValue =
+   158	  | InsightRuleJsonPrimitive
+   159	  | InsightRuleJsonObject
+   160	  | readonly InsightRuleJsonValue[]
+   161	
+   162	export interface InsightRuleJsonObject {
+   163	  readonly [key: string]: InsightRuleJsonValue
+   164	}
+   165	
+   166	export interface InsightRuleReference {
+   167	  readonly ruleId: InsightRuleId
+   168	  readonly ruleVersion: InsightRuleVersion
+   169	  readonly protocolVersion: InsightRuleProtocolVersion
+   170	}
+   171	
+   172	export type InsightRuleCurrencyRequirement =
+   173	  | {
+   174	      readonly mode: 'input-currency'
+   175	    }
+   176	  | {
+   177	      readonly mode: 'fixed-currency'
+   178	      readonly currency: CurrencyCode
+   179	    }
+   180	
+   181	export type InsightRuleTimezoneRequirement =
+   182	  | {
+   183	      readonly mode: 'snapshot-timezone'
+   184	    }
+   185	  | {
+   186	      readonly mode: 'fixed-timezone'
+   187	      readonly timezone: IanaTimeZone
+   188	    }
+   189	  | {
+   190	      readonly mode: 'any-iana'
+   191	    }
+   192	
+   193	export interface InsightRuleScopeRequirement {
+   194	  readonly scopeKinds: readonly InsightRuleScopeKind[]
+   195	  readonly requiresAsOf: true
+   196	  readonly currencyRequirement: InsightRuleCurrencyRequirement
+   197	  readonly timezoneRequirement: InsightRuleTimezoneRequirement
+   198	}
+   199	
+   200	export interface InsightRuleKnowledgeDependency {
+   201	  readonly sourceLayer: 'knowledge-layer'
+   202	  readonly snapshotTypes: readonly InsightRuleSnapshotType[]
+   203	  readonly requiredKnowledgeVersions: readonly KnowledgeVersion[]
+   204	  readonly minimumKnowledgeRevision: KnowledgeRevision | null
+   205	  readonly snapshotKeyMode: 'any' | 'whitelist'
+   206	  readonly snapshotKeys: readonly KnowledgeSnapshotKey[]
+   207	  readonly requiredFacts: readonly [KnowledgeFactId, ...KnowledgeFactId[]]
+   208	  readonly factMatchPolicy: InsightRuleFactMatchPolicy
+   209	  readonly requiredScope: InsightRuleScopeRequirement
+   210	  readonly compatibleInsightCategories: readonly InsightRuleCategory[]
+   211	}
+   212	
+   213	export interface InsightRuleDependency {
+   214	  readonly dependencyId: InsightRuleDependencyId
+   215	  readonly knowledge: InsightRuleKnowledgeDependency
+   216	}
+   217	
+   218	export type InsightRuleConfidencePolicy =
+   219	  | {
+   220	      readonly mode: 'fixed-score'
+   221	      readonly scoreUnit: 'percent-0-100'
+   222	      readonly score: number
+   223	    }
+   224	  | {
+   225	      readonly mode: 'bounded-score'
+   226	      readonly scoreUnit: 'percent-0-100'
+   227	      readonly minimumScore: number
+   228	      readonly maximumScore: number
+   229	    }
+   230	  | {
+   231	      readonly mode: 'evidence-derived'
+   232	      readonly scoreUnit: 'percent-0-100'
+   233	      readonly policyCode: InsightRulePolicyCode
+   234	    }
+   235	
+   236	export interface InsightRuleOutput {
+   237	  readonly outputKind: InsightRuleOutputKind
+   238	  readonly titleCode: InsightRuleTitleCode
+   239	  readonly messageCode: InsightRuleMessageCode
+   240	  readonly category: InsightRuleCategory
+   241	  readonly severity: InsightRuleSeverity
+   242	  readonly confidencePolicy: InsightRuleConfidencePolicy
+   243	  readonly evidenceType: InsightRuleEvidenceType
+   244	}
+   245	
+   246	export interface InsightRuleEvidence {
+   247	  readonly evidenceType: InsightRuleEvidenceType
+   248	  readonly summaryCode: InsightRuleSummaryCode
+   249	  readonly requiredFacts: readonly [KnowledgeFactId, ...KnowledgeFactId[]]
+   250	  readonly traceabilityRequired: true
+   251	  readonly source: 'knowledge'
+   252	}
+   253	
+   254	export type InsightRuleParameterConstraint =
+   255	  | {
+   256	      readonly kind: 'none'
+   257	    }
+   258	  | {
+   259	      readonly kind: 'enum'
+   260	      readonly allowedValues: readonly [InsightRuleJsonPrimitive, ...InsightRuleJsonPrimitive[]]
+
+--- src/types/knowledgeLayer.ts ---
+     1	import type {
+     2	  CanonicalizationVersion,
+     3	  CivilDate,
+     4	  EngineVersion,
+     5	  IanaTimeZone,
+     6	  RulesetVersion,
+     7	  SealedSnapshotId,
+     8	  SnapshotKey,
+     9	  SnapshotVersion,
+    10	  UtcInstant,
+    11	} from './financialSnapshot'
+    12	import type { CurrencyCode, UsageMode } from './settings'
+    13	
+    14	declare const knowledgeFactIdBrand: unique symbol
+    15	declare const knowledgeCollectionIdBrand: unique symbol
+    16	declare const knowledgeSnapshotIdBrand: unique symbol
+    17	declare const knowledgeVersionBrand: unique symbol
+    18	declare const knowledgeBuilderVersionBrand: unique symbol
+    19	declare const knowledgeRulesVersionBrand: unique symbol
+    20	declare const knowledgeProjectionVersionBrand: unique symbol
+    21	declare const knowledgeRevisionBrand: unique symbol
+    22	declare const knowledgeCanonicalizationVersionBrand: unique symbol
+    23	declare const knowledgeSnapshotKeyBrand: unique symbol
+    24	declare const knowledgeRevisionReasonCodeBrand: unique symbol
+    25	
+    26	export type KnowledgeFactId = string & {
+    27	  readonly [knowledgeFactIdBrand]: 'KnowledgeFactId'
+    28	}
+    29	
+    30	export type KnowledgeSnapshotId = string & {
+    31	  readonly [knowledgeSnapshotIdBrand]: 'KnowledgeSnapshotId'
+    32	}
+    33	
+    34	export type KnowledgeCollectionId = string & {
+    35	  readonly [knowledgeCollectionIdBrand]: 'KnowledgeCollectionId'
+    36	}
+    37	
+    38	export type KnowledgeVersion = string & {
+    39	  readonly [knowledgeVersionBrand]: 'KnowledgeVersion'
+    40	}
+    41	
+    42	export type KnowledgeBuilderVersion = string & {
+    43	  readonly [knowledgeBuilderVersionBrand]: 'KnowledgeBuilderVersion'
+    44	}
+    45	
+    46	export type KnowledgeRulesVersion = string & {
+    47	  readonly [knowledgeRulesVersionBrand]: 'KnowledgeRulesVersion'
+    48	}
+    49	
+    50	export type KnowledgeProjectionVersion = string & {
+    51	  readonly [knowledgeProjectionVersionBrand]: 'KnowledgeProjectionVersion'
+    52	}
+    53	
+    54	export type KnowledgeRevision = number & {
+    55	  readonly [knowledgeRevisionBrand]: 'KnowledgeRevision'
+    56	}
+    57	
+    58	export type KnowledgeCanonicalizationVersion = string & {
+    59	  readonly [knowledgeCanonicalizationVersionBrand]: 'KnowledgeCanonicalizationVersion'
+    60	}
+    61	
+    62	export type KnowledgeSnapshotKey = string & {
+    63	  readonly [knowledgeSnapshotKeyBrand]: 'KnowledgeSnapshotKey'
+    64	}
+    65	
+    66	export type KnowledgeRevisionReasonCode = string & {
+    67	  readonly [knowledgeRevisionReasonCodeBrand]: 'KnowledgeRevisionReasonCode'
+    68	}
+    69	
+    70	export type KnowledgeFactType =
+    71	  | 'income.present'
+    72	  | 'income.absent'
+    73	  | 'income.increased'
+    74	  | 'income.decreased'
+    75	  | 'expense.present'
+    76	  | 'expense.absent'
+    77	  | 'expense.increased'
+    78	  | 'expense.decreased'
+    79	  | 'adjustment.present'
+    80	  | 'adjustment.absent'
+    81	  | 'balance.positive'
+    82	  | 'balance.negative'
+    83	  | 'balance.neutral'
+    84	  | 'cashflow.positive'
+    85	  | 'cashflow.negative'
+    86	  | 'cashflow.neutral'
+    87	  | 'period.empty'
+    88	  | 'period.non_empty'
+    89	  | 'season.started'
+    90	  | 'season.completed'
+    91	  | 'saving.high'
+    92	  | 'saving.low'
+    93	  | 'recurring.expense.detected'
+    94	  | 'income.volatile'
+    95	  | 'expense.volatile'
+    96	  | 'cashflow.stable'
+    97	  | 'cashflow.unstable'
+    98	
+    99	export type KnowledgeFactSource = 'financial-snapshot'
+   100	
+   101	export type KnowledgeFactCategory =
+   102	  | 'income'
+   103	  | 'expense'
+   104	  | 'adjustment'
+   105	  | 'balance'
+   106	  | 'period'
+   107	  | 'season'
+   108	  | 'saving'
+   109	  | 'cashflow'
+   110	  | 'volatility'
+   111	  | 'recurrence'
+   112	
+   113	export type KnowledgeFactSeverity =
+   114	  | 'info'
+   115	  | 'warning'
+   116	  | 'critical'
+   117	
+   118	export type KnowledgeFactConfidence = 'certain'
+   119	
+   120	export type KnowledgeStatus =
+   121	  | 'projected'
+   122	  | 'superseded'
+   123	
+   124	export type KnowledgeCollectionState =
+   125	  | 'draft'
+   126	  | 'validated'
+   127	
+   128	export type KnowledgeRelationshipType =
+   129	  | 'derived-from'
+   130	  | 'supports'
+   131	  | 'correlates-with'
+   132	
+   133	export interface KnowledgeScope {
+   134	  readonly kind: 'monthly'
+   135	  readonly periodStart: CivilDate
+   136	  readonly periodEndExclusive: CivilDate
+   137	  readonly periodBoundary: '[start,end)'
+   138	  readonly timezone: IanaTimeZone
+   139	  readonly usageMode: UsageMode
+   140	  readonly currency: CurrencyCode
+   141	  readonly earningPeriodId?: number
+   142	}
+   143	
+   144	export interface KnowledgeIdentity {
+   145	  readonly knowledgeSnapshotId: KnowledgeSnapshotId
+   146	  readonly snapshotKey: SnapshotKey
+   147	}
+   148	
+   149	export interface KnowledgeOrigin {
+   150	  readonly source: KnowledgeFactSource
+   151	  readonly sourceSnapshotId: SealedSnapshotId
+   152	  readonly sourceSnapshotKey: SnapshotKey
+   153	  readonly sourceSnapshotRevision: number
+   154	  readonly sourceSnapshotVersion: SnapshotVersion
+   155	  readonly sourceCanonicalizationVersion: CanonicalizationVersion
+   156	  readonly sourceEngineVersion: EngineVersion
+   157	  readonly sourceRulesetVersion: RulesetVersion
+   158	}
+   159	
+   160	export interface KnowledgeEvidence {
+   161	  readonly sourceSnapshotId: SealedSnapshotId
+   162	  readonly sourceSnapshotKey: SnapshotKey
+   163	  readonly sourceSnapshotRevision: number
+   164	  readonly sourceFingerprintValue: string
+   165	  readonly sourceAppliedRuleIds: readonly string[]
+   166	  readonly sourceRecordIds: readonly (string | number)[]
+   167	  readonly sourceContextKinds: readonly string[]
+   168	  readonly coverageCodes: readonly string[]
+   169	  readonly warningCodes: readonly string[]
+   170	  readonly sourcePaths: readonly string[]
+   171	}
+   172	
+   173	export interface KnowledgeContext {
+   174	  readonly usageMode: UsageMode
+   175	  readonly currency: CurrencyCode
+   176	  readonly timezone: IanaTimeZone
+   177	  readonly periodStart: CivilDate
+   178	  readonly periodEndExclusive: CivilDate
+   179	  readonly earningPeriodId?: number
+   180	}
+   181	
+   182	export interface KnowledgeRelationship {
+   183	  readonly relation: KnowledgeRelationshipType
+   184	  readonly fromFactId: KnowledgeFactId
+   185	  readonly toFactId: KnowledgeFactId
+   186	}
+   187	
+   188	export interface KnowledgeCollectionVersions {
+   189	  readonly knowledgeVersion: KnowledgeVersion
+   190	  readonly builderVersion: KnowledgeBuilderVersion
+   191	  readonly rulesVersion: KnowledgeRulesVersion
+   192	  readonly projectionVersion: KnowledgeProjectionVersion
+   193	}
+   194	
+   195	export interface KnowledgeCollectionIdentity {
+   196	  readonly knowledgeCollectionId: KnowledgeCollectionId
+   197	  readonly sourceSnapshotId: SealedSnapshotId
+   198	  readonly sourceSnapshotKey: SnapshotKey
+   199	  readonly sourceSnapshotRevision: number
+   200	  readonly sourceFingerprintValue: string
+   201	}
+   202	
+   203	export type KnowledgeValidationErrorCode =
+   204	  | 'KNOWLEDGE_VALIDATION_INVALID_STATE'
+   205	  | 'KNOWLEDGE_VALIDATION_UNSUPPORTED_VERSION'
+   206	  | 'KNOWLEDGE_VALIDATION_INVALID_IDENTITY'
+   207	  | 'KNOWLEDGE_VALIDATION_DUPLICATE_FACT_ID'
+   208	  | 'KNOWLEDGE_VALIDATION_UNKNOWN_FACT_TYPE'
+   209	  | 'KNOWLEDGE_VALIDATION_INVALID_ORDER'
+   210	  | 'KNOWLEDGE_VALIDATION_CONTRADICTORY_FACTS'
+   211	  | 'KNOWLEDGE_VALIDATION_INVALID_EVIDENCE'
+   212	  | 'KNOWLEDGE_VALIDATION_INVALID_RELATIONSHIP'
+   213	  | 'KNOWLEDGE_VALIDATION_INVALID_VALUE'
+   214	
+   215	export interface KnowledgeValidationCheck {
+   216	  readonly code: string
+   217	  readonly passed: boolean
+   218	  readonly errorCode?: KnowledgeValidationErrorCode
+   219	}
+   220	
+   221	export interface KnowledgeValidationAssessment {
+   222	  readonly status: 'valid' | 'invalid'
+   223	  readonly checks: readonly KnowledgeValidationCheck[]
+   224	  readonly failedChecks: number
+   225	}
+   226	
+   227	export interface KnowledgeValidationError {
+   228	  readonly name: 'KnowledgeValidationError'
+   229	  readonly message: string
+   230	  readonly code: KnowledgeValidationErrorCode
+   231	  readonly assessment: KnowledgeValidationAssessment
+   232	}
+   233	
+   234	export type KnowledgeCanonicalizationErrorCode =
+   235	  | 'KNOWLEDGE_CANONICALIZATION_INVALID_STATE'
+   236	  | 'KNOWLEDGE_CANONICALIZATION_UNSUPPORTED_VERSION'
+   237	  | 'KNOWLEDGE_CANONICALIZATION_INVALID_VALUE'
+   238	  | 'KNOWLEDGE_CANONICALIZATION_INVALID_ORDER'
+   239	  | 'KNOWLEDGE_CANONICALIZATION_INVALID_FACT'
+   240	  | 'KNOWLEDGE_CANONICALIZATION_INVALID_RELATIONSHIP'
+   241	  | 'KNOWLEDGE_CANONICALIZATION_CYCLIC_VALUE'
+   242	
+   243	export type KnowledgeFingerprintErrorCode =
+   244	  | 'KNOWLEDGE_FINGERPRINT_UNSUPPORTED_ALGORITHM'
+   245	  | 'KNOWLEDGE_FINGERPRINT_INVALID_DOCUMENT'
+   246	  | 'KNOWLEDGE_FINGERPRINT_CRYPTO_UNAVAILABLE'
+   247	  | 'KNOWLEDGE_FINGERPRINT_ENCODING_FAILED'
+   248	
+   249	export interface KnowledgeFingerprint {
+   250	  readonly algorithm: 'SHA-256'
+   251	  readonly encoding: 'hex-lower'
+   252	  readonly domain: 'private-balance:knowledge:fingerprint:v1:'
+   253	  readonly fingerprintVersion: 'knowledge-fingerprint/1.0.0'
+   254	  readonly canonicalizationVersion: KnowledgeCanonicalizationVersion
+   255	  readonly value: string
+   256	}
+   257	
+   258	export type KnowledgeSealStatus = 'sealed'
+   259	
+   260	export type KnowledgeSealErrorCode =
+
+--- src/types/license.ts ---
+     1	export type LicenseStatus = 'inactive' | 'active' | 'expired'
+     2	export type LicenseType = 'demo' | 'monthly' | 'annual' | 'lifetime'
+     3	
+     4	export interface AppLicense {
+     5	  id: string
+     6	  deviceCode: string
+     7	  activationCode?: string
+     8	  activationDate?: string
+     9	  expirationDate?: string
+    10	  status: LicenseStatus
+    11	  licenseType: LicenseType
+    12	  licenseVersion: 1 | 2
+    13	  licenseKey?: string
+    14	  userCode?: string
+    15	  deviceName?: string
+    16	  platform?: 'web' | 'android' | 'ios' | 'unknown'
+    17	  deviceAuthorization?: 'existing' | 'registered'
+    18	  activeDevices?: number
+    19	  maxDevices?: number
+    20	  lastValidAccessDate?: string
+    21	  createdAt: string
+    22	  updatedAt: string
+    23	}
+
+--- src/types/persistedFinancialSnapshot.ts ---
+     1	import type {
+     2	  CanonicalSnapshotDocument,
+     3	  CanonicalizationVersion,
+     4	  EngineVersion,
+     5	  RulesetVersion,
+     6	  SealedFinancialSnapshotStatus,
+     7	  SealedSnapshotId,
+     8	  SnapshotFingerprint,
+     9	  SnapshotKey,
+    10	  SnapshotNormativeCode,
+    11	  SnapshotScopeKind,
+    12	  SnapshotVersion,
+    13	  UtcInstant,
+    14	} from './financialSnapshot'
+    15	
+    16	export const FINANCIAL_SNAPSHOT_LOCAL_SCHEMA_VERSION = 1 as const
+    17	
+    18	export interface PersistedFinancialSnapshot<TEngineResult = unknown> {
+    19	  readonly snapshotId: SealedSnapshotId
+    20	  readonly snapshotKey: SnapshotKey
+    21	  readonly revision: number
+    22	  readonly revisionReasonCode: SnapshotNormativeCode
+    23	  readonly status: Extract<SealedFinancialSnapshotStatus, 'persisted'>
+    24	  readonly canonicalDocument: CanonicalSnapshotDocument<TEngineResult>
+    25	  readonly fingerprint: SnapshotFingerprint
+    26	  readonly sealedAt: UtcInstant
+    27	  readonly supersedesSnapshotId?: SealedSnapshotId
+    28	  readonly persistedAt: UtcInstant
+    29	  readonly localSchemaVersion: typeof FINANCIAL_SNAPSHOT_LOCAL_SCHEMA_VERSION
+    30	  readonly snapshotVersion: SnapshotVersion
+    31	  readonly canonicalizationVersion: CanonicalizationVersion
+    32	  readonly engineVersion: EngineVersion
+    33	  readonly rulesetVersion: RulesetVersion
+    34	  readonly scopeKind: SnapshotScopeKind
+    35	  readonly scopePeriodStart: string
+    36	  readonly fingerprintValue: string
+    37	}
+
+--- src/types/persistedKnowledgeSnapshot.ts ---
+     1	import type {
+     2	  KnowledgeBuilderVersion,
+     3	  KnowledgeCanonicalizationVersion,
+     4	  KnowledgeProjectionVersion,
+     5	  KnowledgeRulesVersion,
+     6	  KnowledgeSnapshotId,
+     7	  KnowledgeSnapshotKey,
+     8	  KnowledgeVersion,
+     9	  SealedKnowledgeSnapshot,
+    10	} from './knowledgeLayer'
+    11	import type { SealedSnapshotId, SnapshotKey, UtcInstant } from './financialSnapshot'
+    12	
+    13	export const KNOWLEDGE_SNAPSHOT_LOCAL_SCHEMA_VERSION = 1 as const
+    14	
+    15	export interface PersistedKnowledgeSnapshot {
+    16	  readonly knowledgeSnapshotId: KnowledgeSnapshotId
+    17	  readonly knowledgeSnapshotKey: KnowledgeSnapshotKey
+    18	  readonly revision: number
+    19	  readonly status: SealedKnowledgeSnapshot['status']
+    20	  readonly canonicalDocument: SealedKnowledgeSnapshot['canonicalDocument']
+    21	  readonly fingerprint: SealedKnowledgeSnapshot['fingerprint']
+    22	  readonly sealedAt: UtcInstant
+    23	  readonly supersedesKnowledgeSnapshotId?: KnowledgeSnapshotId
+    24	  readonly persistedAt: UtcInstant
+    25	  readonly localSchemaVersion: typeof KNOWLEDGE_SNAPSHOT_LOCAL_SCHEMA_VERSION
+    26	  readonly knowledgeVersion: KnowledgeVersion
+    27	  readonly builderVersion: KnowledgeBuilderVersion
+    28	  readonly rulesVersion: KnowledgeRulesVersion
+    29	  readonly projectionVersion: KnowledgeProjectionVersion
+    30	  readonly canonicalizationVersion: KnowledgeCanonicalizationVersion
+    31	  readonly sourceSnapshotId: SealedSnapshotId
+    32	  readonly sourceSnapshotKey: SnapshotKey
+    33	  readonly fingerprintValue: string
+    34	}
+
+--- src/types/service.ts ---
+     1	import type { ReportStatusCode, ReportStatusLabel } from '../catalogs/reportStatuses'
+     2	import type { UsageMode } from './settings'
+     3	
+     4	export type ServiceIncomeStatus = 'PENDIENTE' | 'EJECUCION' | 'FINALIZADO';
+     5	export type ServiceIncomeType = 'ingreso' | 'ajuste' | 'otro';
+     6	export type ServiceTimerStatus =
+     7	  | 'pending'
+     8	  | 'running'
+     9	  | 'completed'
+    10	  | 'notified'
+    11	  | 'dismissed';
+    12	
+    13	export interface ServiceIncome {
+    14	  id?: number;
+    15	
+    16	  createdAt?: string;
+    17	
+    18	  status?: ServiceIncomeStatus;
+    19	
+    20	  type?: ServiceIncomeType;
+    21	
+    22	  usageMode?: UsageMode;
+    23	
+    24	  paymentType?: string;
+    25	
+    26	  notes?: string;
+    27	
+    28	  date: string;
+    29	
+    30	  duration: number;
+    31	
+    32	  durationLabel?: string;
+    33	
+    34	  totalAmount: number;
+    35	
+    36	  currency: string;
+    37	
+    38	  percentage: number;
+    39	
+    40	  earningPeriodId?: number;
+    41	
+    42	  seasonPeriodId?: number;
+    43	
+    44	  earningPercentage?: number;
+    45	
+    46	  realGain: number;
+    47	
+    48	  eurValue: number;
+    49	
+    50	  copValue: number;
+    51	
+    52	  exchangeRateUsed: number;
+    53	
+    54	  baseCurrency?: string;
+    55	
+    56	  secondaryCurrency?: string;
+    57	
+    58	  baseCurrencyValue?: number;
+    59	
+    60	  secondaryCurrencyValue?: number;
+    61	
+    62	  exchangeRateBaseToSecondary?: number;
+    63	
+    64	  timerStartedAt?: string;
+    65	
+    66	  timerStoppedAt?: string;
+    67	
+    68	  timerStatus?: ServiceTimerStatus;
+    69	
+    70	  timerEndsAt?: string;
+    71	
+    72	  timerCompletedAt?: string;
+    73	
+    74	  whatsappNotifiedAt?: string;
+    75	
+    76	  actualDuration?: number;
+    77	
+    78	  country?: string;
+    79	
+    80	  city?: string;
+    81	
+    82	  reportStatusCode?: ReportStatusCode;
+    83	  reportStatusLabel?: ReportStatusLabel;
+    84	  reportedAt?: string;
+    85	}
+
+--- src/types/settings.ts ---
+     1	export type CurrencyCode =
+     2	  | 'ARS'
+     3	  | 'BGN'
+     4	  | 'COP'
+     5	  | 'CZK'
+     6	  | 'DKK'
+     7	  | 'EUR'
+     8	  | 'GBP'
+     9	  | 'HUF'
+    10	  | 'MXN'
+    11	  | 'PLN'
+    12	  | 'RON'
+    13	  | 'SEK'
+    14	  | 'USD'
+    15	export type CountryCode =
+    16	  | 'AR'
+    17	  | 'AT'
+    18	  | 'BE'
+    19	  | 'BG'
+    20	  | 'CO'
+    21	  | 'CY'
+    22	  | 'CZ'
+    23	  | 'DE'
+    24	  | 'DK'
+    25	  | 'EE'
+    26	  | 'ES'
+    27	  | 'FI'
+    28	  | 'FR'
+    29	  | 'GB'
+    30	  | 'GR'
+    31	  | 'HR'
+    32	  | 'HU'
+    33	  | 'IE'
+    34	  | 'IT'
+    35	  | 'LT'
+    36	  | 'LU'
+    37	  | 'LV'
+    38	  | 'MT'
+    39	  | 'MX'
+    40	  | 'NL'
+    41	  | 'PL'
+    42	  | 'PT'
+    43	  | 'RO'
+    44	  | 'SE'
+    45	  | 'SI'
+    46	  | 'SK'
+    47	export type RateMode = 'automatic' | 'manual'
+    48	export type ThemeMode = 'system' | 'light' | 'dark'
+    49	export type UsageMode = 'professional' | 'basic'
+    50	/** @deprecated Compatibility mirror for backups and older app versions. */
+    51	export type UserType = 'primary' | 'basic'
+    52	export type BackupFrequency = 'daily'
+    53	export type CutoffFrequency = 'weekly' | 'biweekly' | 'monthly'
+    54	export type WeekStartDay = 0 | 1 | 2 | 3 | 4 | 5 | 6
+    55	
+    56	export interface ClosedLocationSeason {
+    57	  city: string
+    58	  closedAt: string
+    59	  country: CountryCode
+    60	}
+    61	
+    62	export interface ReopenedLocationSeason extends ClosedLocationSeason {
+    63	  reopenedAt: string
+    64	}
+    65	
+    66	export interface AppSettings {
+    67	  id: 'app'
+    68	  businessName: string
+    69	  country: CountryCode
+    70	  city: string
+    71	  defaultCurrency: CurrencyCode
+    72	  secondaryCurrency: CurrencyCode
+    73	  incomePercentage: number
+    74	  rateMode: RateMode
+    75	  usageMode: UsageMode
+    76	  userType: UserType
+    77	  theme: ThemeMode
+    78	  pinEnabled: boolean
+    79	  pinHash?: string
+    80	  backupEncryptionKey: string
+    81	  driveBackupEnabled: boolean
+    82	  driveBackupFrequency: BackupFrequency
+    83	  cutoffFrequency: CutoffFrequency
+    84	  cutoffWeekStart: WeekStartDay
+    85	  cutoffAnchorDate: string
+    86	  googleDriveClientId: string
+    87	  googleDriveConnected: boolean
+    88	  googleDriveLastBackupAt?: string
+    89	  googleDriveLastBackupStatus?: string
+    90	  closedLocationSeasons: ClosedLocationSeason[]
+    91	  reopenedLocationSeasons: ReopenedLocationSeason[]
+    92	  createdAt: string
+    93	  updatedAt: string
+    94	}
+
+=== CATALOGS ===
+--- src/catalogs/reportStatuses.ts ---
+     1	export type ReportStatusCode = 'pending' | 'reported'
+     2	export type ReportStatusLabel = 'Pendiente' | 'Reportado'
+     3	
+     4	export interface ReportStatusFields {
+     5	  reportStatusCode?: ReportStatusCode
+     6	  reportStatusLabel?: ReportStatusLabel
+     7	  reportedAt?: string
+     8	}
+     9	
+    10	export const REPORTED_RECORD_IMMUTABLE_MESSAGE =
+    11	  'Este registro ya fue reportado y no se puede modificar ni eliminar.'
+    12	
+    13	export const REPORT_STATUSES = [
+    14	  {
+    15	    code: 'pending' as const,
+    16	    label: 'Pendiente' as const,
+    17	  },
+    18	  {
+    19	    code: 'reported' as const,
+    20	    label: 'Reportado' as const,
+    21	  },
+    22	] as const
+    23	
+    24	export function normalizeReportStatus<T extends Partial<ReportStatusFields>>(record: T) {
+    25	  const reportStatusCode = record.reportStatusCode === 'reported' ? 'reported' : 'pending'
+    26	  const reportStatusLabel = reportStatusCode === 'reported' ? 'Reportado' : 'Pendiente'
+    27	
+    28	  return {
+    29	    ...record,
+    30	    reportStatusCode,
+    31	    reportStatusLabel,
+    32	    reportedAt: reportStatusCode === 'reported' ? record.reportedAt : undefined,
+    33	  } as T & ReportStatusFields
+    34	}
+    35	
+    36	export function getReportStatusLabel(code?: ReportStatusCode | null) {
+    37	  return code === 'reported' ? 'Reportado' : 'Pendiente'
+    38	}
+    39	
+    40	export function isReported(record: Partial<ReportStatusFields>) {
+    41	  return normalizeReportStatus(record).reportStatusCode === 'reported'
+    42	}
+    43	
+    44	export function assertRecordIsNotReported(record?: Partial<ReportStatusFields>) {
+    45	  if (record && isReported(record)) {
+    46	    throw new Error(REPORTED_RECORD_IMMUTABLE_MESSAGE)
+    47	  }
+    48	}
+    49	
+    50	export function assertReportedRecordUpdateIsAllowed(
+    51	  record: Partial<ReportStatusFields> | undefined,
+    52	  updates: object,
+    53	) {
+    54	  if (!record || !isReported(record)) {
+    55	    return
+    56	  }
+    57	
+    58	  const reportStatusFields = new Set([
+    59	    'reportStatusCode',
+    60	    'reportStatusLabel',
+    61	    'reportedAt',
+    62	  ])
+    63	  const onlyUpdatesReportStatus = Object.keys(updates).every((field) =>
+    64	    reportStatusFields.has(field),
+    65	  )
+    66	  const reportStatusUpdates = updates as Partial<ReportStatusFields>
+    67	  const removesReportedMark =
+    68	    reportStatusUpdates.reportStatusCode === 'pending' &&
+    69	    reportStatusUpdates.reportStatusLabel === 'Pendiente' &&
+    70	    reportStatusUpdates.reportedAt === undefined
+    71	
+    72	  if (!onlyUpdatesReportStatus || !removesReportedMark) {
+    73	    throw new Error(REPORTED_RECORD_IMMUTABLE_MESSAGE)
+    74	  }
+    75	}
+    76	
+    77	export function markAsReported<T extends Partial<ReportStatusFields>>(record: T) {
+    78	  return {
+    79	    ...normalizeReportStatus(record),
+    80	    reportStatusCode: 'reported' as const,
+    81	    reportStatusLabel: 'Reportado' as const,
+    82	    reportedAt: new Date().toISOString(),
+    83	  } as T & ReportStatusFields
+    84	}
+    85	
+    86	export function markAsPending<T extends Partial<ReportStatusFields>>(record: T) {
+    87	  return {
+    88	    ...normalizeReportStatus(record),
+    89	    reportStatusCode: 'pending' as const,
+    90	    reportStatusLabel: 'Pendiente' as const,
+    91	    reportedAt: undefined,
+    92	  } as T & ReportStatusFields
+    93	}

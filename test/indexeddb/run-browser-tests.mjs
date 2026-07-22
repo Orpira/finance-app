@@ -14,6 +14,129 @@ const server = await createServer({
   server: { host: '127.0.0.1', port: 0 },
 })
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function waitForChildExit(child) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve({ code: child.exitCode, signal: child.signalCode })
+  }
+
+  return new Promise((resolve) => {
+    child.once('exit', (code, signal) => {
+      resolve({ code, signal })
+    })
+  })
+}
+
+function signalChild(child, signal) {
+  if (child === undefined || child.pid === undefined) {
+    return
+  }
+
+  try {
+    if (process.platform !== 'win32') {
+      process.kill(-child.pid, signal)
+      return
+    }
+  } catch {
+    // Fallback to direct child signaling below.
+  }
+
+  try {
+    child.kill(signal)
+  } catch {
+    // The process may have already exited.
+  }
+}
+
+async function terminateChild(child) {
+  if (child === undefined || child.exitCode !== null || child.signalCode !== null) {
+    if (child !== undefined) {
+      await waitForChildExit(child)
+    }
+    return
+  }
+
+  signalChild(child, 'SIGTERM')
+
+  const exited = await Promise.race([
+    waitForChildExit(child).then(() => true),
+    delay(3000).then(() => false),
+  ])
+
+  if (!exited && child.exitCode === null && child.signalCode === null) {
+    signalChild(child, 'SIGKILL')
+    await waitForChildExit(child)
+  }
+}
+
+async function closeSocket(socket) {
+  if (socket === undefined || socket.readyState === WebSocket.CLOSED) {
+    return
+  }
+
+  const closePromise = new Promise((resolve) => {
+    const done = () => resolve()
+    socket.addEventListener('close', done, { once: true })
+    socket.addEventListener('error', done, { once: true })
+    try {
+      socket.close()
+    } catch {
+      resolve()
+    }
+  })
+
+  await Promise.race([closePromise, delay(1000)])
+}
+
+function waitForBrowserSocket(child, readStderr) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup()
+      reject(new Error(`Chrome debugging endpoint timeout\n${readStderr()}`))
+    }, 10000)
+
+    const onStderr = () => {
+      const match = readStderr().match(/DevTools listening on (ws:\/\/[^\s]+)/)
+      if (match !== null) {
+        cleanup()
+        resolve(match[1])
+      }
+    }
+
+    const onExit = (code, signal) => {
+      cleanup()
+      reject(
+        new Error(
+          `Chrome exited before exposing DevTools endpoint (code=${code ?? 'null'}, signal=${signal ?? 'null'})\n${readStderr()}`,
+        ),
+      )
+    }
+
+    const onError = (error) => {
+      cleanup()
+      reject(error)
+    }
+
+    const cleanup = () => {
+      clearTimeout(timeout)
+      child.stderr.off('data', onStderr)
+      child.off('exit', onExit)
+      child.off('error', onError)
+    }
+
+    child.stderr.on('data', onStderr)
+    child.on('exit', onExit)
+    child.on('error', onError)
+  })
+}
+
+let child
+let socket
+let stderr = ''
+
 try {
   await server.listen()
   const address = server.httpServer.address()
@@ -28,21 +151,10 @@ try {
     '--remote-debugging-port=0',
     `http://127.0.0.1:${address.port}/test/indexeddb/browser.html`,
   ]
-  const child = spawn(chrome, args, { stdio: ['ignore', 'pipe', 'pipe'] })
-  let stderr = ''
+  child = spawn(chrome, args, { stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
-  child.once('error', (error) => { throw error })
 
-  const browserSocket = await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Chrome debugging endpoint timeout\n${stderr}`)), 10000)
-    child.stderr.on('data', () => {
-      const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/)
-      if (match !== null) {
-        clearTimeout(timeout)
-        resolve(match[1])
-      }
-    })
-  })
+  const browserSocket = await waitForBrowserSocket(child, () => stderr)
   const endpoint = new URL(browserSocket)
   let pages = []
   for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -53,7 +165,7 @@ try {
   const page = pages.find((candidate) => candidate.url.includes('/test/indexeddb/browser.html'))
   if (page === undefined) throw new Error(`IndexedDB test page was not created\n${stderr}`)
 
-  const socket = new WebSocket(page.webSocketDebuggerUrl)
+  socket = new WebSocket(page.webSocketDebuggerUrl)
   await new Promise((resolve, reject) => {
     socket.addEventListener('open', resolve, { once: true })
     socket.addEventListener('error', reject, { once: true })
@@ -83,14 +195,18 @@ try {
     if (report != null) break
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
-  socket.close()
-  child.kill('SIGTERM')
+  if (report == null) {
+    throw new Error(`IndexedDB browser report timeout\n${stderr}`)
+  }
+
   const details = report?.text === undefined ? undefined : JSON.parse(report.text)
   if (report?.status !== 'passed') {
     throw new Error(`Real IndexedDB browser test failed\n${JSON.stringify(details, null, 2)}\nChrome:\n${stderr}`)
   }
   console.log(JSON.stringify(details, null, 2))
 } finally {
+  await terminateChild(child)
+  await closeSocket(socket)
   await server.close()
   await rm(profile, { recursive: true, force: true })
 }
