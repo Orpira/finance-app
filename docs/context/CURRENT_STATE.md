@@ -51,6 +51,7 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 - AI Long-Term Conversation Memory 11C implementado con `AIConversationMemoryPort` + `LocalConversationRepository`, carga/guardado/listado/eliminacion/limpieza de sesiones via `AIConversationApplicationService` y estados de memoria en el controller sin acceso directo de UI a Dexie.
 - AI Tool Calling Infrastructure 11D implementado como dominio provider-neutral `ai-tools` con `AIToolRegistry` + `AIToolExecutor`, catalogo cerrado de fallos, validacion fail-closed de nombre/schema/argumentos/resultado, permisos declarativos (`read-only`, `write`, `dangerous`, `future-confirmation-required`) e integracion por composicion en `AIExecutionPipeline` mediante `tool_call -> tool_result` sin acoplar herramientas al provider ni a Conversation.
 - Knowledge Retrieval Tooling 11E implementado como modulo `src/application/knowledge` con contratos readonly/JSON-safe, `LocalKnowledgeRepository` sobre Dexie (`knowledgeDocuments` + `knowledgeChunks`), indexacion configurable, ranking determinista y `KnowledgeSearchTool` registrada en `AIToolRegistry` sin acceso documental directo desde provider ni pipeline.
+- PB-IS-012A.1 Financial Tool Contracts scaffolded as a contract-only module under `src/intelligence/ai-tools/financial`, with public types for balance, transactions, budget, goals, investments and reports, without business logic, executors or pipeline integration.
 
 ## 3) Estado de calidad
 
