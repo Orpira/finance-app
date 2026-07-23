@@ -1,4 +1,5 @@
 export * from './balanceContracts'
+export * from './balanceTool'
 export * from './transactionsContracts'
 export * from './budgetContracts'
 export * from './goalsContracts'

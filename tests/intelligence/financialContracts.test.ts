@@ -423,6 +423,7 @@ describe('financial tool contracts', () => {
     const barrelSource = readFinancialSource('index.ts')
     const expectedExports = [
       "export * from './balanceContracts'",
+      "export * from './balanceTool'",
       "export * from './transactionsContracts'",
       "export * from './budgetContracts'",
       "export * from './goalsContracts'",
