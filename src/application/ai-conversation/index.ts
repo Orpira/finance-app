@@ -1,4 +1,5 @@
 export * from './aiConversationApplicationContracts'
+export * from './aiConversationMemoryContracts'
 export * from './aiConversationApplicationValidator'
 export * from './aiConversationApplicationService'
 export * from './aiConversationApplicationComposition'

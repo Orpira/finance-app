@@ -29,6 +29,9 @@ Entregables:
 - nuevos consumidores de read models bajo flags controlados;
 - validación de paridad ampliada;
 - reportes de salud técnica por módulo.
+- consolidacion de memoria conversacional local y politicas de retencion fail-closed.
+- consolidacion de infraestructura de tool calling provider-neutral con registro dinamico y permisos declarativos.
+- consolidacion de retrieval documental local-first via `KnowledgeSearchTool` con ranking determinista y chunks autorizados.
 
 ## Fase R4 - Decisiones estructurales mayores
 

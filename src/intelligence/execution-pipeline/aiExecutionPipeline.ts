@@ -2,6 +2,10 @@ import type {
   AIConversationMessage,
   AIConversationSessionSnapshot,
 } from '../ai-conversation'
+import {
+  createPrompt,
+  type AIPrompt,
+} from '../prompt-builder'
 import { createProviderRequest } from '../provider'
 import type {
   AIExecutionFailure,
@@ -102,6 +106,84 @@ function providerRequestIdFromExecution(request: AIExecutionRequest): string {
 
 function assistantMessageIdFromExecution(request: AIExecutionRequest): string {
   return `message:execution:${normalizeIdentifierFragment(request.id)}:assistant`
+}
+
+function toolResultPromptSegmentId(request: AIExecutionRequest): string {
+  return `prompt-segment:tool-result:${normalizeIdentifierFragment(request.id)}`
+}
+
+function providerToolRequestIdFromExecution(request: AIExecutionRequest): string {
+  return `provider-request:execution:${normalizeIdentifierFragment(request.id)}:tool-result`
+}
+
+function createToolResultPrompt(
+  prompt: AIPrompt,
+  request: AIExecutionRequest,
+  output: {
+    readonly toolName: string
+    readonly output: unknown
+    readonly durationMs: number
+    readonly permission: string
+  },
+): { kind: 'success'; prompt: AIPrompt } | AIExecutionFailure {
+  const enriched = createPrompt({
+    promptId: prompt.promptId,
+    segments: [
+      ...prompt.segments,
+      {
+        id: toolResultPromptSegmentId(request) as AIPrompt['segments'][number]['id'],
+        role: 'CONTEXT',
+        content: JSON.stringify({
+          type: 'tool_result',
+          toolName: output.toolName,
+          output: output.output,
+          durationMs: output.durationMs,
+          permission: output.permission,
+        }),
+        priority: 'HIGH',
+        metadata: {
+          protocolVersion: prompt.metadata.protocolVersion,
+          createdAt: request.metadata.createdAt,
+          source: 'APPLICATION',
+          deterministic: true,
+          failClosed: true,
+          tags: [
+            'tool-calling',
+            `tool:${output.toolName}`,
+          ],
+          attributes: {
+            executionId: request.id,
+            toolName: output.toolName,
+          },
+        },
+      },
+    ],
+    metadata: {
+      protocolVersion: prompt.metadata.protocolVersion,
+      createdAt: prompt.metadata.createdAt,
+      source: prompt.metadata.source,
+      deterministic: true,
+      failClosed: true,
+      ...(prompt.metadata.tags === undefined ? {} : { tags: [...prompt.metadata.tags] }),
+      ...(prompt.metadata.attributes === undefined
+        ? {}
+        : { attributes: structuredClone(prompt.metadata.attributes) }),
+    },
+  })
+
+  if (enriched.kind === 'failure') {
+    return createFailure(
+      'TOOL_EXECUTION_FAILED',
+      'The tool result could not be transformed into a valid follow-up prompt.',
+      false,
+      { promptErrorCode: enriched.code },
+    )
+  }
+
+  return {
+    kind: 'success',
+    prompt: enriched.prompt,
+  }
 }
 
 function mapConversationFailure(
@@ -411,13 +493,121 @@ export function createAIExecutionPipeline(
         responseContentLength: providerResult.response.content.length,
       })
 
+      let effectiveProviderResponse = providerResult.response
+
+      if (dependencies.toolExecutor !== undefined) {
+        const toolRequest = dependencies.toolExecutor.resolveRequestFromProviderResponse({
+          content: providerResult.response.content,
+          context: {
+            executionId: request.id,
+            conversationId: request.conversation.conversationId,
+            sessionId: request.session.sessionId,
+            providerId: request.metadata.providerId,
+            model: request.metadata.model,
+            requestedAt: request.metadata.createdAt,
+            caller: 'PIPELINE',
+            allowedPermissions: [
+              'read-only',
+              'write',
+              'dangerous',
+              'future-confirmation-required',
+            ],
+          },
+          ...(request.metadata.timeoutMs === undefined ? {} : { timeoutMs: request.metadata.timeoutMs }),
+        })
+
+        if (toolRequest.kind === 'failure') {
+          safeFinishTrace(dependencies, 'FAILED')
+          return createFailure(
+            'TOOL_EXECUTION_FAILED',
+            toolRequest.safeMessage,
+            toolRequest.retryable,
+            { toolErrorCode: toolRequest.code },
+          )
+        }
+
+        if (toolRequest.request !== null) {
+          const toolExecution = await dependencies.toolExecutor.execute(toolRequest.request)
+          if (toolExecution.kind === 'failure') {
+            safeFinishTrace(dependencies, 'FAILED')
+            return createFailure(
+              'TOOL_EXECUTION_FAILED',
+              toolExecution.safeMessage,
+              toolExecution.retryable,
+              { toolErrorCode: toolExecution.code },
+            )
+          }
+
+          const toolPrompt = createToolResultPrompt(prompt.prompt, request, toolExecution.value)
+          if (toolPrompt.kind === 'failure') {
+            safeFinishTrace(dependencies, 'FAILED')
+            return toolPrompt
+          }
+
+          const providerToolRequest = createProviderRequest({
+            id: providerToolRequestIdFromExecution(request),
+            prompt: toolPrompt.prompt,
+            metadata: {
+              createdAt: request.metadata.createdAt,
+              source: request.metadata.source,
+              providerId: request.metadata.providerId,
+              model: request.metadata.model,
+              ...(request.metadata.temperature === undefined
+                ? {}
+                : { temperature: request.metadata.temperature }),
+              ...(request.metadata.maxOutputTokens === undefined
+                ? {}
+                : { maxOutputTokens: request.metadata.maxOutputTokens }),
+              ...(request.metadata.timeoutMs === undefined
+                ? {}
+                : { timeoutMs: request.metadata.timeoutMs }),
+              ...(request.metadata.responseFormat === undefined
+                ? {}
+                : { responseFormat: request.metadata.responseFormat }),
+              tags: [
+                'execution-pipeline',
+                `execution:${request.id}`,
+                'tool-calling-follow-up',
+              ],
+              attributes: {
+                executionId: request.id,
+                toolName: toolExecution.value.toolName,
+              },
+            },
+          })
+
+          if (providerToolRequest.kind === 'failure') {
+            safeFinishTrace(dependencies, 'FAILED')
+            return createFailure(
+              'PROVIDER_EXECUTION_FAILED',
+              providerToolRequest.safeMessage,
+              providerToolRequest.retryable,
+              { providerRequestErrorCode: providerToolRequest.code },
+            )
+          }
+
+          const providerToolResponse = await dependencies.provider.executePrompt(providerToolRequest.request)
+          if (providerToolResponse.kind === 'failure') {
+            safeFinishTrace(dependencies, 'FAILED')
+            return createFailure(
+              'PROVIDER_EXECUTION_FAILED',
+              providerToolResponse.safeMessage,
+              providerToolResponse.retryable,
+              { providerErrorCode: providerToolResponse.code },
+            )
+          }
+
+          effectiveProviderResponse = providerToolResponse.response
+        }
+      }
+
       const assistantMessageStartedAt = nowIso()
       const assistantMessageStartedMs = nowMs()
       const assistantMessage = createAssistantMessage(
         dependencies,
         request,
         request.session,
-        providerResult.response.content,
+        effectiveProviderResponse.content,
       )
       if (assistantMessage.kind === 'failure') {
         safeCaptureStage(dependencies, {
@@ -428,7 +618,7 @@ export function createAIExecutionPipeline(
           duration: Math.max(0, nowMs() - assistantMessageStartedMs),
           snapshot: {
             createdAt: nowIso(),
-            providerResponse: providerResult.response,
+            providerResponse: effectiveProviderResponse,
             failure: {
               code: assistantMessage.code,
               safeMessage: assistantMessage.safeMessage,
@@ -447,7 +637,7 @@ export function createAIExecutionPipeline(
         duration: Math.max(0, nowMs() - assistantMessageStartedMs),
         snapshot: {
           createdAt: nowIso(),
-          providerResponse: providerResult.response,
+            providerResponse: effectiveProviderResponse,
           assistantMessage: assistantMessage.message,
         },
       })
@@ -502,7 +692,7 @@ export function createAIExecutionPipeline(
         id: request.id,
         session: appendedSession.value,
         assistantMessage: assistantMessage.message,
-        providerResponse: providerResult.response,
+        providerResponse: effectiveProviderResponse,
         metadata: {
           createdAt: request.metadata.createdAt,
           source: request.metadata.source,
