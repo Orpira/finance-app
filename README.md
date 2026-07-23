@@ -76,13 +76,13 @@ resources/icon.png
 Para cambiar el icono:
 
 1. Reemplaza `resources/icon.png` por un PNG de `1024x1024 px`, sin texto y con el diseño centrado.
-2. Genera los assets de Capacitor:
+1. Genera los assets de Capacitor:
 
 ```bash
 npm run generate:assets
 ```
 
-3. Sincroniza Android:
+1. Sincroniza Android:
 
 ```bash
 npx cap sync android
@@ -107,6 +107,9 @@ Los iconos Android se generan en `android/app/src/main/res/`.
 - `AI Execution Inspector`: capa de observabilidad pasiva con trazas exportables, snapshots de dominio y pantalla Debug de solo lectura para inspeccionar cada etapa del pipeline.
 - `AI Conversation Integration`: capa de aplicación que conecta `ConversationPage` con el motor de IA usando exclusivamente `AIConversationApplicationService` y manteniendo Conversation como fuente de verdad.
 - `AI Provider Production Activation`: composición segura del provider remoto real reutilizando `OpenAIProviderAdapter` mediante un proxy serverless autorizado sin exponer la API key al frontend.
+- `AI Long-Term Conversation Memory`: memoria conversacional local persistente con recuperación tras reinicio, implementada vía `AIConversationMemoryPort` y `LocalConversationRepository` sobre Dexie, sin acoplar la UI a IndexedDB.
+- `AI Tool Calling Infrastructure`: infraestructura provider-neutral para registrar, resolver y ejecutar herramientas con permisos, validación fail-closed y composición en `AIExecutionPipeline` vía `AIToolExecutor`, incluyendo `PingTool` demo (`{}` -> `"PONG"`).
+- `Knowledge Retrieval Tool (RAG Infrastructure)`: herramienta `knowledge_search` registrada sobre Tool Calling con repositorio documental local, indexador configurable, ranking determinista y entrega de fragmentos relevantes sin exponer documentos completos al provider.
 
 ## Configuración del provider remoto real
 
@@ -134,6 +137,7 @@ Nunca se debe exponer `OPENAI_API_KEY` en variables `VITE_`, en el bundle ni en 
 4. Abre `/conversation`, envía un mensaje y verifica que se renderice la respuesta del asistente.
 5. Abre `/debug/ai-execution-inspector` y actualiza la traza para confirmar `PROVIDER_REQUEST` y `PROVIDER_RESPONSE` de la ejecución real.
 6. Desconfigura cualquiera de `VITE_AI_PROVIDER`, `VITE_AI_OPENAI_MODEL` u `OPENAI_API_KEY` y verifica que el flujo falle en cerrado sin volver al preview.
+
 - `Settings`: configuración del negocio, moneda, tema y PIN.
 - `Debug`: herramientas internas para migraciones y mantenimiento.
 
