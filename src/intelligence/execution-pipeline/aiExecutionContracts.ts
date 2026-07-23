@@ -24,6 +24,9 @@ import type {
   AIProviderResponseFormat,
 } from '../provider'
 import type {
+  AIToolExecutor,
+} from '../ai-tools'
+import type {
   AIExecutionInspector,
 } from '../execution-inspector'
 
@@ -98,6 +101,7 @@ export const AI_EXECUTION_ERROR_CODES = [
   'CONTEXT_RESOLUTION_FAILED',
   'PROMPT_BUILD_FAILED',
   'PROVIDER_EXECUTION_FAILED',
+  'TOOL_EXECUTION_FAILED',
   'CONVERSATION_UPDATE_FAILED',
   'PIPELINE_EXECUTION_FAILED',
 ] as const
@@ -163,6 +167,7 @@ export interface AIExecutionPipelineDependencies {
   readonly contextResolver: AIExecutionContextResolverPort
   readonly promptBuilder: AIExecutionPromptBuilderPort
   readonly provider: AIProvider
+  readonly toolExecutor?: AIToolExecutor
   readonly inspector?: AIExecutionInspector
 }
 

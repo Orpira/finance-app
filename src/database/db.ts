@@ -11,6 +11,9 @@ import type { AppSettings } from '../types/settings'
 import type { AutomationOutboxRecord } from '../types/automation'
 import type { CommunicationChannel } from '../types/communicationChannel'
 import type { DeviceIdentity } from '../types/deviceIdentity'
+import type { PersistedConversationMemory } from '../types/persistedConversationMemory'
+import type { PersistedKnowledgeChunk } from '../types/persistedKnowledgeChunk'
+import type { PersistedKnowledgeDocument } from '../types/persistedKnowledgeDocument'
 import type { PersistedFinancialSnapshot } from '../types/persistedFinancialSnapshot'
 import type { PersistedKnowledgeSnapshot } from '../types/persistedKnowledgeSnapshot'
 import {
@@ -70,6 +73,18 @@ export class FinanceDB extends Dexie {
   automationOutbox!: Table<AutomationOutboxRecord, string>
   communicationChannels!: Table<CommunicationChannel, CommunicationChannel['id']>
   deviceIdentity!: Table<DeviceIdentity, DeviceIdentity['id']>
+  conversationMemories!: Table<
+    PersistedConversationMemory,
+    PersistedConversationMemory['sessionId']
+  >
+  knowledgeDocuments!: Table<
+    PersistedKnowledgeDocument,
+    PersistedKnowledgeDocument['documentId']
+  >
+  knowledgeChunks!: Table<
+    PersistedKnowledgeChunk,
+    PersistedKnowledgeChunk['chunkId']
+  >
   financialSnapshots!: Table<PersistedFinancialSnapshot, PersistedFinancialSnapshot['snapshotId']>
   knowledgeSnapshots!: Table<
     PersistedKnowledgeSnapshot,
@@ -604,6 +619,54 @@ export class FinanceDB extends Dexie {
       automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
       communicationChannels: 'id,type,provider,status,updatedAt',
       deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+      financialSnapshots:
+        'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+      knowledgeSnapshots:
+        'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+    })
+
+    this.version(25).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt',
+      expenses:
+        '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+      communicationChannels: 'id,type,provider,status,updatedAt',
+      deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+      conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+      financialSnapshots:
+        'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+      knowledgeSnapshots:
+        'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+    })
+
+    this.version(26).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt',
+      expenses:
+        '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+      communicationChannels: 'id,type,provider,status,updatedAt',
+      deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+      conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+      knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+      knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
       financialSnapshots:
         'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
       knowledgeSnapshots:

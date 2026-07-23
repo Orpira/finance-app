@@ -15,6 +15,7 @@ import {
 } from '../src/intelligence/ai-conversation'
 import {
   __resetDefaultAIConversationApplicationServiceForTests,
+  type AIConversationMemoryPort,
   createAIConversationApplicationService,
   createDefaultAIConversationApplicationService,
   getRegisteredAIConversationExecutionTrace,
@@ -148,6 +149,104 @@ function createPipelineSuccess(): AIExecutionPipeline {
   }
 }
 
+function createMemoryPortFixture(): AIConversationMemoryPort {
+  const records = new Map<string, ReturnType<typeof createStartedSession>['session']>()
+
+  return {
+    async saveSession(input) {
+      records.set(input.session.sessionId, structuredClone(input.session))
+
+      return {
+        kind: 'success',
+        value: {
+          record: {
+            metadata: {
+              sessionId: input.session.sessionId,
+              createdAt: input.session.metadata.createdAt,
+              updatedAt: input.session.metadata.updatedAt ?? input.session.metadata.createdAt,
+              lastMessageAt: input.session.messages.at(-1)?.createdAt ?? null,
+              messageCount: input.session.messages.length,
+              status: input.session.status,
+              source: input.session.metadata.source,
+              tags: [...(input.session.metadata.tags ?? [])],
+            },
+            session: structuredClone(input.session),
+          },
+          retention: {
+            evictionStrategy: input.retentionPolicy.evictionStrategy,
+            maxSessions: input.retentionPolicy.maxSessions,
+            maxMessagesPerSession: input.retentionPolicy.maxMessagesPerSession,
+            evictedSessionIds: [],
+            evictedCount: 0,
+            messagesTruncated: false,
+          },
+        },
+      } as const
+    },
+    async loadSession(input) {
+      const loaded = input?.sessionId === undefined
+        ? [...records.values()].at(-1)
+        : records.get(input.sessionId)
+
+      if (loaded === undefined) {
+        return {
+          kind: 'failure',
+          code: 'SESSION_NOT_FOUND',
+          retryable: false,
+          safeMessage: 'No se encontro una sesion conversacional en memoria local.',
+        } as const
+      }
+
+      return {
+        kind: 'success',
+        value: {
+          metadata: {
+            sessionId: loaded.sessionId,
+            createdAt: loaded.metadata.createdAt,
+            updatedAt: loaded.metadata.updatedAt ?? loaded.metadata.createdAt,
+            lastMessageAt: loaded.messages.at(-1)?.createdAt ?? null,
+            messageCount: loaded.messages.length,
+            status: loaded.status,
+            source: loaded.metadata.source,
+            tags: [...(loaded.metadata.tags ?? [])],
+          },
+          session: structuredClone(loaded),
+        },
+      } as const
+    },
+    async listSessions() {
+      return {
+        kind: 'success',
+        value: [...records.values()].map((session) => ({
+          sessionId: session.sessionId,
+          createdAt: session.metadata.createdAt,
+          updatedAt: session.metadata.updatedAt ?? session.metadata.createdAt,
+          lastMessageAt: session.messages.at(-1)?.createdAt ?? null,
+          messageCount: session.messages.length,
+          status: session.status,
+          source: session.metadata.source,
+          tags: [...(session.metadata.tags ?? [])],
+        })),
+      } as const
+    },
+    async deleteSession(input) {
+      const deleted = records.delete(input.sessionId)
+      return {
+        kind: 'success',
+        value: { deleted },
+      } as const
+    },
+    async clearMemory() {
+      const deletedCount = records.size
+      records.clear()
+      return {
+        kind: 'success',
+        value: { deletedCount },
+      } as const
+    },
+  }
+}
+
 describe('AIConversationApplicationService (Milestone 11A)', () => {
   beforeEach(() => {
     __resetDefaultAIConversationApplicationServiceForTests()
@@ -238,6 +337,114 @@ describe('AIConversationApplicationService (Milestone 11A)', () => {
     expect(result.kind).toBe('failure')
     if (result.kind === 'failure') {
       expect(result.code).toBe('CONVERSATION_NOT_FOUND')
+    }
+  })
+
+  it('persists, loads, lists, deletes and clears sessions through memory port', async () => {
+    const { service, session } = createStartedSession()
+    const memoryPort = createMemoryPortFixture()
+    const applicationService = createAIConversationApplicationService({
+      conversationService: service,
+      executionPipeline: createPipelineSuccess(),
+      memoryPort,
+      config: {
+        providerId: 'OPENAI',
+        model: 'gpt-4.1-mini',
+      },
+    })
+
+    const saved = await applicationService.saveSession({ session })
+    expect(saved.kind).toBe('success')
+    if (saved.kind === 'success') {
+      expect(saved.value.retention.evictedCount).toBe(0)
+      expect(saved.value.session.sessionId).toBe(session.sessionId)
+    }
+
+    const loaded = await applicationService.loadSession({ sessionId: session.sessionId })
+    expect(loaded.kind).toBe('success')
+    if (loaded.kind === 'success') {
+      expect(loaded.value.sessionId).toBe(session.sessionId)
+      expect(loaded.value.messages).toEqual(session.messages)
+    }
+
+    const listed = await applicationService.listSessions()
+    expect(listed.kind).toBe('success')
+    if (listed.kind === 'success') {
+      expect(listed.value).toHaveLength(1)
+      expect(listed.value[0]?.sessionId).toBe(session.sessionId)
+    }
+
+    const deleted = await applicationService.deleteSession({ sessionId: session.sessionId })
+    expect(deleted).toEqual({ kind: 'success', value: { deleted: true } })
+
+    const cleared = await applicationService.clearMemory()
+    expect(cleared).toEqual({ kind: 'success', value: { deletedCount: 0 } })
+  })
+
+  it('maps memory persistence failures to MEMORY_WRITE_FAILED', async () => {
+    const { service, session } = createStartedSession()
+    const applicationService = createAIConversationApplicationService({
+      conversationService: service,
+      executionPipeline: createPipelineSuccess(),
+      memoryPort: {
+        async saveSession() {
+          return {
+            kind: 'failure',
+            code: 'MEMORY_WRITE_FAILED',
+            retryable: true,
+            safeMessage: 'Disk write failed',
+          }
+        },
+        async loadSession() {
+          return {
+            kind: 'failure',
+            code: 'SESSION_NOT_FOUND',
+            retryable: false,
+            safeMessage: 'No se encontro una sesion conversacional en memoria local.',
+          }
+        },
+        async listSessions() {
+          return { kind: 'success', value: [] }
+        },
+        async deleteSession() {
+          return { kind: 'success', value: { deleted: false } }
+        },
+        async clearMemory() {
+          return { kind: 'success', value: { deletedCount: 0 } }
+        },
+      },
+      config: {
+        providerId: 'OPENAI',
+        model: 'gpt-4.1-mini',
+      },
+    })
+
+    const saved = await applicationService.saveSession({ session })
+    expect(saved.kind).toBe('failure')
+    if (saved.kind === 'failure') {
+      expect(saved.code).toBe('MEMORY_WRITE_FAILED')
+      expect(saved.retryable).toBe(true)
+    }
+  })
+
+  it('returns SESSION_NOT_FOUND explicitly when no memory session exists', async () => {
+    const { service } = createStartedSession()
+    const applicationService = createAIConversationApplicationService({
+      conversationService: service,
+      executionPipeline: createPipelineSuccess(),
+      memoryPort: createMemoryPortFixture(),
+      config: {
+        providerId: 'OPENAI',
+        model: 'gpt-4.1-mini',
+      },
+    })
+
+    const loaded = await applicationService.loadSession({
+      sessionId: 'session:application:missing',
+    })
+    expect(loaded.kind).toBe('failure')
+    if (loaded.kind === 'failure') {
+      expect(loaded.code).toBe('SESSION_NOT_FOUND')
     }
   })
 
