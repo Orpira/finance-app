@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
 
 import { FinanceDB } from '../../src/database/db'
+import { createAIConversationService } from '../../src/intelligence/ai-conversation/service'
 import { FinancialSnapshotRepository } from '../../src/intelligence/financial-snapshot/financialSnapshotRepository'
 import { canonicalizeValidatedSnapshotCandidate } from '../../src/intelligence/financial-snapshot/snapshotCanonicalizer'
 import { fingerprintCanonicalSnapshotDocument } from '../../src/intelligence/financial-snapshot/snapshotFingerprint'
@@ -210,6 +211,123 @@ async function sealedKnowledge(
 async function run() {
   await Dexie.delete(databaseName)
 
+  const legacyV25 = new Dexie(databaseName)
+  legacyV25.version(25).stores({
+    services:
+      '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt',
+    settings: 'id',
+    conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+    financialSnapshots:
+      'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+    knowledgeSnapshots:
+      'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+  })
+  await legacyV25.open()
+  const v25Service = {
+    id: 25,
+    date: '2026-01-25',
+    amount: 250,
+    status: 'PENDIENTE',
+  }
+  const v25Settings = {
+    id: 'app',
+    businessName: 'v25 to v26 migration sentinel',
+  }
+  const v25ConversationMemory = {
+    sessionId: 'session:v25:migration:001',
+    session: {
+      sessionId: 'session:v25:migration:001',
+      conversation: {
+        conversationId: 'conversation:v25:migration:001',
+      },
+      messages: [],
+      status: 'OPEN',
+      metadata: {
+        createdAt: at,
+        updatedAt: at,
+        source: 'APPLICATION',
+      },
+    },
+    createdAt: at,
+    updatedAt: at,
+    lastMessageAt: null,
+    messageCount: 0,
+    status: 'OPEN',
+    source: 'APPLICATION',
+    tags: [],
+    localSchemaVersion: 1,
+  }
+  await legacyV25.table('services').add(v25Service)
+  await legacyV25.table('settings').add(v25Settings)
+  await legacyV25.table('conversationMemories').add(v25ConversationMemory)
+  legacyV25.close()
+
+  let database = new FinanceDB()
+  await database.open()
+  assert(database.verno === 26, 'physical migration upgrades from v25 to v26')
+  assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v26 migration preserves v25 conversationMemories table')
+  assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v26 migration creates knowledgeDocuments from v25 base')
+  assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v26 migration creates knowledgeChunks from v25 base')
+  deepEqual(await database.services.get(25), v25Service, 'v25 migration preserves existing service data')
+  deepEqual(await database.settings.get('app'), v25Settings, 'v25 migration preserves existing settings data')
+  deepEqual(
+    await database.conversationMemories.get(v25ConversationMemory.sessionId),
+    v25ConversationMemory,
+    'v25 migration preserves existing conversation memory data',
+  )
+  database.close()
+
+  await Dexie.delete(databaseName)
+
+  const legacyV24 = new Dexie(databaseName)
+  legacyV24.version(24).stores({
+    services:
+      '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt',
+    expenses:
+      '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+    appointments:
+      '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+    settings: 'id',
+    exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+    cutoffReports:
+      '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+    earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+    licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+    automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+    communicationChannels: 'id,type,provider,status,updatedAt',
+    deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+    financialSnapshots:
+      'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+    knowledgeSnapshots:
+      'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+  })
+  await legacyV24.open()
+  const v24Service = {
+    id: 24,
+    date: '2026-01-20',
+    amount: 240,
+    status: 'PENDIENTE',
+  }
+  const v24Settings = {
+    id: 'app',
+    businessName: 'Immediate previous migration sentinel',
+  }
+  await legacyV24.table('services').add(v24Service)
+  await legacyV24.table('settings').add(v24Settings)
+  legacyV24.close()
+
+  database = new FinanceDB()
+  await database.open()
+  assert(database.verno === 26, 'physical migration upgrades from v24 to v26')
+  assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v26 migration keeps conversationMemories from v24 base')
+  assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v26 migration creates knowledgeDocuments from v24 base')
+  assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v26 migration creates knowledgeChunks from v24 base')
+  deepEqual(await database.services.get(24), v24Service, 'v24 migration preserves existing service data')
+  deepEqual(await database.settings.get('app'), v24Settings, 'v24 migration preserves existing settings data')
+  database.close()
+
+  await Dexie.delete(databaseName)
+
   const legacy = new Dexie(databaseName)
   legacy.version(22).stores({
     services: '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt',
@@ -222,13 +340,42 @@ async function run() {
   await legacy.table('settings').add(legacySettings)
   legacy.close()
 
-  let database = new FinanceDB()
+  database = new FinanceDB()
   await database.open()
-  assert(database.verno === 24, 'physical migration opens schema v24')
+  assert(database.verno === 26, 'physical migration opens schema v26')
   assert(database.tables.some((table) => table.name === 'financialSnapshots'), 'migration creates financialSnapshots')
   assert(database.tables.some((table) => table.name === 'knowledgeSnapshots'), 'migration creates knowledgeSnapshots')
+  assert(database.tables.some((table) => table.name === 'conversationMemories'), 'migration creates conversationMemories')
+  assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'migration creates knowledgeDocuments')
+  assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'migration creates knowledgeChunks')
   deepEqual(await database.services.get(7), legacyService, 'migration preserves legacy service data')
   deepEqual(await database.settings.get('app'), legacySettings, 'migration preserves legacy settings data')
+
+  const conversationService = createAIConversationService()
+  const startedConversation = conversationService.startConversation({
+    userDisplayName: 'Usuario',
+    assistantDisplayName: 'Private Balance AI',
+    createdAt: at,
+  })
+  if (startedConversation.kind !== 'success') {
+    throw new Error('Expected valid conversation fixture for IndexedDB memory test')
+  }
+
+  await database.conversationMemories.put({
+    sessionId: startedConversation.value.sessionId,
+    session: structuredClone(startedConversation.value),
+    createdAt: startedConversation.value.metadata.createdAt,
+    updatedAt: startedConversation.value.metadata.updatedAt ?? startedConversation.value.metadata.createdAt,
+    lastMessageAt: null,
+    messageCount: startedConversation.value.messages.length,
+    status: startedConversation.value.status,
+    source: startedConversation.value.metadata.source,
+    tags: [...(startedConversation.value.metadata.tags ?? [])],
+    localSchemaVersion: 1,
+  })
+
+  const persistedConversationMemory = await database.conversationMemories.get(startedConversation.value.sessionId)
+  assert(persistedConversationMemory !== undefined, 'conversation memory persists in Dexie table')
 
   let repository = new FinancialSnapshotRepository(database)
   const source = await sealed(10)
@@ -239,6 +386,11 @@ async function run() {
   await database.open()
   repository = new FinancialSnapshotRepository(database)
   deepEqual(await repository.getBySnapshotId(source.identity.snapshotId), persisted, 'snapshot survives full close and reopen')
+  deepEqual(
+    await database.conversationMemories.get(startedConversation.value.sessionId),
+    persistedConversationMemory,
+    'conversation memory survives full close and reopen',
+  )
 
   const table = database.financialSnapshots
   deepEqual(await table.where('snapshotKey').equals(persisted.snapshotKey).toArray(), [persisted], 'snapshotKey index returns record')

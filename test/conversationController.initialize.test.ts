@@ -60,10 +60,35 @@ function createSendMessageFailureResult(): AIConversationApplicationResult<AICon
 
 function createApplicationServiceMock(input: {
   readonly startConversation: AIConversationApplicationService['startConversation']
+  readonly loadSession?: AIConversationApplicationService['loadSession']
+  readonly saveSession?: AIConversationApplicationService['saveSession']
 }): AIConversationApplicationService {
   return {
     startConversation: input.startConversation,
     sendMessage: vi.fn(async () => createSendMessageFailureResult()),
+    loadSession: input.loadSession ?? vi.fn(async () => ({
+      kind: 'failure',
+      code: 'SESSION_NOT_FOUND',
+      retryable: false,
+      safeMessage: 'No se encontro una sesion conversacional en memoria local.',
+    })),
+    saveSession: input.saveSession ?? vi.fn(async (request) => ({
+      kind: 'success',
+      value: {
+        session: request.session,
+        retention: {
+          evictionStrategy: 'KEEP_MOST_RECENT',
+          maxSessions: 25,
+          maxMessagesPerSession: 300,
+          evictedSessionIds: [],
+          evictedCount: 0,
+          messagesTruncated: false,
+        },
+      },
+    })),
+    listSessions: vi.fn(async () => ({ kind: 'success', value: [] })),
+    deleteSession: vi.fn(async () => ({ kind: 'success', value: { deleted: false } })),
+    clearMemory: vi.fn(async () => ({ kind: 'success', value: { deletedCount: 0 } })),
   }
 }
 
@@ -88,8 +113,10 @@ describe('ConversationController.initialize', () => {
     }))
 
     const controller = createConversationController({
-      service: createApplicationServiceMock({ startConversation }),
-      recoverSession: vi.fn(async () => existingSession),
+      service: createApplicationServiceMock({
+        startConversation,
+        loadSession: vi.fn(async () => ({ kind: 'success', value: existingSession })),
+      }),
     })
 
     await controller.initialize()
@@ -101,7 +128,7 @@ describe('ConversationController.initialize', () => {
     expect(startConversation).not.toHaveBeenCalled()
   })
 
-  it('crea una sesion nueva cuando no hay sesion previa', async () => {
+  it('crea una sesion nueva solo cuando loadSession retorna SESSION_NOT_FOUND', async () => {
     const createdSession = createSessionFixture()
     const startConversation = vi.fn(() => ({
       kind: 'success' as const,
@@ -109,8 +136,15 @@ describe('ConversationController.initialize', () => {
     }))
 
     const controller = createConversationController({
-      service: createApplicationServiceMock({ startConversation }),
-      recoverSession: vi.fn(async () => null),
+      service: createApplicationServiceMock({
+        startConversation,
+        loadSession: vi.fn(async () => ({
+          kind: 'failure',
+          code: 'SESSION_NOT_FOUND',
+          retryable: false,
+          safeMessage: 'No se encontro una sesion conversacional en memoria local.',
+        })),
+      }),
     })
 
     await controller.initialize()
@@ -122,7 +156,7 @@ describe('ConversationController.initialize', () => {
     expect(startConversation).toHaveBeenCalledTimes(1)
   })
 
-  it('si falla la recuperacion, crea una sesion nueva como fallback', async () => {
+  it('si loadSession falla con MEMORY_READ_FAILED, publica memory-error y no crea sesion nueva', async () => {
     const createdSession = createSessionFixture()
     const startConversation = vi.fn(() => ({
       kind: 'success' as const,
@@ -130,40 +164,105 @@ describe('ConversationController.initialize', () => {
     }))
 
     const controller = createConversationController({
-      service: createApplicationServiceMock({ startConversation }),
-      recoverSession: vi.fn(async () => {
-        throw new Error('storage unavailable')
+      service: createApplicationServiceMock({
+        startConversation,
+        loadSession: vi.fn(async () => ({
+          kind: 'failure',
+          code: 'MEMORY_READ_FAILED',
+          retryable: true,
+          safeMessage: 'Read failed',
+        })),
       }),
     })
 
     await controller.initialize()
 
     const state = controller.getState()
-    expect(state.status).toBe('ready')
-    expect(state.session?.sessionId).toBe(createdSession.sessionId)
-    expect(startConversation).toHaveBeenCalledTimes(1)
+    expect(state.status).toBe('memory-error')
+    expect(state.session).toBeNull()
+    expect(startConversation).not.toHaveBeenCalled()
   })
 
-  it('evita doble inicializacion concurrente y ejecuta una sola vez', async () => {
+  it('si loadSession falla con MEMORY_CORRUPTED, no crea sesion nueva', async () => {
     const createdSession = createSessionFixture()
-    const gate = deferred<AIConversationSessionSnapshot | null>()
-    const recoverSession = vi.fn(async () => gate.promise)
     const startConversation = vi.fn(() => ({
       kind: 'success' as const,
       value: createdSession,
     }))
 
     const controller = createConversationController({
-      service: createApplicationServiceMock({ startConversation }),
-      recoverSession,
+      service: createApplicationServiceMock({
+        startConversation,
+        loadSession: vi.fn(async () => ({
+          kind: 'failure',
+          code: 'MEMORY_CORRUPTED',
+          retryable: false,
+          safeMessage: 'Corrupted session',
+        })),
+      }),
+    })
+
+    await controller.initialize()
+
+    expect(controller.getState().status).toBe('memory-error')
+    expect(startConversation).not.toHaveBeenCalled()
+  })
+
+  it('si loadSession falla con MEMORY_VERSION_UNSUPPORTED, no crea sesion nueva', async () => {
+    const createdSession = createSessionFixture()
+    const startConversation = vi.fn(() => ({
+      kind: 'success' as const,
+      value: createdSession,
+    }))
+
+    const controller = createConversationController({
+      service: createApplicationServiceMock({
+        startConversation,
+        loadSession: vi.fn(async () => ({
+          kind: 'failure',
+          code: 'MEMORY_VERSION_UNSUPPORTED',
+          retryable: false,
+          safeMessage: 'Unsupported version',
+        })),
+      }),
+    })
+
+    await controller.initialize()
+
+    expect(controller.getState().status).toBe('memory-error')
+    expect(startConversation).not.toHaveBeenCalled()
+  })
+
+  it('evita doble inicializacion concurrente y ejecuta una sola vez', async () => {
+    const createdSession = createSessionFixture()
+    const gate = deferred<void>()
+    const loadSession = vi.fn(async () => {
+      await gate.promise
+      return {
+        kind: 'failure' as const,
+        code: 'SESSION_NOT_FOUND',
+        retryable: false,
+        safeMessage: 'No se encontro una sesion conversacional en memoria local.',
+      }
+    })
+    const startConversation = vi.fn(() => ({
+      kind: 'success' as const,
+      value: createdSession,
+    }))
+
+    const controller = createConversationController({
+      service: createApplicationServiceMock({
+        startConversation,
+        loadSession,
+      }),
     })
 
     const initA = controller.initialize()
     const initB = controller.initialize()
 
-    expect(recoverSession).toHaveBeenCalledTimes(1)
+    expect(loadSession).toHaveBeenCalledTimes(1)
 
-    gate.resolve(null)
+    gate.resolve()
     await Promise.all([initA, initB])
 
     expect(startConversation).toHaveBeenCalledTimes(1)
@@ -177,9 +276,6 @@ describe('ConversationController.initialize', () => {
 
     const controller = createConversationController({
       service: createApplicationServiceMock({ startConversation }),
-      recoverSession: vi.fn(async () => {
-        throw new Error('recover failure')
-      }),
     })
 
     const unhandled: unknown[] = []
@@ -211,8 +307,15 @@ describe('ConversationController.initialize', () => {
     }))
 
     const controller = createConversationController({
-      service: createApplicationServiceMock({ startConversation }),
-      recoverSession: vi.fn(async () => null),
+      service: createApplicationServiceMock({
+        startConversation,
+        loadSession: vi.fn(async () => ({
+          kind: 'failure',
+          code: 'SESSION_NOT_FOUND',
+          retryable: false,
+          safeMessage: 'No se encontro una sesion conversacional en memoria local.',
+        })),
+      }),
     })
 
     const firstStates: string[] = []
@@ -230,7 +333,7 @@ describe('ConversationController.initialize', () => {
 
     await controller.initialize()
 
-    expect(secondStates).toContain('loading')
+    expect(secondStates).toContain('loading-memory')
     expect(secondStates).toContain('ready')
     expect(controller.getState().status).toBe('ready')
     expect(firstStates[0]).toBe('idle')

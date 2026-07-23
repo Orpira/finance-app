@@ -4,6 +4,11 @@ import type { AIConversationSessionSnapshot } from '../../intelligence/ai-conver
 export type ConversationUiStatus =
   | 'idle'
   | 'loading'
+  | 'loading-memory'
+  | 'memory-loaded'
+  | 'saving-memory'
+  | 'memory-error'
+  | 'deleting-memory'
   | 'ready'
   | 'sending'
   | 'receiving'

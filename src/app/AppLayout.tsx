@@ -11,7 +11,7 @@ import {
   Sun,
 } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert'
@@ -132,6 +132,7 @@ export function AppLayout() {
   const [usageMode, setUsageMode] = useState<UsageMode>('professional')
   const [isTogglingUsageMode, setIsTogglingUsageMode] = useState(false)
   const [isUsageModeTransitioning, setIsUsageModeTransitioning] = useState(false)
+  const usageModeTransitionTimeoutRef = useRef<number | null>(null)
   const [isDarkTheme, setIsDarkTheme] = useState(() =>
     document.documentElement.classList.contains('dark'),
   )
@@ -140,12 +141,30 @@ export function AppLayout() {
       location.pathname === path || location.pathname.startsWith(`${path}/`),
   )
 
+  function startUsageModeTransition() {
+    if (usageModeTransitionTimeoutRef.current !== null) {
+      window.clearTimeout(usageModeTransitionTimeoutRef.current)
+      usageModeTransitionTimeoutRef.current = null
+    }
+
+    setIsUsageModeTransitioning(true)
+    usageModeTransitionTimeoutRef.current = window.setTimeout(() => {
+      usageModeTransitionTimeoutRef.current = null
+      setIsUsageModeTransitioning(false)
+    }, 260)
+  }
+
   useEffect(() => {
     let startedAutomaticBackupOnThisMount = false
 
     function syncLayoutSettings(settings: { theme: ThemeMode; usageMode: UsageMode }) {
       setTheme(settings.theme)
-      setUsageMode(settings.usageMode)
+      setUsageMode((currentMode) => {
+        if (currentMode !== settings.usageMode) {
+          startUsageModeTransition()
+        }
+        return settings.usageMode
+      })
       setIsDarkTheme(document.documentElement.classList.contains('dark'))
     }
 
@@ -233,19 +252,13 @@ export function AppLayout() {
 
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
+
+      if (usageModeTransitionTimeoutRef.current !== null) {
+        window.clearTimeout(usageModeTransitionTimeoutRef.current)
+        usageModeTransitionTimeoutRef.current = null
+      }
     }
   }, [])
-
-  useEffect(() => {
-    setIsUsageModeTransitioning(true)
-    const timeoutId = window.setTimeout(() => {
-      setIsUsageModeTransitioning(false)
-    }, 260)
-
-    return () => {
-      window.clearTimeout(timeoutId)
-    }
-  }, [usageMode])
 
   async function toggleTheme() {
     const nextTheme: ThemeMode = isDarkTheme ? 'light' : 'dark'
@@ -276,12 +289,15 @@ export function AppLayout() {
     const nextUsageMode: UsageMode = usageMode === 'professional' ? 'basic' : 'professional'
 
     setIsTogglingUsageMode(true)
+    startUsageModeTransition()
     setUsageMode(nextUsageMode)
 
     try {
       const updatedSettings = await updateSettings({ usageMode: nextUsageMode })
+      startUsageModeTransition()
       setUsageMode(updatedSettings.usageMode)
     } catch (error) {
+      startUsageModeTransition()
       setUsageMode(previousUsageMode)
       console.warn('No se pudo cambiar el modo de uso.', error)
     } finally {

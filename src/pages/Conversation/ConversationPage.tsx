@@ -22,8 +22,15 @@ export function ConversationPage() {
     hasError: state.errorMessage !== null,
   })
 
-  const isLoadingConversation = state.status === 'idle' || state.status === 'loading'
-  const isSending = state.status === 'sending' || state.status === 'receiving'
+  const isLoadingConversation =
+    state.status === 'idle' ||
+    state.status === 'loading' ||
+    state.status === 'loading-memory'
+  const isSending =
+    state.status === 'sending' ||
+    state.status === 'receiving' ||
+    state.status === 'saving-memory' ||
+    state.status === 'deleting-memory'
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-4 py-2">

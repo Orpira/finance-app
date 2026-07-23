@@ -6,8 +6,10 @@ import {
 } from './conversationState'
 
 export interface ConversationControllerDependencies {
-  readonly service: AIConversationApplicationService
-  readonly recoverSession?: () => Promise<AIConversationSessionSnapshot | null>
+  readonly service: Pick<
+    AIConversationApplicationService,
+    'startConversation' | 'sendMessage'
+  > & Partial<Pick<AIConversationApplicationService, 'loadSession' | 'saveSession'>>
 }
 
 export interface ConversationController {
@@ -93,7 +95,7 @@ export function createConversationController(
       }
 
       initializationTask = (async () => {
-        if (state.status === 'loading') {
+        if (state.status === 'loading' || state.status === 'loading-memory') {
           return
         }
 
@@ -108,35 +110,71 @@ export function createConversationController(
         }
 
         emit({
-          status: 'loading',
+          status: 'loading-memory',
           session: state.session,
           messages: state.messages,
           errorMessage: null,
         })
 
-        let recoveredSession: AIConversationSessionSnapshot | null = null
-
-        if (dependencies.recoverSession !== undefined) {
-          try {
-            recoveredSession = await dependencies.recoverSession()
-          } catch {
-            /* recoveredSession = null */
+        let loadedSession: AIConversationSessionSnapshot | null
+        try {
+          const loaded = dependencies.service.loadSession === undefined
+            ? {
+              kind: 'failure' as const,
+              code: 'SESSION_NOT_FOUND',
+              retryable: false,
+              safeMessage: 'No se encontro una sesion conversacional en memoria local.',
+            }
+            : await dependencies.service.loadSession()
+          if (loaded.kind === 'failure') {
+            if (loaded.code === 'SESSION_NOT_FOUND') {
+              loadedSession = null
+            } else {
+              emit({
+                status: 'memory-error',
+                session: state.session,
+                messages: state.messages,
+                errorMessage: resolveSafeErrorMessage(
+                  'No se pudo recuperar la memoria conversacional local.',
+                  loaded.safeMessage,
+                ),
+              })
+              return
+            }
+          } else {
+            loadedSession = loaded.value
           }
 
-          if (recoveredSession !== null) {
-            debugConversationBoundary('controller.session.recovered', {
-              sessionId: recoveredSession.sessionId,
-              messageCount: recoveredSession.messages.length,
-            })
+        } catch {
+          emit({
+            status: 'memory-error',
+            session: state.session,
+            messages: state.messages,
+            errorMessage: 'No se pudo recuperar la memoria conversacional local.',
+          })
+          return
+        }
 
-            emit({
-              status: 'ready',
-              session: recoveredSession,
-              messages: recoveredSession.messages,
-              errorMessage: null,
-            })
-            return
-          }
+        if (loadedSession !== null) {
+          debugConversationBoundary('controller.session.recovered', {
+            sessionId: loadedSession.sessionId,
+            messageCount: loadedSession.messages.length,
+          })
+
+          emit({
+            status: 'memory-loaded',
+            session: loadedSession,
+            messages: loadedSession.messages,
+            errorMessage: null,
+          })
+
+          emit({
+            status: 'ready',
+            session: loadedSession,
+            messages: loadedSession.messages,
+            errorMessage: null,
+          })
+          return
         }
 
         let result: ReturnType<AIConversationApplicationService['startConversation']>
@@ -166,9 +204,47 @@ export function createConversationController(
         })
 
         emit({
-          status: 'ready',
+          status: 'saving-memory',
           session: result.value,
           messages: result.value.messages,
+          errorMessage: null,
+        })
+
+        const saved = dependencies.service.saveSession === undefined
+          ? {
+            kind: 'success' as const,
+            value: {
+              session: result.value,
+              retention: {
+                evictionStrategy: 'KEEP_MOST_RECENT' as const,
+                maxSessions: 25,
+                maxMessagesPerSession: 300,
+                evictedSessionIds: [],
+                evictedCount: 0,
+                messagesTruncated: false as const,
+              },
+            },
+          }
+          : await dependencies.service.saveSession({
+            session: result.value,
+          })
+        if (saved.kind === 'failure') {
+          emit({
+            status: 'memory-error',
+            session: result.value,
+            messages: result.value.messages,
+            errorMessage: resolveSafeErrorMessage(
+              'No se pudo guardar la memoria conversacional local.',
+              saved.safeMessage,
+            ),
+          })
+          return
+        }
+
+        emit({
+          status: 'ready',
+          session: saved.value.session,
+          messages: saved.value.session.messages,
           errorMessage: null,
         })
       })()
@@ -232,9 +308,47 @@ export function createConversationController(
       }
 
       emit({
-        status: 'ready',
+        status: 'saving-memory',
         session: result.value.session,
         messages: result.value.session.messages,
+        errorMessage: null,
+      })
+
+      const saved = dependencies.service.saveSession === undefined
+        ? {
+          kind: 'success' as const,
+          value: {
+            session: result.value.session,
+            retention: {
+              evictionStrategy: 'KEEP_MOST_RECENT' as const,
+              maxSessions: 25,
+              maxMessagesPerSession: 300,
+              evictedSessionIds: [],
+              evictedCount: 0,
+              messagesTruncated: false as const,
+            },
+          },
+        }
+        : await dependencies.service.saveSession({
+          session: result.value.session,
+        })
+      if (saved.kind === 'failure') {
+        emit({
+          status: 'memory-error',
+          session: result.value.session,
+          messages: result.value.session.messages,
+          errorMessage: resolveSafeErrorMessage(
+            'No se pudo guardar la memoria conversacional local.',
+            saved.safeMessage,
+          ),
+        })
+        return
+      }
+
+      emit({
+        status: 'ready',
+        session: saved.value.session,
+        messages: saved.value.session.messages,
         errorMessage: null,
       })
     },
