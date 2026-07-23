@@ -1,9 +1,8 @@
 # Project Status
 
-| Área | Estado |
+| Area | Status |
 | --- | --- |
-| AI Foundation 8A–8F | Complete |
-| Documentation Baseline | Complete |
+| AI Foundation 8A-8F | Complete |
 | 9A AI Interaction Domain & Contracts | Complete |
 | 9B AI Interaction Policies | Complete |
 | 9C AI Interaction Lifecycle | Complete |
@@ -11,7 +10,7 @@
 | 9E AI Conversation Session | Complete |
 | 9F AI Conversation Message | Complete |
 | 9G AI Conversation Service | Complete |
-| 9H AI Conversation Preview | Complete |
+| 9H AI Conversation Vertical Slice | Complete |
 | 10A Prompt Builder | Complete |
 | 10B Context Builder | Complete |
 | 10C Context Resolution | Complete |
@@ -23,4 +22,4 @@
 | 11C AI Long-Term Conversation Memory | Complete |
 | 11D AI Tool Calling Infrastructure | Complete |
 | 11E Knowledge Retrieval Tooling | IMPLEMENTED - PENDING CERTIFICATION |
-| Lint global | Historical debt outside scoped milestones |
+| Global lint | Historical debt outside scoped milestones |
