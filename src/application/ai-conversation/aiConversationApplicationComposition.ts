@@ -12,6 +12,19 @@ import {
   type AIExecutionTrace,
 } from '../../intelligence/execution-inspector'
 import {
+  createAIToolExecutor,
+  createAIToolRegistry,
+  createPingTool,
+  type AIToolExecutor,
+} from '../../intelligence/ai-tools'
+import {
+  createDeterministicKnowledgeSearchEngine,
+  createFixedWindowChunkingStrategy,
+  createKnowledgeIndexer,
+  createKnowledgeSearchAITool,
+  createKnowledgeSearchToolUseCase,
+} from '../knowledge'
+import {
   createOpenAIProviderAdapter,
   createProvider,
   type AIProvider,
@@ -22,6 +35,8 @@ import {
 import {
   getAutomationGatewayConfig,
 } from '../../services/automationHubService'
+import { LocalConversationRepository } from '../../database/localConversationRepository'
+import { LocalKnowledgeRepository } from '../../database/localKnowledgeRepository'
 import {
   createAIConversationApplicationService,
   createConversationExecutionPipeline,
@@ -216,6 +231,29 @@ function createProductionConversationProvider(config: ProductionConversationProv
 }
 
 const registeredInspector = createAIExecutionInspector()
+const registeredKnowledgeRepository = new LocalKnowledgeRepository({
+  indexer: createKnowledgeIndexer({
+    chunkingStrategy: createFixedWindowChunkingStrategy({
+      targetChunkTokens: 140,
+      overlapTokens: 28,
+      minChunkTokens: 10,
+    }),
+  }),
+  searchEngine: createDeterministicKnowledgeSearchEngine(),
+})
+
+const registeredKnowledgeSearchTool = createKnowledgeSearchAITool({
+  tool: createKnowledgeSearchToolUseCase({
+    repository: registeredKnowledgeRepository,
+  }),
+})
+
+const registeredToolExecutor: AIToolExecutor = createAIToolExecutor({
+  registry: createAIToolRegistry([
+    createPingTool(),
+    registeredKnowledgeSearchTool,
+  ]),
+})
 let defaultApplicationService: AIConversationApplicationService | null = null
 
 export function getRegisteredAIConversationExecutionTrace(): AIExecutionTrace | null {
@@ -231,6 +269,7 @@ export function createDefaultAIConversationExecutionPipeline() {
   return createConversationExecutionPipeline({
     conversationPort: conversationService,
     provider: createProductionConversationProvider(config),
+    toolExecutor: registeredToolExecutor,
     inspector: registeredInspector,
   })
 }
@@ -250,8 +289,10 @@ export function createDefaultAIConversationApplicationService(): AIConversationA
     executionPipeline: createConversationExecutionPipeline({
       conversationPort: conversationService,
       provider: createProductionConversationProvider(config),
+      toolExecutor: registeredToolExecutor,
       inspector: registeredInspector,
     }),
+    memoryPort: new LocalConversationRepository(),
     config: {
       providerId: config.providerId,
       model: config.model,
@@ -260,6 +301,11 @@ export function createDefaultAIConversationApplicationService(): AIConversationA
       temperature: 0.2,
       maxOutputTokens: 400,
       timeoutMs: config.timeoutMs,
+      retentionPolicy: {
+        maxSessions: 25,
+        maxMessagesPerSession: 300,
+        evictionStrategy: 'KEEP_MOST_RECENT',
+      },
     },
   })
 

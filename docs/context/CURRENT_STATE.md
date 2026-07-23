@@ -14,9 +14,10 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 
 ### Persistencia local
 
-- Dexie en versión 24.
+- Dexie en versión 26.
 - Tablas financieras operativas estables.
 - Snapshots financieros y de conocimiento append-only.
+- Memoria conversacional local persistente por sesion con restauracion en reapertura.
 
 ### Serverless/API
 
@@ -47,6 +48,9 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 - AI Execution Inspector 10F implementado como observador pasivo del pipeline con trazas, stages, snapshots inmutables, exportación read-only y pantalla Debug dedicada.
 - AI Conversation Integration 11A implementado como `AIConversationApplicationService` sobre `AIExecutionPipeline`, con `ConversationPage` desacoplada del motor y consumo real del flujo completo de IA.
 - AI Provider Production Activation 11B implementado reutilizando el `OpenAIProviderAdapter` certificado mediante una composition root dedicada y un proxy serverless autorizado que mantiene la API key solo en servidor/edge.
+- AI Long-Term Conversation Memory 11C implementado con `AIConversationMemoryPort` + `LocalConversationRepository`, carga/guardado/listado/eliminacion/limpieza de sesiones via `AIConversationApplicationService` y estados de memoria en el controller sin acceso directo de UI a Dexie.
+- AI Tool Calling Infrastructure 11D implementado como dominio provider-neutral `ai-tools` con `AIToolRegistry` + `AIToolExecutor`, catalogo cerrado de fallos, validacion fail-closed de nombre/schema/argumentos/resultado, permisos declarativos (`read-only`, `write`, `dangerous`, `future-confirmation-required`) e integracion por composicion en `AIExecutionPipeline` mediante `tool_call -> tool_result` sin acoplar herramientas al provider ni a Conversation.
+- Knowledge Retrieval Tooling 11E implementado como modulo `src/application/knowledge` con contratos readonly/JSON-safe, `LocalKnowledgeRepository` sobre Dexie (`knowledgeDocuments` + `knowledgeChunks`), indexacion configurable, ranking determinista y `KnowledgeSearchTool` registrada en `AIToolRegistry` sin acceso documental directo desde provider ni pipeline.
 
 ## 3) Estado de calidad
 
@@ -68,4 +72,4 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 
 ## 6) Veredicto de fase documental
 
-Estado de entrega documental: completo para 11B y listo para iniciar 11C sobre la integración conversacional ya certificada.
+Estado de entrega documental: completo para 11E y listo para iniciar 12A sobre infraestructura de retrieval ya integrada via tool calling.

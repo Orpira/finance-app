@@ -12,6 +12,7 @@
 | R-006 | Exposición accidental de secretos | Baja | Crítico | Controlado | Guardas de build + variables server-only |
 | R-007 | Falla de conectividad en automatización | Alta | Medio | Controlado | Outbox + reintentos + idempotencia |
 | R-008 | Deuda de lint bloqueando release integral | Media | Medio | Abierto | Plan de saneamiento por módulos |
+| R-009 | Crecimiento del indice documental local y degradacion de ranking | Media | Medio | Abierto | Limites de chunking/retencion, pruebas de ranking determinista y auditoria de relevancia |
 
 ## Riesgos sistémicos transversales
 

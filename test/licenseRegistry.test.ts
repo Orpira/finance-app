@@ -1,17 +1,32 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
+type MockRow = {
+  readonly license_status: string | null
+  readonly device_status: string | null
+  readonly device_authorization: string | null
+  readonly active_devices: number
+  readonly max_devices: number
+}
+
+type MockResponse = readonly MockRow[] | ((...args: readonly unknown[]) => unknown)
+
+type NeonSqlMock = ((...args: readonly unknown[]) => Promise<MockResponse>) & {
+  query: () => Promise<readonly unknown[]>
+  _nextResponse: MockResponse
+}
+
 // Mock @neondatabase/serverless neon function
 vi.mock('@neondatabase/serverless', () => {
   // sqlFunction will return the nextResponse when used as a template tag
-  const sqlFunction = (...args: any[]) => {
+  const sqlFunction = (...args: readonly unknown[]) => {
     // args[0] is an array of template strings when used as tag
-    const fn: any = sqlFunction
+    const fn = sqlFunction as NeonSqlMock
     const next = fn._nextResponse
     if (typeof next === 'function') return next(...args)
     return Promise.resolve(next)
   }
-  sqlFunction.query = async () => []
-  sqlFunction._nextResponse = []
+  ;(sqlFunction as NeonSqlMock).query = async () => []
+  ;(sqlFunction as NeonSqlMock)._nextResponse = []
   return { neon: () => sqlFunction }
 })
 
@@ -21,7 +36,6 @@ import {
   BACKFILL_FROM_COMMUNICATION_CHANNELS_SQL,
   BACKFILL_LICENSE_USER_CODES_FROM_DEVICES_SQL,
   authorizeLicenseDevice,
-  LicenseRegistryError,
 } from '../server/licenseDeviceRegistry'
 
 const DUMMY_DB_URL = 'postgresql://user:pass@localhost/db'
@@ -72,7 +86,7 @@ describe('License registry - authorization flow', () => {
   })
 
   it('Caso 1: Licencia multi - Primer dispositivo debe registrar', async () => {
-    const sql: any = (await import('@neondatabase/serverless')).neon()
+    const sql = (await import('@neondatabase/serverless')).neon() as NeonSqlMock
     sql._nextResponse = [
       {
         license_status: 'active',
@@ -99,7 +113,7 @@ describe('License registry - authorization flow', () => {
   })
 
   it('Caso 2/3: Segundo y tercer dispositivo deben registrar', async () => {
-    const sql: any = (await import('@neondatabase/serverless')).neon()
+    const sql = (await import('@neondatabase/serverless')).neon() as NeonSqlMock
 
     sql._nextResponse = [
       { license_status: 'active', device_status: 'active', device_authorization: 'registered', active_devices: 2, max_devices: 3 },
@@ -120,7 +134,7 @@ describe('License registry - authorization flow', () => {
   })
 
   it('Caso 4: Cuarto dispositivo debe responder "Límite de dispositivos alcanzado."', async () => {
-    const sql: any = (await import('@neondatabase/serverless')).neon()
+    const sql = (await import('@neondatabase/serverless')).neon() as NeonSqlMock
     // Simulate function returning no device_authorization (limit reached)
     sql._nextResponse = [
       { license_status: 'active', device_status: null, device_authorization: null, active_devices: 3, max_devices: 3 },
@@ -144,7 +158,7 @@ describe('License registry - authorization flow', () => {
   })
 
   it('Caso 6: Dispositivo revocado debe responder "Este dispositivo está revocado."', async () => {
-    const sql: any = (await import('@neondatabase/serverless')).neon()
+    const sql = (await import('@neondatabase/serverless')).neon() as NeonSqlMock
     sql._nextResponse = [
       { license_status: 'active', device_status: 'revoked', device_authorization: null, active_devices: 1, max_devices: 3 },
     ]
@@ -157,7 +171,7 @@ describe('License registry - authorization flow', () => {
   })
 
   it('Caso 7: Licencia revocada debe responder "La licencia está revocada."', async () => {
-    const sql: any = (await import('@neondatabase/serverless')).neon()
+    const sql = (await import('@neondatabase/serverless')).neon() as NeonSqlMock
     sql._nextResponse = [
       { license_status: 'revoked', device_status: null, device_authorization: null, active_devices: 0, max_devices: 3 },
     ]

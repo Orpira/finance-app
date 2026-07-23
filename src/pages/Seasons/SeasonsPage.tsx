@@ -44,7 +44,15 @@ export function SeasonsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void load()
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [])
 
   async function startNewSeason() {
     if (!active) {

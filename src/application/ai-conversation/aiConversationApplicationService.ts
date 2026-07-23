@@ -18,6 +18,9 @@ import {
 import {
   createAIContextResolver,
 } from '../../intelligence/context-resolution'
+import type {
+  AIToolExecutor,
+} from '../../intelligence/ai-tools'
 import {
   createPromptBuilder,
   createPromptSegmentFromConversationMessage,
@@ -27,13 +30,26 @@ import type { AIExecutionInspector } from '../../intelligence/execution-inspecto
 import type { AIProvider } from '../../intelligence/provider'
 import {
   type AIConversationApplicationFailure,
+  type AIConversationApplicationMemoryClearResponse,
+  type AIConversationApplicationMemoryDeleteRequest,
+  type AIConversationApplicationMemoryDeleteResponse,
+  type AIConversationApplicationMemoryLoadRequest,
+  type AIConversationApplicationMemorySaveRequest,
+  type AIConversationApplicationMemorySaveResponse,
   type AIConversationApplicationResult,
   type AIConversationApplicationService,
   type AIConversationApplicationServiceDependencies,
 } from './aiConversationApplicationContracts'
+import type {
+  AIConversationMemoryFailure,
+  AIConversationMemoryMetadata,
+  AIConversationMemoryPort,
+  AIConversationRetentionPolicy,
+} from './aiConversationMemoryContracts'
 import {
   validateAIConversationApplicationSendRequest,
 } from './aiConversationApplicationValidator'
+import { AIConversationSessionValidator } from '../../intelligence/ai-conversation/session'
 
 function failure(
   code: AIConversationApplicationFailure['code'],
@@ -87,6 +103,113 @@ function earliestTimestamp(values: readonly string[]): string {
 function debugConversationBoundary(event: string, payload: Record<string, unknown>): void {
   // Temporal: trazas sanitizadas para auditar consistencia entre pipeline y controller.
   console.info('[ConversationTrace]', event, payload)
+}
+
+const DEFAULT_RETENTION_POLICY: AIConversationRetentionPolicy = {
+  maxSessions: 25,
+  maxMessagesPerSession: 300,
+  evictionStrategy: 'KEEP_MOST_RECENT',
+}
+
+function resolveRetentionPolicy(
+  configured?: AIConversationRetentionPolicy,
+): AIConversationRetentionPolicy {
+  if (configured === undefined) {
+    return DEFAULT_RETENTION_POLICY
+  }
+
+  return configured
+}
+
+function validateMemorySession(
+  session: AIConversationApplicationMemorySaveRequest['session'],
+): AIConversationApplicationFailure | null {
+  const validation = new AIConversationSessionValidator().validate(session)
+  if (validation) {
+    return failure('INVALID_CONVERSATION', 'La sesion de conversacion no cumple el contrato canonico.')
+  }
+  return null
+}
+
+function mapMemoryFailureToApplicationFailure(
+  code: AIConversationMemoryFailure['code'],
+  safeMessage: string,
+  retryable: boolean,
+): AIConversationApplicationFailure {
+  if (
+    code === 'SESSION_NOT_FOUND' ||
+    code === 'MEMORY_READ_FAILED' ||
+    code === 'MEMORY_WRITE_FAILED' ||
+    code === 'MEMORY_CORRUPTED' ||
+    code === 'MEMORY_VERSION_UNSUPPORTED' ||
+    code === 'MEMORY_MAX_MESSAGES_EXCEEDED' ||
+    code === 'MEMORY_UNAVAILABLE'
+  ) {
+    return failure(code, safeMessage, retryable)
+  }
+
+  return failure('MEMORY_ERROR', safeMessage, retryable)
+}
+
+function createNoopMemoryPort(): AIConversationMemoryPort {
+  return {
+    async saveSession(input) {
+      const updatedAt = input.session.metadata.updatedAt ?? input.session.metadata.createdAt
+      const metadata: AIConversationMemoryMetadata = {
+        sessionId: input.session.sessionId,
+        createdAt: input.session.metadata.createdAt,
+        updatedAt,
+        lastMessageAt: input.session.messages.at(-1)?.createdAt ?? null,
+        messageCount: input.session.messages.length,
+        status: input.session.status,
+        source: input.session.metadata.source,
+        tags: [...(input.session.metadata.tags ?? [])],
+      }
+      return {
+        kind: 'success',
+        value: {
+          record: {
+            metadata,
+            session: structuredClone(input.session),
+          },
+          retention: {
+            evictionStrategy: input.retentionPolicy.evictionStrategy,
+            maxSessions: input.retentionPolicy.maxSessions,
+            maxMessagesPerSession: input.retentionPolicy.maxMessagesPerSession,
+            evictedSessionIds: [],
+            evictedCount: 0,
+            messagesTruncated: false,
+          },
+        },
+      }
+    },
+    async loadSession() {
+      return {
+        kind: 'failure',
+        code: 'SESSION_NOT_FOUND',
+        retryable: false,
+        safeMessage: 'No se encontro una sesion conversacional en memoria local.',
+      }
+    },
+    async listSessions() {
+      return {
+        kind: 'success',
+        value: [],
+      }
+    },
+    async deleteSession() {
+      return {
+        kind: 'success',
+        value: { deleted: false },
+      }
+    },
+    async clearMemory() {
+      return {
+        kind: 'success',
+        value: { deletedCount: 0 },
+      }
+    },
+  }
 }
 
 export function createExecutionIdFactory() {
@@ -209,7 +332,13 @@ export function createConversationExecutionPromptBuilder(): AIExecutionPromptBui
       builder.addSegment({
         id: `prompt-segment:system:${normalizeIdentifierFragment(input.request.id)}`,
         role: 'SYSTEM',
-        content: 'Eres Private Balance AI. Responde en español, de forma clara, breve y basada solo en el contexto disponible.',
+        content: [
+          'Eres Private Balance AI.',
+          'Responde en espanol de forma clara, breve y basada solo en el contexto disponible.',
+          'Si necesitas conocimiento documental adicional, usa tool calling con el envelope JSON exacto:',
+          '{"type":"tool_call","toolName":"knowledge_search","arguments":{"query":"<consulta>","limit":5}}',
+          'No inventes citas ni contenido documental no recuperado por la herramienta.',
+        ].join(' '),
         priority: 'CRITICAL',
         createdAt: promptCreatedAt,
         source: 'SYSTEM',
@@ -267,6 +396,7 @@ export function createConversationExecutionPromptBuilder(): AIExecutionPromptBui
 export function createConversationExecutionPipeline(input: {
   readonly provider: AIProvider
   readonly conversationPort: AIConversationApplicationServiceDependencies['conversationService']
+  readonly toolExecutor?: AIToolExecutor
   readonly inspector?: AIExecutionInspector
 }): AIExecutionPipeline {
   return createAIExecutionPipeline({
@@ -275,6 +405,7 @@ export function createConversationExecutionPipeline(input: {
     contextResolver: createConversationExecutionContextResolver(),
     promptBuilder: createConversationExecutionPromptBuilder(),
     provider: input.provider,
+    ...(input.toolExecutor === undefined ? {} : { toolExecutor: input.toolExecutor }),
     ...(input.inspector === undefined ? {} : { inspector: input.inspector }),
   })
 }
@@ -284,6 +415,109 @@ export function createAIConversationApplicationService(
 ): AIConversationApplicationService {
   const now = dependencies.now ?? (() => new Date().toISOString())
   const idFactory = dependencies.idFactory ?? createExecutionIdFactory()
+  const memoryPort = dependencies.memoryPort ?? createNoopMemoryPort()
+  const retentionPolicy = resolveRetentionPolicy(dependencies.config.retentionPolicy)
+
+  async function saveSession(
+    input: AIConversationApplicationMemorySaveRequest,
+  ): Promise<AIConversationApplicationResult<AIConversationApplicationMemorySaveResponse>> {
+    const validation = validateMemorySession(input.session)
+    if (validation) {
+      return validation
+    }
+
+    const persisted = await memoryPort.saveSession({
+      session: input.session,
+      retentionPolicy: input.retentionPolicy ?? retentionPolicy,
+    })
+    if (persisted.kind === 'failure') {
+      return mapMemoryFailureToApplicationFailure(
+        persisted.code,
+        persisted.safeMessage,
+        persisted.retryable,
+      )
+    }
+
+    return success({
+      session: persisted.value.record.session,
+      retention: persisted.value.retention,
+    })
+  }
+
+  async function loadSession(
+    input?: AIConversationApplicationMemoryLoadRequest,
+  ): Promise<AIConversationApplicationResult<AIConversationApplicationMemorySaveRequest['session']>> {
+    const loaded = await memoryPort.loadSession(input)
+    if (loaded.kind === 'failure') {
+      return mapMemoryFailureToApplicationFailure(loaded.code, loaded.safeMessage, loaded.retryable)
+    }
+
+    const validation = validateMemorySession(loaded.value.session)
+    if (validation) {
+      return failure('MEMORY_CORRUPTED', 'La sesion recuperada de memoria local es invalida para el dominio.')
+    }
+
+    return success(loaded.value.session)
+  }
+
+  async function listSessions(): Promise<AIConversationApplicationResult<
+    readonly AIConversationMemoryMetadata[]
+  >> {
+    const listed = await memoryPort.listSessions()
+    if (listed.kind === 'failure') {
+      return mapMemoryFailureToApplicationFailure(listed.code, listed.safeMessage, listed.retryable)
+    }
+
+    return success(listed.value.map((item) => mapMemoryMetadata(item)))
+  }
+
+  function mapMemoryMetadata(
+    metadata: {
+      readonly sessionId: string
+      readonly createdAt: string
+      readonly updatedAt: string
+      readonly lastMessageAt: string | null
+      readonly messageCount: number
+      readonly status: AIConversationApplicationMemorySaveRequest['session']['status']
+      readonly source: AIConversationApplicationMemorySaveRequest['session']['metadata']['source']
+      readonly tags: readonly string[]
+    },
+  ) {
+    return {
+      sessionId: metadata.sessionId,
+      createdAt: metadata.createdAt,
+      updatedAt: metadata.updatedAt,
+      lastMessageAt: metadata.lastMessageAt,
+      messageCount: metadata.messageCount,
+      status: metadata.status,
+      source: metadata.source,
+      tags: [...metadata.tags],
+    } as const
+  }
+
+  async function deleteSession(
+    input: AIConversationApplicationMemoryDeleteRequest,
+  ): Promise<AIConversationApplicationResult<AIConversationApplicationMemoryDeleteResponse>> {
+    if (input.sessionId.trim().length === 0) {
+      return failure('INVALID_REQUEST', 'El identificador de sesion es obligatorio para eliminar memoria.')
+    }
+
+    const deleted = await memoryPort.deleteSession(input)
+    if (deleted.kind === 'failure') {
+      return mapMemoryFailureToApplicationFailure(deleted.code, deleted.safeMessage, deleted.retryable)
+    }
+
+    return success({ deleted: deleted.value.deleted })
+  }
+
+  async function clearMemory(): Promise<AIConversationApplicationResult<AIConversationApplicationMemoryClearResponse>> {
+    const cleared = await memoryPort.clearMemory()
+    if (cleared.kind === 'failure') {
+      return mapMemoryFailureToApplicationFailure(cleared.code, cleared.safeMessage, cleared.retryable)
+    }
+
+    return success({ deletedCount: cleared.value.deletedCount })
+  }
 
   return {
     startConversation(input) {
@@ -410,5 +644,11 @@ export function createAIConversationApplicationService(
         assistantMessage: executionResult.response.assistantMessage,
       })
     },
+
+    saveSession,
+    loadSession,
+    listSessions,
+    deleteSession,
+    clearMemory,
   }
 }
