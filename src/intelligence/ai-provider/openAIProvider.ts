@@ -27,6 +27,39 @@ import type {
   IntentResolverResolveResult,
 } from '../intent-resolver/intentResolver'
 
+function extractFinancialContext(
+  response: Parameters<Exclude<AIProvider['generateConversation'], undefined>>[0],
+): Record<string, unknown> | null {
+  const attributes = response.promptContext.metadata.attributes
+  if (attributes === undefined) {
+    return null
+  }
+
+  const candidate = attributes.financialConversationContext
+  if (candidate === undefined || candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return null
+  }
+
+  return candidate as Record<string, unknown>
+}
+
+function buildProviderPromptPayload(
+  response: Parameters<Exclude<AIProvider['generateConversation'], undefined>>[0],
+): string {
+  const financialContext = extractFinancialContext(response)
+  const payload = {
+    protocolVersion: 1,
+    mode: 'financial-conversation',
+    promptContextId: response.execution.promptContextId,
+    executionId: response.execution.executionId,
+    financialContext,
+    toolSteps: response.promptContext.steps,
+    responseBlocks: response.blocks,
+  }
+
+  return JSON.stringify(payload)
+}
+
 export interface CreateOpenAIProviderInput extends ResolveOpenAIConfigurationInput {
   readonly adapter?: OpenAIAdapter
 }
@@ -133,15 +166,17 @@ export function createOpenAIProvider(input: CreateOpenAIProviderInput = {}): AIP
 
       let serializedResponse: string
       try {
-        serializedResponse = JSON.stringify(response)
+        serializedResponse = buildProviderPromptPayload(response)
       } catch {
         return createFailure('Unable to serialize conversation response for OpenAI.', 'CONVERSATION_GENERATION_FAILED')
       }
 
       const generated = await adapter.generateConversationText(serializedResponse)
-      return generated.kind === 'failure'
-        ? generated
-        : {
+      if (generated.kind === 'failure') {
+        return generated
+      }
+
+      return {
             kind: 'success',
             message: {
               protocolVersion: MOCK_CONVERSATIONAL_RENDERER_PROTOCOL_VERSION,

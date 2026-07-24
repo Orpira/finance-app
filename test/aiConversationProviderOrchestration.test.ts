@@ -248,6 +248,80 @@ function createDecision(input: Partial<ActivationDecision>): ActivationDecision 
   }
 }
 
+function createTransactionsConversationResponseFixture(input: {
+  readonly firstIncome: number
+  readonly secondIncome: number
+}) {
+  const promptContextResult = createPromptContextBuilder().build({
+    executionResult: {
+      executionId: 'conversation-orchestration:activation:execution:transactions:001' as AIConversationRequest['executionId'],
+      startedAt: '2026-07-24T00:00:00.000Z',
+      finishedAt: '2026-07-24T00:00:01.000Z',
+      status: 'success',
+      summary: {
+        totalSteps: 1,
+        successfulSteps: 1,
+        failedSteps: 0,
+      },
+      steps: [
+        {
+          kind: 'success',
+          stepId: 'step-1',
+          order: 1,
+          toolId: 'financial_transactions',
+          resolvedToolName: 'financial_transactions',
+          execution: {
+            toolName: 'financial_transactions',
+            output: {
+              summary: {
+                currencyCode: 'USD',
+                matchedCount: 2,
+                incomeTotal: input.firstIncome + input.secondIncome,
+                expenseTotal: 0,
+                netTotal: input.firstIncome + input.secondIncome,
+              },
+              items: [
+                {
+                  transactionId: 'income-1',
+                  kind: 'income',
+                  date: '2026-07-20',
+                  label: 'Ingreso 1',
+                  amount: input.firstIncome,
+                  currencyCode: 'USD',
+                },
+                {
+                  transactionId: 'income-2',
+                  kind: 'income',
+                  date: '2026-07-10',
+                  label: 'Ingreso 2',
+                  amount: input.secondIncome,
+                  currencyCode: 'USD',
+                },
+              ],
+            },
+            permission: 'read-only',
+            durationMs: 2,
+          },
+        },
+      ],
+    },
+  })
+
+  if (promptContextResult.kind !== 'success') {
+    throw new Error('Expected prompt context fixture')
+  }
+
+  const responseResult = createConversationResponseComposer().build({
+    promptContext: promptContextResult.context,
+  })
+
+  if (responseResult.kind !== 'success') {
+    throw new Error('Expected response fixture')
+  }
+
+  return responseResult.response
+}
+
 describe('PB-IS-014.5 Intelligent Conversation Activation Engine', () => {
   it('DIRECT_TOOL con confianza alta y tool existente', async () => {
     const metrics = createInMemoryActivationMetricsRecorder()
@@ -539,6 +613,36 @@ describe('PB-IS-014.5 Intelligent Conversation Activation Engine', () => {
       },
     }
 
+    const financialPlanningEngine = {
+      build() {
+        return {
+          planId: 'plan:financial:001',
+          createdAt: '2026-07-24T00:00:00.000Z',
+          title: 'Plan financiero inteligente',
+          summary: 'Consolidar ajustes para proteger flujo y mejorar ahorro.',
+          objective: 'Mejorar estabilidad financiera',
+          priority: 'HIGH' as const,
+          estimatedImpact: 'HIGH' as const,
+          recommendedActions: [
+            {
+              actionId: 'action:001',
+              type: 'expense-reduction',
+              description: 'Reducir gastos discrecionales de alta recurrencia.',
+              expectedBenefit: 'Liberar liquidez para ahorro.',
+              effort: 'LOW' as const,
+              priority: 'HIGH' as const,
+              affectedCategory: 'expense',
+              relatedGoal: 'goal-1',
+              requiresConfirmation: true,
+            },
+          ],
+          relatedInsights: ['insight:proactive:001'],
+          assumptions: ['Existen gastos ajustables'],
+          warnings: ['Confirmar cambios con el usuario'],
+        }
+      },
+    }
+
     const dependencies = {
       facade: createFacadeFixture(),
       provider: createProviderFixture({ providerId: 'openai-provider', confidence: 0.9, text: 'respuesta provider' }),
@@ -546,9 +650,11 @@ describe('PB-IS-014.5 Intelligent Conversation Activation Engine', () => {
       confidencePolicy: { confidenceThreshold: 0.7 },
       activationEngine,
       financialInsightEngine,
+      financialPlanningEngine,
     } as AIConversationServiceDependencies & {
       readonly activationEngine: ActivationEngine
       readonly financialInsightEngine: typeof financialInsightEngine
+      readonly financialPlanningEngine: typeof financialPlanningEngine
     }
 
     const service = createAIConversationService(dependencies)
@@ -562,8 +668,109 @@ describe('PB-IS-014.5 Intelligent Conversation Activation Engine', () => {
     if (result.kind === 'success') {
       expect(result.message.text).toContain('Recomendaciones proactivas')
       expect(result.message.text).toContain('Reduce gastos discrecionales')
+      expect(result.message.text).toContain('Plan financiero inteligente')
+      expect(result.message.text).toContain('Acciones sugeridas')
     }
     expect(activationEngine.decide).toHaveBeenCalledTimes(1)
+  })
+
+  it('flujo E2E: Tool -> Context -> Prompt -> Provider -> Response usa datos reales y cambia segun resultados', async () => {
+    const activationEngine: ActivationEngine = {
+      decide: vi.fn(async () => createDecision({
+        activationType: 'TOOL_WITH_AI',
+        requiresAI: true,
+        requiresTool: true,
+        provider: 'openai-provider',
+        toolId: 'financial_transactions',
+        intent: 'transactions',
+      })),
+    }
+
+    let selectedDataset: 'A' | 'B' = 'A'
+    const facade = {
+      async execute() {
+        return {
+          kind: 'success' as const,
+          response: selectedDataset === 'A'
+            ? createTransactionsConversationResponseFixture({ firstIncome: 2000, secondIncome: 1500 })
+            : createTransactionsConversationResponseFixture({ firstIncome: 900, secondIncome: 700 }),
+        }
+      },
+    }
+
+    const provider = createProviderFixture({ providerId: 'openai-provider', confidence: 0.9, text: 'placeholder' })
+    provider.generateConversation = vi.fn(async (response) => {
+      const context = response.promptContext.metadata.attributes?.financialConversationContext
+      expect(context).toBeDefined()
+
+      const toolResults = (context as {
+        readonly toolResults: readonly {
+          readonly output: {
+            readonly items: readonly { readonly amount: number }[]
+          } | null
+        }[]
+      }).toolResults
+
+      const items = toolResults[0]?.output?.items ?? []
+      const incomeOne = items[0]?.amount ?? 0
+      const incomeTwo = items[1]?.amount ?? 0
+
+      return {
+        kind: 'success' as const,
+        message: {
+          protocolVersion: 1,
+          messageId: `${response.responseId}:message`,
+          type: 'assistant' as const,
+          origin: 'MOCK_RENDERER' as const,
+          timestamp: '2026-07-24T00:00:00.000Z',
+          text: `Comparacion de ingresos: ${incomeOne} vs ${incomeTwo}. Diferencia: ${incomeOne - incomeTwo}.`,
+          responseId: response.responseId,
+          conversationResponse: response,
+          traceability: {
+            executionId: response.execution.executionId,
+            promptContextId: response.execution.promptContextId,
+          },
+        },
+      }
+    })
+
+    const dependencies = {
+      facade,
+      provider,
+      fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, text: 'mock response' }),
+      confidencePolicy: { confidenceThreshold: 0.7 },
+      activationEngine,
+    } as AIConversationServiceDependencies & {
+      readonly activationEngine: ActivationEngine
+    }
+
+    const service = createAIConversationService(dependencies)
+
+    const first = await service.processConversation({
+      conversationRequest: createRequestFixture('Compara mis dos ultimos ingresos'),
+      userMessage: 'Compara mis dos ultimos ingresos',
+      turn: 11,
+    })
+
+    selectedDataset = 'B'
+
+    const second = await service.processConversation({
+      conversationRequest: createRequestFixture('Compara mis dos ultimos ingresos'),
+      userMessage: 'Compara mis dos ultimos ingresos',
+      turn: 12,
+    })
+
+    expect(first.kind).toBe('success')
+    expect(second.kind).toBe('success')
+
+    if (first.kind === 'success' && second.kind === 'success') {
+      expect(first.message.text).toContain('2000 vs 1500')
+      expect(second.message.text).toContain('900 vs 700')
+      expect(first.message.text).not.toBe(second.message.text)
+    }
+
+    expect(provider.generateConversation).toHaveBeenCalledTimes(2)
+    expect(activationEngine.decide).toHaveBeenCalledTimes(2)
   })
 
   it('skill module default registra seis skills y valida registry', () => {

@@ -16,6 +16,7 @@ import {
   resolveAIProviderStrategyFromEnvironment,
   resolveOpenAIProviderConfiguration,
   validateOpenAIProviderConfiguration,
+  type OpenAIAdapter,
   type OpenAIAdapterTransport,
 } from '../src/intelligence/ai-provider/aiProvider'
 import type {
@@ -300,5 +301,93 @@ describe('PB-IS-014.3 OpenAI Provider Adapter', () => {
       maxTokens: 100,
     })
     expect(validation).toBeNull()
+  })
+
+  it('provider envia contexto financiero estructurado al adapter', async () => {
+    let receivedPayload = ''
+    const adapter: OpenAIAdapter = {
+      async resolveIntent() {
+        return {
+          kind: 'failure',
+          code: 'INTENT_RESOLUTION_FAILED',
+          retryable: false,
+          safeMessage: 'not used',
+        }
+      },
+      async generateConversationText(responseJson: string) {
+        receivedPayload = responseJson
+        return {
+          kind: 'success',
+          text: 'respuesta estructurada',
+        }
+      },
+    }
+
+    const provider = createOpenAIProvider({
+      adapter,
+      environment: VALID_ENV,
+    })
+
+    const baseResponse = createConversationResponse()
+    const responseWithFinancialContext = {
+      ...baseResponse,
+      promptContext: {
+        ...baseResponse.promptContext,
+        metadata: {
+          ...baseResponse.promptContext.metadata,
+          attributes: {
+            financialConversationContext: {
+              protocolVersion: 1,
+              createdAt: '2026-07-24T00:00:00.000Z',
+              userIntent: 'transactions',
+              toolResults: [
+                {
+                  stepId: 'step-1',
+                  order: 1,
+                  toolId: 'financial_transactions',
+                  kind: 'success',
+                  durationMs: 1,
+                  permission: 'read-only',
+                  output: {
+                    items: [
+                      { amount: 2100 },
+                      { amount: 1500 },
+                    ],
+                  },
+                  error: null,
+                },
+              ],
+              memory: null,
+              insights: [],
+              actionPlan: null,
+              executionPlan: {
+                skillId: 'transactions-conversation-skill',
+              },
+              activationDecision: {
+                intent: 'transactions',
+              },
+            },
+          },
+        },
+      },
+    }
+
+    const result = await provider.generateConversation(responseWithFinancialContext as never)
+    expect(result.kind).toBe('success')
+
+    const parsed = JSON.parse(receivedPayload) as {
+      readonly financialContext: {
+        readonly userIntent: string
+        readonly toolResults: readonly { readonly toolId: string }[]
+      } | null
+      readonly toolSteps: readonly unknown[]
+      readonly responseBlocks: readonly unknown[]
+    }
+
+    expect(parsed.financialContext).not.toBeNull()
+    expect(parsed.financialContext?.userIntent).toBe('transactions')
+    expect(parsed.financialContext?.toolResults[0]?.toolId).toBe('financial_transactions')
+    expect(parsed.toolSteps.length).toBeGreaterThan(0)
+    expect(parsed.responseBlocks.length).toBeGreaterThan(0)
   })
 })

@@ -98,6 +98,16 @@ function normalizeExecutionSteps(
     .map((step) => mapStep(step))
 }
 
+function normalizeAttributes(
+  attributes: CreatePromptContextInput['attributes'],
+) {
+  if (attributes === undefined) {
+    return undefined
+  }
+
+  return structuredClone(attributes)
+}
+
 export interface PromptContextBuilder {
   build(input: CreatePromptContextInput): PromptContextResult
 }
@@ -109,6 +119,8 @@ export function createPromptContextBuilder(): PromptContextBuilder {
       if (inputValidation) {
         return inputValidation
       }
+
+      const normalizedAttributes = normalizeAttributes(input.attributes)
 
       const context: PromptContext = {
         protocolVersion: AI_PROMPT_CONTEXT_PROTOCOL_VERSION,
@@ -126,9 +138,9 @@ export function createPromptContextBuilder(): PromptContextBuilder {
           deterministic: true,
           failClosed: true,
           ...(input.tags === undefined ? {} : { tags: [...input.tags] }),
-          ...(input.attributes === undefined
+          ...(normalizedAttributes === undefined
             ? {}
-            : { attributes: structuredClone(input.attributes) }),
+            : { attributes: normalizedAttributes }),
         },
         steps: normalizeExecutionSteps(input.executionResult.steps),
       }

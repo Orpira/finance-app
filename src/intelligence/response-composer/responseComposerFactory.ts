@@ -108,6 +108,20 @@ function createBlocks(responseId: ConversationResponseId, promptContext: PromptC
   ]
 }
 
+function createExecutionMetadata(promptContext: PromptContext) {
+  return {
+    promptContextId: promptContext.contextId,
+    executionId: promptContext.execution.executionId,
+    startedAt: promptContext.execution.startedAt,
+    finishedAt: promptContext.execution.finishedAt,
+    status: promptContext.execution.status,
+    blockCount: promptContext.steps.length + 1,
+    stepCount: promptContext.steps.length,
+    successCount: promptContext.steps.filter((step) => step.kind === 'success').length,
+    failureCount: promptContext.steps.filter((step) => step.kind === 'failure').length,
+  } as const
+}
+
 export interface ConversationResponseComposer {
   build(input: CreateConversationResponseInput): ConversationResponseResult
 }
@@ -130,17 +144,7 @@ export function createConversationResponseComposer(): ConversationResponseCompos
         protocolVersion: AI_RESPONSE_COMPOSER_PROTOCOL_VERSION,
         responseId,
         promptContext: structuredClone(promptContext),
-        execution: {
-          promptContextId: promptContext.contextId,
-          executionId: promptContext.execution.executionId,
-          startedAt: promptContext.execution.startedAt,
-          finishedAt: promptContext.execution.finishedAt,
-          status: promptContext.execution.status,
-          blockCount: promptContext.steps.length + 1,
-          stepCount: promptContext.steps.length,
-          successCount: promptContext.steps.filter((step) => step.kind === 'success').length,
-          failureCount: promptContext.steps.filter((step) => step.kind === 'failure').length,
-        },
+        execution: createExecutionMetadata(promptContext),
         metadata: {
           protocolVersion: AI_RESPONSE_COMPOSER_PROTOCOL_VERSION,
           createdAt: input.createdAt ?? promptContext.execution.finishedAt,

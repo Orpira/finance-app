@@ -123,6 +123,32 @@ describe('AI Response Composer (PB-IS-013.4)', () => {
     expect(parsed.promptContext).toBeDefined()
   })
 
+  it('conserva attributes del prompt context sin reconstruir conversacion', () => {
+    const promptContext = createPromptContextFixture()
+    const enrichedPromptContext = {
+      ...promptContext,
+      metadata: {
+        ...promptContext.metadata,
+        attributes: {
+          financialConversationContext: {
+            protocolVersion: 1,
+            userIntent: 'transactions',
+          },
+        },
+      },
+    }
+
+    const composed = buildConversationResponse({ promptContext: enrichedPromptContext as never })
+    expect(composed.kind).toBe('success')
+    if (composed.kind !== 'success') {
+      throw new Error('Expected successful response composition')
+    }
+
+    expect(
+      (composed.response.promptContext.metadata.attributes?.financialConversationContext as { userIntent: string }).userIntent,
+    ).toBe('transactions')
+  })
+
   it('fails closed on invalid PromptContext input', () => {
     const composer = createConversationResponseComposer()
     const invalidPromptContext = {

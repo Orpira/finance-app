@@ -118,6 +118,34 @@ describe('Prompt Context Builder (PB-IS-013.3)', () => {
     expect(Array.isArray(parsed.steps)).toBe(true)
   })
 
+  it('incluye contexto financiero estructurado en attributes para el provider', () => {
+    const executionResult = createExecutionResultFixture()
+    const built = buildPromptContext({
+      executionResult,
+      attributes: {
+        financialConversationContext: {
+          protocolVersion: 1,
+          userIntent: 'transactions',
+          toolResults: [
+            {
+              toolId: 'financial_transactions',
+              kind: 'success',
+            },
+          ],
+        },
+      },
+    })
+
+    expect(built.kind).toBe('success')
+    if (built.kind !== 'success') {
+      throw new Error('Expected prompt context build success')
+    }
+
+    const attributes = built.context.metadata.attributes
+    expect(attributes).toBeDefined()
+    expect((attributes?.financialConversationContext as { userIntent: string }).userIntent).toBe('transactions')
+  })
+
   it('fails closed on invalid execution result input', () => {
     const builder = createPromptContextBuilder()
     const invalidExecutionResult = {

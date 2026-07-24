@@ -1,9 +1,22 @@
 import {
   validateAIProviderConversationGenerationResult,
 } from '../../ai-provider/aiProviderValidator'
+import type {
+  AIToolJsonValue,
+} from '../../ai-tools'
 import {
   validateAIConversationRequest,
 } from '../aiConversationFacadeValidator'
+import type {
+  AIConversationExecutionResult,
+} from '../../conversation-orchestrator'
+import {
+  createPromptContextBuilder,
+} from '../../prompt-context-builder'
+import {
+  createConversationResponseComposer,
+  type ConversationResponse,
+} from '../../response-composer'
 import type {
   AIConversationService,
   AIConversationServiceDependencies,
@@ -33,6 +46,13 @@ import {
 import {
   createFinancialInsightEngine,
 } from './financialInsightFactory'
+import {
+  createFinancialPlanningEngine,
+} from './financialPlanningFactory'
+import {
+  createFinancialConversationContext,
+  createFinancialToolResultMapper,
+} from './financialConversationContextFactory'
 import type {
   ActivationDecision,
   ActivationEngine,
@@ -49,6 +69,13 @@ import type {
   FinancialInsight,
   FinancialInsightEngine,
 } from './financialInsightContracts'
+import type {
+  FinancialActionPlan,
+  FinancialPlanningEngine,
+} from './financialPlanningContracts'
+import type {
+  FinancialConversationContext,
+} from './financialConversationContext'
 import {
   validateActivationDecision,
 } from './activationValidator'
@@ -127,6 +154,23 @@ function mergeExecutionPlanInsights(
   }
 }
 
+function mergeExecutionPlanActionPlan(
+  executionPlan: FinancialConversationExecutionPlan,
+  actionPlan: FinancialActionPlan | null,
+): FinancialConversationExecutionPlan {
+  if (actionPlan === null) {
+    return executionPlan
+  }
+
+  return {
+    ...executionPlan,
+    context: {
+      ...executionPlan.context,
+      actionPlan: structuredClone(actionPlan),
+    },
+  }
+}
+
 function formatInsightText(insight: FinancialInsight): string {
   return `${insight.title}: ${insight.recommendation}`
 }
@@ -141,6 +185,121 @@ function appendInsightsToMessage(
 
   const summary = insights.slice(0, 3).map(formatInsightText).join(' ')
   return `${text}\n\nRecomendaciones proactivas: ${summary}`
+}
+
+function formatActionSummary(
+  actionPlan: FinancialActionPlan,
+): string {
+  return actionPlan.recommendedActions
+    .slice(0, 3)
+    .map((action) => action.description)
+    .join(' ')
+}
+
+function appendActionPlanToMessage(
+  text: string,
+  actionPlan: FinancialActionPlan | null,
+): string {
+  if (actionPlan === null) {
+    return text
+  }
+
+  const actionSummary = formatActionSummary(actionPlan)
+  return `${text}\n\nPlan financiero inteligente: ${actionPlan.summary} Acciones sugeridas: ${actionSummary}`
+}
+
+function estimateTokensFromText(text: string): number {
+  if (text.trim().length === 0) {
+    return 0
+  }
+
+  return Math.ceil(text.length / 4)
+}
+
+function createResponseWithFinancialContext(
+  response: ConversationResponse,
+  financialContext: FinancialConversationContext,
+): { readonly kind: 'success'; readonly response: ConversationResponse } | { readonly kind: 'failure'; readonly safeMessage: string } {
+  const promptContextBuilder = createPromptContextBuilder()
+  const responseComposer = createConversationResponseComposer()
+
+  const executionResult: AIConversationExecutionResult = {
+    executionId: response.execution.executionId,
+    startedAt: response.execution.startedAt,
+    finishedAt: response.execution.finishedAt,
+    status: response.execution.status,
+    summary: {
+      totalSteps: response.execution.stepCount,
+      successfulSteps: response.execution.successCount,
+      failedSteps: response.execution.failureCount,
+    },
+    steps: response.promptContext.steps.map((step) => {
+      if (step.kind === 'success') {
+        return {
+          kind: 'success' as const,
+          stepId: step.stepId,
+          order: step.order,
+          toolId: step.toolId,
+          resolvedToolName: step.resolvedToolName,
+          execution: {
+            toolName: step.resolvedToolName,
+            output: structuredClone(step.output),
+            permission: step.permission,
+            durationMs: step.durationMs,
+          },
+        }
+      }
+
+      return {
+        kind: 'failure' as const,
+        stepId: step.stepId,
+        order: step.order,
+        toolId: step.toolId,
+        error: {
+          kind: 'failure' as const,
+          code: step.error.code,
+          retryable: step.error.retryable,
+          safeMessage: step.error.safeMessage,
+          ...(step.error.details === undefined
+            ? {}
+            : { details: structuredClone(step.error.details) }),
+        },
+      }
+    }),
+  }
+
+  const rebuiltPromptContext = promptContextBuilder.build({
+    executionResult,
+    attributes: {
+      ...(response.promptContext.metadata.attributes === undefined
+        ? {}
+        : structuredClone(response.promptContext.metadata.attributes)),
+      financialConversationContext: structuredClone(financialContext) as unknown as AIToolJsonValue,
+    },
+  })
+
+  if (rebuiltPromptContext.kind === 'failure') {
+    return {
+      kind: 'failure',
+      safeMessage: rebuiltPromptContext.safeMessage,
+    }
+  }
+
+  const rebuiltResponse = responseComposer.build({
+    promptContext: rebuiltPromptContext.context,
+  })
+
+  if (rebuiltResponse.kind === 'failure') {
+    return {
+      kind: 'failure',
+      safeMessage: rebuiltResponse.safeMessage,
+    }
+  }
+
+  return {
+    kind: 'success',
+    response: rebuiltResponse.response,
+  }
 }
 
 export function createAIConversationService(
@@ -202,11 +361,19 @@ export function createAIConversationService(
     }
   ).financialInsightEngine ?? createFinancialInsightEngine()
 
+  const planningEngine = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly financialPlanningEngine?: FinancialPlanningEngine
+    }
+  ).financialPlanningEngine ?? createFinancialPlanningEngine()
+
   const contextResolver = (
     dependencies as AIConversationServiceDependencies & {
       readonly conversationContextResolver?: ConversationContextResolver
     }
   ).conversationContextResolver ?? createConversationContextResolver()
+
+  const toolResultMapper = createFinancialToolResultMapper()
 
   return {
     async processConversation(
@@ -302,8 +469,16 @@ export function createAIConversationService(
         snapshot,
       })
       const executionPlanWithInsights = mergeExecutionPlanInsights(executionPlan, insights)
-      const requiredToolId = executionPlanWithInsights.requiredTools[0] ?? null
-      const requiresAIConversation = decision.requiresAI || executionPlanWithInsights.requiresAIExplanation
+      const actionPlan = planningEngine.build({
+        sessionId: input.conversationRequest.context.sessionId,
+        userMessage: input.userMessage,
+        requestedAt,
+        executionPlan: executionPlanWithInsights,
+        insights,
+      })
+      const executionPlanWithPlanning = mergeExecutionPlanActionPlan(executionPlanWithInsights, actionPlan)
+      const requiredToolId = executionPlanWithPlanning.requiredTools[0] ?? null
+      const requiresAIConversation = decision.requiresAI || executionPlanWithPlanning.requiresAIExplanation
 
       const providerUsed = decision.provider === dependencies.fallbackProvider.metadata.providerId
         ? dependencies.fallbackProvider
@@ -328,7 +503,7 @@ export function createAIConversationService(
                 stepId: `step:${input.turn}:activation:1`,
                 order: 1,
                 toolId: requiredToolId,
-                arguments: structuredClone(executionPlanWithInsights.activationDecision.toolArguments ?? {}),
+                arguments: structuredClone(executionPlanWithPlanning.activationDecision.toolArguments ?? {}),
               },
             ],
           }
@@ -369,6 +544,36 @@ export function createAIConversationService(
         return createFailure('FACADE_EXECUTION_FAILED', execution.safeMessage)
       }
 
+      const mappedToolResults = toolResultMapper.map({
+        steps: execution.response.promptContext.steps,
+      })
+
+      const financialContext = createFinancialConversationContext({
+        createdAt: requestedAt,
+        toolResults: mappedToolResults,
+        memory: snapshot === null ? null : structuredClone(snapshot),
+        insights,
+        actionPlan,
+        userIntent: decision.intent,
+        executionPlan: executionPlanWithPlanning,
+        activationDecision: decision,
+      })
+
+      const responseWithFinancialContext = createResponseWithFinancialContext(
+        execution.response,
+        financialContext,
+      )
+
+      if (responseWithFinancialContext.kind === 'failure') {
+        return createFailure('FACADE_EXECUTION_FAILED', responseWithFinancialContext.safeMessage)
+      }
+
+      const providerPromptPayload = JSON.stringify({
+        promptContext: responseWithFinancialContext.response.promptContext,
+        blocks: responseWithFinancialContext.response.blocks,
+      })
+      const promptTokenEstimate = estimateTokensFromText(providerPromptPayload)
+
       let message
       if (!requiresAIConversation && decision.activationType === 'DIRECT_TOOL') {
         message = {
@@ -377,9 +582,12 @@ export function createAIConversationService(
           type: 'assistant',
           origin: 'MOCK_RENDERER',
           timestamp: now(),
-          text: appendInsightsToMessage(createDirectToolMessageText(decision), insights),
+          text: appendActionPlanToMessage(
+            appendInsightsToMessage(createDirectToolMessageText(decision), insights),
+            actionPlan,
+          ),
           responseId: execution.response.responseId,
-          conversationResponse: execution.response,
+          conversationResponse: responseWithFinancialContext.response,
           traceability: {
             executionId: execution.response.execution.executionId,
             promptContextId: execution.response.execution.promptContextId,
@@ -391,7 +599,7 @@ export function createAIConversationService(
           return createFailure('PROVIDER_UNAVAILABLE', 'Selected AI provider does not implement conversation generation.')
         }
 
-        const rendered = await generateConversation(execution.response).catch(() => {
+        const rendered = await generateConversation(responseWithFinancialContext.response).catch(() => {
           return {
             kind: 'failure',
             code: 'CONVERSATION_GENERATION_FAILED',
@@ -425,7 +633,10 @@ export function createAIConversationService(
 
         message = {
           ...rendered.message,
-          text: appendInsightsToMessage(rendered.message.text, insights),
+          text: appendActionPlanToMessage(
+            appendInsightsToMessage(rendered.message.text, insights),
+            actionPlan,
+          ),
         }
       }
 
@@ -440,6 +651,8 @@ export function createAIConversationService(
         success: true,
         error: null,
       }
+
+      const completionTokenEstimate = estimateTokensFromText(message.text)
 
       const executionValidation = validateAIConversationExecution(executionPayload)
       if (executionValidation !== null) {
@@ -463,11 +676,20 @@ export function createAIConversationService(
         success: true,
       })
 
+      metrics.record({
+        provider: providerId,
+        durationMs: executionPayload.executionTime,
+        operation: 'financial-context',
+        fallbackUsed: decision.fallback.used,
+        success: true,
+        errorCode: `tool:${requiredToolId ?? 'none'};contextSize:${JSON.stringify(financialContext).length};promptTokens:${promptTokenEstimate};completionTokens:${completionTokenEstimate}`,
+      })
+
       memory.remember({
         sessionId: input.conversationRequest.context.sessionId,
         userMessage: input.userMessage,
         requestedAt,
-        plan: executionPlan,
+        plan: executionPlanWithPlanning,
       })
 
       return {

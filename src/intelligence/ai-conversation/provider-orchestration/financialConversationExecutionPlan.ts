@@ -11,6 +11,9 @@ import type {
 import type {
   FinancialInsight,
 } from './financialInsightContracts'
+import type {
+  FinancialActionPlan,
+} from './financialPlanningContracts'
 
 export type FinancialConversationExecutionPriority = 'HIGH' | 'NORMAL' | 'LOW'
 
@@ -22,6 +25,7 @@ export interface FinancialConversationContextPlan {
   readonly referencedEntities?: readonly ConversationMemoryEntityReference[]
   readonly enrichment?: ConversationContextEnrichment | null
   readonly insights?: readonly FinancialInsight[]
+  readonly actionPlan?: FinancialActionPlan | null
 }
 
 export interface FinancialConversationExecutionPlan {
