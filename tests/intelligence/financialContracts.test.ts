@@ -435,6 +435,7 @@ describe('financial tool contracts', () => {
       "export * from './reportsTool'",
       "export * from './insightsTool'",
       "export * from './financialToolsCatalog'",
+      "export * from './financialToolResolverFactory'",
     ]
 
     for (const line of expectedExports) {
