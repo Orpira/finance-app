@@ -33,6 +33,9 @@ import {
 import {
   createAIConversationService,
 } from '../../intelligence/ai-conversation/provider-orchestration/aiConversationService'
+import {
+  createFinancialConversationSkillModule,
+} from '../../intelligence/ai-conversation/provider-orchestration/financialConversationFactory'
 import type {
   AIConversationServiceDependencies,
 } from '../../intelligence/ai-conversation/provider-orchestration/aiConversationContracts'
@@ -137,6 +140,8 @@ export function createConversationControllerDependencies(): ConversationControll
     },
   })
 
+  const financialSkillModule = createFinancialConversationSkillModule()
+
   const conversationServiceDependencies = {
     facade,
     provider,
@@ -145,8 +150,10 @@ export function createConversationControllerDependencies(): ConversationControll
       confidenceThreshold: 0.7,
     },
     activationEngine,
+    skillResolver: financialSkillModule.resolver,
   } as AIConversationServiceDependencies & {
     readonly activationEngine: typeof activationEngine
+    readonly skillResolver: typeof financialSkillModule.resolver
   }
 
   const conversationService = createAIConversationService(conversationServiceDependencies)

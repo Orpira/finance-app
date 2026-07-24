@@ -20,10 +20,16 @@ import {
 import {
   createActivationEngine,
 } from './activationEngine'
+import {
+  createFinancialConversationSkillModule,
+} from './financialConversationFactory'
 import type {
   ActivationDecision,
   ActivationEngine,
 } from './activationContracts'
+import type {
+  FinancialConversationSkillResolver,
+} from './financialConversationSkillResolver'
 import {
   validateActivationDecision,
 } from './activationValidator'
@@ -82,6 +88,12 @@ export function createAIConversationService(
     }
   ).activationEngine
 
+  const injectedSkillResolver = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly skillResolver?: FinancialConversationSkillResolver
+    }
+  ).skillResolver
+
   const activationEngine = injectedActivationEngine ?? createActivationEngine({
     primaryProviderId: dependencies.provider.metadata.providerId,
     fallbackProviderId: dependencies.fallbackProvider.metadata.providerId,
@@ -101,6 +113,9 @@ export function createAIConversationService(
     clock,
     now,
   })
+
+  const skillResolver = injectedSkillResolver
+    ?? createFinancialConversationSkillModule().resolver
 
   return {
     async processConversation(
@@ -157,6 +172,28 @@ export function createAIConversationService(
         return createFailure('INVALID_SERVICE_INPUT', decision.reason)
       }
 
+      const skillResolution = skillResolver.resolve({
+        activationDecision: decision,
+        userMessage: input.userMessage,
+      })
+
+      if (skillResolution.kind === 'failure') {
+        metrics.record({
+          provider: decision.provider,
+          durationMs: clock() - startedAt,
+          operation: 'skill-resolution',
+          fallbackUsed: decision.fallback.used,
+          success: false,
+          errorCode: skillResolution.code,
+        })
+
+        return createFailure('FACADE_EXECUTION_FAILED', skillResolution.safeMessage)
+      }
+
+      const executionPlan = skillResolution.plan
+      const requiredToolId = executionPlan.requiredTools[0] ?? null
+      const requiresAIConversation = decision.requiresAI || executionPlan.requiresAIExplanation
+
       const providerUsed = decision.provider === dependencies.fallbackProvider.metadata.providerId
         ? dependencies.fallbackProvider
         : dependencies.provider
@@ -172,15 +209,15 @@ export function createAIConversationService(
         return createFailure('PROVIDER_UNAVAILABLE', fallbackValidation.safeMessage)
       }
 
-      const requestFromDecision = decision.requiresTool && decision.toolId !== null
+      const requestFromDecision = requiredToolId !== null
         ? {
             ...input.conversationRequest,
             steps: [
               {
                 stepId: `step:${input.turn}:activation:1`,
                 order: 1,
-                toolId: decision.toolId,
-                arguments: structuredClone(decision.toolArguments ?? {}),
+                toolId: requiredToolId,
+                arguments: structuredClone(executionPlan.activationDecision.toolArguments ?? {}),
               },
             ],
           }
@@ -222,7 +259,7 @@ export function createAIConversationService(
       }
 
       let message
-      if (!decision.requiresAI && decision.activationType === 'DIRECT_TOOL') {
+      if (!requiresAIConversation && decision.activationType === 'DIRECT_TOOL') {
         message = {
           protocolVersion: 1,
           messageId: `${execution.response.responseId}:direct-tool`,
@@ -283,7 +320,7 @@ export function createAIConversationService(
         provider: providerId,
         intent: decision.intent,
         confidence: decision.confidence,
-        conversationGenerated: decision.requiresAI,
+        conversationGenerated: requiresAIConversation,
         executionTime: clock() - startedAt,
         fallbackUsed: decision.fallback.used,
         success: true,

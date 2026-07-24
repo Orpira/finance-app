@@ -55,6 +55,7 @@ describe('AI Conversation main integration (PB-IS-013.8)', () => {
     expect(compositionSource).toContain('createAIConversationFacade')
     expect(compositionSource).toContain('createActivationEngineFromResolver')
     expect(compositionSource).toContain('createFinancialAIToolResolver')
+    expect(compositionSource).toContain('createFinancialConversationSkillModule')
     expect(compositionSource).toContain('createAIConversationService')
     expect(compositionSource).toContain('processConversation')
     expect(compositionSource).not.toContain('provider.resolveIntent(')

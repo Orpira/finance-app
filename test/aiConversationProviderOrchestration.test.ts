@@ -43,6 +43,19 @@ import {
 import {
   createAIConversationService,
 } from '../src/intelligence/ai-conversation/provider-orchestration/aiConversationService'
+import {
+  createFinancialConversationSkillModule,
+} from '../src/intelligence/ai-conversation/provider-orchestration/financialConversationFactory'
+import {
+  createFinancialConversationSkillRegistryStore,
+} from '../src/intelligence/ai-conversation/provider-orchestration/financialConversationSkillRegistry'
+import {
+  createFinancialConversationSkillResolver,
+} from '../src/intelligence/ai-conversation/provider-orchestration/financialConversationSkillResolver'
+import {
+  validateFinancialConversationExecutionPlan,
+  validateFinancialConversationSkillRegistry,
+} from '../src/intelligence/ai-conversation/provider-orchestration/financialConversationValidator'
 import type {
   AIConversationServiceDependencies,
 } from '../src/intelligence/ai-conversation/provider-orchestration/aiConversationContracts'
@@ -494,5 +507,55 @@ describe('PB-IS-014.5 Intelligent Conversation Activation Engine', () => {
 
     expect(activationEngine.decide).toHaveBeenCalledTimes(1)
     expect(provider.resolveIntent).not.toHaveBeenCalled()
+  })
+
+  it('skill module default registra seis skills y valida registry', () => {
+    const skillModule = createFinancialConversationSkillModule()
+    const listed = skillModule.registry.list()
+
+    expect(listed).toHaveLength(6)
+    expect(validateFinancialConversationSkillRegistry(skillModule.registry)).toBeNull()
+  })
+
+  it('skill resolver crea execution plan valido para decision financiera', () => {
+    const skillModule = createFinancialConversationSkillModule()
+    const resolution = skillModule.resolver.resolve({
+      activationDecision: createDecision({
+        activationType: 'DIRECT_TOOL',
+        requiresAI: false,
+        requiresTool: true,
+        toolId: 'financial_balance',
+        intent: 'balance',
+      }),
+      userMessage: 'dime mi balance',
+    })
+
+    expect(resolution.kind).toBe('success')
+    if (resolution.kind === 'success') {
+      expect(resolution.skill.skillId).toBe('balance-conversation-skill')
+      expect(resolution.plan.requiredTools).toEqual(['financial_balance'])
+      expect(validateFinancialConversationExecutionPlan(resolution.plan)).toBeNull()
+    }
+  })
+
+  it('skill resolver fail-closed cuando no existe skill compatible', () => {
+    const emptyRegistry = createFinancialConversationSkillRegistryStore([])
+    const resolver = createFinancialConversationSkillResolver(emptyRegistry)
+
+    const resolution = resolver.resolve({
+      activationDecision: createDecision({
+        activationType: 'DIRECT_AI',
+        requiresAI: true,
+        requiresTool: false,
+        toolId: null,
+        intent: 'custom-unmapped-intent',
+      }),
+      userMessage: 'intent inventado',
+    })
+
+    expect(resolution.kind).toBe('failure')
+    if (resolution.kind === 'failure') {
+      expect(resolution.code).toBe('SKILL_NOT_FOUND')
+    }
   })
 })
