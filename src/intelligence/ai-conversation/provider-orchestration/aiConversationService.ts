@@ -11,6 +11,9 @@ import type {
   AIConversationServiceInput,
   AIConversationServiceResult,
 } from './aiConversationContracts'
+import type {
+  FinancialConversationExecutionPlan,
+} from './financialConversationExecutionPlan'
 import {
   AI_CONVERSATION_SERVICE_PROTOCOL_VERSION,
 } from './aiConversationContracts'
@@ -23,6 +26,10 @@ import {
 import {
   createFinancialConversationSkillModule,
 } from './financialConversationFactory'
+import {
+  createConversationContextResolver,
+  createConversationMemory,
+} from './conversationMemoryFactory'
 import type {
   ActivationDecision,
   ActivationEngine,
@@ -30,6 +37,11 @@ import type {
 import type {
   FinancialConversationSkillResolver,
 } from './financialConversationSkillResolver'
+import type {
+  ConversationContextEnrichment,
+  ConversationContextResolver,
+  ConversationMemory,
+} from './conversationMemoryContracts'
 import {
   validateActivationDecision,
 } from './activationValidator'
@@ -68,6 +80,27 @@ function createDirectToolMessageText(
   }
 
   return `Se ejecuto ${decision.toolId} de forma determinista sin usar IA.`
+}
+
+function mergeExecutionPlanWithContext(
+  executionPlan: FinancialConversationExecutionPlan,
+  enrichment: ConversationContextEnrichment,
+): FinancialConversationExecutionPlan {
+  if (enrichment.toolArgumentsPatch === null) {
+    return executionPlan
+  }
+
+  return {
+    ...executionPlan,
+    activationDecision: {
+      ...executionPlan.activationDecision,
+      toolArguments: structuredClone(enrichment.toolArgumentsPatch),
+    },
+    context: {
+      ...executionPlan.context,
+      enrichment: structuredClone(enrichment),
+    },
+  }
 }
 
 export function createAIConversationService(
@@ -116,6 +149,18 @@ export function createAIConversationService(
 
   const skillResolver = injectedSkillResolver
     ?? createFinancialConversationSkillModule().resolver
+
+  const memory = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly conversationMemory?: ConversationMemory
+    }
+  ).conversationMemory ?? createConversationMemory()
+
+  const contextResolver = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly conversationContextResolver?: ConversationContextResolver
+    }
+  ).conversationContextResolver ?? createConversationContextResolver()
 
   return {
     async processConversation(
@@ -190,7 +235,19 @@ export function createAIConversationService(
         return createFailure('FACADE_EXECUTION_FAILED', skillResolution.safeMessage)
       }
 
-      const executionPlan = skillResolution.plan
+      const snapshot = memory.getSnapshot(
+        input.conversationRequest.context.sessionId,
+        requestedAt,
+      )
+
+      const planEnrichment = contextResolver.enrich({
+        request: input.conversationRequest,
+        userMessage: input.userMessage,
+        plan: skillResolution.plan,
+        snapshot,
+      })
+
+      const executionPlan = mergeExecutionPlanWithContext(skillResolution.plan, planEnrichment)
       const requiredToolId = executionPlan.requiredTools[0] ?? null
       const requiresAIConversation = decision.requiresAI || executionPlan.requiresAIExplanation
 
@@ -347,6 +404,13 @@ export function createAIConversationService(
         operation: 'process-conversation',
         fallbackUsed: decision.fallback.used,
         success: true,
+      })
+
+      memory.remember({
+        sessionId: input.conversationRequest.context.sessionId,
+        userMessage: input.userMessage,
+        requestedAt,
+        plan: executionPlan,
       })
 
       return {

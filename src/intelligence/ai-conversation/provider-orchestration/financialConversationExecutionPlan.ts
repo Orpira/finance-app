@@ -1,8 +1,24 @@
 import type {
   ActivationDecision,
 } from './activationContracts'
+import type {
+  AIToolJsonValue,
+} from '../../ai-tools'
+import type {
+  ConversationContextEnrichment,
+  ConversationMemoryEntityReference,
+} from './conversationMemoryContracts'
 
 export type FinancialConversationExecutionPriority = 'HIGH' | 'NORMAL' | 'LOW'
+
+export interface FinancialConversationContextPlan {
+  readonly activePeriod?: Readonly<Record<string, AIToolJsonValue>>
+  readonly activeCategory?: string | null
+  readonly activeAccount?: string | null
+  readonly activeGoal?: string | null
+  readonly referencedEntities?: readonly ConversationMemoryEntityReference[]
+  readonly enrichment?: ConversationContextEnrichment | null
+}
 
 export interface FinancialConversationExecutionPlan {
   readonly skillId: string
@@ -11,4 +27,5 @@ export interface FinancialConversationExecutionPlan {
   readonly requiresAIExplanation: boolean
   readonly expectedOutput: string
   readonly executionPriority: FinancialConversationExecutionPriority
+  readonly context?: FinancialConversationContextPlan
 }

@@ -36,6 +36,10 @@ import {
 import {
   createFinancialConversationSkillModule,
 } from '../../intelligence/ai-conversation/provider-orchestration/financialConversationFactory'
+import {
+  createConversationContextResolver,
+  createConversationMemory,
+} from '../../intelligence/ai-conversation/provider-orchestration/conversationMemoryFactory'
 import type {
   AIConversationServiceDependencies,
 } from '../../intelligence/ai-conversation/provider-orchestration/aiConversationContracts'
@@ -111,6 +115,10 @@ export function createConversationControllerDependencies(): ConversationControll
   const { facade, registry } = createConversationFacadeAndRegistry()
   const provider = createAIProvider()
   const fallbackProvider = createMockAIProvider()
+  const sessionCreatedAt = new Date().toISOString()
+  const sessionFragment = createRequestFragment(sessionCreatedAt)
+  const conversationId = `conversation:main:${sessionFragment}`
+  const sessionId = `session:main:${sessionFragment}`
 
   const providerValidation = validateAIProvider(provider)
   if (providerValidation !== null) {
@@ -141,6 +149,8 @@ export function createConversationControllerDependencies(): ConversationControll
   })
 
   const financialSkillModule = createFinancialConversationSkillModule()
+  const conversationMemory = createConversationMemory()
+  const conversationContextResolver = createConversationContextResolver()
 
   const conversationServiceDependencies = {
     facade,
@@ -151,9 +161,13 @@ export function createConversationControllerDependencies(): ConversationControll
     },
     activationEngine,
     skillResolver: financialSkillModule.resolver,
+    conversationMemory,
+    conversationContextResolver,
   } as AIConversationServiceDependencies & {
     readonly activationEngine: typeof activationEngine
     readonly skillResolver: typeof financialSkillModule.resolver
+    readonly conversationMemory: typeof conversationMemory
+    readonly conversationContextResolver: typeof conversationContextResolver
   }
 
   const conversationService = createAIConversationService(conversationServiceDependencies)
@@ -171,8 +185,8 @@ export function createConversationControllerDependencies(): ConversationControll
           executionId: `conversation-orchestration:conversation-page:${fragment}:${input.turn}` as AIConversationRequest['executionId'],
           context: {
             executionId: `execution:conversation-page:${fragment}:${input.turn}`,
-            conversationId: `conversation:main:${fragment}`,
-            sessionId: `session:main:${fragment}`,
+            conversationId,
+            sessionId,
             providerId: 'CONVERSATION_PAGE',
             model: 'provider-neutral',
             requestedAt,
