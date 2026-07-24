@@ -53,7 +53,10 @@ describe('AI Conversation main integration (PB-IS-013.8)', () => {
     expect(routesSource).toContain('ConversationPage')
 
     expect(compositionSource).toContain('createAIConversationFacade')
-    expect(compositionSource).toContain('createAIProvider')
+    expect(compositionSource).toContain('createConfiguredAIConversationService')
+    expect(compositionSource).toContain('processConversation')
+    expect(compositionSource).not.toContain('provider.resolveIntent(')
+    expect(compositionSource).not.toContain('provider.generateConversation(')
     expect(compositionSource).not.toContain('createDefaultAIConversationApplicationService')
     expect(compositionSource).not.toContain('createOpenAIProviderAdapter')
     expect(compositionSource).not.toContain('createMockConversationalRenderer')

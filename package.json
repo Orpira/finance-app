@@ -34,6 +34,7 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.17.0",
+    "openai": "^6.49.0",
     "react": "^19.2.6",
     "react-calendar": "^6.0.1",
     "react-dom": "^19.2.6",

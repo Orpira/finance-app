@@ -1,7 +1,6 @@
 import {
   createAIConversationFacade,
   type AIConversationRequest,
-  validateAIConversationRequest,
 } from '../../intelligence/ai-conversation'
 import {
   createAIToolRegistry,
@@ -17,20 +16,14 @@ import {
   type ChatMessage,
 } from '../../intelligence/mock-conversational-renderer/mockConversationalRenderer'
 import {
-  createAIProvider,
-  validateAIProvider,
-  validateAIProviderConversationGenerationResult,
-  validateAIProviderIntentResolutionResult,
-} from '../../intelligence/ai-provider/aiProvider'
-import {
   createPromptContextBuilder,
 } from '../../intelligence/prompt-context-builder'
 import {
   createConversationResponseComposer,
 } from '../../intelligence/response-composer'
 import {
-  INTENT_RESOLVER_PROTOCOL_VERSION,
-} from '../../intelligence/intent-resolver/intentResolver'
+  createConfiguredAIConversationService,
+} from '../../intelligence/ai-conversation/provider-orchestration/aiConversationFactory'
 import type { ConversationControllerDependencies } from './conversationController'
 
 function createRequestFragment(now: string): string {
@@ -96,11 +89,9 @@ function createConversationFacade() {
 
 export function createConversationControllerDependencies(): ConversationControllerDependencies {
   const facade = createConversationFacade()
-  const provider = createAIProvider()
-  const providerValidation = validateAIProvider(provider)
-  if (providerValidation !== null) {
-    throw new Error(providerValidation.safeMessage)
-  }
+  const conversationService = createConfiguredAIConversationService({
+    facade,
+  })
 
   return {
     pipeline: {
@@ -132,96 +123,25 @@ export function createConversationControllerDependencies(): ConversationControll
           ],
         } as AIConversationRequest
 
-        if (provider.resolveIntent === undefined) {
-          return {
-            kind: 'failure',
-            code: 'INTENT_RESOLUTION_FAILED',
-            safeMessage: 'El proveedor AI no implementa resolución de intención.',
-          }
-        }
-
-        const resolutionResult = await provider.resolveIntent({
-          protocolVersion: INTENT_RESOLVER_PROTOCOL_VERSION,
+        const coordinated = await conversationService.processConversation({
           conversationRequest: request,
-          metadata: {
-            userMessage: input.userMessage,
-            turn: input.turn,
-            requestedAt,
-          },
+          userMessage: input.userMessage,
+          turn: input.turn,
+          requestedAt,
         })
 
-        const resolutionValidation = validateAIProviderIntentResolutionResult(resolutionResult)
-        if (resolutionValidation !== null) {
+        if (coordinated.kind === 'failure') {
           return {
             kind: 'failure',
-            code: resolutionValidation.code,
-            safeMessage: resolutionValidation.safeMessage,
+            code: coordinated.code,
+            safeMessage: coordinated.safeMessage,
           }
         }
 
-        if (resolutionResult.kind === 'failure') {
-          return {
-            kind: 'failure',
-            code: resolutionResult.code,
-            safeMessage: resolutionResult.safeMessage,
-          }
+        return {
+          kind: 'success',
+          message: coordinated.message,
         }
-
-        const requestFromResolution: AIConversationRequest = {
-          ...request,
-          steps: resolutionResult.resolution.tools.map((tool, index) => ({
-            stepId: `step:${input.turn}:${index + 1}`,
-            order: index + 1,
-            toolId: tool.toolId,
-            arguments: structuredClone(tool.arguments),
-          })),
-        }
-
-        const requestValidation = validateAIConversationRequest(requestFromResolution)
-        if (requestValidation !== null) {
-          return {
-            kind: 'failure',
-            code: requestValidation.code,
-            safeMessage: requestValidation.safeMessage,
-          }
-        }
-
-        const execution = await facade.execute(requestFromResolution)
-        if (execution.kind === 'failure') {
-          return {
-            kind: 'failure',
-            code: execution.code,
-            safeMessage: execution.safeMessage,
-          }
-        }
-
-        if (provider.generateConversation === undefined) {
-          return {
-            kind: 'failure',
-            code: 'CONVERSATION_GENERATION_FAILED',
-            safeMessage: 'El proveedor AI no implementa generación conversacional.',
-          }
-        }
-
-        const rendered = await provider.generateConversation(execution.response)
-        const messageValidation = validateAIProviderConversationGenerationResult(rendered)
-        if (messageValidation !== null) {
-          return {
-            kind: 'failure',
-            code: messageValidation.code,
-            safeMessage: messageValidation.safeMessage,
-          }
-        }
-
-        if (rendered.kind === 'failure') {
-          return {
-            kind: 'failure',
-            code: rendered.code,
-            safeMessage: rendered.safeMessage,
-          }
-        }
-
-        return rendered
       },
     },
   }
