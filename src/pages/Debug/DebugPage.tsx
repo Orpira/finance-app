@@ -43,6 +43,19 @@ export default function DebugPage() {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-950">AI Developer Playground</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Ejecuta el pipeline conversacional por fachada y revisa cada etapa en formato JSON estructurado.
+        </p>
+        <Link
+          className="mt-4 inline-flex min-h-10 items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+          to="/debug/ai-developer-playground"
+        >
+          Abrir playground
+        </Link>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-950">Migraciones</h2>
         <p className="mt-2 text-sm text-slate-600">
           Herramientas de mantenimiento manual para datos locales.

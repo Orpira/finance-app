@@ -25,6 +25,7 @@ import SettingsSecurityPage from '../pages/Settings/SettingsSecurityPage'
 import SettingsLicensePage from '../pages/Settings/SettingsLicensePage'
 import CommunicationChannelsPage from '../pages/Settings/CommunicationChannelsPage'
 import AIExecutionInspectorPage from '../pages/Debug/AIExecutionInspectorPage'
+import AIDeveloperPlaygroundPage from '../pages/Debug/AIDeveloperPlaygroundPage'
 import DebugPage from '../pages/Debug/DebugPage'
 import SeasonsPage from '../pages/Seasons/SeasonsPage'
 import SeasonFormPage from '../pages/Seasons/SeasonFormPage'
@@ -76,6 +77,7 @@ export function RouterProvider() {
             <Route path="conversation" element={<ConversationPage />} />
             <Route path="debug" element={<DebugPage />} />
             <Route path="debug/ai-execution-inspector" element={<AIExecutionInspectorPage />} />
+            <Route path="debug/ai-developer-playground" element={<AIDeveloperPlaygroundPage />} />
           </Route>
           </Routes>
         </PinGate>

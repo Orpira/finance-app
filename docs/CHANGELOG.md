@@ -10,6 +10,10 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Added
 
+- Milestone 13.7 — Mock Conversational Renderer en `src/intelligence/mock-conversational-renderer/mockConversationalRenderer*` (contracts, validator, factory y renderer) para convertir `ConversationResponse` en `ChatMessage` mediante reglas determinísticas por tool financiera (`financial_balance`, `financial_transactions`, `financial_budget`, `financial_goals`, `financial_reports`, `financial_insights`), con manejo fail-closed de errores y validación serializable; integración visual en AI Developer Playground con quinto panel `Rendered Conversation` sin IA, sin Prompt Templates y sin SDKs de proveedores.
+
+- Milestone 13.6 — AI Developer Playground en `src/pages/Debug/AIDeveloperPlaygroundPage.tsx` con controlador y composicion dedicados para ejecutar el pipeline conversacional exclusivamente por `AIConversationFacade`, visualizar en formato JSON las cuatro etapas (Conversation Request, Conversation Execution Result, Prompt Context y Conversation Response), exponer errores controlados por etapa y habilitar navegacion desde Debug via `/debug/ai-developer-playground`, sin Prompt Templates ni dependencias de proveedores LLM.
+
 - Milestone 13.5 — AI Conversation Facade con modulo `src/intelligence/ai-conversation/aiConversationFacade*` (contracts, validator, factory y facade) para exponer un unico punto de entrada provider-neutral sobre Conversation Orchestrator, Prompt Context Builder y Response Composer, validando cada frontera con los validators certificados y devolviendo una `ConversationResponse` estructurada sin Prompt Templates, sin proveedores LLM y sin logica de UI.
 
 - Milestone 13.4 — AI Response Composer con modulo `src/intelligence/response-composer` (contracts, validator, factory y composer) para transformar `PromptContext` en `ConversationResponse` serializable y provider-neutral, preservando el `PromptContext` completo, estructurando bloques resumen/paso y manteniendo la generacion de lenguaje natural fuera de la frontera interna antes de integrar cualquier proveedor LLM.
