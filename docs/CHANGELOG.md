@@ -10,6 +10,8 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Added
 
+- Milestone 13.2 — AI Conversation Orchestrator con modulo `src/intelligence/conversation-orchestrator` (contracts, validator, factory y orchestrator) para coordinar solicitudes estructuradas `ConversationRequest -> Tool Resolver -> Tool Execution -> ConversationExecutionResult`, incluyendo ejecucion secuencial por orden, continuidad fail-closed ante errores por herramienta, trazabilidad por paso y factory financiera `createFinancialConversationOrchestrator` que reutiliza exclusivamente el Tool Resolver certificado y el catalogo financiero canonico sin dependencias con proveedores LLM.
+
 - Milestone 13.1 — AI Tool Resolver con `createAIToolResolver` y `validateAIToolResolverCatalog` en `src/intelligence/ai-tools/aiToolResolver.ts`, mas factory `createFinancialAIToolResolver` en `src/intelligence/ai-tools/financial/financialToolResolverFactory.ts` para resolver herramientas desde el catalogo financiero certificado de 12A.8 usando el `AIToolRegistry` existente, con validacion fail-closed de existencia/duplicados/integridad y sin ejecutar herramientas ni crear registries paralelos.
 
 - Milestone 12A.8 — AI Financial Catalog Integration con `financialToolsCatalog` (`createFinancialToolsCatalog` + `registerFinancialToolsCatalog`) para registrar en el `AIToolRegistry` existente las tools certificadas `financial_balance`, `financial_transactions`, `financial_budget`, `financial_goals`, `financial_reports` y `financial_insights`, con validacion fail-closed de unicidad y sin modificar la logica interna de ninguna herramienta financiera.
