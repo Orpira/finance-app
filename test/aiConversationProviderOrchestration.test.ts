@@ -509,6 +509,63 @@ describe('PB-IS-014.5 Intelligent Conversation Activation Engine', () => {
     expect(provider.resolveIntent).not.toHaveBeenCalled()
   })
 
+  it('AI Conversation Service incorpora insights proactivos solo como contexto del mensaje final', async () => {
+    const activationEngine: ActivationEngine = {
+      decide: vi.fn(async () => createDecision({
+        activationType: 'TOOL_WITH_AI',
+        requiresAI: true,
+        requiresTool: true,
+        provider: 'openai-provider',
+        toolId: 'financial_balance',
+      })),
+    }
+
+    const financialInsightEngine = {
+      async evaluate() {
+        return [
+          {
+            protocolVersion: 1 as const,
+            insightId: 'insight:proactive:001',
+            category: 'budget' as const,
+            severity: 'HIGH' as const,
+            priority: 'HIGH' as const,
+            title: 'Gasto elevado',
+            description: 'Los gastos muestran una tendencia alcista.',
+            recommendation: 'Reduce gastos discrecionales para proteger el margen.',
+            sourceTool: 'financial_insights',
+            generatedAt: '2026-07-24T00:00:00.000Z',
+          },
+        ]
+      },
+    }
+
+    const dependencies = {
+      facade: createFacadeFixture(),
+      provider: createProviderFixture({ providerId: 'openai-provider', confidence: 0.9, text: 'respuesta provider' }),
+      fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, text: 'mock response' }),
+      confidencePolicy: { confidenceThreshold: 0.7 },
+      activationEngine,
+      financialInsightEngine,
+    } as AIConversationServiceDependencies & {
+      readonly activationEngine: ActivationEngine
+      readonly financialInsightEngine: typeof financialInsightEngine
+    }
+
+    const service = createAIConversationService(dependencies)
+    const result = await service.processConversation({
+      conversationRequest: createRequestFixture('dame una recomendacion proactiva'),
+      userMessage: 'dame una recomendacion proactiva',
+      turn: 10,
+    })
+
+    expect(result.kind).toBe('success')
+    if (result.kind === 'success') {
+      expect(result.message.text).toContain('Recomendaciones proactivas')
+      expect(result.message.text).toContain('Reduce gastos discrecionales')
+    }
+    expect(activationEngine.decide).toHaveBeenCalledTimes(1)
+  })
+
   it('skill module default registra seis skills y valida registry', () => {
     const skillModule = createFinancialConversationSkillModule()
     const listed = skillModule.registry.list()

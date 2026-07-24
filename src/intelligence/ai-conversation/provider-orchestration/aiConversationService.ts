@@ -30,6 +30,9 @@ import {
   createConversationContextResolver,
   createConversationMemory,
 } from './conversationMemoryFactory'
+import {
+  createFinancialInsightEngine,
+} from './financialInsightFactory'
 import type {
   ActivationDecision,
   ActivationEngine,
@@ -42,6 +45,10 @@ import type {
   ConversationContextResolver,
   ConversationMemory,
 } from './conversationMemoryContracts'
+import type {
+  FinancialInsight,
+  FinancialInsightEngine,
+} from './financialInsightContracts'
 import {
   validateActivationDecision,
 } from './activationValidator'
@@ -103,6 +110,39 @@ function mergeExecutionPlanWithContext(
   }
 }
 
+function mergeExecutionPlanInsights(
+  executionPlan: FinancialConversationExecutionPlan,
+  insights: readonly FinancialInsight[],
+): FinancialConversationExecutionPlan {
+  if (insights.length === 0) {
+    return executionPlan
+  }
+
+  return {
+    ...executionPlan,
+    context: {
+      ...executionPlan.context,
+      insights: structuredClone(insights),
+    },
+  }
+}
+
+function formatInsightText(insight: FinancialInsight): string {
+  return `${insight.title}: ${insight.recommendation}`
+}
+
+function appendInsightsToMessage(
+  text: string,
+  insights: readonly FinancialInsight[],
+): string {
+  if (insights.length === 0) {
+    return text
+  }
+
+  const summary = insights.slice(0, 3).map(formatInsightText).join(' ')
+  return `${text}\n\nRecomendaciones proactivas: ${summary}`
+}
+
 export function createAIConversationService(
   dependencies: AIConversationServiceDependencies,
 ): AIConversationService {
@@ -155,6 +195,12 @@ export function createAIConversationService(
       readonly conversationMemory?: ConversationMemory
     }
   ).conversationMemory ?? createConversationMemory()
+
+  const insightEngine = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly financialInsightEngine?: FinancialInsightEngine
+    }
+  ).financialInsightEngine ?? createFinancialInsightEngine()
 
   const contextResolver = (
     dependencies as AIConversationServiceDependencies & {
@@ -248,8 +294,16 @@ export function createAIConversationService(
       })
 
       const executionPlan = mergeExecutionPlanWithContext(skillResolution.plan, planEnrichment)
-      const requiredToolId = executionPlan.requiredTools[0] ?? null
-      const requiresAIConversation = decision.requiresAI || executionPlan.requiresAIExplanation
+      const insights = await insightEngine.evaluate({
+        sessionId: input.conversationRequest.context.sessionId,
+        userMessage: input.userMessage,
+        requestedAt,
+        plan: executionPlan,
+        snapshot,
+      })
+      const executionPlanWithInsights = mergeExecutionPlanInsights(executionPlan, insights)
+      const requiredToolId = executionPlanWithInsights.requiredTools[0] ?? null
+      const requiresAIConversation = decision.requiresAI || executionPlanWithInsights.requiresAIExplanation
 
       const providerUsed = decision.provider === dependencies.fallbackProvider.metadata.providerId
         ? dependencies.fallbackProvider
@@ -274,7 +328,7 @@ export function createAIConversationService(
                 stepId: `step:${input.turn}:activation:1`,
                 order: 1,
                 toolId: requiredToolId,
-                arguments: structuredClone(executionPlan.activationDecision.toolArguments ?? {}),
+                arguments: structuredClone(executionPlanWithInsights.activationDecision.toolArguments ?? {}),
               },
             ],
           }
@@ -323,7 +377,7 @@ export function createAIConversationService(
           type: 'assistant',
           origin: 'MOCK_RENDERER',
           timestamp: now(),
-          text: createDirectToolMessageText(decision),
+          text: appendInsightsToMessage(createDirectToolMessageText(decision), insights),
           responseId: execution.response.responseId,
           conversationResponse: execution.response,
           traceability: {
@@ -369,7 +423,10 @@ export function createAIConversationService(
           return createFailure('CONVERSATION_GENERATION_FAILED', safeMessage)
         }
 
-        message = rendered.message
+        message = {
+          ...rendered.message,
+          text: appendInsightsToMessage(rendered.message.text, insights),
+        }
       }
 
       const executionPayload = {

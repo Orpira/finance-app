@@ -40,6 +40,9 @@ import {
   createConversationContextResolver,
   createConversationMemory,
 } from '../../intelligence/ai-conversation/provider-orchestration/conversationMemoryFactory'
+import {
+  createFinancialInsightEngine,
+} from '../../intelligence/ai-conversation/provider-orchestration/financialInsightFactory'
 import type {
   AIConversationServiceDependencies,
 } from '../../intelligence/ai-conversation/provider-orchestration/aiConversationContracts'
@@ -151,6 +154,7 @@ export function createConversationControllerDependencies(): ConversationControll
   const financialSkillModule = createFinancialConversationSkillModule()
   const conversationMemory = createConversationMemory()
   const conversationContextResolver = createConversationContextResolver()
+  const financialInsightEngine = createFinancialInsightEngine()
 
   const conversationServiceDependencies = {
     facade,
@@ -163,11 +167,13 @@ export function createConversationControllerDependencies(): ConversationControll
     skillResolver: financialSkillModule.resolver,
     conversationMemory,
     conversationContextResolver,
+    financialInsightEngine,
   } as AIConversationServiceDependencies & {
     readonly activationEngine: typeof activationEngine
     readonly skillResolver: typeof financialSkillModule.resolver
     readonly conversationMemory: typeof conversationMemory
     readonly conversationContextResolver: typeof conversationContextResolver
+    readonly financialInsightEngine: typeof financialInsightEngine
   }
 
   const conversationService = createAIConversationService(conversationServiceDependencies)

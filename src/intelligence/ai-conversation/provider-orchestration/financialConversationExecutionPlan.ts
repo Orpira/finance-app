@@ -8,6 +8,9 @@ import type {
   ConversationContextEnrichment,
   ConversationMemoryEntityReference,
 } from './conversationMemoryContracts'
+import type {
+  FinancialInsight,
+} from './financialInsightContracts'
 
 export type FinancialConversationExecutionPriority = 'HIGH' | 'NORMAL' | 'LOW'
 
@@ -18,6 +21,7 @@ export interface FinancialConversationContextPlan {
   readonly activeGoal?: string | null
   readonly referencedEntities?: readonly ConversationMemoryEntityReference[]
   readonly enrichment?: ConversationContextEnrichment | null
+  readonly insights?: readonly FinancialInsight[]
 }
 
 export interface FinancialConversationExecutionPlan {
