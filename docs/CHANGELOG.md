@@ -10,6 +10,8 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Added
 
+- Milestone 13.4 — AI Response Composer con modulo `src/intelligence/response-composer` (contracts, validator, factory y composer) para transformar `PromptContext` en `ConversationResponse` serializable y provider-neutral, preservando el `PromptContext` completo, estructurando bloques resumen/paso y manteniendo la generacion de lenguaje natural fuera de la frontera interna antes de integrar cualquier proveedor LLM.
+
 - Milestone 13.3 — AI Prompt Context Builder con modulo `src/intelligence/prompt-context-builder` (contracts, validator, factory y builder) para transformar `ConversationExecutionResult` en `PromptContext` serializable y provider-neutral, preservando trazabilidad por paso, resultados de herramientas y errores sin construir prompts ni introducir dependencias de OpenAI/Gemini/Claude, reutilizando los contratos del Conversation Orchestrator y del AI Tool layer.
 
 - Milestone 13.2 — AI Conversation Orchestrator con modulo `src/intelligence/conversation-orchestrator` (contracts, validator, factory y orchestrator) para coordinar solicitudes estructuradas `ConversationRequest -> Tool Resolver -> Tool Execution -> ConversationExecutionResult`, incluyendo ejecucion secuencial por orden, continuidad fail-closed ante errores por herramienta, trazabilidad por paso y factory financiera `createFinancialConversationOrchestrator` que reutiliza exclusivamente el Tool Resolver certificado y el catalogo financiero canonico sin dependencias con proveedores LLM.
