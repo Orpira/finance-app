@@ -425,6 +425,7 @@ describe('financial tool contracts', () => {
       "export * from './balanceContracts'",
       "export * from './balanceTool'",
       "export * from './transactionsContracts'",
+      "export * from './transactionsTool'",
       "export * from './budgetContracts'",
       "export * from './goalsContracts'",
       "export * from './investmentsContracts'",

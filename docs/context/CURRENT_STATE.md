@@ -53,6 +53,7 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 - Knowledge Retrieval Tooling 11E implementado como modulo `src/application/knowledge` con contratos readonly/JSON-safe, `LocalKnowledgeRepository` sobre Dexie (`knowledgeDocuments` + `knowledgeChunks`), indexacion configurable, ranking determinista y `KnowledgeSearchTool` registrada en `AIToolRegistry` sin acceso documental directo desde provider ni pipeline.
 - PB-IS-012A.1 Financial Tool Contracts scaffolded as a contract-only module under `src/intelligence/ai-tools/financial`, with public types for balance, transactions, budget, goals, investments and reports, without business logic, executors or pipeline integration.
 - PB-IS-012A.2 Balance Tool implemented as a read-only adapter over existing financial services, reusing `buildBalanceReport`, `getSettings`, `listServiceIncomes` and `listExpenses` without touching Dexie or the execution pipeline.
+- PB-IS-012A.3 Transactions Tool implemented as a read-only adapter over existing financial listing services, exposing structured transaction history via financial contracts without modifying Tool Calling infrastructure.
 
 ## 3) Estado de calidad
 
