@@ -14,16 +14,23 @@ import {
   createFinancialConversationOrchestrator,
 } from '../../intelligence/conversation-orchestrator'
 import {
-  createMockConversationalRenderer,
   type ChatMessage,
-  validateChatMessage,
 } from '../../intelligence/mock-conversational-renderer/mockConversationalRenderer'
+import {
+  createAIProvider,
+  validateAIProvider,
+  validateAIProviderConversationGenerationResult,
+  validateAIProviderIntentResolutionResult,
+} from '../../intelligence/ai-provider/aiProvider'
 import {
   createPromptContextBuilder,
 } from '../../intelligence/prompt-context-builder'
 import {
   createConversationResponseComposer,
 } from '../../intelligence/response-composer'
+import {
+  INTENT_RESOLVER_PROTOCOL_VERSION,
+} from '../../intelligence/intent-resolver/intentResolver'
 import type { ConversationControllerDependencies } from './conversationController'
 
 function createRequestFragment(now: string): string {
@@ -32,73 +39,6 @@ function createRequestFragment(now: string): string {
     .replace(/T/g, ':')
     .replace(/Z/g, '')
     .toLowerCase()
-}
-
-function normalizeText(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-}
-
-function resolveToolPlan(message: string): {
-  readonly toolId: string
-  readonly arguments: Readonly<Record<string, unknown>>
-} {
-  const normalized = normalizeText(message)
-
-  if (
-    normalized.includes('transaccion')
-    || normalized.includes('movimiento')
-    || normalized.includes('ingreso')
-    || normalized.includes('egreso')
-    || normalized.includes('gasto')
-  ) {
-    return {
-      toolId: 'financial_transactions',
-      arguments: {},
-    }
-  }
-
-  if (normalized.includes('presupuesto') || normalized.includes('budget')) {
-    return {
-      toolId: 'financial_budget',
-      arguments: {},
-    }
-  }
-
-  if (normalized.includes('objetivo') || normalized.includes('meta')) {
-    return {
-      toolId: 'financial_goals',
-      arguments: {},
-    }
-  }
-
-  if (normalized.includes('reporte') || normalized.includes('informe')) {
-    return {
-      toolId: 'financial_reports',
-      arguments: {
-        format: 'json',
-      },
-    }
-  }
-
-  if (
-    normalized.includes('insight')
-    || normalized.includes('resumen')
-    || normalized.includes('tendencia')
-  ) {
-    return {
-      toolId: 'financial_insights',
-      arguments: {
-        format: 'json',
-      },
-    }
-  }
-
-  return {
-    toolId: 'financial_balance',
-    arguments: {},
-  }
 }
 
 function createConversationFacade() {
@@ -156,7 +96,11 @@ function createConversationFacade() {
 
 export function createConversationControllerDependencies(): ConversationControllerDependencies {
   const facade = createConversationFacade()
-  const renderer = createMockConversationalRenderer()
+  const provider = createAIProvider()
+  const providerValidation = validateAIProvider(provider)
+  if (providerValidation !== null) {
+    throw new Error(providerValidation.safeMessage)
+  }
 
   return {
     pipeline: {
@@ -166,8 +110,6 @@ export function createConversationControllerDependencies(): ConversationControll
       > {
         const requestedAt = new Date().toISOString()
         const fragment = createRequestFragment(requestedAt)
-        const plan = resolveToolPlan(input.userMessage)
-
         const request = {
           protocolVersion: AI_CONVERSATION_ORCHESTRATOR_PROTOCOL_VERSION,
           executionId: `conversation-orchestration:conversation-page:${fragment}:${input.turn}` as AIConversationRequest['executionId'],
@@ -184,13 +126,58 @@ export function createConversationControllerDependencies(): ConversationControll
             {
               stepId: `step:${input.turn}`,
               order: 1,
-              toolId: plan.toolId,
-              arguments: plan.arguments,
+              toolId: 'financial_balance',
+              arguments: {},
             },
           ],
         } as AIConversationRequest
 
-        const requestValidation = validateAIConversationRequest(request)
+        if (provider.resolveIntent === undefined) {
+          return {
+            kind: 'failure',
+            code: 'INTENT_RESOLUTION_FAILED',
+            safeMessage: 'El proveedor AI no implementa resolución de intención.',
+          }
+        }
+
+        const resolutionResult = await provider.resolveIntent({
+          protocolVersion: INTENT_RESOLVER_PROTOCOL_VERSION,
+          conversationRequest: request,
+          metadata: {
+            userMessage: input.userMessage,
+            turn: input.turn,
+            requestedAt,
+          },
+        })
+
+        const resolutionValidation = validateAIProviderIntentResolutionResult(resolutionResult)
+        if (resolutionValidation !== null) {
+          return {
+            kind: 'failure',
+            code: resolutionValidation.code,
+            safeMessage: resolutionValidation.safeMessage,
+          }
+        }
+
+        if (resolutionResult.kind === 'failure') {
+          return {
+            kind: 'failure',
+            code: resolutionResult.code,
+            safeMessage: resolutionResult.safeMessage,
+          }
+        }
+
+        const requestFromResolution: AIConversationRequest = {
+          ...request,
+          steps: resolutionResult.resolution.tools.map((tool, index) => ({
+            stepId: `step:${input.turn}:${index + 1}`,
+            order: index + 1,
+            toolId: tool.toolId,
+            arguments: structuredClone(tool.arguments),
+          })),
+        }
+
+        const requestValidation = validateAIConversationRequest(requestFromResolution)
         if (requestValidation !== null) {
           return {
             kind: 'failure',
@@ -199,7 +186,7 @@ export function createConversationControllerDependencies(): ConversationControll
           }
         }
 
-        const execution = await facade.execute(request)
+        const execution = await facade.execute(requestFromResolution)
         if (execution.kind === 'failure') {
           return {
             kind: 'failure',
@@ -208,21 +195,29 @@ export function createConversationControllerDependencies(): ConversationControll
           }
         }
 
-        const rendered = renderer.render(execution.response)
-        if (rendered.kind === 'failure') {
+        if (provider.generateConversation === undefined) {
           return {
             kind: 'failure',
-            code: rendered.code,
-            safeMessage: rendered.safeMessage,
+            code: 'CONVERSATION_GENERATION_FAILED',
+            safeMessage: 'El proveedor AI no implementa generación conversacional.',
           }
         }
 
-        const messageValidation = validateChatMessage(rendered.message)
+        const rendered = await provider.generateConversation(execution.response)
+        const messageValidation = validateAIProviderConversationGenerationResult(rendered)
         if (messageValidation !== null) {
           return {
             kind: 'failure',
             code: messageValidation.code,
             safeMessage: messageValidation.safeMessage,
+          }
+        }
+
+        if (rendered.kind === 'failure') {
+          return {
+            kind: 'failure',
+            code: rendered.code,
+            safeMessage: rendered.safeMessage,
           }
         }
 
