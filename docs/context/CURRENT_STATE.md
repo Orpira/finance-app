@@ -58,6 +58,7 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 - PB-IS-012A.5 Goals Tool implemented as a read-only adapter over earning period domain services, reusing `listEarningPeriods`, `getSeasonStatistics` and `getSettings` to expose structured goals status via financial contracts without creating new financial entities or modifying AI infrastructure.
 - PB-IS-012A.6 Reports Tool implemented as a read-only adapter over consolidated domain reporting services, reusing `listCutoffReports`, `listEarningPeriods`, `getSeasonStatistics` and `getSettings` to expose structured report sections via financial contracts without recalculating domain statistics or modifying AI infrastructure.
 - PB-IS-012A.7 Financial Insights Tool implemented as a read-only adapter over existing financial indicators, reusing `getActiveEarningPeriod`, `listClosedEarningPeriods`, `getSeasonStatistics`, `listCutoffReports` and `getSettings` to expose structured insights and season comparison sections without introducing new metrics or changing AI infrastructure.
+- PB-IS-012A.8 Financial Catalog Integration implemented by introducing `financialToolsCatalog` as the single discovery source for certified financial tools and wiring it into the existing `AIToolRegistry` composition root, preserving tool independence and fail-closed registration without creating parallel registries.
 
 ## 3) Estado de calidad
 

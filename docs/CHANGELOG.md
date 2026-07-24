@@ -10,6 +10,8 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Added
 
+- Milestone 12A.8 — AI Financial Catalog Integration con `financialToolsCatalog` (`createFinancialToolsCatalog` + `registerFinancialToolsCatalog`) para registrar en el `AIToolRegistry` existente las tools certificadas `financial_balance`, `financial_transactions`, `financial_budget`, `financial_goals`, `financial_reports` y `financial_insights`, con validacion fail-closed de unicidad y sin modificar la logica interna de ninguna herramienta financiera.
+
 - Milestone 12A.7 — AI Financial Insights Tool (`financial_insights`) implementada como adaptador read-only en `src/intelligence/ai-tools/financial/insightsTool.ts`, reutilizando indicadores existentes del dominio de temporadas (`getSeasonStatistics`, `getActiveEarningPeriod`, `listClosedEarningPeriods`) y reportes de corte (`listCutoffReports`) para exponer secciones estructuradas de insights y comparacion de temporadas sin introducir nuevos calculos, sin cambios en infraestructura IA y con cobertura unitaria dedicada.
 
 - Milestone 12A.6 — AI Reports Tool (`financial_reports`) implementada como adaptador read-only en `src/intelligence/ai-tools/financial/reportsTool.ts`, reutilizando reportes consolidados de cortes (`listCutoffReports`) y estadisticas de temporada (`listEarningPeriods` + `getSeasonStatistics`) para exponer secciones estructuradas por contrato publico (`reportsContracts`) con fail-closed, sin nuevos calculos de dominio, sin cambios en Tool Registry/Execution Pipeline/Composition Root y con cobertura unitaria dedicada.

@@ -18,6 +18,9 @@ import {
   type AIToolExecutor,
 } from '../../intelligence/ai-tools'
 import {
+  registerFinancialToolsCatalog,
+} from '../../intelligence/ai-tools/financial'
+import {
   createDeterministicKnowledgeSearchEngine,
   createFixedWindowChunkingStrategy,
   createKnowledgeIndexer,
@@ -248,11 +251,18 @@ const registeredKnowledgeSearchTool = createKnowledgeSearchAITool({
   }),
 })
 
+const registeredToolsRegistry = createAIToolRegistry([
+  createPingTool(),
+  registeredKnowledgeSearchTool,
+])
+
+const financialCatalogRegistration = registerFinancialToolsCatalog(registeredToolsRegistry)
+if (financialCatalogRegistration.kind === 'failure') {
+  throw new Error(financialCatalogRegistration.safeMessage)
+}
+
 const registeredToolExecutor: AIToolExecutor = createAIToolExecutor({
-  registry: createAIToolRegistry([
-    createPingTool(),
-    registeredKnowledgeSearchTool,
-  ]),
+  registry: registeredToolsRegistry,
 })
 let defaultApplicationService: AIConversationApplicationService | null = null
 
