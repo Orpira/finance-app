@@ -54,6 +54,7 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 - PB-IS-012A.1 Financial Tool Contracts scaffolded as a contract-only module under `src/intelligence/ai-tools/financial`, with public types for balance, transactions, budget, goals, investments and reports, without business logic, executors or pipeline integration.
 - PB-IS-012A.2 Balance Tool implemented as a read-only adapter over existing financial services, reusing `buildBalanceReport`, `getSettings`, `listServiceIncomes` and `listExpenses` without touching Dexie or the execution pipeline.
 - PB-IS-012A.3 Transactions Tool implemented as a read-only adapter over existing financial listing services, exposing structured transaction history via financial contracts without modifying Tool Calling infrastructure.
+- PB-IS-012A.4 Budget Tool implemented as a read-only adapter over existing cutoff reporting services, reusing `listCutoffReports` and `getSettings` to expose structured budget status via financial contracts without adding new financial persistence paths or modifying Tool Calling infrastructure.
 
 ## 3) Estado de calidad
 
