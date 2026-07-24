@@ -1,15 +1,21 @@
-import type { AIConversationApplicationService } from '../../application/ai-conversation'
-import type { AIConversationSessionSnapshot } from '../../intelligence/ai-conversation/session'
+import type { ChatMessage } from '../../intelligence/mock-conversational-renderer/mockConversationalRenderer'
 import {
   createInitialConversationUiState,
+  type ConversationUiMessage,
   type ConversationUiState,
 } from './conversationState'
 
 export interface ConversationControllerDependencies {
-  readonly service: Pick<
-    AIConversationApplicationService,
-    'startConversation' | 'sendMessage'
-  > & Partial<Pick<AIConversationApplicationService, 'loadSession' | 'saveSession'>>
+  readonly pipeline: {
+    generateAssistantMessage(input: {
+      readonly userMessage: string
+      readonly turn: number
+    }): Promise<
+      | { readonly kind: 'success'; readonly message: ChatMessage }
+      | { readonly kind: 'failure'; readonly code: string; readonly safeMessage: string }
+    >
+  }
+  readonly now?: () => string
 }
 
 export interface ConversationController {
@@ -20,26 +26,60 @@ export interface ConversationController {
   dispose(): void
 }
 
-function debugConversationBoundary(event: string, payload: Record<string, unknown>): void {
-  // Temporal: trazas sanitizadas para auditar publicación de estado del controller.
-  console.info('[ConversationTrace]', event, payload)
+function toAssistantErrorMessage(safeMessage: string): string {
+  const detail = safeMessage.trim()
+  if (detail.length === 0) {
+    return 'No fue posible procesar la solicitud.'
+  }
+
+  return `No fue posible procesar la solicitud.\n\n${detail}`
 }
 
-function resolveSafeErrorMessage(fallback: string, input: string): string {
-  const value = input.trim()
-  if (value.length === 0) {
-    return fallback
+function createUserMessage(input: {
+  readonly id: string
+  readonly text: string
+  readonly createdAt: string
+}): ConversationUiMessage {
+  return {
+    id: input.id,
+    role: 'USER',
+    text: input.text,
+    createdAt: input.createdAt,
   }
-  return value
+}
+
+function createAssistantMessage(input: {
+  readonly id: string
+  readonly text: string
+  readonly createdAt: string
+}): ConversationUiMessage {
+  return {
+    id: input.id,
+    role: 'ASSISTANT',
+    text: input.text,
+    createdAt: input.createdAt,
+  }
+}
+
+export function validateConversationUiState(state: ConversationUiState): string | null {
+  if (state.status === 'ready' && state.errorMessage !== null) {
+    return 'El estado visual de conversacion no puede estar ready con error activo.'
+  }
+
+  if (state.status === 'sending' && state.messages.length === 0) {
+    return 'El estado visual de conversacion no puede enviar sin historial.'
+  }
+
+  return null
 }
 
 export function createConversationController(
   dependencies: ConversationControllerDependencies,
 ): ConversationController {
+  const now = dependencies.now ?? (() => new Date().toISOString())
+
   let state: ConversationUiState = createInitialConversationUiState()
   let disposed = false
-  let initializationTask: Promise<void> | null = null
-
   const listeners = new Set<(state: ConversationUiState) => void>()
 
   function emit(nextState: ConversationUiState): void {
@@ -47,26 +87,10 @@ export function createConversationController(
       return
     }
 
-    debugConversationBoundary('controller.state.published', {
-      status: nextState.status,
-      sessionId: nextState.session?.sessionId ?? null,
-      messageCount: nextState.messages.length,
-      hasError: nextState.errorMessage !== null,
-    })
-
     state = nextState
     for (const listener of listeners) {
       listener(state)
     }
-  }
-
-  function fail(message: string): void {
-    emit({
-      status: 'error',
-      session: state.session,
-      messages: state.session?.messages ?? state.messages,
-      errorMessage: message,
-    })
   }
 
   return {
@@ -76,8 +100,6 @@ export function createConversationController(
 
     subscribe(listener) {
       if (disposed) {
-        // React StrictMode desmonta y vuelve a montar efectos en desarrollo.
-        // Rehabilitamos el controller al resuscribirse para no perder emisiones.
         disposed = false
       }
 
@@ -90,265 +112,82 @@ export function createConversationController(
     },
 
     async initialize() {
-      if (initializationTask !== null) {
-        return initializationTask
+      if (state.status === 'ready') {
+        return
       }
 
-      initializationTask = (async () => {
-        if (state.status === 'loading' || state.status === 'loading-memory') {
-          return
-        }
+      emit({
+        ...state,
+        status: 'loading',
+        errorMessage: null,
+      })
 
-        if (state.session !== null) {
-          emit({
-            status: 'ready',
-            session: state.session,
-            messages: state.session.messages,
-            errorMessage: null,
-          })
-          return
-        }
-
-        emit({
-          status: 'loading-memory',
-          session: state.session,
-          messages: state.messages,
-          errorMessage: null,
-        })
-
-        let loadedSession: AIConversationSessionSnapshot | null
-        try {
-          const loaded = dependencies.service.loadSession === undefined
-            ? {
-              kind: 'failure' as const,
-              code: 'SESSION_NOT_FOUND',
-              retryable: false,
-              safeMessage: 'No se encontro una sesion conversacional en memoria local.',
-            }
-            : await dependencies.service.loadSession()
-          if (loaded.kind === 'failure') {
-            if (loaded.code === 'SESSION_NOT_FOUND') {
-              loadedSession = null
-            } else {
-              emit({
-                status: 'memory-error',
-                session: state.session,
-                messages: state.messages,
-                errorMessage: resolveSafeErrorMessage(
-                  'No se pudo recuperar la memoria conversacional local.',
-                  loaded.safeMessage,
-                ),
-              })
-              return
-            }
-          } else {
-            loadedSession = loaded.value
-          }
-
-        } catch {
-          emit({
-            status: 'memory-error',
-            session: state.session,
-            messages: state.messages,
-            errorMessage: 'No se pudo recuperar la memoria conversacional local.',
-          })
-          return
-        }
-
-        if (loadedSession !== null) {
-          debugConversationBoundary('controller.session.recovered', {
-            sessionId: loadedSession.sessionId,
-            messageCount: loadedSession.messages.length,
-          })
-
-          emit({
-            status: 'memory-loaded',
-            session: loadedSession,
-            messages: loadedSession.messages,
-            errorMessage: null,
-          })
-
-          emit({
-            status: 'ready',
-            session: loadedSession,
-            messages: loadedSession.messages,
-            errorMessage: null,
-          })
-          return
-        }
-
-        let result: ReturnType<AIConversationApplicationService['startConversation']>
-        try {
-          result = dependencies.service.startConversation({
-            userDisplayName: 'Usuario',
-            assistantDisplayName: 'Private Balance AI',
-          })
-        } catch {
-          fail('No se pudo iniciar la sesion de conversacion.')
-          return
-        }
-
-        if (result.kind === 'failure') {
-          fail(
-            resolveSafeErrorMessage(
-              'No se pudo crear la sesion de conversacion.',
-              result.safeMessage,
-            ),
-          )
-          return
-        }
-
-        debugConversationBoundary('controller.session.created', {
-          sessionId: result.value.sessionId,
-          messageCount: result.value.messages.length,
-        })
-
-        emit({
-          status: 'saving-memory',
-          session: result.value,
-          messages: result.value.messages,
-          errorMessage: null,
-        })
-
-        const saved = dependencies.service.saveSession === undefined
-          ? {
-            kind: 'success' as const,
-            value: {
-              session: result.value,
-              retention: {
-                evictionStrategy: 'KEEP_MOST_RECENT' as const,
-                maxSessions: 25,
-                maxMessagesPerSession: 300,
-                evictedSessionIds: [],
-                evictedCount: 0,
-                messagesTruncated: false as const,
-              },
-            },
-          }
-          : await dependencies.service.saveSession({
-            session: result.value,
-          })
-        if (saved.kind === 'failure') {
-          emit({
-            status: 'memory-error',
-            session: result.value,
-            messages: result.value.messages,
-            errorMessage: resolveSafeErrorMessage(
-              'No se pudo guardar la memoria conversacional local.',
-              saved.safeMessage,
-            ),
-          })
-          return
-        }
-
-        emit({
-          status: 'ready',
-          session: saved.value.session,
-          messages: saved.value.session.messages,
-          errorMessage: null,
-        })
-      })()
-        .catch(() => {
-          fail('No se pudo inicializar la conversacion.')
-        })
-        .finally(() => {
-          initializationTask = null
-        })
-
-      return initializationTask
+      emit({
+        ...state,
+        status: 'ready',
+        errorMessage: null,
+      })
     },
 
     async sendMessage(message) {
-      const trimmedMessage = message.trim()
-      if (trimmedMessage.length === 0) {
+      const text = message.trim()
+      if (text.length === 0) {
         return
       }
 
-      if (!state.session) {
-        fail('No hay una sesion activa para enviar mensajes.')
-        return
-      }
+      const turn = state.messages.filter((item) => item.role === 'USER').length + 1
+      const userMessage = createUserMessage({
+        id: `conversation:user:${turn}`,
+        text,
+        createdAt: now(),
+      })
+
+      const baseMessages = [...state.messages, userMessage]
 
       emit({
         status: 'sending',
-        session: state.session,
-        messages: state.session.messages,
+        messages: baseMessages,
         errorMessage: null,
       })
 
-      let result
+      let generated
       try {
-        result = await dependencies.service.sendMessage({
-          session: state.session,
-          message: trimmedMessage,
-          onStateChange: (applicationState) => {
-            if (applicationState === 'Receiving') {
-              emit({
-                status: 'receiving',
-                session: state.session,
-                messages: state.session?.messages ?? state.messages,
-                errorMessage: null,
-              })
-            }
-          },
+        generated = await dependencies.pipeline.generateAssistantMessage({
+          userMessage: text,
+          turn,
         })
       } catch {
-        fail('No se pudo procesar la respuesta del asistente.')
-        return
-      }
-
-      if (result.kind === 'failure') {
-        fail(
-          resolveSafeErrorMessage(
-            'No se pudo procesar la respuesta del asistente.',
-            result.safeMessage,
-          ),
-        )
-        return
-      }
-
-      emit({
-        status: 'saving-memory',
-        session: result.value.session,
-        messages: result.value.session.messages,
-        errorMessage: null,
-      })
-
-      const saved = dependencies.service.saveSession === undefined
-        ? {
-          kind: 'success' as const,
-          value: {
-            session: result.value.session,
-            retention: {
-              evictionStrategy: 'KEEP_MOST_RECENT' as const,
-              maxSessions: 25,
-              maxMessagesPerSession: 300,
-              evictedSessionIds: [],
-              evictedCount: 0,
-              messagesTruncated: false as const,
-            },
-          },
+        generated = {
+          kind: 'failure' as const,
+          code: 'UNEXPECTED_ERROR',
+          safeMessage: 'No fue posible procesar la solicitud.',
         }
-        : await dependencies.service.saveSession({
-          session: result.value.session,
+      }
+
+      if (generated.kind === 'failure') {
+        const assistantErrorMessage = createAssistantMessage({
+          id: `conversation:assistant:error:${turn}`,
+          text: toAssistantErrorMessage(generated.safeMessage),
+          createdAt: now(),
         })
-      if (saved.kind === 'failure') {
+
         emit({
-          status: 'memory-error',
-          session: result.value.session,
-          messages: result.value.session.messages,
-          errorMessage: resolveSafeErrorMessage(
-            'No se pudo guardar la memoria conversacional local.',
-            saved.safeMessage,
-          ),
+          status: 'error',
+          messages: [...baseMessages, assistantErrorMessage],
+          errorMessage: assistantErrorMessage.text,
         })
         return
       }
+
+      const assistantMessage = createAssistantMessage({
+        id: generated.message.messageId,
+        text: generated.message.text,
+        createdAt: generated.message.timestamp,
+      })
 
       emit({
         status: 'ready',
-        session: saved.value.session,
-        messages: saved.value.session.messages,
+        messages: [...baseMessages, assistantMessage],
         errorMessage: null,
       })
     },

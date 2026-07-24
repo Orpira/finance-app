@@ -1,341 +1,204 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type {
-  AIConversationApplicationResult,
-  AIConversationApplicationSendResponse,
-  AIConversationApplicationService,
-} from '../src/application/ai-conversation'
+import type { ChatMessage } from '../src/intelligence/mock-conversational-renderer/mockConversationalRenderer'
 import {
-  AIInteractionPolicyEngine,
-  AIInteractionPolicyRegistry,
-  createDeterministicInteractionPolicy,
-} from '../src/intelligence/ai-interaction/policies'
-import {
-  createAIConversationService,
-} from '../src/intelligence/ai-conversation/service'
-import type { AIConversationSessionSnapshot } from '../src/intelligence/ai-conversation/session'
-import { createConversationController } from '../src/pages/Conversation/conversationController'
+  createConversationController,
+  validateConversationUiState,
+} from '../src/pages/Conversation/conversationController'
 
-function createPolicyEngine() {
-  const policy = createDeterministicInteractionPolicy({
-    policyId: 'conversation-preview',
-    policyVersion: '1.0.0',
-    allowedIntents: ['EDUCATIONAL_GUIDANCE'],
-    allowedCapabilities: ['TEXT_GENERATION'],
-    allowedProcessingModes: ['LOCAL_ONLY'],
-    requireAuthorizedContext: false,
-    requireUserConfirmation: false,
-    requireRedactionForSensitiveData: false,
-    featureAvailable: true,
-  })
+function createChatMessageFixture(input: {
+  readonly messageId: string
+  readonly text: string
+  readonly responseId?: string
+  readonly timestamp?: string
+}): ChatMessage {
+  const timestamp = input.timestamp ?? '2026-07-24T12:00:01.000Z'
+  const responseId = input.responseId ?? 'conversation-response:test:001'
 
-  return new AIInteractionPolicyEngine(new AIInteractionPolicyRegistry([policy]))
-}
-
-function createSessionFixture(): AIConversationSessionSnapshot {
-  const service = createAIConversationService({
-    policyEngine: createPolicyEngine(),
-  })
-
-  const started = service.startConversation({
-    userDisplayName: 'Usuario',
-    assistantDisplayName: 'Private Balance AI',
-  })
-
-  if (started.kind !== 'success') {
-    throw new Error('Expected a valid session fixture')
-  }
-
-  return started.value
-}
-
-function createSendMessageFailureResult(): AIConversationApplicationResult<AIConversationApplicationSendResponse> {
   return {
-    kind: 'failure',
-    code: 'SEND_MESSAGE_FAILED',
-    retryable: false,
-    safeMessage: 'No-op para pruebas de initialize.',
-  }
-}
-
-function createApplicationServiceMock(input: {
-  readonly startConversation: AIConversationApplicationService['startConversation']
-  readonly loadSession?: AIConversationApplicationService['loadSession']
-  readonly saveSession?: AIConversationApplicationService['saveSession']
-}): AIConversationApplicationService {
-  return {
-    startConversation: input.startConversation,
-    sendMessage: vi.fn(async () => createSendMessageFailureResult()),
-    loadSession: input.loadSession ?? vi.fn(async () => ({
-      kind: 'failure',
-      code: 'SESSION_NOT_FOUND',
-      retryable: false,
-      safeMessage: 'No se encontro una sesion conversacional en memoria local.',
-    })),
-    saveSession: input.saveSession ?? vi.fn(async (request) => ({
-      kind: 'success',
-      value: {
-        session: request.session,
-        retention: {
-          evictionStrategy: 'KEEP_MOST_RECENT',
-          maxSessions: 25,
-          maxMessagesPerSession: 300,
-          evictedSessionIds: [],
-          evictedCount: 0,
-          messagesTruncated: false,
-        },
+    protocolVersion: 1,
+    messageId: input.messageId,
+    type: 'assistant',
+    origin: 'MOCK_RENDERER',
+    timestamp,
+    text: input.text,
+    responseId,
+    conversationResponse: {
+      protocolVersion: 1,
+      responseId,
+      metadata: {
+        createdAt: timestamp,
+        blockCount: 1,
+        failClosed: true,
       },
-    })),
-    listSessions: vi.fn(async () => ({ kind: 'success', value: [] })),
-    deleteSession: vi.fn(async () => ({ kind: 'success', value: { deleted: false } })),
-    clearMemory: vi.fn(async () => ({ kind: 'success', value: { deletedCount: 0 } })),
+      execution: {
+        executionId: 'execution:test:001',
+        promptContextId: 'prompt-context:test:001',
+        status: 'success',
+        startedAt: '2026-07-24T12:00:00.000Z',
+        finishedAt: timestamp,
+      },
+      blocks: [
+        {
+          kind: 'summary',
+          summaryText: input.text,
+          sourceStepIds: ['step-1'],
+        },
+      ],
+      promptContext: {
+        protocolVersion: 1,
+        promptContextId: 'prompt-context:test:001',
+        metadata: {
+          createdAt: timestamp,
+          schemaVersion: '1.0.0',
+          source: 'AI_CONVERSATION_ORCHESTRATOR',
+        },
+        execution: {
+          executionId: 'execution:test:001',
+          status: 'success',
+          startedAt: '2026-07-24T12:00:00.000Z',
+          finishedAt: timestamp,
+          summary: {
+            totalSteps: 1,
+            successfulSteps: 1,
+            failedSteps: 0,
+          },
+        },
+        steps: [
+          {
+            kind: 'success',
+            stepId: 'step-1',
+            order: 1,
+            toolId: 'financial_balance',
+            resolvedToolName: 'financial_balance',
+            output: {
+              summary: {
+                netBalance: 1200,
+              },
+            },
+            permission: 'read-only',
+            durationMs: 1,
+          },
+        ],
+      },
+    },
+    traceability: {
+      executionId: 'execution:test:001',
+      promptContextId: 'prompt-context:test:001',
+    },
   }
 }
 
-function deferred<T>() {
-  let resolve: (value: T) => void = () => undefined
-  const promise = new Promise<T>((promiseResolve) => {
-    resolve = promiseResolve
-  })
-
-  return {
-    promise,
-    resolve,
-  }
-}
-
-describe('ConversationController.initialize', () => {
-  it('recupera una sesion existente y no crea una nueva', async () => {
-    const existingSession = createSessionFixture()
-    const startConversation = vi.fn(() => ({
-      kind: 'success' as const,
-      value: createSessionFixture(),
-    }))
-
+describe('ConversationController initialize/send (PB-IS-013.8)', () => {
+  it('inicializa en ready y sin historial', async () => {
     const controller = createConversationController({
-      service: createApplicationServiceMock({
-        startConversation,
-        loadSession: vi.fn(async () => ({ kind: 'success', value: existingSession })),
-      }),
+      pipeline: {
+        generateAssistantMessage: vi.fn(async () => ({
+          kind: 'success',
+          message: createChatMessageFixture({
+            messageId: 'assistant-message-1',
+            text: 'Tu balance disponible es de $1200.',
+          }),
+        })),
+      },
+      now: () => '2026-07-24T12:00:00.000Z',
     })
 
     await controller.initialize()
+
+    expect(controller.getState()).toEqual({
+      status: 'ready',
+      messages: [],
+      errorMessage: null,
+    })
+  })
+
+  it('envia mensaje y renderiza respuesta del asistente usando ChatMessage', async () => {
+    const controller = createConversationController({
+      pipeline: {
+        generateAssistantMessage: vi.fn(async () => ({
+          kind: 'success',
+          message: createChatMessageFixture({
+            messageId: 'assistant-message-1',
+            text: 'Tu balance disponible es de $1200.',
+          }),
+        })),
+      },
+      now: () => '2026-07-24T12:00:00.000Z',
+    })
+
+    await controller.initialize()
+    await controller.sendMessage('Cuanto dinero tengo disponible?')
 
     const state = controller.getState()
     expect(state.status).toBe('ready')
-    expect(state.session?.sessionId).toBe(existingSession.sessionId)
-    expect(state.messages).toEqual(existingSession.messages)
-    expect(startConversation).not.toHaveBeenCalled()
+    expect(state.messages).toHaveLength(2)
+    expect(state.messages[0].role).toBe('USER')
+    expect(state.messages[0].text).toBe('Cuanto dinero tengo disponible?')
+    expect(state.messages[1].role).toBe('ASSISTANT')
+    expect(state.messages[1].text).toBe('Tu balance disponible es de $1200.')
+    expect(validateConversationUiState(state)).toBeNull()
   })
 
-  it('crea una sesion nueva solo cuando loadSession retorna SESSION_NOT_FOUND', async () => {
-    const createdSession = createSessionFixture()
-    const startConversation = vi.fn(() => ({
-      kind: 'success' as const,
-      value: createdSession,
-    }))
-
-    const controller = createConversationController({
-      service: createApplicationServiceMock({
-        startConversation,
-        loadSession: vi.fn(async () => ({
-          kind: 'failure',
-          code: 'SESSION_NOT_FOUND',
-          retryable: false,
-          safeMessage: 'No se encontro una sesion conversacional en memoria local.',
-        })),
-      }),
-    })
-
-    await controller.initialize()
-
-    const state = controller.getState()
-    expect(state.status).toBe('ready')
-    expect(state.session?.sessionId).toBe(createdSession.sessionId)
-    expect(state.messages).toEqual(createdSession.messages)
-    expect(startConversation).toHaveBeenCalledTimes(1)
-  })
-
-  it('si loadSession falla con MEMORY_READ_FAILED, publica memory-error y no crea sesion nueva', async () => {
-    const createdSession = createSessionFixture()
-    const startConversation = vi.fn(() => ({
-      kind: 'success' as const,
-      value: createdSession,
-    }))
-
-    const controller = createConversationController({
-      service: createApplicationServiceMock({
-        startConversation,
-        loadSession: vi.fn(async () => ({
-          kind: 'failure',
-          code: 'MEMORY_READ_FAILED',
-          retryable: true,
-          safeMessage: 'Read failed',
-        })),
-      }),
-    })
-
-    await controller.initialize()
-
-    const state = controller.getState()
-    expect(state.status).toBe('memory-error')
-    expect(state.session).toBeNull()
-    expect(startConversation).not.toHaveBeenCalled()
-  })
-
-  it('si loadSession falla con MEMORY_CORRUPTED, no crea sesion nueva', async () => {
-    const createdSession = createSessionFixture()
-    const startConversation = vi.fn(() => ({
-      kind: 'success' as const,
-      value: createdSession,
-    }))
-
-    const controller = createConversationController({
-      service: createApplicationServiceMock({
-        startConversation,
-        loadSession: vi.fn(async () => ({
-          kind: 'failure',
-          code: 'MEMORY_CORRUPTED',
-          retryable: false,
-          safeMessage: 'Corrupted session',
-        })),
-      }),
-    })
-
-    await controller.initialize()
-
-    expect(controller.getState().status).toBe('memory-error')
-    expect(startConversation).not.toHaveBeenCalled()
-  })
-
-  it('si loadSession falla con MEMORY_VERSION_UNSUPPORTED, no crea sesion nueva', async () => {
-    const createdSession = createSessionFixture()
-    const startConversation = vi.fn(() => ({
-      kind: 'success' as const,
-      value: createdSession,
-    }))
-
-    const controller = createConversationController({
-      service: createApplicationServiceMock({
-        startConversation,
-        loadSession: vi.fn(async () => ({
-          kind: 'failure',
-          code: 'MEMORY_VERSION_UNSUPPORTED',
-          retryable: false,
-          safeMessage: 'Unsupported version',
-        })),
-      }),
-    })
-
-    await controller.initialize()
-
-    expect(controller.getState().status).toBe('memory-error')
-    expect(startConversation).not.toHaveBeenCalled()
-  })
-
-  it('evita doble inicializacion concurrente y ejecuta una sola vez', async () => {
-    const createdSession = createSessionFixture()
-    const gate = deferred<void>()
-    const loadSession = vi.fn(async () => {
-      await gate.promise
-      return {
-        kind: 'failure' as const,
-        code: 'SESSION_NOT_FOUND',
-        retryable: false,
-        safeMessage: 'No se encontro una sesion conversacional en memoria local.',
-      }
-    })
-    const startConversation = vi.fn(() => ({
-      kind: 'success' as const,
-      value: createdSession,
-    }))
-
-    const controller = createConversationController({
-      service: createApplicationServiceMock({
-        startConversation,
-        loadSession,
-      }),
-    })
-
-    const initA = controller.initialize()
-    const initB = controller.initialize()
-
-    expect(loadSession).toHaveBeenCalledTimes(1)
-
-    gate.resolve()
-    await Promise.all([initA, initB])
-
-    expect(startConversation).toHaveBeenCalledTimes(1)
-    expect(controller.getState().status).toBe('ready')
-  })
-
-  it('no deja promise rejection sin manejar cuando initialize se invoca sin await', async () => {
-    const startConversation = vi.fn(() => {
-      throw new Error('unexpected startup failure')
-    })
-
-    const controller = createConversationController({
-      service: createApplicationServiceMock({ startConversation }),
-    })
-
-    const unhandled: unknown[] = []
-    const onUnhandled = (reason: unknown) => {
-      unhandled.push(reason)
-    }
-
-    process.on('unhandledRejection', onUnhandled)
-    try {
-      void controller.initialize()
-      await Promise.resolve()
-      await new Promise<void>((resolve) => {
-        setTimeout(() => resolve(), 0)
+  it('acumula historial local en multiples mensajes', async () => {
+    const assistant = vi
+      .fn()
+      .mockResolvedValueOnce({
+        kind: 'success',
+        message: createChatMessageFixture({
+          messageId: 'assistant-message-1',
+          text: 'Encontré 3 transacciones.',
+        }),
       })
-    } finally {
-      process.off('unhandledRejection', onUnhandled)
-    }
-
-    expect(unhandled).toHaveLength(0)
-    expect(controller.getState().status).toBe('error')
-    expect(controller.getState().errorMessage).toBe('No se pudo iniciar la sesion de conversacion.')
-  })
-
-  it('reanuda emisiones tras dispose y nueva suscripcion (compatible con StrictMode)', async () => {
-    const createdSession = createSessionFixture()
-    const startConversation = vi.fn(() => ({
-      kind: 'success' as const,
-      value: createdSession,
-    }))
+      .mockResolvedValueOnce({
+        kind: 'success',
+        message: createChatMessageFixture({
+          messageId: 'assistant-message-2',
+          text: 'Actualmente tienes 2 objetivos financieros.',
+          responseId: 'conversation-response:test:002',
+          timestamp: '2026-07-24T12:00:02.000Z',
+        }),
+      })
 
     const controller = createConversationController({
-      service: createApplicationServiceMock({
-        startConversation,
-        loadSession: vi.fn(async () => ({
-          kind: 'failure',
-          code: 'SESSION_NOT_FOUND',
-          retryable: false,
-          safeMessage: 'No se encontro una sesion conversacional en memoria local.',
-        })),
-      }),
-    })
-
-    const firstStates: string[] = []
-    const unsubscribe = controller.subscribe((nextState) => {
-      firstStates.push(nextState.status)
-    })
-
-    unsubscribe()
-    controller.dispose()
-
-    const secondStates: string[] = []
-    controller.subscribe((nextState) => {
-      secondStates.push(nextState.status)
+      pipeline: {
+        generateAssistantMessage: assistant,
+      },
+      now: () => '2026-07-24T12:00:00.000Z',
     })
 
     await controller.initialize()
+    await controller.sendMessage('Dame mis transacciones')
+    await controller.sendMessage('Y mis objetivos')
 
-    expect(secondStates).toContain('loading-memory')
-    expect(secondStates).toContain('ready')
-    expect(controller.getState().status).toBe('ready')
-    expect(firstStates[0]).toBe('idle')
+    const state = controller.getState()
+    expect(state.status).toBe('ready')
+    expect(state.messages).toHaveLength(4)
+    expect(state.messages.map((item) => item.role)).toEqual(['USER', 'ASSISTANT', 'USER', 'ASSISTANT'])
+    expect(assistant).toHaveBeenCalledTimes(2)
+  })
+
+  it('maneja error devolviendo burbuja de asistente con safeMessage', async () => {
+    const controller = createConversationController({
+      pipeline: {
+        generateAssistantMessage: vi.fn(async () => ({
+          kind: 'failure',
+          code: 'CONVERSATION_ORCHESTRATION_FAILED',
+          safeMessage: 'No se pudo resolver la herramienta solicitada.',
+        })),
+      },
+      now: () => '2026-07-24T12:00:00.000Z',
+    })
+
+    await controller.initialize()
+    await controller.sendMessage('Necesito mi balance')
+
+    const state = controller.getState()
+    expect(state.status).toBe('error')
+    expect(state.messages).toHaveLength(2)
+    expect(state.messages[1].role).toBe('ASSISTANT')
+    expect(state.messages[1].text).toContain('No fue posible procesar la solicitud.')
+    expect(state.messages[1].text).toContain('No se pudo resolver la herramienta solicitada.')
+    expect(state.errorMessage).toContain('No fue posible procesar la solicitud.')
   })
 })

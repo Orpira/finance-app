@@ -14,23 +14,11 @@ export function ConversationPage() {
   )
   const { state, sendMessage } = useConversation(dependencies)
 
-  // Temporal: traza sanitizada para auditar recepción de estado en render React.
-  console.info('[ConversationTrace]', 'react.render.received', {
-    status: state.status,
-    sessionId: state.session?.sessionId ?? null,
-    messageCount: state.messages.length,
-    hasError: state.errorMessage !== null,
-  })
-
   const isLoadingConversation =
     state.status === 'idle' ||
-    state.status === 'loading' ||
-    state.status === 'loading-memory'
+    state.status === 'loading'
   const isSending =
-    state.status === 'sending' ||
-    state.status === 'receiving' ||
-    state.status === 'saving-memory' ||
-    state.status === 'deleting-memory'
+    state.status === 'sending'
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-4 py-2">
@@ -41,7 +29,7 @@ export function ConversationPage() {
         title="Preview conversacional"
       />
 
-      <ConversationHeader isSending={isSending} session={state.session} />
+      <ConversationHeader isSending={isSending} status={state.status} />
 
       {state.errorMessage ? (
         <div
@@ -60,7 +48,7 @@ export function ConversationPage() {
       />
 
       <MessageComposer
-        disabled={isLoadingConversation || isSending || state.session === null}
+        disabled={isLoadingConversation || isSending}
         onSend={sendMessage}
       />
     </section>

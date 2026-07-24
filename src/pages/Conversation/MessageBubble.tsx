@@ -1,10 +1,10 @@
-import type { AIConversationMessage } from '../../intelligence/ai-conversation/message'
+import type { ConversationUiMessage } from './conversationState'
 
 interface MessageBubbleProps {
-  readonly message: AIConversationMessage
+  readonly message: ConversationUiMessage
 }
 
-function resolveTone(role: AIConversationMessage['role']): string {
+function resolveTone(role: ConversationUiMessage['role']): string {
   if (role === 'USER') {
     return 'self-end border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100'
   }
@@ -14,7 +14,7 @@ function resolveTone(role: AIConversationMessage['role']): string {
   return 'self-start border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100'
 }
 
-function resolveRoleLabel(role: AIConversationMessage['role']): string {
+function resolveRoleLabel(role: ConversationUiMessage['role']): string {
   if (role === 'USER') {
     return 'Usuario'
   }
@@ -36,7 +36,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
         {resolveRoleLabel(message.role)}
       </p>
-      <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{message.content.value}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{message.text}</p>
     </article>
   )
 }

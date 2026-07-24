@@ -10,6 +10,8 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Added
 
+- Milestone 13.8 — Mock Conversational Chat Integration en `src/pages/Conversation` para que la ruta principal `/conversation` deje de depender del flujo conversacional previo basado en proveedor y utilice exclusivamente `AIConversationFacade` + `Mock Conversational Renderer`, con request planning determinístico, validación fail-closed de request/ChatMessage, historial local de mensajes USER/ASSISTANT y renderizado en burbujas existentes sin JSON técnico, sin Prompt Templates y sin SDKs de IA.
+
 - Milestone 13.7 — Mock Conversational Renderer en `src/intelligence/mock-conversational-renderer/mockConversationalRenderer*` (contracts, validator, factory y renderer) para convertir `ConversationResponse` en `ChatMessage` mediante reglas determinísticas por tool financiera (`financial_balance`, `financial_transactions`, `financial_budget`, `financial_goals`, `financial_reports`, `financial_insights`), con manejo fail-closed de errores y validación serializable; integración visual en AI Developer Playground con quinto panel `Rendered Conversation` sin IA, sin Prompt Templates y sin SDKs de proveedores.
 
 - Milestone 13.6 — AI Developer Playground en `src/pages/Debug/AIDeveloperPlaygroundPage.tsx` con controlador y composicion dedicados para ejecutar el pipeline conversacional exclusivamente por `AIConversationFacade`, visualizar en formato JSON las cuatro etapas (Conversation Request, Conversation Execution Result, Prompt Context y Conversation Response), exponer errores controlados por etapa y habilitar navegacion desde Debug via `/debug/ai-developer-playground`, sin Prompt Templates ni dependencias de proveedores LLM.

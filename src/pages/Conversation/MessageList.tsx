@@ -1,8 +1,8 @@
-import type { AIConversationMessage } from '../../intelligence/ai-conversation/message'
+import type { ConversationUiMessage } from './conversationState'
 import { MessageBubble } from './MessageBubble'
 
 interface MessageListProps {
-  readonly messages: readonly AIConversationMessage[]
+  readonly messages: readonly ConversationUiMessage[]
   readonly isLoadingConversation: boolean
   readonly isSending: boolean
 }

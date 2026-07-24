@@ -1,33 +1,32 @@
-import type { AIConversationSessionSnapshot } from '../../intelligence/ai-conversation/session'
+import type { ConversationUiStatus } from './conversationState'
 
 interface ConversationHeaderProps {
-  readonly session: AIConversationSessionSnapshot | null
+  readonly status: ConversationUiStatus
   readonly isSending: boolean
 }
 
 function resolveStatusLabel(input: {
-  readonly session: AIConversationSessionSnapshot | null
+  readonly status: ConversationUiStatus
   readonly isSending: boolean
 }): string {
   if (input.isSending) {
     return 'Procesando respuesta...'
   }
 
-  if (!input.session) {
-    return 'Sin sesion activa'
+  if (input.status === 'error') {
+    return 'Error de procesamiento conversacional'
   }
 
-  const interactionState = input.session.interaction?.lifecycleState
-  if (interactionState) {
-    return `Interaccion: ${interactionState}`
+  if (input.status === 'loading') {
+    return 'Preparando conversacion...'
   }
 
-  return `Sesion: ${input.session.status}`
+  return 'Conversacion activa'
 }
 
-export function ConversationHeader({ session, isSending }: ConversationHeaderProps) {
+export function ConversationHeader({ status, isSending }: ConversationHeaderProps) {
   const statusLabel = resolveStatusLabel({
-    session,
+    status,
     isSending,
   })
 

@@ -1,30 +1,28 @@
-import type { AIConversationMessage } from '../../intelligence/ai-conversation/message'
-import type { AIConversationSessionSnapshot } from '../../intelligence/ai-conversation/session'
-
 export type ConversationUiStatus =
   | 'idle'
   | 'loading'
-  | 'loading-memory'
-  | 'memory-loaded'
-  | 'saving-memory'
-  | 'memory-error'
-  | 'deleting-memory'
   | 'ready'
   | 'sending'
-  | 'receiving'
   | 'error'
+
+export type ConversationUiMessageRole = 'USER' | 'ASSISTANT'
+
+export interface ConversationUiMessage {
+  readonly id: string
+  readonly role: ConversationUiMessageRole
+  readonly text: string
+  readonly createdAt: string
+}
 
 export interface ConversationUiState {
   readonly status: ConversationUiStatus
-  readonly session: AIConversationSessionSnapshot | null
-  readonly messages: readonly AIConversationMessage[]
+  readonly messages: readonly ConversationUiMessage[]
   readonly errorMessage: string | null
 }
 
 export function createInitialConversationUiState(): ConversationUiState {
   return {
     status: 'idle',
-    session: null,
     messages: [],
     errorMessage: null,
   }
