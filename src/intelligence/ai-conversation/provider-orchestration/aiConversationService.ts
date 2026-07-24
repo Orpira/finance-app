@@ -1,9 +1,5 @@
 import {
-  INTENT_RESOLVER_PROTOCOL_VERSION,
-} from '../../intent-resolver/intentResolver'
-import {
   validateAIProviderConversationGenerationResult,
-  validateAIProviderIntentResolutionResult,
 } from '../../ai-provider/aiProviderValidator'
 import {
   validateAIConversationRequest,
@@ -21,6 +17,16 @@ import {
 import {
   createNoopAIConversationMetricsRecorder,
 } from './aiConversationMetrics'
+import {
+  createActivationEngine,
+} from './activationEngine'
+import type {
+  ActivationDecision,
+  ActivationEngine,
+} from './activationContracts'
+import {
+  validateActivationDecision,
+} from './activationValidator'
 import {
   validateAIConversationConfidencePolicy,
   validateAIConversationExecution,
@@ -40,6 +46,24 @@ function createFailure(
   }
 }
 
+function createDirectToolMessageText(
+  decision: ActivationDecision,
+): string {
+  if (decision.toolId === null) {
+    return 'Se ejecuto la herramienta solicitada de forma determinista.'
+  }
+
+  if (decision.toolId === 'financial_transactions') {
+    return 'Se ejecutaron tus transacciones de forma determinista sin usar IA.'
+  }
+
+  if (decision.toolId === 'financial_balance') {
+    return 'Se calculo tu balance de forma determinista sin usar IA.'
+  }
+
+  return `Se ejecuto ${decision.toolId} de forma determinista sin usar IA.`
+}
+
 export function createAIConversationService(
   dependencies: AIConversationServiceDependencies,
 ): AIConversationService {
@@ -51,6 +75,32 @@ export function createAIConversationService(
   if (policyValidation !== null) {
     throw new Error(policyValidation.safeMessage)
   }
+
+  const injectedActivationEngine = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly activationEngine?: ActivationEngine
+    }
+  ).activationEngine
+
+  const activationEngine = injectedActivationEngine ?? createActivationEngine({
+    primaryProviderId: dependencies.provider.metadata.providerId,
+    fallbackProviderId: dependencies.fallbackProvider.metadata.providerId,
+    primaryIntentResolver: dependencies.provider.resolveIntent,
+    fallbackIntentResolver: dependencies.fallbackProvider.resolveIntent,
+    routingStrategy: {
+      exists() {
+        return true
+      },
+    },
+    policy: {
+      minimumConfidence: dependencies.confidencePolicy.confidenceThreshold,
+      enableFallback: true,
+      enableAIExplanation: true,
+      enableDirectTools: true,
+    },
+    clock,
+    now,
+  })
 
   return {
     async processConversation(
@@ -73,128 +123,76 @@ export function createAIConversationService(
         return createFailure('INVALID_SERVICE_INPUT', requestValidation.safeMessage)
       }
 
-      const primaryResolve = dependencies.provider.resolveIntent
-      if (primaryResolve === undefined) {
-        return createFailure('PROVIDER_UNAVAILABLE', 'Primary AI provider does not implement intent resolution.')
-      }
-
-      const fallbackResolve = dependencies.fallbackProvider.resolveIntent
-      if (fallbackResolve === undefined) {
-        return createFailure('PROVIDER_UNAVAILABLE', 'Fallback AI provider does not implement intent resolution.')
-      }
-
-      const primaryIntent = await primaryResolve({
-        protocolVersion: INTENT_RESOLVER_PROTOCOL_VERSION,
+      const decision = await activationEngine.decide({
         conversationRequest: input.conversationRequest,
-        metadata: {
-          userMessage: input.userMessage,
-          turn: input.turn,
-          requestedAt,
-        },
-      }).catch(() => {
-        return {
-          kind: 'failure',
-          code: 'INTENT_RESOLUTION_FAILED',
-          retryable: false,
-          safeMessage: 'Primary intent resolution failed.',
-        } as const
+        userMessage: input.userMessage,
+        turn: input.turn,
+        requestedAt,
       })
 
-      let fallbackUsed = false
-      let providerUsed = dependencies.provider
-      let providerId = dependencies.provider.metadata.providerId
-      let intentResult = primaryIntent
-
-      const primaryIntentValidation = validateAIProviderIntentResolutionResult(primaryIntent)
-      const primaryLowConfidence =
-        primaryIntent.kind === 'success'
-        && primaryIntent.resolution.confidence < dependencies.confidencePolicy.confidenceThreshold
-
-      if (primaryIntentValidation !== null || primaryIntent.kind === 'failure' || primaryLowConfidence) {
-        fallbackUsed = true
-        providerUsed = dependencies.fallbackProvider
-        providerId = dependencies.fallbackProvider.metadata.providerId
-
-        const fallbackIntent = await fallbackResolve({
-          protocolVersion: INTENT_RESOLVER_PROTOCOL_VERSION,
-          conversationRequest: input.conversationRequest,
-          metadata: {
-            userMessage: input.userMessage,
-            turn: input.turn,
-            requestedAt,
-          },
-        }).catch(() => {
-          return {
-            kind: 'failure',
-            code: 'INTENT_RESOLUTION_FAILED',
-            retryable: false,
-            safeMessage: 'Fallback intent resolution failed.',
-          } as const
-        })
-
-        const fallbackIntentValidation = validateAIProviderIntentResolutionResult(fallbackIntent)
-        if (fallbackIntentValidation !== null || fallbackIntent.kind === 'failure') {
-          const errorCode = fallbackIntentValidation?.code
-            ?? (fallbackIntent.kind === 'failure' ? fallbackIntent.code : 'INTENT_RESOLUTION_FAILED')
-
-          metrics.record({
-            provider: providerId,
-            durationMs: clock() - startedAt,
-            operation: 'resolve-intent',
-            fallbackUsed: true,
-            success: false,
-            errorCode,
-          })
-
-          return createFailure('INTENT_RESOLUTION_FAILED', fallbackIntentValidation?.safeMessage
-            ?? (fallbackIntent.kind === 'failure'
-              ? fallbackIntent.safeMessage
-              : 'Fallback intent resolution failed.'))
-        }
-
-        intentResult = fallbackIntent
-      }
-
-      if (intentResult.kind !== 'success') {
+      const decisionValidation = validateActivationDecision(decision)
+      if (decisionValidation !== null) {
         metrics.record({
-          provider: providerId,
+          provider: dependencies.provider.metadata.providerId,
           durationMs: clock() - startedAt,
-          operation: 'resolve-intent',
-          fallbackUsed,
+          operation: 'activation-decision',
+          fallbackUsed: false,
           success: false,
-          errorCode: intentResult.code,
+          errorCode: decisionValidation.code,
         })
 
-        return createFailure('INTENT_RESOLUTION_FAILED', intentResult.safeMessage)
+        return createFailure('INVALID_SERVICE_INPUT', decisionValidation.safeMessage)
       }
+
+      if (decision.activationType === 'INVALID_REQUEST') {
+        metrics.record({
+          provider: decision.provider,
+          durationMs: clock() - startedAt,
+          operation: 'activation-decision',
+          fallbackUsed: decision.fallback.used,
+          success: false,
+          errorCode: 'INVALID_REQUEST',
+        })
+
+        return createFailure('INVALID_SERVICE_INPUT', decision.reason)
+      }
+
+      const providerUsed = decision.provider === dependencies.fallbackProvider.metadata.providerId
+        ? dependencies.fallbackProvider
+        : dependencies.provider
+      const providerId = providerUsed.metadata.providerId
 
       const providerValidation = validateAIConversationProviderIdentifier(providerId)
       if (providerValidation !== null) {
         return createFailure('PROVIDER_UNAVAILABLE', providerValidation.safeMessage)
       }
 
-      const fallbackValidation = validateAIConversationFallback(providerId, fallbackUsed)
+      const fallbackValidation = validateAIConversationFallback(providerId, decision.fallback.used)
       if (fallbackValidation !== null) {
         return createFailure('PROVIDER_UNAVAILABLE', fallbackValidation.safeMessage)
       }
 
-      const requestFromResolution = {
-        ...input.conversationRequest,
-        steps: intentResult.resolution.tools.map((tool, index) => ({
-          stepId: `step:${input.turn}:${index + 1}`,
-          order: index + 1,
-          toolId: tool.toolId,
-          arguments: structuredClone(tool.arguments),
-        })),
-      }
+      const requestFromDecision = decision.requiresTool && decision.toolId !== null
+        ? {
+            ...input.conversationRequest,
+            steps: [
+              {
+                stepId: `step:${input.turn}:activation:1`,
+                order: 1,
+                toolId: decision.toolId,
+                arguments: structuredClone(decision.toolArguments ?? {}),
+              },
+            ],
+          }
+        : input.conversationRequest
 
-      const resolvedRequestValidation = validateAIConversationRequest(requestFromResolution)
+      const resolvedRequestValidation = validateAIConversationRequest(requestFromDecision)
       if (resolvedRequestValidation !== null) {
         metrics.record({
           provider: providerId,
           durationMs: clock() - startedAt,
           operation: 'facade-execute',
-          fallbackUsed,
+          fallbackUsed: decision.fallback.used,
           success: false,
           errorCode: resolvedRequestValidation.code,
         })
@@ -202,7 +200,7 @@ export function createAIConversationService(
         return createFailure('FACADE_EXECUTION_FAILED', resolvedRequestValidation.safeMessage)
       }
 
-      const execution = await dependencies.facade.execute(requestFromResolution).catch(() => {
+      const execution = await dependencies.facade.execute(requestFromDecision).catch(() => {
         return {
           kind: 'failure',
           code: 'CONVERSATION_ORCHESTRATION_FAILED',
@@ -215,7 +213,7 @@ export function createAIConversationService(
           provider: providerId,
           durationMs: clock() - startedAt,
           operation: 'facade-execute',
-          fallbackUsed,
+          fallbackUsed: decision.fallback.used,
           success: false,
           errorCode: execution.code,
         })
@@ -223,50 +221,71 @@ export function createAIConversationService(
         return createFailure('FACADE_EXECUTION_FAILED', execution.safeMessage)
       }
 
-      const generateConversation = providerUsed.generateConversation
-      if (generateConversation === undefined) {
-        return createFailure('PROVIDER_UNAVAILABLE', 'Selected AI provider does not implement conversation generation.')
-      }
-
-      const rendered = await generateConversation(execution.response).catch(() => {
-        return {
-          kind: 'failure',
-          code: 'CONVERSATION_GENERATION_FAILED',
-          retryable: false,
-          safeMessage: 'Conversation generation failed.',
+      let message
+      if (!decision.requiresAI && decision.activationType === 'DIRECT_TOOL') {
+        message = {
+          protocolVersion: 1,
+          messageId: `${execution.response.responseId}:direct-tool`,
+          type: 'assistant',
+          origin: 'MOCK_RENDERER',
+          timestamp: now(),
+          text: createDirectToolMessageText(decision),
+          responseId: execution.response.responseId,
+          conversationResponse: execution.response,
+          traceability: {
+            executionId: execution.response.execution.executionId,
+            promptContextId: execution.response.execution.promptContextId,
+          },
         } as const
-      })
-      const renderValidation = validateAIProviderConversationGenerationResult(rendered)
-      if (renderValidation !== null || rendered.kind === 'failure') {
-        const safeMessage = renderValidation?.safeMessage
-          ?? (rendered.kind === 'failure'
-            ? rendered.safeMessage
-            : 'Conversation generation failed.')
-        const errorCode = renderValidation?.code
-          ?? (rendered.kind === 'failure'
-            ? rendered.code
-            : 'CONVERSATION_GENERATION_FAILED')
+      } else {
+        const generateConversation = providerUsed.generateConversation
+        if (generateConversation === undefined) {
+          return createFailure('PROVIDER_UNAVAILABLE', 'Selected AI provider does not implement conversation generation.')
+        }
 
-        metrics.record({
-          provider: providerId,
-          durationMs: clock() - startedAt,
-          operation: 'generate-conversation',
-          fallbackUsed,
-          success: false,
-          errorCode,
+        const rendered = await generateConversation(execution.response).catch(() => {
+          return {
+            kind: 'failure',
+            code: 'CONVERSATION_GENERATION_FAILED',
+            retryable: false,
+            safeMessage: 'Conversation generation failed.',
+          } as const
         })
 
-        return createFailure('CONVERSATION_GENERATION_FAILED', safeMessage)
+        const renderValidation = validateAIProviderConversationGenerationResult(rendered)
+        if (renderValidation !== null || rendered.kind === 'failure') {
+          const safeMessage = renderValidation?.safeMessage
+            ?? (rendered.kind === 'failure'
+              ? rendered.safeMessage
+              : 'Conversation generation failed.')
+          const errorCode = renderValidation?.code
+            ?? (rendered.kind === 'failure'
+              ? rendered.code
+              : 'CONVERSATION_GENERATION_FAILED')
+
+          metrics.record({
+            provider: providerId,
+            durationMs: clock() - startedAt,
+            operation: 'generate-conversation',
+            fallbackUsed: decision.fallback.used,
+            success: false,
+            errorCode,
+          })
+
+          return createFailure('CONVERSATION_GENERATION_FAILED', safeMessage)
+        }
+
+        message = rendered.message
       }
 
       const executionPayload = {
         protocolVersion: AI_CONVERSATION_SERVICE_PROTOCOL_VERSION,
         provider: providerId,
-        intent: intentResult.resolution.detectedIntent,
-        confidence: intentResult.resolution.confidence,
-        conversationGenerated: true,
+        intent: decision.intent,
+        confidence: decision.confidence,
+        conversationGenerated: decision.requiresAI,
         executionTime: clock() - startedAt,
-        fallbackUsed,
+        fallbackUsed: decision.fallback.used,
         success: true,
         error: null,
       }
@@ -277,7 +296,7 @@ export function createAIConversationService(
           provider: providerId,
           durationMs: clock() - startedAt,
           operation: 'execution-validation',
-          fallbackUsed,
+          fallbackUsed: decision.fallback.used,
           success: false,
           errorCode: executionValidation.code,
         })
@@ -289,13 +308,13 @@ export function createAIConversationService(
         provider: providerId,
         durationMs: executionPayload.executionTime,
         operation: 'process-conversation',
-        fallbackUsed,
+        fallbackUsed: decision.fallback.used,
         success: true,
       })
 
       return {
         kind: 'success',
-        message: rendered.message,
+        message,
         execution: executionPayload,
       }
     },

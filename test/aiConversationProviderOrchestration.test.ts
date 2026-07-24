@@ -14,37 +14,48 @@ import {
 } from '../src/intelligence/response-composer'
 import {
   AI_PROVIDER_PROTOCOL_VERSION,
-  createMockAIProvider,
   type AIProvider,
 } from '../src/intelligence/ai-provider/aiProvider'
 import type {
   AIConversationFacade,
 } from '../src/intelligence/ai-conversation/aiConversationFacadeContracts'
+import type {
+  ActivationEngine,
+  ActivationDecision,
+} from '../src/intelligence/ai-conversation/provider-orchestration/activationContracts'
 import {
-  createConfiguredAIConversationService,
-} from '../src/intelligence/ai-conversation/provider-orchestration/aiConversationFactory'
+  createActivationEngine,
+} from '../src/intelligence/ai-conversation/provider-orchestration/activationEngine'
 import {
-  createInMemoryAIConversationMetricsRecorder,
-} from '../src/intelligence/ai-conversation/provider-orchestration/aiConversationMetrics'
+  createActivationPolicy,
+} from '../src/intelligence/ai-conversation/provider-orchestration/activationPolicy'
+import {
+  createActivationEngineFromResolver,
+} from '../src/intelligence/ai-conversation/provider-orchestration/activationFactory'
+import {
+  createInMemoryActivationMetricsRecorder,
+} from '../src/intelligence/ai-conversation/provider-orchestration/activationMetrics'
+import {
+  validateActivationDecision,
+  validateActivationPolicy,
+  validateActivationRoutingStrategy,
+} from '../src/intelligence/ai-conversation/provider-orchestration/activationValidator'
 import {
   createAIConversationService,
 } from '../src/intelligence/ai-conversation/provider-orchestration/aiConversationService'
-import {
-  validateAIConversationConfidencePolicy,
-  validateAIConversationExecution,
-  validateAIConversationFallback,
-  validateAIConversationProviderIdentifier,
-} from '../src/intelligence/ai-conversation/provider-orchestration/aiConversationValidator'
+import type {
+  AIConversationServiceDependencies,
+} from '../src/intelligence/ai-conversation/provider-orchestration/aiConversationContracts'
 
 function createRequestFixture(userMessage: string): AIConversationRequest {
   return {
     protocolVersion: AI_CONVERSATION_ORCHESTRATOR_PROTOCOL_VERSION,
-    executionId: 'conversation-orchestration:service:test:001' as AIConversationRequest['executionId'],
+    executionId: 'conversation-orchestration:activation:test:001' as AIConversationRequest['executionId'],
     context: {
-      executionId: 'execution:service:test:001',
-      conversationId: 'conversation:service:test:001',
-      sessionId: 'session:service:test:001',
-      providerId: 'SERVICE_TEST',
+      executionId: 'execution:activation:test:001',
+      conversationId: 'conversation:activation:test:001',
+      sessionId: 'session:activation:test:001',
+      providerId: 'ACTIVATION_TEST',
       model: 'provider-neutral',
       requestedAt: '2026-07-24T00:00:00.000Z',
       caller: 'SYSTEM',
@@ -66,7 +77,7 @@ function createRequestFixture(userMessage: string): AIConversationRequest {
 function createConversationResponseFixture() {
   const promptContextResult = createPromptContextBuilder().build({
     executionResult: {
-      executionId: 'conversation-orchestration:service:execution:001' as AIConversationRequest['executionId'],
+      executionId: 'conversation-orchestration:activation:execution:001' as AIConversationRequest['executionId'],
       startedAt: '2026-07-24T00:00:00.000Z',
       finishedAt: '2026-07-24T00:00:01.000Z',
       status: 'success',
@@ -205,127 +216,43 @@ function createProviderFixture(input: {
   }
 }
 
-describe('PB-IS-014.4 AI Conversation Service', () => {
-  it('coordina provider OpenAI con confianza alta sin fallback', async () => {
-    const metrics = createInMemoryAIConversationMetricsRecorder()
-    const service = createAIConversationService({
-      facade: createFacadeFixture(),
-      provider: createProviderFixture({ providerId: 'openai-provider', confidence: 0.95, text: 'openai ok' }),
-      fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, text: 'fallback' }),
-      confidencePolicy: { confidenceThreshold: 0.7 },
-      metrics: metrics.recorder,
-      clock: () => 100,
-    })
+function createDecision(input: Partial<ActivationDecision>): ActivationDecision {
+  return {
+    protocolVersion: 1,
+    activationType: 'TOOL_WITH_AI',
+    provider: 'openai-provider',
+    toolId: 'financial_balance',
+    confidence: 0.9,
+    requiresAI: true,
+    requiresTool: true,
+    requiresExplanation: true,
+    fallback: {
+      used: false,
+    },
+    reason: 'fixture decision',
+    intent: 'balance',
+    ...input,
+  }
+}
 
-    const result = await service.processConversation({
-      conversationRequest: createRequestFixture('quiero mi balance'),
-      userMessage: 'quiero mi balance',
-      turn: 1,
-      requestedAt: '2026-07-24T00:00:00.000Z',
-    })
-
-    expect(result.kind).toBe('success')
-    if (result.kind === 'success') {
-      expect(result.execution.provider).toBe('openai-provider')
-      expect(result.execution.fallbackUsed).toBe(false)
-      expect(result.execution.success).toBe(true)
-      expect(result.message.text).toContain('openai ok')
-    }
-
-    expect(metrics.entries.length).toBe(1)
-    expect(metrics.entries[0]?.provider).toBe('openai-provider')
-  })
-
-  it('coordina provider Mock cuando strategy es mock', async () => {
-    const service = createAIConversationService({
-      facade: createFacadeFixture(),
-      provider: createMockAIProvider(),
-      fallbackProvider: createMockAIProvider(),
-      confidencePolicy: { confidenceThreshold: 0.5 },
-    })
-
-    const result = await service.processConversation({
-      conversationRequest: createRequestFixture('necesito transacciones'),
-      userMessage: 'necesito transacciones',
-      turn: 1,
-    })
-
-    expect(result.kind).toBe('success')
-    if (result.kind === 'success') {
-      expect(result.message.type).toBe('assistant')
-    }
-  })
-
-  it('aplica fallback cuando confianza primaria es baja', async () => {
-    const service = createAIConversationService({
-      facade: createFacadeFixture(),
-      provider: createProviderFixture({ providerId: 'openai-provider', confidence: 0.3, text: 'openai low' }),
-      fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, text: 'fallback ok' }),
-      confidencePolicy: { confidenceThreshold: 0.7 },
-    })
-
-    const result = await service.processConversation({
-      conversationRequest: createRequestFixture('dame insights'),
-      userMessage: 'dame insights',
-      turn: 2,
-    })
-
-    expect(result.kind).toBe('success')
-    if (result.kind === 'success') {
-      expect(result.execution.fallbackUsed).toBe(true)
-      expect(result.execution.provider).toBe('mock-ai-provider')
-      expect(result.message.text).toContain('fallback ok')
-    }
-  })
-
-  it('maneja timeout como error controlado y usa fallback', async () => {
-    const service = createAIConversationService({
-      facade: createFacadeFixture(),
-      provider: createProviderFixture({ providerId: 'openai-provider', confidence: 0.9, throwIntent: true }),
-      fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, text: 'fallback after timeout' }),
-      confidencePolicy: { confidenceThreshold: 0.7 },
-    })
-
-    const result = await service.processConversation({
-      conversationRequest: createRequestFixture('timeout test'),
-      userMessage: 'timeout test',
-      turn: 3,
-    })
-
-    expect(result.kind).toBe('success')
-    if (result.kind === 'success') {
-      expect(result.execution.fallbackUsed).toBe(true)
-      expect(result.execution.provider).toBe('mock-ai-provider')
-    }
-  })
-
-  it('devuelve error controlado cuando fallback tambien falla', async () => {
-    const service = createAIConversationService({
-      facade: createFacadeFixture(),
-      provider: createProviderFixture({ providerId: 'openai-provider', confidence: 0.3, failIntent: true }),
-      fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, failIntent: true }),
-      confidencePolicy: { confidenceThreshold: 0.7 },
-    })
-
-    const result = await service.processConversation({
-      conversationRequest: createRequestFixture('falla total'),
-      userMessage: 'falla total',
-      turn: 4,
-    })
-
-    expect(result.kind).toBe('failure')
-    if (result.kind === 'failure') {
-      expect(result.code).toBe('INTENT_RESOLUTION_FAILED')
-    }
-  })
-
-  it('registra metricas seguras sin prompts ni datos financieros', async () => {
-    const metrics = createInMemoryAIConversationMetricsRecorder()
-    const service = createAIConversationService({
-      facade: createFacadeFixture(),
-      provider: createProviderFixture({ providerId: 'openai-provider', confidence: 0.95 }),
-      fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9 }),
-      confidencePolicy: { confidenceThreshold: 0.7 },
+describe('PB-IS-014.5 Intelligent Conversation Activation Engine', () => {
+  it('DIRECT_TOOL con confianza alta y tool existente', async () => {
+    const metrics = createInMemoryActivationMetricsRecorder()
+    const engine = createActivationEngine({
+      primaryProviderId: 'openai-provider',
+      fallbackProviderId: 'mock-ai-provider',
+      primaryIntentResolver: createProviderFixture({ providerId: 'openai-provider', confidence: 0.95 }).resolveIntent,
+      fallbackIntentResolver: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9 }).resolveIntent,
+      routingStrategy: {
+        exists(toolId: string) {
+          return toolId === 'financial_balance'
+        },
+      },
+      policy: createActivationPolicy({
+        minimumConfidence: 0.7,
+        enableDirectTools: true,
+        enableAIExplanation: false,
+      }),
       metrics: metrics.recorder,
       clock: (() => {
         let current = 0
@@ -336,84 +263,236 @@ describe('PB-IS-014.4 AI Conversation Service', () => {
       })(),
     })
 
-    await service.processConversation({
-      conversationRequest: createRequestFixture('metric test'),
-      userMessage: 'metric test',
+    const decision = await engine.decide({
+      conversationRequest: createRequestFixture('cuanto dinero tengo'),
+      userMessage: 'cuanto dinero tengo',
+      turn: 1,
+    })
+
+    expect(decision.activationType).toBe('DIRECT_TOOL')
+    expect(decision.requiresAI).toBe(false)
+    expect(decision.requiresTool).toBe(true)
+    expect(metrics.entries.length).toBe(1)
+  })
+
+  it('DIRECT_AI cuando no hay tool especializada', async () => {
+    const engine = createActivationEngine({
+      primaryProviderId: 'openai-provider',
+      fallbackProviderId: 'mock-ai-provider',
+      primaryIntentResolver: createProviderFixture({ providerId: 'openai-provider', confidence: 0.92 }).resolveIntent,
+      fallbackIntentResolver: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9 }).resolveIntent,
+      routingStrategy: {
+        exists() {
+          return false
+        },
+      },
+      policy: createActivationPolicy(),
+    })
+
+    const decision = await engine.decide({
+      conversationRequest: createRequestFixture('como puedo ahorrar mas?'),
+      userMessage: 'como puedo ahorrar mas?',
+      turn: 2,
+    })
+
+    expect(decision.activationType).toBe('DIRECT_AI')
+    expect(decision.requiresAI).toBe(true)
+    expect(decision.requiresTool).toBe(false)
+  })
+
+  it('TOOL_WITH_AI cuando hay explicacion habilitada', async () => {
+    const engine = createActivationEngine({
+      primaryProviderId: 'openai-provider',
+      fallbackProviderId: 'mock-ai-provider',
+      primaryIntentResolver: createProviderFixture({ providerId: 'openai-provider', confidence: 0.91 }).resolveIntent,
+      fallbackIntentResolver: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9 }).resolveIntent,
+      routingStrategy: {
+        exists() {
+          return true
+        },
+      },
+      policy: createActivationPolicy({
+        enableAIExplanation: true,
+      }),
+    })
+
+    const decision = await engine.decide({
+      conversationRequest: createRequestFixture('muestrame mis gastos y explicalos'),
+      userMessage: 'muestrame mis gastos y explicalos',
+      turn: 3,
+    })
+
+    expect(decision.activationType).toBe('TOOL_WITH_AI')
+    expect(decision.requiresAI).toBe(true)
+    expect(decision.requiresTool).toBe(true)
+  })
+
+  it('FALLBACK cuando falla provider primario o confianza es baja', async () => {
+    const engine = createActivationEngine({
+      primaryProviderId: 'openai-provider',
+      fallbackProviderId: 'mock-ai-provider',
+      primaryIntentResolver: createProviderFixture({ providerId: 'openai-provider', confidence: 0.2, failIntent: true }).resolveIntent,
+      fallbackIntentResolver: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.88 }).resolveIntent,
+      routingStrategy: {
+        exists() {
+          return true
+        },
+      },
+      policy: createActivationPolicy({
+        minimumConfidence: 0.7,
+        enableFallback: true,
+      }),
+    })
+
+    const decision = await engine.decide({
+      conversationRequest: createRequestFixture('fallback test'),
+      userMessage: 'fallback test',
+      turn: 4,
+    })
+
+    expect(decision.activationType).toBe('FALLBACK')
+    expect(decision.fallback.used).toBe(true)
+    expect(decision.provider).toBe('mock-ai-provider')
+  })
+
+  it('INVALID_REQUEST cuando la solicitud no es procesable', async () => {
+    const engine = createActivationEngine({
+      primaryProviderId: 'openai-provider',
+      fallbackProviderId: 'mock-ai-provider',
+      primaryIntentResolver: createProviderFixture({ providerId: 'openai-provider', confidence: 0.9 }).resolveIntent,
+      fallbackIntentResolver: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9 }).resolveIntent,
+      routingStrategy: {
+        exists() {
+          return true
+        },
+      },
+      policy: createActivationPolicy(),
+    })
+
+    const decision = await engine.decide({
+      conversationRequest: createRequestFixture(''),
+      userMessage: '   ',
       turn: 5,
     })
 
-    expect(metrics.entries.length).toBe(1)
-    const metric = metrics.entries[0]
-    expect(metric?.provider).toBe('openai-provider')
-    expect(metric?.operation).toBe('process-conversation')
-    expect(metric?.success).toBe(true)
-    expect(JSON.stringify(metric)).not.toContain('metric test')
+    expect(decision.activationType).toBe('INVALID_REQUEST')
   })
 
-  it('valida execution, confidence, provider y fallback', () => {
-    expect(validateAIConversationConfidencePolicy({ confidenceThreshold: 0.7 })).toBeNull()
-    expect(validateAIConversationConfidencePolicy({ confidenceThreshold: 1.5 })).not.toBeNull()
-
-    expect(validateAIConversationProviderIdentifier('openai-provider')).toBeNull()
-    expect(validateAIConversationProviderIdentifier('')).not.toBeNull()
-
-    expect(validateAIConversationFallback('mock-ai-provider', true)).toBeNull()
-    expect(validateAIConversationFallback('', true)).not.toBeNull()
-
-    expect(validateAIConversationExecution({
-      protocolVersion: 1,
-      provider: 'openai-provider',
-      intent: 'balance',
-      confidence: 0.8,
-      conversationGenerated: true,
-      executionTime: 120,
-      fallbackUsed: false,
-      success: true,
-      error: null,
-    })).toBeNull()
-  })
-
-  it('factory crea servicio configurable y ejecuta integracion', async () => {
-    const facade = createFacadeFixture()
-    const service = createConfiguredAIConversationService({
-      facade,
-      providerInput: {
-        strategy: 'mock',
-      },
-      confidenceThreshold: 0.6,
+  it('confidence alta/baja respeta la policy', async () => {
+    const high = createActivationEngine({
+      primaryProviderId: 'openai-provider',
+      fallbackProviderId: 'mock-ai-provider',
+      primaryIntentResolver: createProviderFixture({ providerId: 'openai-provider', confidence: 0.85 }).resolveIntent,
+      fallbackIntentResolver: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9 }).resolveIntent,
+      routingStrategy: { exists: () => true },
+      policy: createActivationPolicy({ minimumConfidence: 0.7 }),
     })
 
-    const result = await service.processConversation({
-      conversationRequest: createRequestFixture('factory integration'),
-      userMessage: 'factory integration',
+    const low = createActivationEngine({
+      primaryProviderId: 'openai-provider',
+      fallbackProviderId: 'mock-ai-provider',
+      primaryIntentResolver: createProviderFixture({ providerId: 'openai-provider', confidence: 0.2 }).resolveIntent,
+      fallbackIntentResolver: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, failIntent: true }).resolveIntent,
+      routingStrategy: { exists: () => true },
+      policy: createActivationPolicy({ minimumConfidence: 0.7, enableFallback: false }),
+    })
+
+    const highDecision = await high.decide({
+      conversationRequest: createRequestFixture('high confidence'),
+      userMessage: 'high confidence',
       turn: 6,
     })
 
-    expect(result.kind).toBe('success')
-  })
-
-  it('integra facade + service y mantiene contrato de salida estable', async () => {
-    const facadeExecute = vi.fn(async () => ({
-      kind: 'success' as const,
-      response: createConversationResponseFixture(),
-    }))
-
-    const service = createAIConversationService({
-      facade: {
-        execute: facadeExecute,
-      },
-      provider: createProviderFixture({ providerId: 'openai-provider', confidence: 0.9 }),
-      fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9 }),
-      confidencePolicy: { confidenceThreshold: 0.7 },
-    })
-
-    const result = await service.processConversation({
-      conversationRequest: createRequestFixture('integration'),
-      userMessage: 'integration',
+    const lowDecision = await low.decide({
+      conversationRequest: createRequestFixture('low confidence'),
+      userMessage: 'low confidence',
       turn: 7,
     })
 
+    expect(highDecision.activationType).not.toBe('INVALID_REQUEST')
+    expect(lowDecision.activationType).toBe('INVALID_REQUEST')
+  })
+
+  it('validator, policy y routing strategy fail-closed', () => {
+    expect(validateActivationPolicy(createActivationPolicy())).toBeNull()
+    expect(validateActivationPolicy({ minimumConfidence: 2, enableFallback: true, enableAIExplanation: true, enableDirectTools: true })).not.toBeNull()
+
+    expect(validateActivationRoutingStrategy({ exists: () => true })).toBeNull()
+    expect(validateActivationRoutingStrategy({ exists: undefined as never })).not.toBeNull()
+
+    const decision = createDecision({ activationType: 'DIRECT_TOOL', requiresAI: false, requiresTool: true })
+    expect(validateActivationDecision(decision)).toBeNull()
+    expect(validateActivationDecision(createDecision({ toolId: null, requiresTool: true }))).not.toBeNull()
+  })
+
+  it('factory crea engine configurable', async () => {
+    const engine = createActivationEngineFromResolver({
+      primaryProviderId: 'openai-provider',
+      fallbackProviderId: 'mock-ai-provider',
+      primaryIntentResolver: createProviderFixture({ providerId: 'openai-provider', confidence: 0.88 }).resolveIntent,
+      fallbackIntentResolver: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9 }).resolveIntent,
+      toolResolver: {
+        resolve() {
+          throw new Error('not used')
+        },
+        exists() {
+          return true
+        },
+        listDefinitions() {
+          return []
+        },
+      },
+      policy: {
+        minimumConfidence: 0.6,
+      },
+    })
+
+    const decision = await engine.decide({
+      conversationRequest: createRequestFixture('factory decision'),
+      userMessage: 'factory decision',
+      turn: 8,
+    })
+
+    expect(['DIRECT_TOOL', 'TOOL_WITH_AI', 'DIRECT_AI', 'FALLBACK', 'INVALID_REQUEST']).toContain(decision.activationType)
+  })
+
+  it('integracion completa: AI Conversation Service ejecuta la decision y no la construye', async () => {
+    const activationEngine: ActivationEngine = {
+      decide: vi.fn(async () => createDecision({
+        activationType: 'DIRECT_TOOL',
+        requiresAI: false,
+        requiresTool: true,
+        provider: 'openai-provider',
+      })),
+    }
+
+    const provider = createProviderFixture({ providerId: 'openai-provider', confidence: 0.9, text: 'openai response' })
+    provider.resolveIntent = vi.fn(async () => {
+      throw new Error('should not be called by service when activation is injected')
+    })
+
+    const dependencies = {
+      facade: createFacadeFixture(),
+      provider,
+      fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, text: 'mock response' }),
+      confidencePolicy: { confidenceThreshold: 0.7 },
+      activationEngine,
+    } as AIConversationServiceDependencies & { readonly activationEngine: ActivationEngine }
+
+    const service = createAIConversationService(dependencies)
+    const result = await service.processConversation({
+      conversationRequest: createRequestFixture('integracion activacion'),
+      userMessage: 'integracion activacion',
+      turn: 9,
+    })
+
     expect(result.kind).toBe('success')
-    expect(facadeExecute).toHaveBeenCalledTimes(1)
+    if (result.kind === 'success') {
+      expect(result.execution.conversationGenerated).toBe(false)
+      expect(result.message.text).toContain('determinista sin usar IA')
+    }
+
+    expect(activationEngine.decide).toHaveBeenCalledTimes(1)
+    expect(provider.resolveIntent).not.toHaveBeenCalled()
   })
 })

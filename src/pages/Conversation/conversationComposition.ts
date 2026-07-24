@@ -6,6 +6,7 @@ import {
   createAIToolRegistry,
 } from '../../intelligence/ai-tools'
 import {
+  createFinancialAIToolResolver,
   registerFinancialToolsCatalog,
 } from '../../intelligence/ai-tools/financial'
 import {
@@ -16,14 +17,25 @@ import {
   type ChatMessage,
 } from '../../intelligence/mock-conversational-renderer/mockConversationalRenderer'
 import {
+  createAIProvider,
+  createMockAIProvider,
+  validateAIProvider,
+} from '../../intelligence/ai-provider/aiProvider'
+import {
   createPromptContextBuilder,
 } from '../../intelligence/prompt-context-builder'
 import {
   createConversationResponseComposer,
 } from '../../intelligence/response-composer'
 import {
-  createConfiguredAIConversationService,
-} from '../../intelligence/ai-conversation/provider-orchestration/aiConversationFactory'
+  createActivationEngineFromResolver,
+} from '../../intelligence/ai-conversation/provider-orchestration/activationFactory'
+import {
+  createAIConversationService,
+} from '../../intelligence/ai-conversation/provider-orchestration/aiConversationService'
+import type {
+  AIConversationServiceDependencies,
+} from '../../intelligence/ai-conversation/provider-orchestration/aiConversationContracts'
 import type { ConversationControllerDependencies } from './conversationController'
 
 function createRequestFragment(now: string): string {
@@ -34,7 +46,7 @@ function createRequestFragment(now: string): string {
     .toLowerCase()
 }
 
-function createConversationFacade() {
+function createConversationFacadeAndRegistry() {
   const registry = createAIToolRegistry([])
   const registration = registerFinancialToolsCatalog(registry)
   if (registration.kind === 'failure') {
@@ -44,7 +56,7 @@ function createConversationFacade() {
   const promptContextBuilder = createPromptContextBuilder()
   const responseComposer = createConversationResponseComposer()
 
-  return createAIConversationFacade({
+  const facade = createAIConversationFacade({
     orchestrator: createFinancialConversationOrchestrator({
       registry,
     }),
@@ -85,13 +97,59 @@ function createConversationFacade() {
       },
     },
   })
+
+  return {
+    facade,
+    registry,
+  }
 }
 
 export function createConversationControllerDependencies(): ConversationControllerDependencies {
-  const facade = createConversationFacade()
-  const conversationService = createConfiguredAIConversationService({
-    facade,
+  const { facade, registry } = createConversationFacadeAndRegistry()
+  const provider = createAIProvider()
+  const fallbackProvider = createMockAIProvider()
+
+  const providerValidation = validateAIProvider(provider)
+  if (providerValidation !== null) {
+    throw new Error(providerValidation.safeMessage)
+  }
+
+  const fallbackValidation = validateAIProvider(fallbackProvider)
+  if (fallbackValidation !== null) {
+    throw new Error(fallbackValidation.safeMessage)
+  }
+
+  const toolResolver = createFinancialAIToolResolver({
+    registry,
   })
+
+  const activationEngine = createActivationEngineFromResolver({
+    primaryProviderId: provider.metadata.providerId,
+    fallbackProviderId: fallbackProvider.metadata.providerId,
+    primaryIntentResolver: provider.resolveIntent,
+    fallbackIntentResolver: fallbackProvider.resolveIntent,
+    toolResolver,
+    policy: {
+      minimumConfidence: 0.7,
+      enableFallback: true,
+      enableAIExplanation: true,
+      enableDirectTools: true,
+    },
+  })
+
+  const conversationServiceDependencies = {
+    facade,
+    provider,
+    fallbackProvider,
+    confidencePolicy: {
+      confidenceThreshold: 0.7,
+    },
+    activationEngine,
+  } as AIConversationServiceDependencies & {
+    readonly activationEngine: typeof activationEngine
+  }
+
+  const conversationService = createAIConversationService(conversationServiceDependencies)
 
   return {
     pipeline: {
