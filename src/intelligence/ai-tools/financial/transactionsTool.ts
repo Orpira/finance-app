@@ -1,5 +1,6 @@
 import type { AITool, AIToolContext, AIToolJsonValue } from '../aiToolContracts'
 import { createToolFailure } from '../aiToolValidator'
+import { db } from '../../../database/db'
 import { getSettings } from '../../../services/settingsService'
 import { listExpenses, type ExpenseListOptions } from '../../../services/expenseService'
 import { listServiceIncomes, type ServiceIncomeListOptions } from '../../../services/incomeService'
@@ -21,6 +22,9 @@ import {
   type FinancialTransactionStatus,
   type FinancialTransactionSummary,
 } from './transactionsContracts'
+import {
+  recordRuntimeToolAudit,
+} from '../../ai-conversation/provider-orchestration/runtimeConversationAudit'
 
 export type TransactionsSummary = FinancialTransactionSummary
 export type TransactionsToolInput = FinancialTransactionInput
@@ -37,8 +41,25 @@ export interface TransactionsToolUseCase {
   execute(input: FinancialTransactionInput): Promise<FinancialTransactionResult>
 }
 
+export interface FinancialTransactionsToolRuntimeMetadata {
+  readonly runtimeSource: string
+  readonly repositoryPath: string
+  readonly repositoryInstanceId: string
+  readonly listServiceIncomesRef: typeof listServiceIncomes
+}
+
+export function getFinancialTransactionsToolRuntimeMetadata(): FinancialTransactionsToolRuntimeMetadata {
+  return {
+    runtimeSource: 'financialToolsCatalog -> createTransactionsAITool',
+    repositoryPath: 'incomeService.listServiceIncomes -> db.services',
+    repositoryInstanceId: `db:${db.name}:table:${db.services.name}`,
+    listServiceIncomesRef: listServiceIncomes,
+  }
+}
+
 interface UnifiedTransactionRecord {
   readonly transactionId: string
+  readonly recordId: number
   readonly kind: FinancialTransactionKind
   readonly date: string
   readonly label: string
@@ -169,6 +190,7 @@ function mapIncomeToTransaction(income: ServiceIncome, currency: CurrencyCode): 
 
   return {
     transactionId: `income:${String(income.id ?? `${income.date}:${amount}`)}`,
+    recordId: income.id ?? 0,
     kind,
     date: income.date,
     label: income.notes?.trim() || (kind === 'adjustment' ? 'Ajuste de ingreso' : 'Ingreso'),
@@ -186,6 +208,7 @@ function mapExpenseToTransaction(expense: Expense, currency: CurrencyCode): Unif
 
   return {
     transactionId: `expense:${String(expense.id ?? `${expense.date}:${amount}`)}`,
+    recordId: expense.id ?? 0,
     kind,
     date: expense.date,
     label: expense.notes?.trim() || expense.category || (kind === 'adjustment' ? 'Ajuste de egreso' : 'Egreso'),
@@ -243,16 +266,28 @@ function sortTransactions(
   const factor = direction === 'asc' ? 1 : -1
 
   return [...items].sort((a, b) => {
+    let primaryCompare: number
+
     if (field === 'amount') {
-      return (a.amount - b.amount) * factor
+      primaryCompare = (a.amount - b.amount) * factor
+    } else if (field === 'label') {
+      primaryCompare = a.label.localeCompare(b.label, 'es') * factor
+    } else if (field === 'status') {
+      primaryCompare = a.status.localeCompare(b.status) * factor
+    } else {
+      primaryCompare = a.date.localeCompare(b.date) * factor
     }
-    if (field === 'label') {
-      return a.label.localeCompare(b.label, 'es') * factor
+
+    if (primaryCompare !== 0) {
+      return primaryCompare
     }
-    if (field === 'status') {
-      return a.status.localeCompare(b.status) * factor
-    }
-    return a.date.localeCompare(b.date) * factor
+
+    // Tie-break must match the same repository order `/income` and `/expenses`
+    // use (Dexie `orderBy('date').reverse()`), which for equal index keys
+    // resolves in descending primary-key order under a reverse cursor and
+    // ascending primary-key order under a forward cursor. Without this,
+    // same-date records diverge between the UI and the conversation tool.
+    return (a.recordId - b.recordId) * factor
   })
 }
 
@@ -337,16 +372,22 @@ export function createTransactionsToolUseCase(input: TransactionsToolDependencie
         const effectiveUsageMode: 'basic' | 'professional' = settings.usageMode
         const currency = (request.filters?.currencyCode ?? settings.defaultCurrency) as CurrencyCode
         const period = request.filters?.period
+        // Fetch in the same repository order `/income` and `/expenses` request
+        // (`newestFirst`) whenever the effective sort matches the certified
+        // definition of "date desc" (the default), so the base list is already
+        // aligned with what the UI shows before any cross-kind merge sort runs.
+        const newestFirst = (request.sort?.field ?? 'date') !== 'date'
+          || (request.sort?.direction ?? 'desc') === 'desc'
 
         const incomeOptions: ServiceIncomeListOptions = {
           ...(period?.from === undefined ? {} : { from: period.from }),
           ...(period?.to === undefined ? {} : { to: period.to }),
-          newestFirst: false,
+          newestFirst,
         }
         const expenseOptions: ExpenseListOptions = {
           ...(period?.from === undefined ? {} : { from: period.from }),
           ...(period?.to === undefined ? {} : { to: period.to }),
-          newestFirst: false,
+          newestFirst,
         }
 
         const [incomes, expenses] = await Promise.all([
@@ -361,10 +402,24 @@ export function createTransactionsToolUseCase(input: TransactionsToolDependencie
 
         const filtered = applyFilters(unifiedItems, request, effectiveUsageMode)
         const sorted = sortTransactions(filtered, request)
+        const output = mapOutput(sorted, request, currency)
+
+        if (typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV)) {
+          const firstRecord = output.items[0] ?? null
+          const lastRecord = output.items[output.items.length - 1] ?? null
+          recordRuntimeToolAudit({
+            timestamp: new Date().toISOString(),
+            toolId: 'financial_transactions',
+            repositoryInstanceId: `db:${db.name}:table:${db.services.name}`,
+            recordCount: output.items.length,
+            firstRecord: firstRecord === null ? null : JSON.stringify(firstRecord),
+            lastRecord: lastRecord === null ? null : JSON.stringify(lastRecord),
+          })
+        }
 
         return {
           kind: 'success',
-          output: mapOutput(sorted, request, currency),
+          output,
         }
       } catch (error) {
         return {

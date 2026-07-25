@@ -1,20 +1,20 @@
 import type {
-  InsightReadModelProjection,
-} from '../../services/readModelInterfaces'
+  InsightDashboardViewModel,
+} from './insightDashboardContracts'
 
 interface InsightSummaryProps {
-  readonly projection: InsightReadModelProjection
+  readonly viewModel: InsightDashboardViewModel
 }
 
-function formatConfidence(value: number | null): string {
-  if (value === null) {
-    return 'N/D'
-  }
-
-  return `${value.toFixed(1)}%`
+function formatCurrency(value: number, currency: string): string {
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value)
 }
 
-export function InsightSummary({ projection }: InsightSummaryProps) {
+export function InsightSummary({ viewModel }: InsightSummaryProps) {
   return (
     <section
       aria-labelledby="insights-summary-title"
@@ -27,67 +27,69 @@ export function InsightSummary({ projection }: InsightSummaryProps) {
         Resumen general de insights
       </h2>
 
+      <p className="mt-2 text-sm text-slate-600">{viewModel.subtitle}</p>
+
       <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
           <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Total de insights
+            Balance neto
           </dt>
           <dd className="mt-1 text-xl font-semibold text-slate-950">
-            {projection.summary.totalInsights}
+            {formatCurrency(viewModel.summary.netBalance, viewModel.summary.currency)}
           </dd>
         </div>
 
         <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
           <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Reglas generadas
+            Ingresos
           </dt>
           <dd className="mt-1 text-xl font-semibold text-slate-950">
-            {projection.summary.generatedRules}
+            {formatCurrency(viewModel.summary.incomeTotal, viewModel.summary.currency)}
           </dd>
         </div>
 
         <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
           <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Reglas omitidas
+            Egresos
           </dt>
           <dd className="mt-1 text-xl font-semibold text-slate-950">
-            {projection.summary.skippedRules}
+            {formatCurrency(viewModel.summary.expenseTotal, viewModel.summary.currency)}
           </dd>
         </div>
 
         <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
           <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Confianza promedio
+            Ajustes
           </dt>
           <dd className="mt-1 text-xl font-semibold text-slate-950">
-            {formatConfidence(projection.confidenceIndicators.averageScore)}
+            {formatCurrency(viewModel.summary.adjustmentTotal, viewModel.summary.currency)}
           </dd>
         </div>
       </dl>
 
       <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
         <p>
-          Estado runtime:{' '}
+          Estado de datos:{' '}
           <strong className="text-slate-900">
-            {projection.updateMetadata.runtimeStatus}
+            {viewModel.dataStatus === 'partial' ? 'Parcial' : 'Completo'}
           </strong>
         </p>
         <p>
-          Issues de validacion:{' '}
+          Insights priorizados:{' '}
           <strong className="text-slate-900">
-            {projection.statistics.validationIssueCount}
+            {viewModel.insights.length}
           </strong>
         </p>
         <p>
-          Min confianza:{' '}
+          Acciones recomendadas:{' '}
           <strong className="text-slate-900">
-            {formatConfidence(projection.confidenceIndicators.minimumScore)}
+            {viewModel.recommendedActions.length}
           </strong>
         </p>
         <p>
-          Max confianza:{' '}
+          Ultima actualizacion:{' '}
           <strong className="text-slate-900">
-            {formatConfidence(projection.confidenceIndicators.maximumScore)}
+            {viewModel.generatedAtLabel}
           </strong>
         </p>
       </div>

@@ -1,64 +1,11 @@
 import type {
-  InsightExecutionService,
-} from '../../services/insightExecutionInterfaces'
-import type {
-  InsightExecutionRequest,
-} from '../../services/insightExecutionResult'
-import type {
-  InsightReadModels,
-} from '../../services/readModelInterfaces'
-import type {
-  InsightDashboardErrorCode,
-  InsightDashboardRejectedCode,
-  InsightDashboardState,
-} from './insightDashboardState'
-
-const REJECTED_MESSAGE_BY_CODE: Readonly<
-  Record<InsightDashboardRejectedCode, string>
-> = {
-  INSIGHT_DASHBOARD_SNAPSHOT_UNAVAILABLE:
-    'Aun no hay un snapshot sellado disponible para generar insights.',
-  INSIGHT_EXECUTION_INVALID_REQUEST:
-    'La solicitud de insights no es valida para el pipeline actual.',
-  INSIGHT_EXECUTION_MISSING_SNAPSHOT:
-    'No se encontro un snapshot compatible para ejecutar insights.',
-  INSIGHT_EXECUTION_MISSING_RULE_CATALOG:
-    'No hay un catalogo de reglas disponible para ejecutar insights.',
-  INSIGHT_EXECUTION_MISSING_DEPENDENCY:
-    'La integracion de insights no esta disponible en este momento.',
-  INSIGHT_EXECUTION_SNAPSHOT_INTEGRATION_REJECTED:
-    'El snapshot fue rechazado por la frontera de integracion.',
-  INSIGHT_EXECUTION_KNOWLEDGE_INTEGRATION_REJECTED:
-    'La integracion de conocimiento rechazo la ejecucion de insights.',
-  INSIGHT_EXECUTION_SNAPSHOT_INTEGRATION_EXCEPTION:
-    'Ocurrio un error controlado durante la integracion del snapshot.',
-  INSIGHT_EXECUTION_KNOWLEDGE_INTEGRATION_EXCEPTION:
-    'Ocurrio un error controlado durante la integracion de conocimiento.',
-  INSIGHT_EXECUTION_INCONSISTENT_SNAPSHOT_RESULT:
-    'El resultado de snapshot no fue consistente para continuar.',
-  INSIGHT_EXECUTION_INCONSISTENT_KNOWLEDGE_RESULT:
-    'El resultado de conocimiento no fue consistente para continuar.',
-  INSIGHT_EXECUTION_TRACEABILITY_MISMATCH:
-    'La trazabilidad del pipeline de insights no fue consistente.',
-  INSIGHT_EXECUTION_PIPELINE_FAILURE:
-    'El pipeline de insights fallo por una condicion no recuperable.',
-}
-
-const ERROR_MESSAGE_BY_CODE: Readonly<Record<InsightDashboardErrorCode, string>> = {
-  INSIGHT_DASHBOARD_UNEXPECTED_ERROR:
-    'No fue posible cargar el dashboard de insights por un error inesperado.',
-  INSIGHT_DASHBOARD_INVALID_READ_MODEL:
-    'La proyeccion de lectura de insights fue inconsistente.',
-}
-
-export interface InsightDashboardRequestFactory {
-  createRequest(): Promise<InsightExecutionRequest | null>
-}
+  InsightDashboardUseCase,
+  InsightDashboardUseCaseResult,
+} from './insightDashboardContracts'
+import type { InsightDashboardState } from './insightDashboardState'
 
 export interface InsightDashboardControllerDependencies {
-  readonly executionService: InsightExecutionService
-  readonly readModels: InsightReadModels
-  readonly requestFactory: InsightDashboardRequestFactory
+  readonly useCase: InsightDashboardUseCase
 }
 
 export interface InsightDashboardController {
@@ -68,12 +15,32 @@ export interface InsightDashboardController {
   dispose(): void
 }
 
-function mapRejectedMessage(code: InsightDashboardRejectedCode): string {
-  return REJECTED_MESSAGE_BY_CODE[code]
-}
+function applyResult(result: InsightDashboardUseCaseResult): InsightDashboardState {
+  if (result.kind === 'error') {
+    return {
+      status: 'error',
+      error: result.error,
+    }
+  }
 
-function mapErrorMessage(code: InsightDashboardErrorCode): string {
-  return ERROR_MESSAGE_BY_CODE[code]
+  if (result.kind === 'empty') {
+    return {
+      status: 'empty',
+      data: result.viewModel,
+    }
+  }
+
+  if (result.kind === 'partial') {
+    return {
+      status: 'partial',
+      data: result.viewModel,
+    }
+  }
+
+  return {
+    status: 'success',
+    data: result.viewModel,
+  }
 }
 
 export function createInsightDashboardController(
@@ -94,26 +61,6 @@ export function createInsightDashboardController(
     for (const listener of listeners) {
       listener(state)
     }
-  }
-
-  function reject(input: {
-    readonly code: InsightDashboardRejectedCode
-    readonly executionId: string | null
-  }): void {
-    emit({
-      status: 'rejected',
-      code: input.code,
-      executionId: input.executionId,
-      message: mapRejectedMessage(input.code),
-    })
-  }
-
-  function fail(code: InsightDashboardErrorCode): void {
-    emit({
-      status: 'error',
-      code,
-      message: mapErrorMessage(code),
-    })
   }
 
   return {
@@ -141,62 +88,24 @@ export function createInsightDashboardController(
       emit({ status: 'loading' })
 
       try {
-        const request = await dependencies.requestFactory.createRequest()
+        const result = await dependencies.useCase.execute()
         if (disposed || currentSequence !== requestSequence) {
           return
         }
 
-        if (request === null) {
-          reject({
-            code: 'INSIGHT_DASHBOARD_SNAPSHOT_UNAVAILABLE',
-            executionId: null,
-          })
-          return
-        }
-
-        const executionResult = dependencies.executionService.execute(request)
-        if (disposed || currentSequence !== requestSequence) {
-          return
-        }
-
-        if (!executionResult.ok) {
-          reject({
-            code: executionResult.code,
-            executionId: executionResult.executionId,
-          })
-          return
-        }
-
-        const projectionResult = dependencies.readModels.project(
-          executionResult.runtimeResponse,
-        )
-        if (disposed || currentSequence !== requestSequence) {
-          return
-        }
-
-        if (!projectionResult.ok) {
-          fail('INSIGHT_DASHBOARD_INVALID_READ_MODEL')
-          return
-        }
-
-        if (projectionResult.insights.length === 0) {
-          emit({
-            status: 'empty',
-            projection: projectionResult,
-          })
-          return
-        }
-
-        emit({
-          status: 'success',
-          projection: projectionResult,
-        })
+        emit(applyResult(result))
       } catch {
         if (disposed || currentSequence !== requestSequence) {
           return
         }
 
-        fail('INSIGHT_DASHBOARD_UNEXPECTED_ERROR')
+        emit({
+          status: 'error',
+          error: {
+            code: 'INSIGHT_DASHBOARD_READ_FAILED',
+            message: 'La carga del dashboard fallo por un error inesperado.',
+          },
+        })
       }
     },
 

@@ -10,8 +10,12 @@ import {
 } from './openAIFactory'
 import {
   resolveAIProviderStrategyFromEnvironment,
+  resolveOpenAIProviderConfiguration,
   type AIProviderStrategy,
 } from './openAIConfiguration'
+import {
+  recordRuntimeProviderAudit,
+} from '../ai-conversation/provider-orchestration/runtimeConversationAudit'
 
 export interface CreateAIProviderInput extends CreateMockAIProviderInput {
   readonly strategy?: AIProviderStrategy
@@ -25,15 +29,44 @@ export function createAIProvider(
     environment: input.environment,
   })
 
+  const openAIConfiguration = resolveOpenAIProviderConfiguration({
+    environment: input.environment,
+  })
+
+  function record(providerId: string): void {
+    if (typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV)) {
+      recordRuntimeProviderAudit({
+        timestamp: new Date().toISOString(),
+        strategy,
+        providerExpected: strategy === 'openai' ? 'openai-provider' : 'mock-ai-provider',
+        providerSelected: providerId,
+        model: openAIConfiguration.kind === 'success'
+          ? openAIConfiguration.configuration.conversationModel
+          : null,
+        openAICalled: false,
+        fallbackUsed: false,
+        reasonIfNotCalled: openAIConfiguration.kind === 'failure'
+          ? openAIConfiguration.safeMessage
+          : null,
+      })
+    }
+  }
+
   if (strategy === 'mock') {
-    return createMockAIProvider(input)
+    const provider = createMockAIProvider(input)
+    record(provider.metadata.providerId)
+    return provider
   }
 
   if (strategy === 'openai') {
-    return createConfiguredOpenAIProvider({
+    const provider = createConfiguredOpenAIProvider({
       environment: input.environment,
     })
+    record(provider.metadata.providerId)
+    return provider
   }
 
-  return createMockAIProvider(input)
+  const provider = createMockAIProvider(input)
+  record(provider.metadata.providerId)
+  return provider
 }

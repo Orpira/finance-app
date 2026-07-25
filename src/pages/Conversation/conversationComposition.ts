@@ -46,6 +46,19 @@ import {
 import {
   createFinancialPlanningEngine,
 } from '../../intelligence/ai-conversation/provider-orchestration/financialPlanningFactory'
+import {
+  validateRuntimeRepositoryComposition,
+} from '../../intelligence/ai-conversation/provider-orchestration/runtimeRepositoryValidator'
+import {
+  validateProviderRuntime,
+} from '../../intelligence/ai-conversation/provider-orchestration/providerRuntimeValidator'
+import {
+  validateFinancialTransactionsToolRuntime,
+} from '../../intelligence/ai-conversation/provider-orchestration/financialToolRuntimeValidator'
+import {
+  recordRuntimeRepositoryAudit,
+  recordRuntimeProviderAudit,
+} from '../../intelligence/ai-conversation/provider-orchestration/runtimeConversationAudit'
 import type {
   AIConversationServiceDependencies,
 } from '../../intelligence/ai-conversation/provider-orchestration/aiConversationContracts'
@@ -118,6 +131,34 @@ function createConversationFacadeAndRegistry() {
 }
 
 export function createConversationControllerDependencies(): ConversationControllerDependencies {
+  if (typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV)) {
+    const repositoryValidation = validateRuntimeRepositoryComposition()
+    recordRuntimeRepositoryAudit({
+      timestamp: new Date().toISOString(),
+      incomeRepository: repositoryValidation.incomeRepository,
+      incomeInstanceId: repositoryValidation.incomeInstanceId,
+      transactionsToolRepository: repositoryValidation.transactionsToolRepository,
+      transactionsToolInstanceId: repositoryValidation.transactionsToolInstanceId,
+      sameInstance: repositoryValidation.sameInstance,
+      hasRuntimeMocks: repositoryValidation.hasRuntimeMocks,
+      detectedRuntimeMockSymbols: repositoryValidation.detectedRuntimeMockSymbols,
+    })
+
+    const providerValidation = validateProviderRuntime()
+    recordRuntimeProviderAudit({
+      timestamp: new Date().toISOString(),
+      strategy: providerValidation.strategy,
+      providerExpected: providerValidation.providerExpected,
+      providerSelected: providerValidation.providerSelected,
+      model: providerValidation.model,
+      openAICalled: false,
+      fallbackUsed: false,
+      reasonIfNotCalled: providerValidation.openAIConfigurationError,
+    })
+
+    void validateFinancialTransactionsToolRuntime()
+  }
+
   const { facade, registry } = createConversationFacadeAndRegistry()
   const provider = createAIProvider()
   const fallbackProvider = createMockAIProvider()

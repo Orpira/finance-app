@@ -1,33 +1,26 @@
 import type {
-  InsightReadModelProjection,
-} from '../../services/readModelInterfaces'
+  InsightDashboardViewModel,
+} from './insightDashboardContracts'
 
 interface InsightListProps {
-  readonly projection: InsightReadModelProjection
+  readonly viewModel: InsightDashboardViewModel
 }
 
 const CATEGORY_LABELS: Readonly<Record<string, string>> = {
-  'cash-flow': 'Flujo de caja',
-  spending: 'Gasto',
+  budget: 'Presupuesto',
+  goal: 'Meta',
+  expense: 'Egreso',
   income: 'Ingreso',
-  savings: 'Ahorro',
-  balance: 'Balance',
-  trend: 'Tendencia',
-  anomaly: 'Anomalia',
-  recurring: 'Recurrencia',
-  'data-quality': 'Calidad de datos',
+  subscription: 'Suscripcion',
+  health: 'Salud financiera',
 }
 
 const SEVERITY_LABELS: Readonly<Record<string, string>> = {
-  info: 'Informativa',
-  notice: 'Aviso',
-  warning: 'Advertencia',
-  critical: 'Critica',
-}
-
-const STATUS_LABELS: Readonly<Record<string, string>> = {
-  generated: 'Generado',
-  skipped: 'Omitido',
+  CRITICAL: 'Critica',
+  HIGH: 'Alta',
+  MEDIUM: 'Media',
+  LOW: 'Baja',
+  INFO: 'Informativa',
 }
 
 function labelFromMap(
@@ -37,7 +30,7 @@ function labelFromMap(
   return map[value] ?? value
 }
 
-export function InsightList({ projection }: InsightListProps) {
+export function InsightList({ viewModel }: InsightListProps) {
   return (
     <section
       aria-labelledby="insights-list-title"
@@ -48,8 +41,8 @@ export function InsightList({ projection }: InsightListProps) {
       </h2>
 
       <ul aria-label="Insights proyectados" className="mt-4 grid gap-3" role="list">
-        {projection.insights.map((insight) => (
-          <li key={insight.insightId}>
+        {viewModel.insights.map((insight) => (
+          <li key={insight.id}>
             <article className="rounded-lg border border-slate-200 p-4">
               <header className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700">
@@ -59,28 +52,70 @@ export function InsightList({ projection }: InsightListProps) {
                   Severidad: {labelFromMap(SEVERITY_LABELS, insight.severity)}
                 </span>
                 <span className="rounded-full border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                  Estado: {labelFromMap(STATUS_LABELS, insight.executionStatus)}
+                  Prioridad: {labelFromMap(SEVERITY_LABELS, insight.priority)}
                 </span>
               </header>
 
               <div className="mt-3 grid gap-1 text-sm text-slate-700">
                 <p>
-                  <strong>Titulo:</strong> {insight.titleCode}
+                  <strong>Titulo:</strong> {insight.title}
                 </p>
                 <p>
-                  <strong>Mensaje:</strong> {insight.messageCode}
+                  <strong>Descripcion:</strong> {insight.description}
                 </p>
                 <p>
-                  <strong>Confianza:</strong> {insight.confidence.score.toFixed(1)}%
-                </p>
-                <p>
-                  <strong>Trazabilidad:</strong> {insight.traceability.sourceSnapshotKey}
+                  <strong>Recomendacion:</strong> {insight.recommendation}
                 </p>
               </div>
             </article>
           </li>
         ))}
       </ul>
+
+      {viewModel.actionPlan === null ? null : (
+        <article className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <h3 className="text-base font-semibold">Financial Action Plan</h3>
+          <p className="mt-1 font-medium">{viewModel.actionPlan.title}</p>
+          <p className="mt-2">{viewModel.actionPlan.summary}</p>
+          <p className="mt-2">
+            <strong>Objetivo:</strong> {viewModel.actionPlan.objective}
+          </p>
+          <p className="mt-1">
+            <strong>Impacto estimado:</strong> {viewModel.actionPlan.estimatedImpact}
+          </p>
+        </article>
+      )}
+
+      {viewModel.recommendedActions.length === 0 ? null : (
+        <section className="mt-6">
+          <h3 className="text-base font-semibold text-slate-900">
+            Acciones recomendadas
+          </h3>
+          <ul className="mt-3 grid gap-3" role="list">
+            {viewModel.recommendedActions.map((action) => (
+              <li key={action.id}>
+                <article className="rounded-lg border border-slate-200 p-4 text-sm text-slate-700">
+                  <p>
+                    <strong>Tipo:</strong> {action.type}
+                  </p>
+                  <p>
+                    <strong>Descripcion:</strong> {action.description}
+                  </p>
+                  <p>
+                    <strong>Beneficio esperado:</strong> {action.expectedBenefit}
+                  </p>
+                  <p>
+                    <strong>Prioridad:</strong> {action.priority}
+                  </p>
+                  <p>
+                    <strong>Esfuerzo:</strong> {action.effort}
+                  </p>
+                </article>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </section>
   )
 }

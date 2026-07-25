@@ -2,22 +2,18 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import type { InsightRuntimeSuccess } from '../src/insight/runtimeResponse'
-import { createValidationReport } from '../src/insight/validationReport'
 import {
   createInsightDashboardController,
   type InsightDashboardControllerDependencies,
 } from '../src/pages/Insights/insightDashboardController'
-import { createInsightReadModels } from '../src/services/insightReadModels'
-import type { InsightExecutionRequest } from '../src/services/insightExecutionResult'
+import {
+  createInsightDashboardUseCase,
+} from '../src/pages/Insights/insightDashboardUseCase'
 import type {
-  InsightReadModelProjection,
-  InsightReadModels,
-} from '../src/services/readModelInterfaces'
-
-function brand<T>(value: string | number): T {
-  return value as T
-}
+  InsightDashboardFinancialData,
+  InsightDashboardUseCaseResult,
+  InsightDashboardViewModel,
+} from '../src/pages/Insights/insightDashboardContracts'
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => undefined
@@ -35,164 +31,70 @@ function deferred<T>() {
   }
 }
 
-function createRuntimeSuccessResponse(
-  insightIds: readonly string[],
-  executionId = 'runtime-exec:insights',
-): InsightRuntimeSuccess {
+function createViewModel(overrides: Partial<InsightDashboardViewModel> = {}): InsightDashboardViewModel {
   return {
-    ok: true,
-    status: 'success',
-    executionId,
-    deterministic: true,
-    failClosed: true,
-    repositoryUpdated: true,
-    collection: {
-      protocolVersion: 1,
-      sourceKnowledgeCollectionId: brand('knowledge-collection:fixture'),
-      sourceSnapshotId: brand('financial-snapshot:fixture'),
-      sourceSnapshotKey: brand('snapshot-key:fixture'),
-      sourceSnapshotRevision: 1,
-      deterministicOutput: true,
-      failClosed: true,
-      insights: insightIds.map((id) => ({
-        insightId: brand(`insight:${id}`),
-        rule: {
-          ruleId: brand(`insight-rule.${id}`),
-          ruleVersion: brand('1.0.0'),
-          protocolVersion: 1,
-        },
-        outputKind: 'observation',
-        category: 'cash-flow',
-        severity: 'warning',
-        titleCode: brand(`insight.title.${id}`),
-        messageCode: brand(`insight.message.${id}`),
-        confidence: {
-          mode: 'fixed-score',
-          scoreUnit: 'percent-0-100',
-          score: 80,
-        },
-        evidence: {
-          evidenceType: 'knowledge-fact-set',
-          summaryCode: brand(`insight.summary.${id}`),
-          source: 'knowledge',
-          traceabilityRequired: true,
-          requiredFacts: [brand(`fact:${id}`)],
-          matchedFacts: [],
-          missingFacts: [brand(`fact:${id}`)],
-        },
-        traceability: {
-          knowledgeCollectionId: brand('knowledge-collection:fixture'),
-          sourceSnapshotId: brand('financial-snapshot:fixture'),
-          sourceSnapshotKey: brand('snapshot-key:fixture'),
-          sourceSnapshotRevision: 1,
-          rule: {
-            ruleId: brand(`insight-rule.${id}`),
-            ruleVersion: brand('1.0.0'),
-            protocolVersion: 1,
-          },
-          factIds: [brand(`fact:${id}`)],
-        },
-      })),
-      executions: insightIds.map((id) => ({
-        rule: {
-          ruleId: brand(`insight-rule.${id}`),
-          ruleVersion: brand('1.0.0'),
-          protocolVersion: 1,
-        },
-        enabled: true,
-        status: 'generated',
-        compatibilityChecks: [],
-        generatedInsightId: brand(`insight:${id}`),
-      })),
+    title: 'Dashboard de insights financieros',
+    subtitle: 'Proyeccion read-only sobre motores financieros certificados.',
+    generatedAt: '2026-07-24T00:00:00.000Z',
+    generatedAtLabel: '24 jul 2026, 00:00',
+    dataStatus: 'complete',
+    warnings: [],
+    summary: {
+      currency: 'COP',
+      usageMode: 'professional',
+      incomeTotal: 1000,
+      expenseTotal: 500,
+      adjustmentTotal: 50,
+      netBalance: 550,
+      incomeCount: 2,
+      expenseCount: 1,
+      adjustmentCount: 1,
+      hasData: true,
     },
-    assessment: {
-      status: 'ok',
-      failures: [],
-      generatedInsights: insightIds.length,
-      skippedRules: 0,
-    },
-    validationReport: createValidationReport([]),
-  }
-}
-
-function createRequestFixture(
-  executionId = 'execution:insights:1',
-): InsightExecutionRequest {
-  return {
-    executionId,
-    snapshotIntegrationId: `snapshot-integration:${executionId}`,
-    knowledgeIntegrationId: `knowledge-integration:${executionId}`,
-    snapshot: {
-      identity: {
-        snapshotId: brand('financial-snapshot:fixture'),
-        snapshotKey: brand('snapshot-key:fixture'),
+    insights: [
+      {
+        id: 'insight:1',
+        category: 'budget',
+        priority: 'HIGH',
+        severity: 'HIGH',
+        title: 'Gasto alto en presupuesto',
+        description: 'Tus egresos crecieron sobre el objetivo.',
+        recommendation: 'Reduce gastos variables esta semana.',
+        generatedAt: '2026-07-24T00:00:00.000Z',
       },
-      revision: { revision: 1 },
-      snapshotVersion: 'financial-snapshot/1.0.0',
-      canonicalizationVersion: 'financial-snapshot-c14n/1.0.0',
-    } as unknown as InsightExecutionRequest['snapshot'],
-    rules: [],
-    versions: {
-      knowledgeVersion: brand('knowledge/1.0.0'),
-      builderVersion: brand('knowledge-builder/1.0.0'),
-      rulesVersion: brand('knowledge-rules/1.0.0'),
-      projectionVersion: brand('knowledge-projection/1.0.0'),
+    ],
+    actionPlan: {
+      planId: 'plan:1',
+      title: 'Plan financiero inteligente',
+      summary: 'Plan de accion de prueba',
+      objective: 'Recuperar margen operativo',
+      priority: 'HIGH',
+      estimatedImpact: 'MEDIUM',
+      relatedInsights: ['insight:1'],
+      warnings: [],
     },
-    protocolVersion: 1,
+    recommendedActions: [
+      {
+        id: 'action:1',
+        type: 'expense_reduction',
+        description: 'Reducir compras no esenciales',
+        expectedBenefit: 'Mejorar flujo de caja',
+        effort: 'LOW',
+        priority: 'HIGH',
+        requiresConfirmation: true,
+      },
+    ],
+    ...overrides,
   }
-}
-
-function createProjectionFixture(
-  insightIds: readonly string[],
-): InsightReadModelProjection {
-  const readModels = createInsightReadModels()
-  const result = readModels.project(createRuntimeSuccessResponse(insightIds))
-
-  if (!result.ok) {
-    throw new Error('expected valid read model projection fixture')
-  }
-
-  return result
 }
 
 function createController(
-  input: {
-    readonly requestFactory?: InsightDashboardControllerDependencies['requestFactory']
-    readonly readModels?: InsightReadModels
-    readonly executionService?: InsightDashboardControllerDependencies['executionService']
-  } = {},
+  execute: () => Promise<InsightDashboardUseCaseResult>,
 ) {
-  const defaultExecutionResult = {
-    ok: true,
-    status: 'success',
-    deterministic: true,
-    failClosed: true,
-    stage: 'pipeline',
-    executionId: 'execution:insights:1',
-    completedStages: ['snapshot-integration', 'knowledge-integration'],
-    traceability: {
-      executionId: 'execution:insights:1',
-      snapshotIntegrationId: 'snapshot-integration:execution:insights:1',
-      knowledgeIntegrationId: 'knowledge-integration:execution:insights:1',
-      completedStages: ['snapshot-integration', 'knowledge-integration'],
-    },
-    snapshotIntegration: {},
-    knowledgeIntegration: {},
-    runtimeResponse: createRuntimeSuccessResponse(['one']),
-  }
-
   const dependencies: InsightDashboardControllerDependencies = {
-    executionService:
-      input.executionService ??
-      {
-        execute: vi.fn(() => defaultExecutionResult as never),
-      },
-    readModels: input.readModels ?? createInsightReadModels(),
-    requestFactory:
-      input.requestFactory ??
-      {
-        createRequest: vi.fn(async () => createRequestFixture()),
-      },
+    useCase: {
+      execute,
+    },
   }
 
   return {
@@ -201,238 +103,173 @@ function createController(
   }
 }
 
-describe('Insight Dashboard Integration controller (Milestone 7F)', () => {
-  it('estado inicial', () => {
-    const { controller } = createController()
-
-    expect(controller.getState()).toEqual({ status: 'idle' })
+function createUseCaseResult(kind: 'success' | 'empty' | 'partial'): InsightDashboardUseCaseResult {
+  const viewModel = createViewModel({
+    dataStatus: kind === 'partial' ? 'partial' : 'complete',
+    warnings: kind === 'partial'
+      ? ['No fue posible generar el plan de accion.']
+      : [],
+    ...(kind === 'empty' ? { insights: [], recommendedActions: [], actionPlan: null } : {}),
   })
 
-  it('transicion idle -> loading', async () => {
-    const pending = deferred<InsightExecutionRequest | null>()
-    const { controller } = createController({
-      requestFactory: {
-        createRequest: vi.fn(async () => pending.promise),
+  return {
+    kind,
+    snapshot: {
+      generatedAt: viewModel.generatedAt,
+      financialSummary: viewModel.summary,
+      insights: [],
+      actionPlan: null,
+      dataSources: {
+        incomes: 'incomeService.listServiceIncomes -> db.services',
+        expenses: 'expenseService.listExpenses -> db.expenses',
+        settings: 'settingsService.getSettings -> db.settings',
+        activePeriod: 'earningPeriodService.getActiveEarningPeriod -> db.earningPeriods',
+        insightEngine: 'createFinancialInsightEngine',
+        planningEngine: 'createFinancialPlanningEngine',
       },
-    })
+      isPartial: kind === 'partial',
+      warnings: [...viewModel.warnings],
+    },
+    viewModel,
+  }
+}
+
+describe('Insight Dashboard runtime controller (PB-IS-015.6)', () => {
+  it('estado inicial y transicion a loading', async () => {
+    const pending = deferred<InsightDashboardUseCaseResult>()
+    const { controller } = createController(async () => pending.promise)
 
     const statuses: string[] = []
     controller.subscribe((state) => {
       statuses.push(state.status)
     })
 
-    const loadPromise = controller.load()
+    const loadingPromise = controller.load()
     expect(controller.getState().status).toBe('loading')
 
-    pending.resolve(createRequestFixture())
-    await loadPromise
+    pending.resolve(createUseCaseResult('success'))
+    await loadingPromise
 
     expect(statuses).toContain('loading')
+    expect(controller.getState().status).toBe('success')
   })
 
-  it('ejecucion exitosa', async () => {
-    const runtimeSuccess = createRuntimeSuccessResponse(['one'])
-    const { controller } = createController({
-      executionService: {
-        execute: vi.fn(() => ({
-          ok: true,
-          status: 'success',
-          deterministic: true,
-          failClosed: true,
-          stage: 'pipeline',
-          executionId: 'execution:insights:success',
-          completedStages: ['snapshot-integration', 'knowledge-integration'],
-          traceability: {
-            executionId: 'execution:insights:success',
-            snapshotIntegrationId: 'snapshot-integration:success',
-            knowledgeIntegrationId: 'knowledge-integration:success',
-            completedStages: ['snapshot-integration', 'knowledge-integration'],
-          },
-          snapshotIntegration: {},
-          knowledgeIntegration: {},
-          runtimeResponse: runtimeSuccess,
-        })),
-      },
-    })
+  it('loading termina en success', async () => {
+    const { controller } = createController(async () => createUseCaseResult('success'))
 
     await controller.load()
 
     const state = controller.getState()
     expect(state.status).toBe('success')
     if (state.status === 'success') {
-      expect(state.projection.insights).toHaveLength(1)
+      expect(state.data.insights.length).toBeGreaterThan(0)
+      expect(state.data.recommendedActions.length).toBeGreaterThan(0)
     }
   })
 
-  it('exito proyectado exclusivamente mediante 7E', async () => {
-    const projection = createProjectionFixture(['one'])
-    const runtimeSuccess = createRuntimeSuccessResponse(['one'])
-    const readModels: InsightReadModels = {
-      project: vi.fn(() => projection),
-    }
-
-    const executionService = {
-      execute: vi.fn(() => ({
-        ok: true,
-        status: 'success',
-        deterministic: true,
-        failClosed: true,
-        stage: 'pipeline',
-        executionId: 'execution:insights:projection',
-        completedStages: ['snapshot-integration', 'knowledge-integration'],
-        traceability: {
-          executionId: 'execution:insights:projection',
-          snapshotIntegrationId: 'snapshot-integration:projection',
-          knowledgeIntegrationId: 'knowledge-integration:projection',
-          completedStages: ['snapshot-integration', 'knowledge-integration'],
-        },
-        snapshotIntegration: {},
-        knowledgeIntegration: {},
-        runtimeResponse: runtimeSuccess,
-      })),
-    }
-
-    const { controller } = createController({
-      readModels,
-      executionService,
-    })
-
-    await controller.load()
-
-    expect(readModels.project).toHaveBeenCalledTimes(1)
-    expect((readModels.project as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toEqual(
-      runtimeSuccess,
-    )
-
-    const state = controller.getState()
-    expect(state.status).toBe('success')
-    if (state.status === 'success') {
-      expect(state.projection).toBe(projection)
-    }
-  })
-
-  it('estado empty', async () => {
-    const readModels: InsightReadModels = {
-      project: vi.fn(() => createProjectionFixture([])),
-    }
-
-    const { controller } = createController({ readModels })
+  it('loading termina en empty', async () => {
+    const { controller } = createController(async () => createUseCaseResult('empty'))
 
     await controller.load()
 
     const state = controller.getState()
     expect(state.status).toBe('empty')
-    if (state.status === 'empty') {
-      expect(state.projection.insights).toEqual([])
-    }
   })
 
-  it('rechazo de 7D convertido en rejected', async () => {
-    const readModels: InsightReadModels = {
-      project: vi.fn(() => createProjectionFixture(['one'])),
-    }
-
-    const { controller } = createController({
-      readModels,
-      executionService: {
-        execute: vi.fn(() => ({
-          ok: false,
-          status: 'failure',
-          deterministic: true,
-          failClosed: true,
-          stage: 'knowledge-integration',
-          executionId: 'execution:rejected',
-          code: 'INSIGHT_EXECUTION_KNOWLEDGE_INTEGRATION_REJECTED',
-          message: 'rejected',
-          traceability: {
-            executionId: 'execution:rejected',
-            snapshotIntegrationId: 'snapshot-integration:rejected',
-            knowledgeIntegrationId: 'knowledge-integration:rejected',
-            completedStages: ['snapshot-integration'],
-          },
-        })),
-      },
-    })
+  it('loading termina en partial cuando hay warning no bloqueante', async () => {
+    const { controller } = createController(async () => createUseCaseResult('partial'))
 
     await controller.load()
 
     const state = controller.getState()
-    expect(state.status).toBe('rejected')
-    if (state.status === 'rejected') {
-      expect(state.code).toBe('INSIGHT_EXECUTION_KNOWLEDGE_INTEGRATION_REJECTED')
+    expect(state.status).toBe('partial')
+    if (state.status === 'partial') {
+      expect(state.data.warnings.length).toBeGreaterThan(0)
     }
-    expect(readModels.project).toHaveBeenCalledTimes(0)
   })
 
-  it('excepcion controlable convertida en error', async () => {
-    const { controller } = createController({
-      requestFactory: {
-        createRequest: vi.fn(async () => {
-          throw new Error('request failed')
-        }),
+  it('loading termina en error cuando use case falla', async () => {
+    const { controller } = createController(async () => ({
+      kind: 'error',
+      error: {
+        code: 'INSIGHT_DASHBOARD_READ_FAILED',
+        message: 'fallo controlado',
       },
-    })
+    }))
 
     await controller.load()
 
-    expect(controller.getState()).toEqual({
-      status: 'error',
-      code: 'INSIGHT_DASHBOARD_UNEXPECTED_ERROR',
-      message:
-        'No fue posible cargar el dashboard de insights por un error inesperado.',
-    })
+    const state = controller.getState()
+    expect(state.status).toBe('error')
+    if (state.status === 'error') {
+      expect(state.error.code).toBe('INSIGHT_DASHBOARD_READ_FAILED')
+    }
   })
 
-  it('respuesta inconsistente convertida en error', async () => {
-    const readModels: InsightReadModels = {
-      project: vi.fn(() => ({
-        ok: false,
-        status: 'failure',
-        deterministic: true,
-        failClosed: true,
-        code: 'READ_MODEL_INVALID_RUNTIME_RESPONSE',
-        message: 'invalid read model',
-      })),
-    }
+  it('retry manual: error inicial y luego success', async () => {
+    const execute = vi
+      .fn<() => Promise<InsightDashboardUseCaseResult>>()
+      .mockResolvedValueOnce({
+        kind: 'error',
+        error: {
+          code: 'INSIGHT_DASHBOARD_READ_FAILED',
+          message: 'fallo',
+        },
+      })
+      .mockResolvedValueOnce(createUseCaseResult('success'))
 
-    const { controller } = createController({ readModels })
+    const { controller } = createController(execute)
 
     await controller.load()
+    expect(controller.getState().status).toBe('error')
 
-    expect(controller.getState()).toEqual({
-      status: 'error',
-      code: 'INSIGHT_DASHBOARD_INVALID_READ_MODEL',
-      message: 'La proyeccion de lectura de insights fue inconsistente.',
-    })
+    await controller.load({ force: true })
+    expect(controller.getState().status).toBe('success')
   })
 
-  it('no ejecucion duplicada durante loading', async () => {
-    const pending = deferred<InsightExecutionRequest | null>()
-    const requestFactory = {
-      createRequest: vi.fn(async () => pending.promise),
-    }
-
-    const { controller } = createController({ requestFactory })
+  it('no duplica ejecucion durante loading', async () => {
+    const pending = deferred<InsightDashboardUseCaseResult>()
+    const execute = vi.fn(async () => pending.promise)
+    const { controller } = createController(execute)
 
     const firstLoad = controller.load()
     const secondLoad = controller.load()
 
-    expect(requestFactory.createRequest).toHaveBeenCalledTimes(1)
+    expect(execute).toHaveBeenCalledTimes(1)
 
-    pending.resolve(createRequestFixture())
+    pending.resolve(createUseCaseResult('success'))
     await firstLoad
     await secondLoad
   })
 
-  it('ausencia de actualizaciones despues de dispose', async () => {
-    const pending = deferred<InsightExecutionRequest | null>()
-    const requestFactory = {
-      createRequest: vi.fn(async () => pending.promise),
-    }
+  it('ignora resultados obsoletos y mantiene el mas reciente', async () => {
+    const first = deferred<InsightDashboardUseCaseResult>()
+    const second = deferred<InsightDashboardUseCaseResult>()
 
-    const { controller } = createController({ requestFactory })
+    const execute = vi
+      .fn<() => Promise<InsightDashboardUseCaseResult>>()
+      .mockImplementationOnce(async () => first.promise)
+      .mockImplementationOnce(async () => second.promise)
+
+    const { controller } = createController(execute)
+
+    const firstLoad = controller.load()
+    const secondLoad = controller.load({ force: true })
+
+    second.resolve(createUseCaseResult('success'))
+    await secondLoad
+
+    first.resolve(createUseCaseResult('empty'))
+    await firstLoad
+
+    expect(controller.getState().status).toBe('success')
+  })
+
+  it('no actualiza estado despues de dispose', async () => {
+    const pending = deferred<InsightDashboardUseCaseResult>()
+    const { controller } = createController(async () => pending.promise)
+
     const transitions: string[] = []
-
     controller.subscribe((state) => {
       transitions.push(state.status)
     })
@@ -440,202 +277,199 @@ describe('Insight Dashboard Integration controller (Milestone 7F)', () => {
     const loadingPromise = controller.load()
     controller.dispose()
 
-    pending.resolve(createRequestFixture())
+    pending.resolve(createUseCaseResult('success'))
     await loadingPromise
 
     expect(transitions).toEqual(['idle', 'loading'])
   })
+})
 
-  it('resultado obsoleto no reemplaza uno mas reciente', async () => {
-    const first = deferred<InsightExecutionRequest | null>()
-    const second = deferred<InsightExecutionRequest | null>()
-
-    const requestFactory = {
-      createRequest: vi
-        .fn<() => Promise<InsightExecutionRequest | null>>()
-        .mockImplementationOnce(async () => first.promise)
-        .mockImplementationOnce(async () => second.promise),
+describe('Insight Dashboard runtime use case (PB-IS-015.6)', () => {
+  function financialData(input: Partial<InsightDashboardFinancialData> = {}): InsightDashboardFinancialData {
+    return {
+      usageMode: 'professional',
+      currency: 'COP',
+      incomeTotal: 1000,
+      expenseTotal: 500,
+      adjustmentTotal: 50,
+      netBalance: 550,
+      incomeCount: 2,
+      expenseCount: 1,
+      adjustmentCount: 1,
+      hasData: true,
+      periodStart: '2026-07-01',
+      periodEnd: '2026-07-31',
+      ...input,
     }
+  }
 
-    const executionService = {
-      execute: vi.fn((request: InsightExecutionRequest) => {
-        const runtimeResponse =
-          request.executionId === 'execution:new'
-            ? createRuntimeSuccessResponse(['new'], 'runtime:new')
-            : createRuntimeSuccessResponse(['old'], 'runtime:old')
-
-        return {
-          ok: true,
-          status: 'success',
-          deterministic: true,
-          failClosed: true,
-          stage: 'pipeline',
-          executionId: request.executionId,
-          completedStages: ['snapshot-integration', 'knowledge-integration'],
-          traceability: {
-            executionId: request.executionId,
-            snapshotIntegrationId: 'snapshot-integration',
-            knowledgeIntegrationId: 'knowledge-integration',
-            completedStages: ['snapshot-integration', 'knowledge-integration'],
-          },
-          snapshotIntegration: {},
-          knowledgeIntegration: {},
-          runtimeResponse,
-        }
-      }),
+  function insightFixture() {
+    return {
+      protocolVersion: 1 as const,
+      insightId: 'insight:1',
+      category: 'budget' as const,
+      severity: 'HIGH' as const,
+      priority: 'HIGH' as const,
+      title: 'Gasto alto',
+      description: 'Se detecto crecimiento de gasto',
+      recommendation: 'Reducir gastos no esenciales',
+      sourceTool: 'financial_insights',
+      generatedAt: '2026-07-24T00:00:00.000Z',
     }
+  }
 
-    const { controller } = createController({
-      requestFactory,
-      executionService,
+  function actionPlanFixture() {
+    return {
+      planId: 'plan:1',
+      createdAt: '2026-07-24T00:00:00.000Z',
+      title: 'Plan financiero inteligente',
+      summary: 'Resumen del plan',
+      objective: 'Mejorar balance',
+      priority: 'HIGH' as const,
+      estimatedImpact: 'MEDIUM' as const,
+      recommendedActions: [
+        {
+          actionId: 'action:1',
+          type: 'expense_reduction',
+          description: 'Reducir gasto variable',
+          expectedBenefit: 'Aumentar margen',
+          effort: 'LOW' as const,
+          priority: 'HIGH' as const,
+          affectedCategory: 'expense',
+          relatedGoal: null,
+          requiresConfirmation: true,
+        },
+      ],
+      relatedInsights: ['insight:1'],
+      assumptions: [],
+      warnings: [],
+    }
+  }
+
+  it('retorna empty cuando no hay datos o no hay insights', async () => {
+    const useCase = createInsightDashboardUseCase({
+      financialDataReader: {
+        read: vi.fn(async () => financialData({ hasData: false })),
+      },
+      insightEngine: {
+        evaluate: vi.fn(async () => []),
+      },
+      planningRunner: {
+        run: vi.fn(() => null),
+      },
+      now: () => '2026-07-24T00:00:00.000Z',
     })
 
-    const firstLoad = controller.load()
-    const secondLoad = controller.load({ force: true })
-
-    second.resolve(createRequestFixture('execution:new'))
-    await secondLoad
-
-    first.resolve(createRequestFixture('execution:old'))
-    await firstLoad
-
-    const state = controller.getState()
-    expect(state.status).toBe('success')
-    if (state.status === 'success') {
-      expect(state.projection.updateMetadata.executionId).toBe('runtime:new')
-      expect(state.projection.insights[0]?.insightId).toBe('insight:new')
-    }
-
-    expect(executionService.execute).toHaveBeenCalledTimes(1)
+    const result = await useCase.execute()
+    expect(result.kind).toBe('empty')
   })
 
-  it('determinismo de transformaciones', async () => {
-    const projection = createProjectionFixture(['one'])
-    const readModels: InsightReadModels = {
-      project: vi.fn(() => projection),
-    }
-
-    const { controller } = createController({ readModels })
-
-    await controller.load()
-    const firstState = controller.getState()
-
-    await controller.load({ force: true })
-    const secondState = controller.getState()
-
-    expect(firstState).toEqual(secondState)
-  })
-
-  it('input y read models no mutados', async () => {
-    const request = createRequestFixture('execution:immutability')
-    const requestBefore = JSON.stringify(request)
-    const projection = createProjectionFixture(['one'])
-    const projectionBefore = JSON.stringify(projection)
-
-    const { controller } = createController({
-      requestFactory: {
-        createRequest: vi.fn(async () => request),
+  it('retorna partial cuando planning falla y conserva insights', async () => {
+    const useCase = createInsightDashboardUseCase({
+      financialDataReader: {
+        read: vi.fn(async () => financialData()),
       },
-      readModels: {
-        project: vi.fn(() => projection),
+      insightEngine: {
+        evaluate: vi.fn(async () => [insightFixture()]),
       },
+      planningRunner: {
+        run: vi.fn(() => {
+          throw new Error('planning failed')
+        }),
+      },
+      now: () => '2026-07-24T00:00:00.000Z',
     })
 
-    await controller.load()
+    const result = await useCase.execute()
+    expect(result.kind).toBe('partial')
+    if (result.kind === 'partial') {
+      expect(result.viewModel.insights.length).toBe(1)
+      expect(result.viewModel.warnings.length).toBeGreaterThan(0)
+    }
+  })
 
-    expect(JSON.stringify(request)).toBe(requestBefore)
-    expect(JSON.stringify(projection)).toBe(projectionBefore)
+  it('retorna success con action plan cuando todo sale bien', async () => {
+    const useCase = createInsightDashboardUseCase({
+      financialDataReader: {
+        read: vi.fn(async () => financialData()),
+      },
+      insightEngine: {
+        evaluate: vi.fn(async () => [insightFixture()]),
+      },
+      planningRunner: {
+        run: vi.fn(() => actionPlanFixture()),
+      },
+      now: () => '2026-07-24T00:00:00.000Z',
+    })
+
+    const result = await useCase.execute()
+    expect(result.kind).toBe('success')
+    if (result.kind === 'success') {
+      expect(result.viewModel.actionPlan?.planId).toBe('plan:1')
+      expect(result.viewModel.recommendedActions.length).toBe(1)
+    }
+  })
+
+  it('retorna error de timeout cuando la lectura no resuelve', async () => {
+    const pending = deferred<InsightDashboardFinancialData>()
+    const useCase = createInsightDashboardUseCase({
+      financialDataReader: {
+        read: vi.fn(async () => pending.promise),
+      },
+      insightEngine: {
+        evaluate: vi.fn(async () => [insightFixture()]),
+      },
+      planningRunner: {
+        run: vi.fn(() => actionPlanFixture()),
+      },
+      timeoutMs: 1,
+      now: () => '2026-07-24T00:00:00.000Z',
+    })
+
+    const result = await useCase.execute()
+    expect(result.kind).toBe('error')
+    if (result.kind === 'error') {
+      expect(result.error.code).toBe('INSIGHT_DASHBOARD_TIMEOUT')
+    }
   })
 })
 
-describe('Insight Dashboard Integration static constraints (Milestone 7F)', () => {
-  it('componentes reciben solo read models y no invocan execution service', () => {
-    const dashboardSource = readFileSync(
-      new URL('../src/pages/Insights/InsightDashboard.tsx', import.meta.url),
-      'utf8',
-    )
-    const summarySource = readFileSync(
-      new URL('../src/pages/Insights/InsightSummary.tsx', import.meta.url),
-      'utf8',
-    )
-    const listSource = readFileSync(
-      new URL('../src/pages/Insights/InsightList.tsx', import.meta.url),
-      'utf8',
-    )
-
-    expect(summarySource.includes('InsightReadModelProjection')).toBe(true)
-    expect(listSource.includes('InsightReadModelProjection')).toBe(true)
-    expect(dashboardSource.includes('execute(')).toBe(false)
-    expect(summarySource.includes('execute(')).toBe(false)
-    expect(listSource.includes('execute(')).toBe(false)
-  })
-
-  it('componentes no importan runtime ni repository internos', () => {
-    const files = [
-      '../src/pages/Insights/InsightDashboard.tsx',
-      '../src/pages/Insights/InsightSummary.tsx',
-      '../src/pages/Insights/InsightList.tsx',
-      '../src/pages/Insights/InsightStateViews.tsx',
-      '../src/pages/Insights/InsightDashboardPage.tsx',
-    ]
-
-    for (const file of files) {
-      const source = readFileSync(new URL(file, import.meta.url), 'utf8')
-
-      expect(source.includes('createInsightRuntime')).toBe(false)
-      expect(source.includes('InsightRuntime')).toBe(false)
-      expect(source.includes('createInsightRepository')).toBe(false)
-      expect(source.includes('InsightRepository')).toBe(false)
-      expect(source.includes('buildInsightCollection')).toBe(false)
-      expect(source.includes('validateInsightCollection')).toBe(false)
-      expect(source.includes('createInsightEngine')).toBe(false)
-      expect(source.includes('Dexie')).toBe(false)
-      expect(source.includes('indexedDB')).toBe(false)
-      expect(source.includes('IndexedDB')).toBe(false)
-    }
-  })
-
-  it('loading, empty, rejected y error son accesibles', () => {
+describe('Insight Dashboard runtime static constraints (PB-IS-015.6)', () => {
+  it('la composicion del dashboard no depende de snapshots sellados ni openai', () => {
     const source = readFileSync(
-      new URL('../src/pages/Insights/InsightStateViews.tsx', import.meta.url),
+      new URL('../src/pages/Insights/insightDashboardComposition.ts', import.meta.url),
       'utf8',
     )
 
-    expect(source.includes('role="status"')).toBe(true)
-    expect(source.includes('role="alert"')).toBe(true)
-    expect(source.includes('aria-live="polite"')).toBe(true)
-    expect(source.includes('aria-live="assertive"')).toBe(true)
+    expect(source.includes('FinancialSnapshotRepository')).toBe(false)
+    expect(source.includes('snapshot')).toBe(false)
+    expect(source.includes('openai')).toBe(false)
+    expect(source.includes('createInsightDashboardUseCase')).toBe(true)
   })
 
-  it('lista semantica y severidad no solo por color', () => {
+  it('el use case declara fuentes runtime compartidas de ingresos y egresos', () => {
     const source = readFileSync(
-      new URL('../src/pages/Insights/InsightList.tsx', import.meta.url),
+      new URL('../src/pages/Insights/insightDashboardUseCase.ts', import.meta.url),
       'utf8',
     )
 
-    expect(source.includes('<ul')).toBe(true)
-    expect(source.includes('<li')).toBe(true)
-    expect(source.includes('Severidad:')).toBe(true)
-    expect(source.includes('Estado:')).toBe(true)
+    expect(source.includes('listServiceIncomes')).toBe(true)
+    expect(source.includes('listExpenses')).toBe(true)
+    expect(source.includes('createFinancialInsightEngine')).toBe(true)
+    expect(source.includes('createFinancialPlanningEngine')).toBe(true)
   })
 
-  it('sin logica de dominio en componentes y sin IA/persistencia', () => {
-    const summarySource = readFileSync(
-      new URL('../src/pages/Insights/InsightSummary.tsx', import.meta.url),
-      'utf8',
-    )
-    const listSource = readFileSync(
-      new URL('../src/pages/Insights/InsightList.tsx', import.meta.url),
+  it('el hook no crea el controller fuera del useEffect (regresion de loading infinito bajo StrictMode)', () => {
+    const source = readFileSync(
+      new URL('../src/pages/Insights/useInsightDashboard.ts', import.meta.url),
       'utf8',
     )
 
-    expect(summarySource.includes('.reduce(')).toBe(false)
-    expect(listSource.includes('.reduce(')).toBe(false)
-    expect(summarySource.includes('generalBalance')).toBe(false)
-    expect(listSource.includes('generalBalance')).toBe(false)
-    expect(summarySource.includes('LLM')).toBe(false)
-    expect(listSource.includes('LLM')).toBe(false)
-    expect(summarySource.includes('persist')).toBe(false)
-    expect(listSource.includes('persist')).toBe(false)
+    const effectIndex = source.indexOf('useEffect(')
+    const controllerCreationIndex = source.indexOf('createInsightDashboardController(')
+
+    expect(effectIndex).toBeGreaterThan(-1)
+    expect(controllerCreationIndex).toBeGreaterThan(effectIndex)
+    expect(source.includes('useMemo')).toBe(false)
   })
 })

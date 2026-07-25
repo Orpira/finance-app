@@ -18,27 +18,33 @@ export function InsightDashboard({ state, onReload }: InsightDashboardProps) {
     return <InsightLoadingView />
   }
 
-  if (state.status === 'rejected') {
-    return <InsightRejectedView onReload={onReload} state={state} />
-  }
-
   if (state.status === 'error') {
-    return <InsightErrorView onReload={onReload} state={state} />
+    return <InsightErrorView onReload={onReload} error={state.error} />
   }
 
   if (state.status === 'empty') {
     return (
       <div className="grid gap-4">
-        <InsightSummary projection={state.projection} />
+        <InsightSummary viewModel={state.data} />
         <InsightEmptyView onReload={onReload} />
+      </div>
+    )
+  }
+
+  if (state.status === 'partial') {
+    return (
+      <div className="grid gap-4">
+        <InsightSummary viewModel={state.data} />
+        <InsightRejectedView onReload={onReload} warnings={state.data.warnings} />
+        <InsightList viewModel={state.data} />
       </div>
     )
   }
 
   return (
     <div className="grid gap-4">
-      <InsightSummary projection={state.projection} />
-      <InsightList projection={state.projection} />
+      <InsightSummary viewModel={state.data} />
+      <InsightList viewModel={state.data} />
     </div>
   )
 }

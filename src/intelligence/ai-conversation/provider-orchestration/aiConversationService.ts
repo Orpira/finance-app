@@ -53,6 +53,11 @@ import {
   createFinancialConversationContext,
   createFinancialToolResultMapper,
 } from './financialConversationContextFactory'
+import {
+  recordRuntimePromptAudit,
+  recordRuntimeProviderAudit,
+  recordRuntimeResponseAudit,
+} from './runtimeConversationAudit'
 import type {
   ActivationDecision,
   ActivationEngine,
@@ -214,6 +219,112 @@ function estimateTokensFromText(text: string): number {
   }
 
   return Math.ceil(text.length / 4)
+}
+
+function detectCompareLatestIncomeIntent(userMessage: string): boolean {
+  const normalized = userMessage.toLowerCase()
+  const hasComparisonVerb = /compara|comparar|compare|versus|vs/.test(normalized)
+  const hasIncomeSignal = /ingreso|income/.test(normalized)
+  const hasLatestSignal = /ultimo|ultimos|último|últimos|reciente/.test(normalized)
+  return hasComparisonVerb && hasIncomeSignal && hasLatestSignal
+}
+
+function applyTransactionsComparisonArguments(
+  executionPlan: FinancialConversationExecutionPlan,
+  userMessage: string,
+): FinancialConversationExecutionPlan {
+  if (
+    executionPlan.activationDecision.intent !== 'transactions'
+    || !detectCompareLatestIncomeIntent(userMessage)
+  ) {
+    return executionPlan
+  }
+
+  const currentArguments = executionPlan.activationDecision.toolArguments ?? {}
+
+  return {
+    ...executionPlan,
+    activationDecision: {
+      ...executionPlan.activationDecision,
+      toolArguments: {
+        ...structuredClone(currentArguments),
+        filters: {
+          kinds: ['income'],
+        },
+        sort: {
+          field: 'date',
+          direction: 'desc',
+        },
+        limit: 2,
+      },
+    },
+  }
+}
+
+function shouldForceAIConversation(
+  input: {
+    readonly userMessage: string
+    readonly intent: string
+    readonly providerId: string
+  },
+): boolean {
+  return input.providerId === 'openai-provider'
+    && input.intent === 'transactions'
+    && detectCompareLatestIncomeIntent(input.userMessage)
+}
+
+function extractLatestIncomeAmountsFromResponse(
+  response: ConversationResponse,
+): readonly number[] {
+  for (const step of response.promptContext.steps) {
+    if (step.kind !== 'success' || step.toolId !== 'financial_transactions') {
+      continue
+    }
+
+    const output = step.output
+    if (output === null || typeof output !== 'object' || Array.isArray(output)) {
+      continue
+    }
+
+    const items = (output as { readonly items?: unknown }).items
+    if (!Array.isArray(items)) {
+      continue
+    }
+
+    const incomeAmounts = items
+      .map((item) => {
+        if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+          return null
+        }
+        const amount = (item as { readonly amount?: unknown }).amount
+        return typeof amount === 'number' && Number.isFinite(amount)
+          ? amount
+          : null
+      })
+      .filter((amount): amount is number => amount !== null)
+
+    if (incomeAmounts.length > 0) {
+      return incomeAmounts.slice(0, 2)
+    }
+  }
+
+  return []
+}
+
+function createIncomeComparisonMessage(
+  response: ConversationResponse,
+): string | null {
+  const amounts = extractLatestIncomeAmountsFromResponse(response)
+  if (amounts.length < 2) {
+    return null
+  }
+
+  const latest = amounts[0] ?? 0
+  const previous = amounts[1] ?? 0
+  const difference = latest - previous
+  const trend = difference >= 0 ? 'subió' : 'bajó'
+
+  return `Comparación de tus dos últimos ingresos: ${latest} vs ${previous}. La variación fue de ${Math.abs(difference)} y ${trend} en ${difference >= 0 ? 'positivo' : 'negativo'}.`
 }
 
 function createResponseWithFinancialContext(
@@ -461,14 +572,15 @@ export function createAIConversationService(
       })
 
       const executionPlan = mergeExecutionPlanWithContext(skillResolution.plan, planEnrichment)
+      const executionPlanForRequest = applyTransactionsComparisonArguments(executionPlan, input.userMessage)
       const insights = await insightEngine.evaluate({
         sessionId: input.conversationRequest.context.sessionId,
         userMessage: input.userMessage,
         requestedAt,
-        plan: executionPlan,
+        plan: executionPlanForRequest,
         snapshot,
       })
-      const executionPlanWithInsights = mergeExecutionPlanInsights(executionPlan, insights)
+      const executionPlanWithInsights = mergeExecutionPlanInsights(executionPlanForRequest, insights)
       const actionPlan = planningEngine.build({
         sessionId: input.conversationRequest.context.sessionId,
         userMessage: input.userMessage,
@@ -478,12 +590,18 @@ export function createAIConversationService(
       })
       const executionPlanWithPlanning = mergeExecutionPlanActionPlan(executionPlanWithInsights, actionPlan)
       const requiredToolId = executionPlanWithPlanning.requiredTools[0] ?? null
-      const requiresAIConversation = decision.requiresAI || executionPlanWithPlanning.requiresAIExplanation
 
       const providerUsed = decision.provider === dependencies.fallbackProvider.metadata.providerId
         ? dependencies.fallbackProvider
         : dependencies.provider
       const providerId = providerUsed.metadata.providerId
+
+      const forcedAIConversation = shouldForceAIConversation({
+        userMessage: input.userMessage,
+        intent: decision.intent,
+        providerId,
+      })
+      const requiresAIConversation = decision.requiresAI || executionPlanWithPlanning.requiresAIExplanation || forcedAIConversation
 
       const providerValidation = validateAIConversationProviderIdentifier(providerId)
       if (providerValidation !== null) {
@@ -576,6 +694,8 @@ export function createAIConversationService(
 
       let message
       if (!requiresAIConversation && decision.activationType === 'DIRECT_TOOL') {
+        const incomeComparisonMessage = createIncomeComparisonMessage(responseWithFinancialContext.response)
+        const directToolText = incomeComparisonMessage ?? createDirectToolMessageText(decision)
         message = {
           protocolVersion: 1,
           messageId: `${execution.response.responseId}:direct-tool`,
@@ -583,7 +703,7 @@ export function createAIConversationService(
           origin: 'MOCK_RENDERER',
           timestamp: now(),
           text: appendActionPlanToMessage(
-            appendInsightsToMessage(createDirectToolMessageText(decision), insights),
+            appendInsightsToMessage(directToolText, insights),
             actionPlan,
           ),
           responseId: execution.response.responseId,
@@ -598,6 +718,19 @@ export function createAIConversationService(
         if (generateConversation === undefined) {
           return createFailure('PROVIDER_UNAVAILABLE', 'Selected AI provider does not implement conversation generation.')
         }
+
+        recordRuntimeProviderAudit({
+          timestamp: requestedAt,
+          strategy: providerId === 'openai-provider' ? 'openai' : 'mock',
+          providerExpected: providerId,
+          providerSelected: providerId,
+          model: input.conversationRequest.context.model,
+          openAICalled: providerId === 'openai-provider',
+          fallbackUsed: decision.fallback.used,
+          reasonIfNotCalled: providerId === 'openai-provider'
+            ? null
+            : 'Provider seleccionado no es OpenAI para esta solicitud.',
+        })
 
         const rendered = await generateConversation(responseWithFinancialContext.response).catch(() => {
           return {
@@ -653,6 +786,23 @@ export function createAIConversationService(
       }
 
       const completionTokenEstimate = estimateTokensFromText(message.text)
+
+      recordRuntimePromptAudit({
+        timestamp: requestedAt,
+        provider: providerId,
+        promptSize: providerPromptPayload.length,
+        contextSize: JSON.stringify(financialContext).length,
+        containsFinancialData: financialContext.toolResults.length > 0,
+        completionSize: message.text.length,
+      })
+
+      recordRuntimeResponseAudit({
+        timestamp: requestedAt,
+        provider: providerId,
+        generatedByOpenAI: providerId === 'openai-provider' && requiresAIConversation,
+        generatedByDeterministicComposer: providerId !== 'openai-provider' || !requiresAIConversation,
+        messagePreview: message.text.slice(0, 220),
+      })
 
       const executionValidation = validateAIConversationExecution(executionPayload)
       if (executionValidation !== null) {
