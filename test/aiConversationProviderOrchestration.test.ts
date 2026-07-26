@@ -110,7 +110,12 @@ function createConversationResponseFixture() {
             toolName: 'financial_balance',
             output: {
               summary: {
+                currencyCode: 'EUR',
+                incomeTotal: 5000,
+                expenseTotal: 800,
+                adjustmentTotal: 0,
                 netBalance: 4200,
+                hasData: true,
               },
             },
             permission: 'read-only',
@@ -576,11 +581,143 @@ describe('PB-IS-014.5 Intelligent Conversation Activation Engine', () => {
     expect(result.kind).toBe('success')
     if (result.kind === 'success') {
       expect(result.execution.conversationGenerated).toBe(false)
-      expect(result.message.text).toContain('determinista sin usar IA')
+      // PB-IS-016.1-R1: la ruta DIRECT_TOOL construye la respuesta a partir
+      // del payload real de la Tool (financialDirectResponseBuilder), sin
+      // texto tecnico hardcodeado por toolId.
+      expect(result.message.text).toContain('balance neto de 4.200,00 EUR')
+      expect(result.message.text).not.toContain('determinista')
+      expect(result.message.text).not.toContain('DIRECT_TOOL')
     }
 
     expect(activationEngine.decide).toHaveBeenCalledTimes(1)
     expect(provider.resolveIntent).not.toHaveBeenCalled()
+  })
+
+  it('PB-IS-016.2-R3: una consulta DIRECT_TOOL sin intencion de comparar NO se secuestra por el mensaje fijo de "dos ultimos ingresos" aunque el resultado tenga 2 ingresos', async () => {
+    // Bug real demostrado con runtime en navegador (Chrome/Brave headless
+    // contra Vite + IndexedDB reales): createIncomeComparisonMessage se
+    // invocaba sin verificar detectCompareLatestIncomeIntent(userMessage),
+    // por lo que CUALQUIER financial_transactions con >=2 ingresos devolvia
+    // "Comparacion de tus dos ultimos ingresos..." sin importar la pregunta
+    // real (p. ej. "cuantos ingresos obtuve ayer"). Los tests unitarios de
+    // financialDirectResponseBuilder.ts (aislados) no cubrian esta ruta de
+    // aiConversationService.ts, por lo que pasaban en verde mientras el
+    // navegador real seguia respondiendo mal.
+    const activationEngine: ActivationEngine = {
+      decide: vi.fn(async () => createDecision({
+        activationType: 'DIRECT_TOOL',
+        requiresAI: false,
+        requiresTool: true,
+        provider: 'mock-ai-provider',
+        toolId: 'financial_transactions',
+        intent: 'transactions',
+      })),
+    }
+
+    const facade: AIConversationFacade = {
+      async execute() {
+        return {
+          kind: 'success',
+          response: createTransactionsConversationResponseFixture({ firstIncome: 5250, secondIncome: 84 }),
+        }
+      },
+    }
+
+    const dependencies = {
+      facade,
+      provider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, text: 'mock response' }),
+      fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, text: 'mock response' }),
+      confidencePolicy: { confidenceThreshold: 0.7 },
+      activationEngine,
+    } as AIConversationServiceDependencies & { readonly activationEngine: ActivationEngine }
+
+    const service = createAIConversationService(dependencies)
+    const result = await service.processConversation({
+      conversationRequest: createRequestFixture('¿Cuántos ingresos obtuve ayer?'),
+      userMessage: '¿Cuántos ingresos obtuve ayer?',
+      turn: 12,
+    })
+
+    expect(result.kind).toBe('success')
+    if (result.kind === 'success') {
+      expect(result.message.text).not.toContain('Comparación de tus dos últimos ingresos')
+      expect(result.message.text).toContain('2 ingresos')
+    }
+  })
+
+  it('PB-IS-016.2-R3: el filters.period que llega a la Tool siempre lo calcula el Resolver determinista, aunque el proveedor primario (ej. OpenAI real) resuelva una fecha alucinada', async () => {
+    // Bug real demostrado con runtime en un dispositivo del usuario con
+    // VITE_AI_PROVIDER=openai activo (no reproducible con el proveedor mock
+    // usado en el resto de los tests, ni en fixtures aisladas): con OpenAI
+    // como resolver primario de intencion (conversationComposition.ts), el
+    // filters.period que genera puede ser una fecha alucinada -- valida
+    // contra el schema, por lo que la reparacion de PB-IS-016.1 no la
+    // detecta -- que no corresponde a "ayer"/"hoy" reales. La Tool entonces
+    // consulta la fecha equivocada y devuelve 0 resultados aunque la UI
+    // muestre datos reales para "ayer". Este test simula exactamente eso:
+    // el "proveedor primario" (Activation Engine decision) resuelve un
+    // periodo alucinado (2024-05-31) para un mensaje que dice "ayer".
+    const originalTz = process.env.TZ
+    process.env.TZ = 'UTC'
+    try {
+      const activationEngine: ActivationEngine = {
+        decide: vi.fn(async () => createDecision({
+          activationType: 'DIRECT_TOOL',
+          requiresAI: false,
+          requiresTool: true,
+          provider: 'openai-provider',
+          toolId: 'financial_transactions',
+          intent: 'transactions',
+          toolArguments: {
+            filters: {
+              period: { from: '2024-05-31', to: '2024-05-31' },
+              kinds: ['income'],
+            },
+          },
+        })),
+      }
+
+      let capturedRequest: AIConversationRequest | undefined
+      const facade: AIConversationFacade = {
+        async execute(request) {
+          capturedRequest = request
+          return {
+            kind: 'success',
+            response: createTransactionsConversationResponseFixture({ firstIncome: 100, secondIncome: 50 }),
+          }
+        },
+      }
+
+      const dependencies = {
+        facade,
+        provider: createProviderFixture({ providerId: 'openai-provider', confidence: 0.9, text: 'openai response' }),
+        fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, text: 'mock response' }),
+        confidencePolicy: { confidenceThreshold: 0.7 },
+        activationEngine,
+      } as AIConversationServiceDependencies & { readonly activationEngine: ActivationEngine }
+
+      const service = createAIConversationService(dependencies)
+      const result = await service.processConversation({
+        conversationRequest: createRequestFixture('¿Cuánto ingresé ayer?'),
+        userMessage: '¿Cuánto ingresé ayer?',
+        turn: 13,
+        requestedAt: '2026-07-24T00:00:00.000Z',
+      })
+
+      expect(result.kind).toBe('success')
+      expect(capturedRequest).toBeDefined()
+      const sentArguments = capturedRequest?.steps[0]?.arguments as {
+        readonly filters?: { readonly period?: { readonly from?: string; readonly to?: string }; readonly kinds?: readonly string[] }
+      }
+      // "ayer" relativo a requestedAt=2026-07-24 es 2026-07-23: el Resolver
+      // determinista debe imponer esta fecha, descartando la alucinada.
+      expect(sentArguments.filters?.period).toEqual({ from: '2026-07-23', to: '2026-07-23' })
+      // El resto de los argumentos que resolvio el proveedor primario (kinds)
+      // se conservan sin tocar.
+      expect(sentArguments.filters?.kinds).toEqual(['income'])
+    } finally {
+      process.env.TZ = originalTz
+    }
   })
 
   it('AI Conversation Service incorpora insights proactivos solo como contexto del mensaje final', async () => {
@@ -672,6 +809,98 @@ describe('PB-IS-014.5 Intelligent Conversation Activation Engine', () => {
       expect(result.message.text).toContain('Acciones sugeridas')
     }
     expect(activationEngine.decide).toHaveBeenCalledTimes(1)
+  })
+
+  it('Relevance Policy (PB-IS-016.2): una consulta puntual de balance NO anexa Insights ni Planning aunque los motores los generen', async () => {
+    const activationEngine: ActivationEngine = {
+      decide: vi.fn(async () => createDecision({
+        activationType: 'DIRECT_TOOL',
+        requiresAI: false,
+        requiresTool: true,
+        provider: 'mock-ai-provider',
+        toolId: 'financial_balance',
+      })),
+    }
+
+    const financialInsightEngine = {
+      async evaluate() {
+        return [
+          {
+            protocolVersion: 1 as const,
+            insightId: 'insight:proactive:002',
+            category: 'budget' as const,
+            severity: 'HIGH' as const,
+            priority: 'HIGH' as const,
+            title: 'Gasto elevado',
+            description: 'Los gastos muestran una tendencia alcista.',
+            recommendation: 'Reduce gastos discrecionales para proteger el margen.',
+            sourceTool: 'financial_insights',
+            generatedAt: '2026-07-24T00:00:00.000Z',
+          },
+        ]
+      },
+    }
+
+    const financialPlanningEngine = {
+      build() {
+        return {
+          planId: 'plan:financial:002',
+          createdAt: '2026-07-24T00:00:00.000Z',
+          title: 'Plan financiero inteligente',
+          summary: 'Consolidar ajustes para proteger flujo y mejorar ahorro.',
+          objective: 'Mejorar estabilidad financiera',
+          priority: 'HIGH' as const,
+          estimatedImpact: 'HIGH' as const,
+          recommendedActions: [
+            {
+              actionId: 'action:002',
+              type: 'expense-reduction',
+              description: 'Reducir gastos discrecionales de alta recurrencia.',
+              expectedBenefit: 'Liberar liquidez para ahorro.',
+              effort: 'LOW' as const,
+              priority: 'HIGH' as const,
+              affectedCategory: 'expense',
+              relatedGoal: 'goal-1',
+              requiresConfirmation: true,
+            },
+          ],
+          relatedInsights: ['insight:proactive:002'],
+          assumptions: ['Existen gastos ajustables'],
+          warnings: ['Confirmar cambios con el usuario'],
+        }
+      },
+    }
+
+    const dependencies = {
+      facade: createFacadeFixture(),
+      provider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, text: 'respuesta provider' }),
+      fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, text: 'mock response' }),
+      confidencePolicy: { confidenceThreshold: 0.7 },
+      activationEngine,
+      financialInsightEngine,
+      financialPlanningEngine,
+    } as AIConversationServiceDependencies & {
+      readonly activationEngine: ActivationEngine
+      readonly financialInsightEngine: typeof financialInsightEngine
+      readonly financialPlanningEngine: typeof financialPlanningEngine
+    }
+
+    const service = createAIConversationService(dependencies)
+    const result = await service.processConversation({
+      conversationRequest: createRequestFixture('¿Cuál fue mi balance hoy?'),
+      userMessage: '¿Cuál fue mi balance hoy?',
+      turn: 11,
+    })
+
+    expect(result.kind).toBe('success')
+    if (result.kind === 'success') {
+      // La respuesta determinista (Builder) sigue funcionando con datos reales...
+      expect(result.message.text).toContain('balance neto de 4.200,00 EUR')
+      // ...pero Insights y Planning NO se anexan: la consulta es puntual,
+      // no pide una evaluacion de la situacion financiera (DA-0162-03).
+      expect(result.message.text).not.toContain('Recomendaciones proactivas')
+      expect(result.message.text).not.toContain('Plan financiero inteligente')
+    }
   })
 
   it('flujo E2E: Tool -> Context -> Prompt -> Provider -> Response usa datos reales y cambia segun resultados', async () => {

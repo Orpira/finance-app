@@ -3,12 +3,16 @@ import {
   type AIConversationRequest,
 } from '../../intelligence/ai-conversation'
 import {
+  createAIToolExecutor,
   createAIToolRegistry,
 } from '../../intelligence/ai-tools'
 import {
   createFinancialAIToolResolver,
   registerFinancialToolsCatalog,
 } from '../../intelligence/ai-tools/financial'
+import {
+  createCopilotAwareToolExecutor,
+} from '../../intelligence/financial-copilot/financialCopilotOrchestrator'
 import {
   AI_CONVERSATION_ORCHESTRATOR_PROTOCOL_VERSION,
   createFinancialConversationOrchestrator,
@@ -40,6 +44,9 @@ import {
   createConversationContextResolver,
   createConversationMemory,
 } from '../../intelligence/ai-conversation/provider-orchestration/conversationMemoryFactory'
+import {
+  createCapabilityAwareIntentResolver,
+} from '../../intelligence/intent-resolver/intentResolver'
 import {
   createFinancialInsightEngine,
 } from '../../intelligence/ai-conversation/provider-orchestration/financialInsightFactory'
@@ -82,9 +89,22 @@ function createConversationFacadeAndRegistry() {
   const promptContextBuilder = createPromptContextBuilder()
   const responseComposer = createConversationResponseComposer()
 
+  // El orquestador nunca recibe el `AIToolExecutor` real "crudo": lo envuelve
+  // con `createCopilotAwareToolExecutor` (PB-IS-016.1) para que toda llamada
+  // a una Financial Tool -- venga de donde venga -- pase primero por
+  // validacion contra el schema real, autoreparacion determinista y reintento
+  // (maximo 3 intentos) antes de ejecutarse. Asi se cumple el mandato
+  // arquitectonico de la Fase 016: "no debe existir ningun acceso directo
+  // desde OpenAI hacia una Tool".
+  const copilotAwareToolExecutor = createCopilotAwareToolExecutor({
+    registry,
+    toolExecutor: createAIToolExecutor({ registry }),
+  })
+
   const facade = createAIConversationFacade({
     orchestrator: createFinancialConversationOrchestrator({
       registry,
+      toolExecutor: copilotAwareToolExecutor,
     }),
     promptContextBuilder: {
       build(input) {
@@ -130,7 +150,13 @@ function createConversationFacadeAndRegistry() {
   }
 }
 
-export function createConversationControllerDependencies(): ConversationControllerDependencies {
+export interface CreateConversationControllerDependenciesInput {
+  readonly environment?: Readonly<Record<string, unknown>>
+}
+
+export function createConversationControllerDependencies(
+  input: CreateConversationControllerDependenciesInput = {},
+): ConversationControllerDependencies {
   if (typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV)) {
     const repositoryValidation = validateRuntimeRepositoryComposition()
     recordRuntimeRepositoryAudit({
@@ -160,7 +186,13 @@ export function createConversationControllerDependencies(): ConversationControll
   }
 
   const { facade, registry } = createConversationFacadeAndRegistry()
-  const provider = createAIProvider()
+  const provider = createAIProvider({
+    ...(input.environment === undefined ? {} : { environment: input.environment }),
+    // Permite que el prompt de resolucion de intencion (openAIAdapter.ts) se
+    // genere desde el JSON Schema real de cada Financial Tool en lugar de una
+    // descripcion escrita a mano (PB-IS-016.1: "Nunca ejemplos inventados").
+    toolRegistry: registry,
+  })
   const fallbackProvider = createMockAIProvider()
   const sessionCreatedAt = new Date().toISOString()
   const sessionFragment = createRequestFragment(sessionCreatedAt)
@@ -181,10 +213,21 @@ export function createConversationControllerDependencies(): ConversationControll
     registry,
   })
 
+  // Si el proveedor primario resuelve un toolId que no existe realmente en
+  // el Tool Registry, esta capa falla cerrado (INVALID_INTENT_RESULT) en vez
+  // de dejar que la activacion intente ejecutar una capacidad inexistente
+  // (PB-IS-016.1).
+  const capabilityAwareResolveIntent = provider.resolveIntent === undefined
+    ? undefined
+    : createCapabilityAwareIntentResolver({
+        baseResolver: { resolve: provider.resolveIntent },
+        toolRegistry: registry,
+      }).resolve
+
   const activationEngine = createActivationEngineFromResolver({
     primaryProviderId: provider.metadata.providerId,
     fallbackProviderId: fallbackProvider.metadata.providerId,
-    primaryIntentResolver: provider.resolveIntent,
+    primaryIntentResolver: capabilityAwareResolveIntent,
     fallbackIntentResolver: fallbackProvider.resolveIntent,
     toolResolver,
     policy: {

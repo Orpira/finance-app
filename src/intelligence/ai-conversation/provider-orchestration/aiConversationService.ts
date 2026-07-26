@@ -37,6 +37,9 @@ import {
   createActivationEngine,
 } from './activationEngine'
 import {
+  buildFinancialDirectResponseText,
+} from './financialDirectResponseBuilder'
+import {
   createFinancialConversationSkillModule,
 } from './financialConversationFactory'
 import {
@@ -58,8 +61,13 @@ import {
   recordRuntimeProviderAudit,
   recordRuntimeResponseAudit,
 } from './runtimeConversationAudit'
+import {
+  createDeterministicIntentResolver,
+} from '../../intent-resolver/deterministicIntentResolver'
+import {
+  INTENT_RESOLVER_PROTOCOL_VERSION,
+} from '../../intent-resolver/intentResolverContracts'
 import type {
-  ActivationDecision,
   ActivationEngine,
 } from './activationContracts'
 import type {
@@ -101,24 +109,6 @@ function createFailure(
     retryable: false,
     safeMessage,
   }
-}
-
-function createDirectToolMessageText(
-  decision: ActivationDecision,
-): string {
-  if (decision.toolId === null) {
-    return 'Se ejecuto la herramienta solicitada de forma determinista.'
-  }
-
-  if (decision.toolId === 'financial_transactions') {
-    return 'Se ejecutaron tus transacciones de forma determinista sin usar IA.'
-  }
-
-  if (decision.toolId === 'financial_balance') {
-    return 'Se calculo tu balance de forma determinista sin usar IA.'
-  }
-
-  return `Se ejecuto ${decision.toolId} de forma determinista sin usar IA.`
 }
 
 function mergeExecutionPlanWithContext(
@@ -213,6 +203,23 @@ function appendActionPlanToMessage(
   return `${text}\n\nPlan financiero inteligente: ${actionPlan.summary} Acciones sugeridas: ${actionSummary}`
 }
 
+// --- Relevance Policy (PB-IS-016.2 sección 10) ---
+// Insights y Planning solo aportan valor cuando el usuario pregunta por su
+// situacion financiera en general (riesgos, recomendaciones, ahorro). Para
+// consultas deterministas puntuales (montos, conteos, un periodo concreto)
+// no se anexan, para no diluir la respuesta con informacion no solicitada
+// (DA-0162-03).
+const FINANCIAL_ADVICE_RELEVANCE_PATTERN = /situacion financiera|salud financiera|riesgo|recom\w*|consejo|ahorr\w*|como (voy|estoy|ando|puedo)|plan financiero|mejorar (mi|la)/
+
+function isFinancialAdviceRelevant(userMessage: string): boolean {
+  const normalized = userMessage
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+
+  return FINANCIAL_ADVICE_RELEVANCE_PATTERN.test(normalized)
+}
+
 function estimateTokensFromText(text: string): number {
   if (text.trim().length === 0) {
     return 0
@@ -256,6 +263,89 @@ function applyTransactionsComparisonArguments(
           direction: 'desc',
         },
         limit: 2,
+      },
+    },
+  }
+}
+
+function isJsonRecord(value: AIToolJsonValue | undefined): value is Record<string, AIToolJsonValue> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+const TOOLS_WITH_PERIOD_FILTER = new Set(['financial_transactions', 'financial_balance'])
+
+const deterministicTemporalResolver = createDeterministicIntentResolver()
+
+/**
+ * PB-IS-016.2-R3: cuando el mensaje del usuario contiene una expresion
+ * temporal explicita (hoy, ayer, una fecha, etc.), el `filters.period` que
+ * llega a la Tool debe venir SIEMPRE del Deterministic Intent Resolver ya
+ * certificado (016.2/R2), nunca del proveedor primario. Root cause real
+ * (demostrado con runtime en un dispositivo con OpenAI real activo, no en
+ * fixtures): cuando `VITE_AI_PROVIDER=openai`, el resolver primario de
+ * intencion es OpenAI (`conversationComposition.ts`), y OpenAI puede generar
+ * un `filters.period` con una fecha alucinada (estructuralmente valida
+ * contra el schema, por lo que `toolArgumentValidator`/`toolArgumentRepair`
+ * de PB-IS-016.1 no la detectan como error) que no corresponde a "ayer"/"hoy"
+ * reales, devolviendo 0 resultados aunque la UI muestre datos reales para
+ * esa fecha. El Resolver determinista nunca inventa fechas: si detecta una
+ * expresion temporal, su cálculo es la unica fuente de verdad para el rango
+ * de fechas; el resto de los argumentos (kinds, sort, limit, etc.) que haya
+ * resuelto el proveedor primario se conservan sin tocar.
+ */
+async function enforceDeterministicTemporalPeriod(
+  executionPlan: FinancialConversationExecutionPlan,
+  input: {
+    readonly conversationRequest: AIConversationServiceInput['conversationRequest']
+    readonly userMessage: string
+    readonly turn: number
+    readonly requestedAt: string
+  },
+): Promise<FinancialConversationExecutionPlan> {
+  const toolId = executionPlan.activationDecision.toolId
+  if (toolId === null || !TOOLS_WITH_PERIOD_FILTER.has(toolId)) {
+    return executionPlan
+  }
+
+  const deterministicResult = await deterministicTemporalResolver.resolve({
+    protocolVersion: INTENT_RESOLVER_PROTOCOL_VERSION,
+    conversationRequest: input.conversationRequest,
+    metadata: {
+      userMessage: input.userMessage,
+      turn: input.turn,
+      requestedAt: input.requestedAt,
+    },
+  })
+
+  if (deterministicResult.kind !== 'success') {
+    return executionPlan
+  }
+
+  const deterministicArguments = deterministicResult.resolution.tools[0]?.arguments
+  const deterministicFilters = isJsonRecord(deterministicArguments)
+    ? deterministicArguments.filters
+    : undefined
+  const deterministicPeriod = isJsonRecord(deterministicFilters)
+    ? deterministicFilters.period
+    : undefined
+
+  if (!isJsonRecord(deterministicPeriod)) {
+    return executionPlan
+  }
+
+  const currentArguments = executionPlan.activationDecision.toolArguments ?? {}
+  const currentFilters = isJsonRecord(currentArguments.filters) ? currentArguments.filters : {}
+
+  return {
+    ...executionPlan,
+    activationDecision: {
+      ...executionPlan.activationDecision,
+      toolArguments: {
+        ...structuredClone(currentArguments),
+        filters: {
+          ...structuredClone(currentFilters),
+          period: structuredClone(deterministicPeriod),
+        },
       },
     },
   }
@@ -572,7 +662,13 @@ export function createAIConversationService(
       })
 
       const executionPlan = mergeExecutionPlanWithContext(skillResolution.plan, planEnrichment)
-      const executionPlanForRequest = applyTransactionsComparisonArguments(executionPlan, input.userMessage)
+      const executionPlanWithTemporalPeriod = await enforceDeterministicTemporalPeriod(executionPlan, {
+        conversationRequest: input.conversationRequest,
+        userMessage: input.userMessage,
+        turn: input.turn,
+        requestedAt,
+      })
+      const executionPlanForRequest = applyTransactionsComparisonArguments(executionPlanWithTemporalPeriod, input.userMessage)
       const insights = await insightEngine.evaluate({
         sessionId: input.conversationRequest.context.sessionId,
         userMessage: input.userMessage,
@@ -590,6 +686,15 @@ export function createAIConversationService(
       })
       const executionPlanWithPlanning = mergeExecutionPlanActionPlan(executionPlanWithInsights, actionPlan)
       const requiredToolId = executionPlanWithPlanning.requiredTools[0] ?? null
+
+      // PB-IS-016.2 sección 10-11-12: Insights/Planning solo se anexan al
+      // mensaje final cuando la consulta del usuario es de indole asesora
+      // (situacion financiera, riesgos, recomendaciones, ahorro). El resto
+      // del pipeline (financialContext, memoria) sigue viendo el insight y
+      // el plan completos; solo se filtra lo que se anexa a `message.text`.
+      const adviceRelevant = isFinancialAdviceRelevant(input.userMessage)
+      const insightsToAppend = adviceRelevant ? insights : []
+      const actionPlanToAppend = adviceRelevant ? actionPlan : null
 
       const providerUsed = decision.provider === dependencies.fallbackProvider.metadata.providerId
         ? dependencies.fallbackProvider
@@ -694,8 +799,44 @@ export function createAIConversationService(
 
       let message
       if (!requiresAIConversation && decision.activationType === 'DIRECT_TOOL') {
-        const incomeComparisonMessage = createIncomeComparisonMessage(responseWithFinancialContext.response)
-        const directToolText = incomeComparisonMessage ?? createDirectToolMessageText(decision)
+        const directToolStartedAt = clock()
+        // PB-IS-016.2-R3: solo usar la comparacion de "dos ultimos ingresos"
+        // cuando el propio mensaje del usuario la pidio (mismo detector que
+        // shouldForceAIConversation/applyTransactionsComparisonArguments).
+        // Sin este guard, cualquier consulta DIRECT_TOOL cuyo resultado
+        // tuviera 2+ ingresos (p. ej. "cuantos ingresos obtuve ayer") era
+        // secuestrada por este mensaje fijo, sin importar la pregunta real.
+        const incomeComparisonMessage = detectCompareLatestIncomeIntent(input.userMessage)
+          ? createIncomeComparisonMessage(responseWithFinancialContext.response)
+          : null
+        const directResponse = incomeComparisonMessage !== null
+          ? { text: incomeComparisonMessage, builderId: 'income-comparison' as const }
+          : buildFinancialDirectResponseText({
+              // PB-IS-016.2-R3: usar la decision con el filters.period ya
+              // corregido por enforceDeterministicTemporalPeriod, no la
+              // decision original del proveedor primario -- si no, la
+              // etiqueta temporal ("Ayer"/"Hoy") se calcula contra un
+              // periodo alucinado y desaparece aunque la Tool ya haya
+              // consultado (y sumado) la fecha real correcta.
+              decision: executionPlanWithPlanning.activationDecision,
+              userMessage: input.userMessage,
+              response: responseWithFinancialContext.response,
+              now,
+            })
+        const directToolText = directResponse.text
+
+        if (typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV)) {
+          // PB-IS-016.2 sección 14: solo metadata tecnica, nunca el texto generado.
+          console.debug('[financial-copilot] direct-tool-response', {
+            toolId: decision.toolId,
+            builderUsed: directResponse.builderId,
+            durationMs: clock() - directToolStartedAt,
+            payloadReceived: decision.toolId !== null,
+            insightsIncluded: insightsToAppend.length > 0 ? 'SI' : 'NO',
+            planningIncluded: actionPlanToAppend !== null ? 'SI' : 'NO',
+          })
+        }
+
         message = {
           protocolVersion: 1,
           messageId: `${execution.response.responseId}:direct-tool`,
@@ -703,8 +844,8 @@ export function createAIConversationService(
           origin: 'MOCK_RENDERER',
           timestamp: now(),
           text: appendActionPlanToMessage(
-            appendInsightsToMessage(directToolText, insights),
-            actionPlan,
+            appendInsightsToMessage(directToolText, insightsToAppend),
+            actionPlanToAppend,
           ),
           responseId: execution.response.responseId,
           conversationResponse: responseWithFinancialContext.response,
@@ -764,11 +905,20 @@ export function createAIConversationService(
           return createFailure('CONVERSATION_GENERATION_FAILED', safeMessage)
         }
 
+        if (typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV)) {
+          // PB-IS-016.2 sección 14: solo metadata tecnica, nunca el texto generado.
+          console.debug('[financial-copilot] ai-conversation-response', {
+            intent: decision.intent,
+            insightsIncluded: insightsToAppend.length > 0 ? 'SI' : 'NO',
+            planningIncluded: actionPlanToAppend !== null ? 'SI' : 'NO',
+          })
+        }
+
         message = {
           ...rendered.message,
           text: appendActionPlanToMessage(
-            appendInsightsToMessage(rendered.message.text, insights),
-            actionPlan,
+            appendInsightsToMessage(rendered.message.text, insightsToAppend),
+            actionPlanToAppend,
           ),
         }
       }

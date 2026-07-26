@@ -23,7 +23,7 @@ const DEFAULT_CONVERSATION_MODEL = 'gpt-4o-mini'
 const DEFAULT_TIMEOUT_MS = 12_000
 const DEFAULT_RETRY_COUNT = 1
 const DEFAULT_TEMPERATURE = 0.2
-const DEFAULT_MAX_TOKENS = 400
+const DEFAULT_MAX_TOKENS = 2000
 
 function createFailure(safeMessage: string): AIProviderFailure {
   return {
@@ -84,7 +84,11 @@ export function resolveAIProviderStrategyFromEnvironment(
   input: ResolveOpenAIConfigurationInput = {},
 ): AIProviderStrategy {
   const environment = readEnvironmentSource(input.environment)
-  const rawStrategy = getString(environment, 'VITE_AI_PROVIDER_STRATEGY')
+  // `VITE_AI_PROVIDER` is the documented and actually configured variable
+  // (README.md, ADR-025, .env, .env.local). `VITE_AI_PROVIDER_STRATEGY` is
+  // kept for backward compatibility with any environment still using it.
+  const rawStrategy = getString(environment, 'VITE_AI_PROVIDER')
+    ?? getString(environment, 'VITE_AI_PROVIDER_STRATEGY')
 
   if (rawStrategy === undefined) {
     return 'mock'
@@ -106,12 +110,27 @@ export function resolveOpenAIProviderConfiguration(
     return createFailure('OpenAI API key is missing. Set VITE_OPENAI_API_KEY to enable the OpenAI provider.')
   }
 
-  const intentModel = getString(environment, 'VITE_OPENAI_INTENT_MODEL') ?? DEFAULT_INTENT_MODEL
-  const conversationModel = getString(environment, 'VITE_OPENAI_CONVERSATION_MODEL') ?? DEFAULT_CONVERSATION_MODEL
-  const timeoutMs = Math.floor(getNumber(environment, 'VITE_OPENAI_TIMEOUT_MS') ?? DEFAULT_TIMEOUT_MS)
+  // `VITE_AI_OPENAI_MODEL` / `VITE_AI_OPENAI_TIMEOUT_MS` are the documented and
+  // actually configured variables (README.md, ADR-025, .env, .env.local).
+  // The `VITE_OPENAI_*` variants are kept as backward-compatible fallbacks.
+  const sharedModel = getString(environment, 'VITE_AI_OPENAI_MODEL')
+  const intentModel = getString(environment, 'VITE_OPENAI_INTENT_MODEL') ?? sharedModel ?? DEFAULT_INTENT_MODEL
+  const conversationModel = getString(environment, 'VITE_OPENAI_CONVERSATION_MODEL') ?? sharedModel ?? DEFAULT_CONVERSATION_MODEL
+  const timeoutMs = Math.floor(
+    getNumber(environment, 'VITE_AI_OPENAI_TIMEOUT_MS')
+      ?? getNumber(environment, 'VITE_OPENAI_TIMEOUT_MS')
+      ?? DEFAULT_TIMEOUT_MS,
+  )
   const retryCount = Math.floor(getNumber(environment, 'VITE_OPENAI_RETRY_COUNT') ?? DEFAULT_RETRY_COUNT)
   const temperature = getNumber(environment, 'VITE_OPENAI_TEMPERATURE') ?? DEFAULT_TEMPERATURE
-  const maxTokens = Math.floor(getNumber(environment, 'VITE_OPENAI_MAX_TOKENS') ?? DEFAULT_MAX_TOKENS)
+  // Reasoning-tier models (e.g. gpt-5-*) spend part of `max_completion_tokens`
+  // on internal (invisible) reasoning before emitting visible content, so the
+  // default must be large enough to leave room for an actual JSON/text answer.
+  const maxTokens = Math.floor(
+    getNumber(environment, 'VITE_AI_OPENAI_MAX_TOKENS')
+      ?? getNumber(environment, 'VITE_OPENAI_MAX_TOKENS')
+      ?? DEFAULT_MAX_TOKENS,
+  )
   const baseUrl = getString(environment, 'VITE_OPENAI_BASE_URL')
 
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 120_000) {

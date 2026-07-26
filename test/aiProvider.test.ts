@@ -179,13 +179,16 @@ describe('AI Provider Contracts (PB-IS-014.2)', () => {
   })
 
   it('factory', () => {
-    const provider = createAIProvider()
+    // `environment: {}` aisla el test del `.env`/`.env.local` reales del
+    // repositorio (que configuran VITE_AI_PROVIDER=openai); sin esto, el test
+    // dependeria del entorno ambiental en lugar de verificar el default.
+    const provider = createAIProvider({ environment: {} })
     expect(validateAIProvider(provider)).toBeNull()
     expect(provider.metadata.providerId).toBe('mock-ai-provider')
   })
 
   it('integración', async () => {
-    const provider = createAIProvider()
+    const provider = createAIProvider({ environment: {} })
     if (provider.resolveIntent === undefined || provider.generateConversation === undefined) {
       throw new Error('Expected full provider capabilities')
     }

@@ -4,11 +4,17 @@ import {
   INTENT_RESOLVER_PROTOCOL_VERSION,
   type IntentResolutionDetectedIntent,
   type IntentResolutionRequest,
+  type IntentResolutionToolSelection,
   type IntentResolverResolveResult,
 } from '../intent-resolver/intentResolver'
 import type {
   AIToolJsonValue,
+  AIToolRegistry,
 } from '../ai-tools'
+import {
+  createFinancialToolRegistry,
+  type ToolCapability,
+} from '../financial-copilot/toolRegistry'
 import type {
   AIProviderFailure,
 } from './aiProviderContracts'
@@ -60,6 +66,15 @@ export interface CreateOpenAIAdapterInput {
   readonly transport?: OpenAIAdapterTransport
   readonly now?: () => string
   readonly logger?: (event: string, payload: Readonly<Record<string, unknown>>) => void
+  /**
+   * Real, certified Financial Tools registry. When provided, the intent
+   * resolution system prompt is generated from each tool's actual JSON
+   * Schema (via the Tool Registry / Tool Schema Registry) instead of a
+   * hand-written description, so OpenAI never has to guess an argument
+   * shape (PB-IS-016.1). When omitted, a minimal built-in description is
+   * used so existing callers keep working unchanged.
+   */
+  readonly toolRegistry?: AIToolRegistry
 }
 
 interface ParsedIntentPayload {
@@ -68,6 +83,7 @@ interface ParsedIntentPayload {
   readonly toolId: string
   readonly reasoning: string
   readonly arguments?: IntentResolutionRequest['conversationRequest']['steps'][number]['arguments']
+  readonly toolPlan?: readonly IntentResolutionToolSelection[]
 }
 
 const INTENTS: readonly IntentResolutionDetectedIntent[] = [
@@ -79,6 +95,55 @@ const INTENTS: readonly IntentResolutionDetectedIntent[] = [
   'insights',
   'unknown',
 ] as const
+
+const FALLBACK_INTENT_SYSTEM_PROMPT = [
+  'You resolve financial chat intent.',
+  'Return strict JSON with keys: detectedIntent, confidence, toolId, arguments, reasoning.',
+  'Allowed detectedIntent: balance, transactions, budget, goals, reports, insights, unknown.',
+  'Allowed toolId: financial_balance, financial_transactions, financial_budget, financial_goals, financial_reports, financial_insights.',
+  'Use confidence between 0 and 1.',
+].join(' ')
+
+function describeToolForPrompt(tool: ToolCapability): string {
+  return JSON.stringify({
+    toolId: tool.toolId,
+    description: tool.description,
+    categories: tool.categories,
+    inputSchema: tool.inputSchema,
+    examples: tool.examples,
+    limits: tool.limits,
+  })
+}
+
+/**
+ * Builds the intent-resolution system prompt from the real, certified Tool
+ * Registry instead of a hand-written tool description (PB-IS-016.1). The
+ * model only ever sees the actual JSON Schema each tool declares, so it can
+ * no longer invent a plausible-looking-but-wrong argument shape. When no
+ * registry is supplied, falls back to the previous built-in description so
+ * existing callers keep working unchanged.
+ */
+function buildIntentSystemPrompt(toolRegistry: AIToolRegistry | undefined): string {
+  if (toolRegistry === undefined) {
+    return FALLBACK_INTENT_SYSTEM_PROMPT
+  }
+
+  const tools = createFinancialToolRegistry(toolRegistry).listTools()
+  if (tools.length === 0) {
+    return FALLBACK_INTENT_SYSTEM_PROMPT
+  }
+
+  return [
+    'You resolve financial chat intent for Private Balance.',
+    'Return strict JSON with keys: detectedIntent, confidence, toolId, arguments, reasoning.',
+    'Optionally include "toolPlan": an array of {toolId, arguments} when the question genuinely requires combining more than one tool (e.g. reports + insights + planning); omit it for single-tool questions.',
+    `Allowed detectedIntent: ${INTENTS.join(', ')}.`,
+    'Use confidence between 0 and 1.',
+    'Each tool below is described with its real, exact JSON Schema. "arguments" (and each "toolPlan" entry\'s "arguments") MUST validate against that exact schema — do not invent field names, always use the schema\'s own property names and nesting.',
+    'Available tools:',
+    ...tools.map((tool) => describeToolForPrompt(tool)),
+  ].join(' ')
+}
 
 function createFailure(
   code: AIProviderFailure['code'],
@@ -142,6 +207,34 @@ function delay(ms: number): Promise<void> {
   })
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function parseToolPlan(value: unknown): readonly IntentResolutionToolSelection[] | undefined {
+  if (!Array.isArray(value) || value.length < 2) {
+    // A single-entry plan carries no information a plain `toolId` +
+    // `arguments` pair does not already have; only arrays with 2+ real
+    // steps count as a multi-tool plan (PB-IS-016.1).
+    return undefined
+  }
+
+  const selections: IntentResolutionToolSelection[] = []
+  for (const entry of value) {
+    if (!isPlainRecord(entry) || typeof entry.toolId !== 'string' || entry.toolId.trim().length === 0) {
+      return undefined
+    }
+
+    const entryArguments = isPlainRecord(entry.arguments) ? entry.arguments : {}
+    selections.push({
+      toolId: entry.toolId,
+      arguments: entryArguments as IntentResolutionToolSelection['arguments'],
+    })
+  }
+
+  return selections
+}
+
 function parseIntentPayload(content: string): ParsedIntentPayload | null {
   const parsed = extractJsonObject(content)
   if (parsed === null) {
@@ -180,6 +273,7 @@ function parseIntentPayload(content: string): ParsedIntentPayload | null {
     toolId,
     reasoning,
     arguments: safeArguments,
+    toolPlan: parseToolPlan(parsed.toolPlan),
   }
 }
 
@@ -192,17 +286,50 @@ function createOpenAITransport(
     dangerouslyAllowBrowser: true,
   })
 
+  function isUnsupportedTemperatureError(error: unknown): boolean {
+    const candidate = error as {
+      readonly status?: number
+      readonly param?: string
+      readonly code?: string
+      readonly error?: { readonly param?: string; readonly code?: string }
+    }
+
+    const param = candidate.param ?? candidate.error?.param
+    const code = candidate.code ?? candidate.error?.code
+
+    return candidate.status === 400 && param === 'temperature' && code === 'unsupported_value'
+  }
+
   return {
     async createChatCompletion(request): Promise<OpenAIAdapterChatCompletionResponse> {
-      const response = await client.chat.completions.create({
-        model: request.model,
-        messages: [...request.messages],
-        temperature: request.temperature,
-        max_tokens: request.maxTokens,
-        ...(request.responseFormat === 'json'
-          ? { response_format: { type: 'json_object' as const } }
-          : {}),
-      })
+      function basePayload(includeTemperature: boolean) {
+        return {
+          model: request.model,
+          messages: [...request.messages],
+          ...(includeTemperature ? { temperature: request.temperature } : {}),
+          // `max_completion_tokens` is the current Chat Completions parameter;
+          // `max_tokens` is rejected (HTTP 400) by newer models (e.g. gpt-5-*)
+          // while still being accepted by older ones, so it is safe to always
+          // send the current parameter name.
+          max_completion_tokens: request.maxTokens,
+          ...(request.responseFormat === 'json'
+            ? { response_format: { type: 'json_object' as const } }
+            : {}),
+        }
+      }
+
+      let response
+      try {
+        response = await client.chat.completions.create(basePayload(true))
+      } catch (error) {
+        // Some models (e.g. reasoning-tier gpt-5-*) only support the default
+        // temperature and reject any explicit value with HTTP 400. Retry
+        // once without the parameter instead of failing the whole request.
+        if (!isUnsupportedTemperatureError(error)) {
+          throw error
+        }
+        response = await client.chat.completions.create(basePayload(false))
+      }
 
       const first = response.choices[0]
       const content = first?.message?.content
@@ -295,13 +422,7 @@ export function createOpenAIAdapter(input: CreateOpenAIAdapterInput): OpenAIAdap
           messages: [
             {
               role: 'system',
-              content: [
-                'You resolve financial chat intent.',
-                'Return strict JSON with keys: detectedIntent, confidence, toolId, arguments, reasoning.',
-                'Allowed detectedIntent: balance, transactions, budget, goals, reports, insights, unknown.',
-                'Allowed toolId: financial_balance, financial_transactions, financial_budget, financial_goals, financial_reports, financial_insights.',
-                'Use confidence between 0 and 1.',
-              ].join(' '),
+              content: buildIntentSystemPrompt(input.toolRegistry),
             },
             {
               role: 'user',
@@ -326,7 +447,7 @@ export function createOpenAIAdapter(input: CreateOpenAIAdapterInput): OpenAIAdap
             protocolVersion: INTENT_RESOLVER_PROTOCOL_VERSION,
             detectedIntent: parsed.detectedIntent,
             confidence: parsed.confidence,
-            tools: [
+            tools: parsed.toolPlan ?? [
               {
                 toolId: parsed.toolId,
                 arguments: parsed.arguments ?? {},

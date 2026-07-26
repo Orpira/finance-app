@@ -26,6 +26,9 @@ import type {
   IntentResolverFailure,
   IntentResolverResolveResult,
 } from '../intent-resolver/intentResolver'
+import type {
+  AIToolRegistry,
+} from '../ai-tools'
 
 function extractFinancialContext(
   response: Parameters<Exclude<AIProvider['generateConversation'], undefined>>[0],
@@ -62,6 +65,7 @@ function buildProviderPromptPayload(
 
 export interface CreateOpenAIProviderInput extends ResolveOpenAIConfigurationInput {
   readonly adapter?: OpenAIAdapter
+  readonly toolRegistry?: AIToolRegistry
 }
 
 function createFailure(
@@ -107,7 +111,10 @@ export function createOpenAIProvider(input: CreateOpenAIProviderInput = {}): AIP
   const configurationResult = resolveOpenAIProviderConfiguration(input)
   const adapter =
     configurationResult.kind === 'success'
-      ? (input.adapter ?? createOpenAIAdapter({ configuration: configurationResult.configuration }))
+      ? (input.adapter ?? createOpenAIAdapter({
+          configuration: configurationResult.configuration,
+          toolRegistry: input.toolRegistry,
+        }))
       : input.adapter
 
   return {

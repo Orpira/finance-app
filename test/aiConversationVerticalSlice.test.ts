@@ -15,7 +15,11 @@ import ConversationPage from '../src/pages/Conversation/ConversationPage'
 
 describe('AI Conversation main integration (PB-IS-013.8)', () => {
   it('ejecuta flujo real facade + mock renderer y agrega respuesta del asistente', async () => {
-    const dependencies = createConversationControllerDependencies()
+    // environment: {} aisla el test del .env/.env.local reales del
+    // repositorio (que configuran VITE_AI_PROVIDER=openai); sin esto, el test
+    // haria una llamada de red real a OpenAI en lugar de ejercitar el flujo
+    // determinista con el Mock Conversational Renderer.
+    const dependencies = createConversationControllerDependencies({ environment: {} })
     const controller = createConversationController(dependencies)
 
     await controller.initialize()

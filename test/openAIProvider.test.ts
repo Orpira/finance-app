@@ -19,9 +19,50 @@ import {
   type OpenAIAdapter,
   type OpenAIAdapterTransport,
 } from '../src/intelligence/ai-provider/aiProvider'
+import { createAIToolRegistry, type AITool } from '../src/intelligence/ai-tools'
 import type {
   AIConversationRequest,
 } from '../src/intelligence/ai-conversation'
+
+function createFakeTransactionsTool(): AITool {
+  return {
+    definition: {
+      name: 'financial_transactions',
+      description: 'Test transactions tool.',
+      permission: 'read-only',
+      deterministic: true,
+      failClosed: true,
+      inputSchema: {
+        type: 'object',
+        required: ['requestId', 'requestedAt'],
+        properties: {
+          requestId: { type: 'string' },
+          requestedAt: { type: 'string' },
+          filters: {
+            type: 'object',
+            properties: { kinds: { type: 'array', items: { type: 'string' } } },
+            additionalProperties: false,
+          },
+          sort: {
+            type: 'object',
+            properties: { field: { type: 'string' }, direction: { type: 'string', enum: ['asc', 'desc'] } },
+            additionalProperties: false,
+          },
+          limit: { type: 'number' },
+        },
+        additionalProperties: false,
+      },
+      outputSchema: { type: 'object' },
+      tags: ['financial'],
+    },
+    async execute() {
+      return {
+        kind: 'success',
+        value: { toolName: 'financial_transactions', output: {}, permission: 'read-only', durationMs: 1 },
+      }
+    },
+  }
+}
 
 function createIntentRequest(message: string): {
   readonly protocolVersion: 1
@@ -157,6 +198,36 @@ describe('PB-IS-014.3 OpenAI Provider Adapter', () => {
     })
 
     expect(strategy).toBe('openai')
+  })
+
+  it('detecta strategy openai usando la variable documentada VITE_AI_PROVIDER (PB-IS-015.7)', () => {
+    // README.md, ADR-025 y .env/.env.local configuran VITE_AI_PROVIDER, no
+    // VITE_AI_PROVIDER_STRATEGY. Este test certifica que el provider real se
+    // activa con la variable que realmente se configura en runtime.
+    const strategy = resolveAIProviderStrategyFromEnvironment({
+      environment: {
+        VITE_AI_PROVIDER: 'openai',
+      },
+    })
+
+    expect(strategy).toBe('openai')
+  })
+
+  it('resuelve modelo y timeout desde las variables documentadas VITE_AI_OPENAI_MODEL / VITE_AI_OPENAI_TIMEOUT_MS (PB-IS-015.7)', () => {
+    const result = resolveOpenAIProviderConfiguration({
+      environment: {
+        VITE_OPENAI_API_KEY: 'test-openai-key',
+        VITE_AI_OPENAI_MODEL: 'gpt-5-mini',
+        VITE_AI_OPENAI_TIMEOUT_MS: '30000',
+      },
+    })
+
+    expect(result.kind).toBe('success')
+    if (result.kind === 'success') {
+      expect(result.configuration.intentModel).toBe('gpt-5-mini')
+      expect(result.configuration.conversationModel).toBe('gpt-5-mini')
+      expect(result.configuration.timeoutMs).toBe(30000)
+    }
   })
 
   it('reintenta en error transitorio y resuelve intent', async () => {
@@ -389,5 +460,133 @@ describe('PB-IS-014.3 OpenAI Provider Adapter', () => {
     expect(parsed.financialContext?.toolResults[0]?.toolId).toBe('financial_transactions')
     expect(parsed.toolSteps.length).toBeGreaterThan(0)
     expect(parsed.responseBlocks.length).toBeGreaterThan(0)
+  })
+})
+
+describe('Financial Copilot Orchestrator — schema-aware intent prompt (PB-IS-016.1)', () => {
+  it('cuando se provee un toolRegistry, el prompt del sistema incluye el schema real de la tool', async () => {
+    const registry = createAIToolRegistry([createFakeTransactionsTool()])
+    const transport: OpenAIAdapterTransport = {
+      createChatCompletion: vi.fn().mockResolvedValue({
+        content: JSON.stringify({
+          detectedIntent: 'transactions',
+          confidence: 0.9,
+          toolId: 'financial_transactions',
+          arguments: { filters: { kinds: ['income'] } },
+          reasoning: 'test',
+        }),
+      }),
+    }
+
+    const configResult = resolveOpenAIProviderConfiguration({ environment: VALID_ENV })
+    if (configResult.kind !== 'success') {
+      throw new Error('Expected success configuration')
+    }
+
+    const adapter = createOpenAIAdapter({
+      configuration: configResult.configuration,
+      transport,
+      toolRegistry: registry,
+    })
+
+    await adapter.resolveIntent(createIntentRequest('Compara mis dos ultimos ingresos'))
+
+    const [[request]] = (transport.createChatCompletion as ReturnType<typeof vi.fn>).mock.calls
+    const systemMessage = request.messages.find((message: { readonly role: string }) => message.role === 'system')
+    expect(systemMessage.content).toContain('financial_transactions')
+    expect(systemMessage.content).toContain('"additionalProperties":false')
+    expect(systemMessage.content).not.toContain('transaction_type')
+  })
+
+  it('sin toolRegistry, usa el prompt de respaldo (compatibilidad retroactiva)', async () => {
+    const transport: OpenAIAdapterTransport = {
+      createChatCompletion: vi.fn().mockResolvedValue({
+        content: JSON.stringify({
+          detectedIntent: 'balance',
+          confidence: 0.9,
+          toolId: 'financial_balance',
+          arguments: {},
+          reasoning: 'test',
+        }),
+      }),
+    }
+
+    const configResult = resolveOpenAIProviderConfiguration({ environment: VALID_ENV })
+    if (configResult.kind !== 'success') {
+      throw new Error('Expected success configuration')
+    }
+
+    const adapter = createOpenAIAdapter({ configuration: configResult.configuration, transport })
+    await adapter.resolveIntent(createIntentRequest('Cual es mi balance'))
+
+    const [[request]] = (transport.createChatCompletion as ReturnType<typeof vi.fn>).mock.calls
+    const systemMessage = request.messages.find((message: { readonly role: string }) => message.role === 'system')
+    expect(systemMessage.content).toContain('Allowed toolId: financial_balance')
+  })
+
+  it('parsea un toolPlan de multiples tools cuando el modelo lo devuelve', async () => {
+    const transport: OpenAIAdapterTransport = {
+      createChatCompletion: vi.fn().mockResolvedValue({
+        content: JSON.stringify({
+          detectedIntent: 'reports',
+          confidence: 0.85,
+          toolId: 'financial_reports',
+          arguments: {},
+          reasoning: 'Pregunta compuesta: reportes + insights',
+          toolPlan: [
+            { toolId: 'financial_reports', arguments: {} },
+            { toolId: 'financial_insights', arguments: {} },
+          ],
+        }),
+      }),
+    }
+
+    const configResult = resolveOpenAIProviderConfiguration({ environment: VALID_ENV })
+    if (configResult.kind !== 'success') {
+      throw new Error('Expected success configuration')
+    }
+
+    const adapter = createOpenAIAdapter({ configuration: configResult.configuration, transport })
+    const result = await adapter.resolveIntent(
+      createIntentRequest('Estoy ahorrando mas este mes y cuanto podria invertir?'),
+    )
+
+    expect(result.kind).toBe('success')
+    if (result.kind === 'success') {
+      expect(result.resolution.tools).toHaveLength(2)
+      expect(result.resolution.tools.map((tool) => tool.toolId)).toEqual([
+        'financial_reports',
+        'financial_insights',
+      ])
+    }
+  })
+
+  it('un toolPlan de una sola entrada se ignora y se usa el toolId/arguments unico (compatibilidad)', async () => {
+    const transport: OpenAIAdapterTransport = {
+      createChatCompletion: vi.fn().mockResolvedValue({
+        content: JSON.stringify({
+          detectedIntent: 'balance',
+          confidence: 0.9,
+          toolId: 'financial_balance',
+          arguments: { currency: 'EUR' },
+          reasoning: 'test',
+          toolPlan: [{ toolId: 'financial_balance', arguments: { currency: 'EUR' } }],
+        }),
+      }),
+    }
+
+    const configResult = resolveOpenAIProviderConfiguration({ environment: VALID_ENV })
+    if (configResult.kind !== 'success') {
+      throw new Error('Expected success configuration')
+    }
+
+    const adapter = createOpenAIAdapter({ configuration: configResult.configuration, transport })
+    const result = await adapter.resolveIntent(createIntentRequest('Cual es mi balance'))
+
+    expect(result.kind).toBe('success')
+    if (result.kind === 'success') {
+      expect(result.resolution.tools).toHaveLength(1)
+      expect(result.resolution.tools[0]?.toolId).toBe('financial_balance')
+    }
   })
 })

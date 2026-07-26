@@ -1,6 +1,9 @@
 import type {
   AIProvider,
 } from './aiProviderContracts'
+import type {
+  AIToolRegistry,
+} from '../ai-tools'
 import {
   createMockAIProvider,
   type CreateMockAIProviderInput,
@@ -20,6 +23,13 @@ import {
 export interface CreateAIProviderInput extends CreateMockAIProviderInput {
   readonly strategy?: AIProviderStrategy
   readonly environment?: Readonly<Record<string, unknown>>
+  /**
+   * Real, certified Financial Tools registry. Threaded through to the
+   * OpenAI adapter (PB-IS-016.1) so the intent-resolution prompt is built
+   * from each tool's actual JSON Schema instead of a hand-written
+   * description. Ignored by the mock provider.
+   */
+  readonly toolRegistry?: AIToolRegistry
 }
 
 export function createAIProvider(
@@ -61,6 +71,7 @@ export function createAIProvider(
   if (strategy === 'openai') {
     const provider = createConfiguredOpenAIProvider({
       environment: input.environment,
+      toolRegistry: input.toolRegistry,
     })
     record(provider.metadata.providerId)
     return provider
