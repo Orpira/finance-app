@@ -5,7 +5,7 @@ import { roundMoney } from './currency'
 import { isServiceIncome } from './incomeTypes'
 import { getEffectiveFinancialDuration } from './serviceDuration'
 
-const weekdayNames = [
+export const weekdayNames = [
   'Domingo',
   'Lunes',
   'Martes',
