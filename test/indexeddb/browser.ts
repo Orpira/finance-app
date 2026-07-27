@@ -16,6 +16,9 @@ import { runSnapshotShadowMode } from '../../src/services/snapshotShadowModeServ
 import { runFinancialEngine } from '../../src/services/financialEngineAdapter'
 import { executeSnapshotPromotion } from '../../src/services/snapshotPromotionExecutor'
 import { executeKnowledgePromotion } from '../../src/services/knowledgePromotionExecutor'
+import { getSettings, updateSettings } from '../../src/services/settingsService'
+import { getOnboardingState, setOnboardingStep } from '../../src/services/onboardingService'
+import { CURRENT_ONBOARDING_VERSION, LAST_ONBOARDING_STEP_INDEX } from '../../src/types/onboarding'
 import type { Expense } from '../../src/types/expense'
 import type { ServiceIncome } from '../../src/types/service'
 import type {
@@ -45,6 +48,19 @@ function assert(condition: unknown, message: string): asserts condition {
 
 function deepEqual(actual: unknown, expected: unknown, message: string): void {
   assert(JSON.stringify(actual) === JSON.stringify(expected), message)
+}
+
+function assertOnboardingBackfilledForExistingUser(
+  settings: { language?: string; timeZone?: string; dateFormat?: string; onboarding?: { completed?: boolean; completedAt?: string; currentStep?: number; version?: number } } | undefined,
+  originLabel: string,
+): void {
+  assert(settings?.language === 'es', `v28 migration backfills language for ${originLabel}-origin settings`)
+  assert(typeof settings?.timeZone === 'string' && settings.timeZone.length > 0, `v28 migration backfills timeZone for ${originLabel}-origin settings`)
+  assert(settings?.dateFormat === 'dd/MM/yyyy', `v28 migration backfills dateFormat for ${originLabel}-origin settings`)
+  assert(settings?.onboarding?.completed === true, `v28 migration marks onboarding completed for existing ${originLabel}-origin settings`)
+  assert(typeof settings?.onboarding?.completedAt === 'string' && settings.onboarding.completedAt.length > 0, `v28 migration backfills onboarding.completedAt for ${originLabel}-origin settings`)
+  assert(settings?.onboarding?.currentStep === LAST_ONBOARDING_STEP_INDEX, `v28 migration sets onboarding.currentStep to the last step for ${originLabel}-origin settings`)
+  assert(settings?.onboarding?.version === CURRENT_ONBOARDING_VERSION, `v28 migration stamps onboarding.version for ${originLabel}-origin settings`)
 }
 
 async function expectReject(action: () => Promise<unknown>, message: string, code?: string) {
@@ -264,7 +280,7 @@ async function run() {
 
   let database = new FinanceDB()
   await database.open()
-  assert(database.verno === 27, 'physical migration upgrades from v25 to v27')
+  assert(database.verno === 28, 'physical migration upgrades from v25 to v28')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration preserves v25 conversationMemories table')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v25 base')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v25 base')
@@ -272,7 +288,9 @@ async function run() {
   assert(migratedV25Service?.date === v25Service.date && migratedV25Service?.amount === v25Service.amount, 'v25 migration preserves existing service data')
   assert(migratedV25Service?.reportStatusCode === 'unreviewed', 'v27 migration backfills unreviewed report status for pre-existing services')
   assert(typeof migratedV25Service?.updatedAt === 'string' && migratedV25Service.updatedAt.length > 0, 'v27 migration backfills updatedAt for pre-existing services')
-  deepEqual(await database.settings.get('app'), v25Settings, 'v25 migration preserves existing settings data')
+  const migratedV25Settings = await database.settings.get('app')
+  assert(migratedV25Settings?.businessName === v25Settings.businessName, 'v28 migration preserves legacy settings businessName (v25 origin)')
+  assertOnboardingBackfilledForExistingUser(migratedV25Settings, 'v25')
   deepEqual(
     await database.conversationMemories.get(v25ConversationMemory.sessionId),
     v25ConversationMemory,
@@ -321,14 +339,16 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 27, 'physical migration upgrades from v24 to v27')
+  assert(database.verno === 28, 'physical migration upgrades from v24 to v28')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration keeps conversationMemories from v24 base')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v24 base')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v24 base')
   const migratedV24Service = await database.services.get(24)
   assert(migratedV24Service?.date === v24Service.date && migratedV24Service?.amount === v24Service.amount, 'v24 migration preserves existing service data')
   assert(migratedV24Service?.reportStatusCode === 'unreviewed', 'v27 migration backfills unreviewed report status for v24-origin services')
-  deepEqual(await database.settings.get('app'), v24Settings, 'v24 migration preserves existing settings data')
+  const migratedV24Settings = await database.settings.get('app')
+  assert(migratedV24Settings?.businessName === v24Settings.businessName, 'v28 migration preserves legacy settings businessName (v24 origin)')
+  assertOnboardingBackfilledForExistingUser(migratedV24Settings, 'v24')
   database.close()
 
   await Dexie.delete(databaseName)
@@ -347,7 +367,7 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 27, 'physical migration opens schema v27')
+  assert(database.verno === 28, 'physical migration opens schema v28')
   assert(database.tables.some((table) => table.name === 'financialSnapshots'), 'migration creates financialSnapshots')
   assert(database.tables.some((table) => table.name === 'knowledgeSnapshots'), 'migration creates knowledgeSnapshots')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'migration creates conversationMemories')
@@ -356,7 +376,9 @@ async function run() {
   const migratedLegacyService = await database.services.get(7)
   assert(migratedLegacyService?.date === legacyService.date && migratedLegacyService?.amount === legacyService.amount, 'migration preserves legacy service data')
   assert(migratedLegacyService?.reportStatusCode === 'unreviewed', 'v27 migration backfills unreviewed report status for legacy services')
-  deepEqual(await database.settings.get('app'), legacySettings, 'migration preserves legacy settings data')
+  const migratedLegacySettings = await database.settings.get('app')
+  assert(migratedLegacySettings?.businessName === legacySettings.businessName, 'v28 migration preserves legacy settings businessName (v22 origin)')
+  assertOnboardingBackfilledForExistingUser(migratedLegacySettings, 'v22')
 
   assert(
     database.services.schema.idxByName.reportStatusCode !== undefined,
@@ -922,6 +944,32 @@ async function run() {
   assert(await database.financialSnapshots.count() === 7, 'second full reopen preserves repository, coexistence and shadow revisions')
   assert(await database.knowledgeSnapshots.count() === 5, 'second full reopen preserves knowledge append-only history including shadow observations')
   database.close()
+  await Dexie.delete(databaseName)
+
+  localStorage.removeItem('finance-app:settings')
+  const freshInstallSettings = await getSettings()
+  assert(freshInstallSettings.onboarding.completed === false, 'brand-new install starts with onboarding not completed')
+  assert(freshInstallSettings.onboarding.currentStep === 0, 'brand-new install starts onboarding at step 0')
+  assert(freshInstallSettings.onboarding.version === CURRENT_ONBOARDING_VERSION, 'brand-new install stamps the current onboarding version')
+  assert(freshInstallSettings.language === 'es', 'brand-new install defaults language to es')
+  assert(freshInstallSettings.dateFormat === 'dd/MM/yyyy', 'brand-new install defaults dateFormat to dd/MM/yyyy')
+  assert(typeof freshInstallSettings.timeZone === 'string' && freshInstallSettings.timeZone.length > 0, 'brand-new install detects a non-empty timeZone')
+  await Dexie.delete(databaseName)
+
+  localStorage.removeItem('finance-app:settings')
+  await getSettings()
+  await setOnboardingStep(2)
+  await updateSettings({ pinEnabled: true, pinHash: 'v2:210000:deadbeef:deadbeef' })
+  const inProgressState = await getOnboardingState()
+  assert(inProgressState.completed === false, 'setting a PIN mid-onboarding does not auto-complete an in-progress flow')
+  assert(inProgressState.currentStep === 2, 'setting a PIN mid-onboarding preserves the current step')
+  await Dexie.delete(databaseName)
+
+  localStorage.removeItem('finance-app:settings')
+  await getSettings()
+  await updateSettings({ pinEnabled: true, pinHash: 'v2:210000:deadbeef:deadbeef' })
+  const neverStartedWithDataState = await getOnboardingState()
+  assert(neverStartedWithDataState.completed === true, 'a settings row with data that never started onboarding (step 0) is treated as an existing user')
   await Dexie.delete(databaseName)
 }
 

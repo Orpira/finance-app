@@ -944,9 +944,9 @@ describe('KnowledgeSnapshotRepository', () => {
     expect(financialResult.snapshotId).toBe(financial.identity.snapshotId)
   })
 
-  it('declara FinanceDB v27 y tabla knowledgeSnapshots.', () => {
+  it('declara FinanceDB v28 y tabla knowledgeSnapshots.', () => {
     const database = new FinanceDB()
-    expect(database.verno).toBe(27)
+    expect(database.verno).toBe(28)
     expect(database.tables.some((table) => table.name === 'knowledgeSnapshots')).toBe(true)
     expect(database.knowledgeSnapshots.schema.primKey.name).toBe('knowledgeSnapshotId')
     expect(

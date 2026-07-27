@@ -116,9 +116,9 @@ async function expectCode(action: () => Promise<unknown>, codeValue: FinancialSn
 }
 
 describe('FinancialSnapshotRepository', () => {
-  it('declara FinanceDB v27 y los índices normativos', () => {
+  it('declara FinanceDB v28 y los índices normativos', () => {
     const database = new FinanceDB()
-    expect(database.verno).toBe(27)
+    expect(database.verno).toBe(28)
     expect(database.financialSnapshots.schema.primKey.name).toBe('snapshotId')
     expect(database.financialSnapshots.schema.indexes.map((index) => index.name)).toEqual([
       'snapshotKey', '[snapshotKey+revision]', 'sealedAt', 'status', 'scopeKind',

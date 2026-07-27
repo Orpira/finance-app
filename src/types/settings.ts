@@ -1,3 +1,5 @@
+import type { OnboardingState } from './onboarding'
+
 export type CurrencyCode =
   | 'ARS'
   | 'BGN'
@@ -68,6 +70,10 @@ export interface AppSettings {
   businessName: string
   country: CountryCode
   city: string
+  language: string
+  timeZone: string
+  dateFormat: string
+  onboarding: OnboardingState
   defaultCurrency: CurrencyCode
   secondaryCurrency: CurrencyCode
   incomePercentage: number

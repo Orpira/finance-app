@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 
 import AppLayout from '../app/AppLayout'
 import { PinGate } from '../components/PinGate'
+import { OnboardingGate } from '../components/onboarding/OnboardingGate'
 import { LicenseGuard } from '../components/security/LicenseGuard'
 import { UsageModeGuard } from '../components/security/UsageModeGuard'
 import AppointmentFormPage from '../pages/Agenda/AppointmentFormPage'
@@ -44,6 +45,7 @@ export function RouterProvider() {
   return (
     <BrowserRouter>
       <LicenseGuard>
+        <OnboardingGate>
         <PinGate>
           <Routes>
           <Route element={<AppLayout />}>
@@ -94,6 +96,7 @@ export function RouterProvider() {
           </Route>
           </Routes>
         </PinGate>
+        </OnboardingGate>
       </LicenseGuard>
     </BrowserRouter>
   )

@@ -41,16 +41,19 @@ const navItems = [
     label: 'Ingresos',
     path: '/income',
     icon: CircleDollarSign,
+    onboardingTarget: 'nav-income',
   },
   {
     label: 'Egresos',
     path: '/expenses',
     icon: ReceiptText,
+    onboardingTarget: 'nav-expenses',
   },
   {
     label: 'Agenda',
     path: '/agenda',
     icon: CalendarDays,
+    onboardingTarget: 'nav-agenda',
   },
   {
     label: 'Más',
@@ -63,7 +66,7 @@ const basicNavItems = [
   navItems[0],
   navItems[1],
   navItems[2],
-  { label: 'Reportes', path: '/reports', icon: ChartNoAxesCombined },
+  { label: 'Reportes', path: '/reports', icon: ChartNoAxesCombined, onboardingTarget: 'nav-reports' },
   { label: 'Configuración', path: '/settings', icon: Settings },
 ]
 
@@ -316,7 +319,7 @@ export function AppLayout() {
         <div className="mb-6 mt-2 px-3"><UsageModeBadge usageMode={usageMode} /></div>
         <nav aria-label="Navegación principal de escritorio">
           <ul className="grid gap-1">
-            {visibleNavItems.map(({ label, path, icon: Icon }) => (
+            {visibleNavItems.map(({ label, path, icon: Icon, onboardingTarget }) => (
               <li key={path}>
                 <NavLink
                   className={({ isActive }) => [
@@ -325,6 +328,7 @@ export function AppLayout() {
                       ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                       : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-900',
                   ].join(' ')}
+                  data-onboarding-target={onboardingTarget}
                   end={path === '/'}
                   to={path}
                 >
@@ -396,11 +400,12 @@ export function AppLayout() {
         className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 md:hidden"
       >
         <ul className="mx-auto grid max-w-5xl grid-cols-5 gap-1">
-          {visibleNavItems.map(({ label, path, icon: Icon }) => (
+          {visibleNavItems.map(({ label, path, icon: Icon, onboardingTarget }) => (
             <li key={path}>
               <NavLink
                 to={path}
                 end={path === '/'}
+                data-onboarding-target={onboardingTarget}
                 className={({ isActive }) =>
                   [
                     'flex min-h-14 flex-col items-center justify-center rounded-md px-1 text-[0.65rem] font-medium leading-tight transition-colors',

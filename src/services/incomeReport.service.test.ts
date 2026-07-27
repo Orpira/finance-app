@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ServiceIncome } from '../types/service'
 import type { AppSettings } from '../types/settings'
+import { createDefaultOnboardingState } from '../utils/onboarding'
 
 const servicesTable = {
   get: vi.fn(),
@@ -41,6 +42,10 @@ function baseSettings(overrides: Partial<AppSettings> = {}): AppSettings {
     businessName: '',
     country: 'ES',
     city: '',
+    language: 'es',
+    timeZone: 'Europe/Madrid',
+    dateFormat: 'dd/MM/yyyy',
+    onboarding: createDefaultOnboardingState(),
     defaultCurrency: 'EUR',
     secondaryCurrency: 'COP',
     incomePercentage: 50,
