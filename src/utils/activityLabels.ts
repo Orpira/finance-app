@@ -31,9 +31,9 @@ export function getIncomeTime(income: ServiceIncome) {
 export function getIncomeDisplayName(income: ServiceIncome) {
   return [
     `${getIncomeTypeLabel(income)} #${income.id ?? '-'}`,
-    income.date,
+    /* income.date,
     getIncomeTime(income),
-    income.city,
+    income.city, */ //Relación Registros de ingresos: Se oculta fecha de ingreso y ciudad de temporada
   ]
     .filter(Boolean)
     .join(' · ')

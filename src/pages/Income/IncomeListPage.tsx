@@ -50,7 +50,7 @@ function formatDate(value: string) {
   )
 }
 
-function formatDateTimeLabel(value?: string) {
+/* function formatDateTimeLabel(value?: string) {
   if (!value) {
     return '—'
   }
@@ -62,7 +62,7 @@ function formatDateTimeLabel(value?: string) {
   }
 
   return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }).format(parsedDate)
-}
+} */
 
 const incomeStatusLabels: Record<ServiceIncomeStatus, string> = {
   PENDIENTE: 'Pendiente',
@@ -815,9 +815,9 @@ export function IncomeListPage() {
                           {income.percentage}% ·{' '}
                           {getPaymentTypeLabel(income.paymentType)}
                         </p>}
-                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        {/* <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                           Ingreso: {formatDate(income.date)} · Creado: {formatDateTimeLabel(income.createdAt)} · Reportado: {reportBadge.isReported ? formatDateTimeLabel(income.reportedAt) : '—'}
-                        </p>
+                        </p> */} 
                         {income.notes && (
                           <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
                             {income.notes}
