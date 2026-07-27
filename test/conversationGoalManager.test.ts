@@ -14,6 +14,16 @@ const REQUESTED_AT_1 = '2026-07-27T10:00:00.000Z'
 const REQUESTED_AT_2 = '2026-07-27T10:05:00.000Z'
 const REQUESTED_AT_3 = '2026-07-27T10:10:00.000Z'
 
+// El store en memoria expira un Goal tras 30 min de reloj real (Date.now())
+// desde su updatedAt. Los fixtures anteriores usan timestamps fijos, así que
+// las pruebas necesitan un reloj congelado dentro de esa ventana -- si no,
+// el resultado depende de a qué hora real se ejecuten los tests.
+const FIXED_NOW_MS = new Date('2026-07-27T10:15:00.000Z').getTime()
+
+function createManager(store = createInMemoryConversationGoalStore({ now: () => FIXED_NOW_MS })) {
+  return createConversationGoalManager({ store })
+}
+
 describe('PB-IS-017.1 Conversation Goal Extractor', () => {
   it('detecta "quiero ahorrar" como SAVE_MORE', () => {
     const result = extractConversationGoal('Quiero ahorrar.')
@@ -50,7 +60,7 @@ describe('PB-IS-017.1 Conversation Goal Extractor', () => {
 
 describe('PB-IS-017.1 Conversation Goal Manager', () => {
   it('creacion de Goal: un mensaje nuevo con objetivo crea el Goal de la sesion', () => {
-    const manager = createConversationGoalManager()
+    const manager = createManager()
     const result = manager.updateFromMessage({
       sessionId: 'session-1',
       userMessage: 'Quiero ahorrar.',
@@ -65,7 +75,7 @@ describe('PB-IS-017.1 Conversation Goal Manager', () => {
   })
 
   it('actualizacion de Goal: un mensaje posterior enriquece el campo faltante sin reemplazar el objetivo', () => {
-    const manager = createConversationGoalManager()
+    const manager = createManager()
     manager.updateFromMessage({ sessionId: 'session-2', userMessage: 'Quiero ahorrar.', requestedAt: REQUESTED_AT_1 })
 
     const result = manager.updateFromMessage({
@@ -82,7 +92,7 @@ describe('PB-IS-017.1 Conversation Goal Manager', () => {
   })
 
   it('enriquecimiento de Goal: no sobrescribe un campo ya informado', () => {
-    const manager = createConversationGoalManager()
+    const manager = createManager()
     manager.updateFromMessage({ sessionId: 'session-3', userMessage: 'Quiero ahorrar 500 € mensuales.', requestedAt: REQUESTED_AT_1 })
 
     const result = manager.updateFromMessage({
@@ -97,7 +107,7 @@ describe('PB-IS-017.1 Conversation Goal Manager', () => {
   })
 
   it('multiples objetivos: sesiones distintas mantienen Goals independientes', () => {
-    const manager = createConversationGoalManager()
+    const manager = createManager()
     manager.updateFromMessage({ sessionId: 'session-a', userMessage: 'Quiero ahorrar.', requestedAt: REQUESTED_AT_1 })
     manager.updateFromMessage({ sessionId: 'session-b', userMessage: 'Quiero comprar una casa.', requestedAt: REQUESTED_AT_1 })
 
@@ -106,7 +116,7 @@ describe('PB-IS-017.1 Conversation Goal Manager', () => {
   })
 
   it('un mensaje sin objetivo detectable y sin Goal previo no crea nada', () => {
-    const manager = createConversationGoalManager()
+    const manager = createManager()
     const result = manager.updateFromMessage({
       sessionId: 'session-4',
       userMessage: '¿Cuánto gasté este mes?',
@@ -120,7 +130,7 @@ describe('PB-IS-017.1 Conversation Goal Manager', () => {
   })
 
   it('continuidad conversacional: el Goal persiste sin cambios en un turno que no aporta informacion nueva', () => {
-    const manager = createConversationGoalManager()
+    const manager = createManager()
     manager.updateFromMessage({ sessionId: 'session-5', userMessage: 'Quiero ahorrar.', requestedAt: REQUESTED_AT_1 })
     manager.updateFromMessage({ sessionId: 'session-5', userMessage: 'Mi meta son 500 € al mes.', requestedAt: REQUESTED_AT_2 })
 
@@ -137,20 +147,18 @@ describe('PB-IS-017.1 Conversation Goal Manager', () => {
   })
 
   it('ausencia de persistencia en IndexedDB: un store nuevo (misma sesion) no ve el Goal de un store anterior', () => {
-    const storeA = createInMemoryConversationGoalStore()
-    const managerA = createConversationGoalManager({ store: storeA })
+    const managerA = createManager()
     managerA.updateFromMessage({ sessionId: 'session-6', userMessage: 'Quiero ahorrar.', requestedAt: REQUESTED_AT_1 })
     expect(managerA.getGoal('session-6')).not.toBeNull()
 
     // Un segundo store en memoria (simula un nuevo proceso/reinicio sin
     // Dexie de por medio) parte completamente vacio para la misma sesion.
-    const storeB = createInMemoryConversationGoalStore()
-    const managerB = createConversationGoalManager({ store: storeB })
+    const managerB = createManager()
     expect(managerB.getGoal('session-6')).toBeNull()
   })
 
   it('clearSession elimina el Goal de la sesion', () => {
-    const manager = createConversationGoalManager()
+    const manager = createManager()
     manager.updateFromMessage({ sessionId: 'session-7', userMessage: 'Quiero ahorrar.', requestedAt: REQUESTED_AT_1 })
     manager.clearSession('session-7')
     expect(manager.getGoal('session-7')).toBeNull()
