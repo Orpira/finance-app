@@ -1052,3 +1052,184 @@ describe('PB-IS-014.5 Intelligent Conversation Activation Engine', () => {
     }
   })
 })
+
+describe('PB-IS-017.1 Personal Financial Copilot Foundation', () => {
+  function createGoalFixtureDependencies() {
+    const activationEngine: ActivationEngine = {
+      decide: vi.fn(async () => createDecision({
+        activationType: 'TOOL_WITH_AI',
+        requiresAI: true,
+        requiresTool: true,
+        provider: 'openai-provider',
+        toolId: 'financial_balance',
+      })),
+    }
+
+    const financialInsightEngine = {
+      async evaluate() {
+        return [
+          {
+            protocolVersion: 1 as const,
+            insightId: 'insight:budget:001',
+            category: 'budget' as const,
+            severity: 'HIGH' as const,
+            priority: 'HIGH' as const,
+            title: 'Gasto elevado',
+            description: 'Los gastos muestran una tendencia alcista.',
+            recommendation: 'Reduce gastos discrecionales para proteger el margen.',
+            sourceTool: 'financial_insights',
+            generatedAt: '2026-07-24T00:00:00.000Z',
+          },
+          {
+            protocolVersion: 1 as const,
+            insightId: 'insight:income:001',
+            category: 'income' as const,
+            severity: 'HIGH' as const,
+            priority: 'HIGH' as const,
+            title: 'Ingreso estable',
+            description: 'Tus ingresos se han mantenido estables.',
+            recommendation: 'Mantén tu fuente de ingresos actual.',
+            sourceTool: 'financial_insights',
+            generatedAt: '2026-07-24T00:00:00.000Z',
+          },
+        ]
+      },
+    }
+
+    const financialPlanningEngine = {
+      build() {
+        return {
+          planId: 'plan:financial:001',
+          createdAt: '2026-07-24T00:00:00.000Z',
+          title: 'Plan financiero inteligente',
+          summary: 'Consolidar ajustes para proteger flujo y mejorar ahorro.',
+          objective: 'Mejorar estabilidad financiera',
+          priority: 'HIGH' as const,
+          estimatedImpact: 'HIGH' as const,
+          recommendedActions: [
+            {
+              actionId: 'action:001',
+              type: 'expense-reduction',
+              description: 'Reducir gastos discrecionales de alta recurrencia.',
+              expectedBenefit: 'Liberar liquidez para ahorro.',
+              effort: 'LOW' as const,
+              priority: 'HIGH' as const,
+              affectedCategory: 'expense',
+              relatedGoal: null,
+              requiresConfirmation: false,
+            },
+          ],
+          relatedInsights: ['insight:budget:001'],
+          assumptions: ['Existen gastos ajustables'],
+          warnings: [],
+        }
+      },
+    }
+
+    return {
+      facade: createFacadeFixture(),
+      provider: createProviderFixture({ providerId: 'openai-provider', confidence: 0.9, text: 'respuesta provider' }),
+      fallbackProvider: createProviderFixture({ providerId: 'mock-ai-provider', confidence: 0.9, text: 'mock response' }),
+      confidencePolicy: { confidenceThreshold: 0.7 },
+      activationEngine,
+      financialInsightEngine,
+      financialPlanningEngine,
+    } as AIConversationServiceDependencies & {
+      readonly activationEngine: ActivationEngine
+      readonly financialInsightEngine: typeof financialInsightEngine
+      readonly financialPlanningEngine: typeof financialPlanningEngine
+    }
+  }
+
+  it('continuidad conversacional: mantiene el objetivo activo, hace seguimiento y luego prioriza recomendaciones', async () => {
+    // Reproduce el ejemplo de Runtime de la especificacion (seccion 23):
+    // "Quiero ahorrar." -> "Mi objetivo son 500 € al mes." -> "¿Qué me
+    // recomiendas?", sobre la MISMA instancia de servicio (misma sesion,
+    // ya que createRequestFixture usa siempre el mismo sessionId fijo) para
+    // demostrar que el Goal persiste entre turnos sin volver a preguntarse
+    // por informacion ya conocida.
+    const service = createAIConversationService(createGoalFixtureDependencies())
+
+    const turn1 = await service.processConversation({
+      conversationRequest: createRequestFixture('Quiero ahorrar.'),
+      userMessage: 'Quiero ahorrar.',
+      turn: 1,
+    })
+    expect(turn1.kind).toBe('success')
+    if (turn1.kind === 'success') {
+      expect(turn1.message.text).toContain('¿Tienes una meta mensual de ahorro?')
+    }
+
+    const turn2 = await service.processConversation({
+      conversationRequest: createRequestFixture('Mi objetivo son 500 € al mes.'),
+      userMessage: 'Mi objetivo son 500 € al mes.',
+      turn: 2,
+    })
+    expect(turn2.kind).toBe('success')
+    if (turn2.kind === 'success') {
+      // Ya no debe repetir la misma pregunta: el campo ya quedo informado.
+      expect(turn2.message.text).not.toContain('¿Tienes una meta mensual de ahorro?')
+    }
+
+    const turn3 = await service.processConversation({
+      conversationRequest: createRequestFixture('¿Qué me recomiendas?'),
+      userMessage: '¿Qué me recomiendas?',
+      turn: 3,
+    })
+    expect(turn3.kind).toBe('success')
+    if (turn3.kind === 'success') {
+      expect(turn3.message.text).not.toContain('¿Tienes una meta mensual de ahorro?')
+      expect(turn3.message.text).toContain('Recomendaciones proactivas')
+      // El insight de categoria "budget" (alineado con el objetivo de
+      // ahorro, seccion 9-11) debe anteponerse al de categoria "income".
+      const budgetIndex = turn3.message.text.indexOf('Gasto elevado')
+      const incomeIndex = turn3.message.text.indexOf('Ingreso estable')
+      expect(budgetIndex).toBeGreaterThanOrEqual(0)
+      expect(incomeIndex).toBeGreaterThanOrEqual(0)
+      expect(budgetIndex).toBeLessThan(incomeIndex)
+    }
+  })
+
+  it('integracion con Planning e Insights: el Financial Copilot nunca recalcula datos, solo reordena lo ya generado', async () => {
+    const service = createAIConversationService(createGoalFixtureDependencies())
+
+    const result = await service.processConversation({
+      conversationRequest: createRequestFixture('Quiero reducir gastos, ¿qué me recomiendas?'),
+      userMessage: 'Quiero reducir gastos, ¿qué me recomiendas?',
+      turn: 1,
+    })
+
+    expect(result.kind).toBe('success')
+    if (result.kind === 'success') {
+      // Los mismos textos certificados de Insight/Planning Engine, sin
+      // alterar montos ni descripciones.
+      expect(result.message.text).toContain('Gasto elevado: Reduce gastos discrecionales para proteger el margen.')
+      expect(result.message.text).toContain('Plan financiero inteligente: Consolidar ajustes para proteger flujo y mejorar ahorro.')
+      expect(result.message.text).toContain('Reducir gastos discrecionales de alta recurrencia.')
+    }
+  })
+
+  it('ausencia de persistencia en IndexedDB: dos instancias de servicio (misma composicion) no comparten el Goal de la otra', async () => {
+    const serviceA = createAIConversationService(createGoalFixtureDependencies())
+    const serviceB = createAIConversationService(createGoalFixtureDependencies())
+
+    await serviceA.processConversation({
+      conversationRequest: createRequestFixture('Quiero ahorrar.'),
+      userMessage: 'Quiero ahorrar.',
+      turn: 1,
+    })
+
+    const resultB = await serviceB.processConversation({
+      conversationRequest: createRequestFixture('¿Qué me recomiendas?'),
+      userMessage: '¿Qué me recomiendas?',
+      turn: 1,
+    })
+
+    // serviceB nunca vio "Quiero ahorrar.": si el Goal estuviera persistido
+    // en algun almacen compartido (Dexie u otro), apareceria aqui tambien.
+    expect(resultB.kind).toBe('success')
+    if (resultB.kind === 'success') {
+      expect(resultB.message.text).not.toContain('¿Tienes una meta mensual de ahorro?')
+    }
+  })
+})

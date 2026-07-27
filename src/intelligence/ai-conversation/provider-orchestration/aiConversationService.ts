@@ -90,6 +90,26 @@ import type {
   FinancialConversationContext,
 } from './financialConversationContext'
 import {
+  createConversationGoalManager,
+  type ConversationGoalManager,
+} from './conversationGoalManager'
+import {
+  createConversationFollowUpEngine,
+  type ConversationFollowUpEngine,
+} from './conversationFollowUpEngine'
+import {
+  createRecommendationPrioritizer,
+  type RecommendationPrioritizer,
+} from './recommendationPrioritizer'
+import {
+  createConversationSummaryBuilder,
+  type ConversationSummaryBuilder,
+} from './conversationSummary'
+import {
+  createConversationGoalMetricsRecorder,
+  type ConversationGoalMetricsRecorder,
+} from './conversationGoalMetrics'
+import {
   validateActivationDecision,
 } from './activationValidator'
 import {
@@ -201,6 +221,19 @@ function appendActionPlanToMessage(
 
   const actionSummary = formatActionSummary(actionPlan)
   return `${text}\n\nPlan financiero inteligente: ${actionPlan.summary} Acciones sugeridas: ${actionSummary}`
+}
+
+/**
+ * PB-IS-017.1 seccion 8: agrega la pregunta de seguimiento del objetivo
+ * conversacional activo, si el turno actual determino que corresponde
+ * preguntar. Nunca reemplaza el resto de la respuesta -- solo la continua.
+ */
+function appendGoalFollowUpToMessage(text: string, followUpQuestion: string | null): string {
+  if (followUpQuestion === null) {
+    return text
+  }
+
+  return `${text}\n\n${followUpQuestion}`
 }
 
 // --- Relevance Policy (PB-IS-016.2 sección 10) ---
@@ -574,6 +607,40 @@ export function createAIConversationService(
     }
   ).conversationContextResolver ?? createConversationContextResolver()
 
+  // PB-IS-017.1: mismo patron de dependencia opcional que activationEngine/
+  // skillResolver/memory/insightEngine/planningEngine -- si no se inyectan,
+  // se crean con sus factories por defecto (todas en memoria, sin acceso a
+  // Dexie ni a las Financial Tools).
+  const goalManager = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly goalManager?: ConversationGoalManager
+    }
+  ).goalManager ?? createConversationGoalManager()
+
+  const followUpEngine = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly followUpEngine?: ConversationFollowUpEngine
+    }
+  ).followUpEngine ?? createConversationFollowUpEngine()
+
+  const recommendationPrioritizer = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly recommendationPrioritizer?: RecommendationPrioritizer
+    }
+  ).recommendationPrioritizer ?? createRecommendationPrioritizer()
+
+  const summaryBuilder = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly summaryBuilder?: ConversationSummaryBuilder
+    }
+  ).summaryBuilder ?? createConversationSummaryBuilder()
+
+  const goalMetrics = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly goalMetrics?: ConversationGoalMetricsRecorder
+    }
+  ).goalMetrics ?? createConversationGoalMetricsRecorder()
+
   const toolResultMapper = createFinancialToolResultMapper()
 
   return {
@@ -695,6 +762,61 @@ export function createAIConversationService(
       const adviceRelevant = isFinancialAdviceRelevant(input.userMessage)
       const insightsToAppend = adviceRelevant ? insights : []
       const actionPlanToAppend = adviceRelevant ? actionPlan : null
+
+      // --- PB-IS-017.1 Personal Financial Copilot Foundation ---
+      // El Goal vive exclusivamente en memoria de conversacion (DA-0171-02):
+      // nunca se persiste en Dexie ni en ninguna otra base de datos. El
+      // Copilot nunca recalcula datos financieros ni genera recomendaciones
+      // propias (DA-0171-01, DA-0171-03, DA-0171-04): solo reordena los
+      // insights/planning ya certificados por sus motores y decide cuando
+      // preguntar por informacion que aun falta del objetivo activo.
+      const goalUpdate = goalManager.updateFromMessage({
+        sessionId: input.conversationRequest.context.sessionId,
+        userMessage: input.userMessage,
+        requestedAt,
+      })
+      const activeGoal = goalUpdate.goal
+      const prioritizedInsightsToAppend = recommendationPrioritizer.prioritizeInsights(insightsToAppend, activeGoal)
+      const prioritizedActionPlanToAppend = recommendationPrioritizer.prioritizeActionPlan(actionPlanToAppend, activeGoal)
+      // Solo se pregunta cuando el propio mensaje aporto informacion nueva
+      // del objetivo (creacion o enriquecimiento) -- de lo contrario la
+      // misma pregunta se repetiria en cada turno (seccion 8).
+      const followUpQuestion = activeGoal !== null && (goalUpdate.created || goalUpdate.updated)
+        ? followUpEngine.nextQuestion(activeGoal)
+        : null
+
+      const conversationSummary = summaryBuilder.build({
+        sessionId: input.conversationRequest.context.sessionId,
+        goal: activeGoal,
+        prioritizedInsights: prioritizedInsightsToAppend,
+        prioritizedActionPlan: prioritizedActionPlanToAppend,
+        pendingFollowUpQuestion: followUpQuestion,
+        requestedAt,
+      })
+
+      goalMetrics.record({
+        timestamp: requestedAt,
+        sessionId: input.conversationRequest.context.sessionId,
+        goalCreated: goalUpdate.created,
+        goalUpdated: goalUpdate.updated,
+        followUpAsked: followUpQuestion !== null,
+        recommendationUsed: prioritizedInsightsToAppend.length > 0 || prioritizedActionPlanToAppend !== null,
+        planningConsulted: actionPlan !== null,
+        insightsConsulted: insights.length > 0,
+      })
+
+      if (typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV)) {
+        // Seccion 16: solo metadata tecnica agregable, nunca el resumen
+        // completo (que incluiria titulos/descripciones ya certificados
+        // pero derivados del contexto financiero) ni el mensaje del usuario.
+        console.debug('[financial-copilot] conversation-summary', {
+          sessionId: conversationSummary.sessionId,
+          hasGoal: conversationSummary.goal !== null,
+          hasMainIssue: conversationSummary.mainIssue !== null,
+          hasLastRecommendation: conversationSummary.lastRecommendation !== null,
+          hasPendingFollowUp: conversationSummary.pendingFollowUp !== null,
+        })
+      }
 
       const providerUsed = decision.provider === dependencies.fallbackProvider.metadata.providerId
         ? dependencies.fallbackProvider
@@ -843,9 +965,12 @@ export function createAIConversationService(
           type: 'assistant',
           origin: 'MOCK_RENDERER',
           timestamp: now(),
-          text: appendActionPlanToMessage(
-            appendInsightsToMessage(directToolText, insightsToAppend),
-            actionPlanToAppend,
+          text: appendGoalFollowUpToMessage(
+            appendActionPlanToMessage(
+              appendInsightsToMessage(directToolText, prioritizedInsightsToAppend),
+              prioritizedActionPlanToAppend,
+            ),
+            followUpQuestion,
           ),
           responseId: execution.response.responseId,
           conversationResponse: responseWithFinancialContext.response,
@@ -916,9 +1041,12 @@ export function createAIConversationService(
 
         message = {
           ...rendered.message,
-          text: appendActionPlanToMessage(
-            appendInsightsToMessage(rendered.message.text, insightsToAppend),
-            actionPlanToAppend,
+          text: appendGoalFollowUpToMessage(
+            appendActionPlanToMessage(
+              appendInsightsToMessage(rendered.message.text, prioritizedInsightsToAppend),
+              prioritizedActionPlanToAppend,
+            ),
+            followUpQuestion,
           ),
         }
       }

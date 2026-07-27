@@ -54,6 +54,9 @@ import {
   createFinancialPlanningEngine,
 } from '../../intelligence/ai-conversation/provider-orchestration/financialPlanningFactory'
 import {
+  createConversationGoalModule,
+} from '../../intelligence/ai-conversation/provider-orchestration/conversationGoalFactory'
+import {
   validateRuntimeRepositoryComposition,
 } from '../../intelligence/ai-conversation/provider-orchestration/runtimeRepositoryValidator'
 import {
@@ -243,6 +246,10 @@ export function createConversationControllerDependencies(
   const conversationContextResolver = createConversationContextResolver()
   const financialInsightEngine = createFinancialInsightEngine()
   const financialPlanningEngine = createFinancialPlanningEngine()
+  // PB-IS-017.1: Goal Manager, Follow-up Engine, Recommendation Prioritizer,
+  // Conversation Summary y sus runtime metrics -- todos en memoria, sin
+  // acceso a Dexie ni a las Financial Tools (DA-0171-01, DA-0171-02).
+  const conversationGoalModule = createConversationGoalModule()
 
   const conversationServiceDependencies = {
     facade,
@@ -257,6 +264,11 @@ export function createConversationControllerDependencies(
     conversationContextResolver,
     financialInsightEngine,
     financialPlanningEngine,
+    goalManager: conversationGoalModule.goalManager,
+    followUpEngine: conversationGoalModule.followUpEngine,
+    recommendationPrioritizer: conversationGoalModule.recommendationPrioritizer,
+    summaryBuilder: conversationGoalModule.summaryBuilder,
+    goalMetrics: conversationGoalModule.goalMetrics,
   } as AIConversationServiceDependencies & {
     readonly activationEngine: typeof activationEngine
     readonly skillResolver: typeof financialSkillModule.resolver
@@ -264,6 +276,11 @@ export function createConversationControllerDependencies(
     readonly conversationContextResolver: typeof conversationContextResolver
     readonly financialInsightEngine: typeof financialInsightEngine
     readonly financialPlanningEngine: typeof financialPlanningEngine
+    readonly goalManager: typeof conversationGoalModule.goalManager
+    readonly followUpEngine: typeof conversationGoalModule.followUpEngine
+    readonly recommendationPrioritizer: typeof conversationGoalModule.recommendationPrioritizer
+    readonly summaryBuilder: typeof conversationGoalModule.summaryBuilder
+    readonly goalMetrics: typeof conversationGoalModule.goalMetrics
   }
 
   const conversationService = createAIConversationService(conversationServiceDependencies)
