@@ -1,4 +1,4 @@
-import { CalendarRange, Eye, Share2 } from 'lucide-react'
+import { CalendarRange, Eye, FileSpreadsheet, Share2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDialog } from '../../components/dialogs/useDialog'
@@ -106,6 +106,20 @@ function escapeHtml(value: string) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;')
+}
+
+function formatExportDateTime(value?: string) {
+  if (!value) {
+    return ''
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 
 function getExpenseValue(expense: Expense, currency: CurrencyCode) {
@@ -633,6 +647,8 @@ export function ReportsPage() {
       .map((income) => {
         const amount = getIncomeValue(income, primaryCurrency)
         const adjustmentCount = income.id ? adjustmentsByIncomeId.get(income.id) ?? 0 : 0
+        const isReportable = canMarkAsReported(income, activeUsageMode)
+        const badge = getRecordReportBadge(income)
 
         return `
           <tr>
@@ -640,7 +656,12 @@ export function ReportsPage() {
             <td>${escapeHtml(getIncomeTypeLabel(income))}</td>
             <td>${escapeHtml(getPaymentTypeLabel(income.paymentType))}</td>
             ${!isBasicUser ? `<td>${isServiceIncome(income) ? escapeHtml(getIncomeDurationDisplay(income)) : 'No aplica'}</td>` : ''}
-            ${!isBasicUser ? `<td>${canMarkAsReported(income, activeUsageMode) ? getRecordReportBadge(income).label : 'No aplica'}</td>` : ''}
+            <td>${escapeHtml(income.date)}</td>
+            <td>${escapeHtml(formatExportDateTime(income.createdAt))}</td>
+            ${!isBasicUser ? `<td>${isReportable ? escapeHtml(badge.label) : 'No aplica'}</td>` : ''}
+            ${!isBasicUser ? `<td>${isReportable && badge.isReported ? escapeHtml(formatExportDateTime(badge.reportedAt)) : ''}</td>` : ''}
+            ${!isBasicUser ? `<td>${isReportable ? escapeHtml(badge.reportReference ?? '') : ''}</td>` : ''}
+            ${!isBasicUser ? `<td>${isReportable ? escapeHtml(badge.reportNotes ?? '') : ''}</td>` : ''}
             <td>${adjustmentCount > 0 ? `Afectado por ajuste (${adjustmentCount})` : 'Sin ajustes'}</td>
             <td class="amount">${escapeHtml(formatCurrency(amount, primaryCurrency))}</td>
           </tr>
@@ -656,7 +677,12 @@ export function ReportsPage() {
             <th>Tipo</th>
             <th>Tipo de pago</th>
             ${!isBasicUser ? '<th>Duración</th>' : ''}
-            ${!isBasicUser ? '<th>Estado operativo</th>' : ''}
+            <th>Fecha de ingreso</th>
+            <th>Fecha de creación</th>
+            ${!isBasicUser ? '<th>Estado</th>' : ''}
+            ${!isBasicUser ? '<th>Fecha de reporte</th>' : ''}
+            ${!isBasicUser ? '<th>Referencia</th>' : ''}
+            ${!isBasicUser ? '<th>Notas</th>' : ''}
             <th>Trazabilidad</th>
             <th class="amount">Valor</th>
           </tr>
@@ -666,6 +692,11 @@ export function ReportsPage() {
           <tr>
             <td colspan="3">Total</td>
             ${!isBasicUser ? `<td>${totalDuration} min</td>` : ''}
+            <td></td>
+            <td></td>
+            ${!isBasicUser ? '<td></td>' : ''}
+            ${!isBasicUser ? '<td></td>' : ''}
+            ${!isBasicUser ? '<td></td>' : ''}
             ${!isBasicUser ? '<td></td>' : ''}
             <td></td>
             <td class="amount">${escapeHtml(formatCurrency(totalAmount, primaryCurrency))}</td>
@@ -692,6 +723,8 @@ export function ReportsPage() {
       .map((income) => {
         const amount = getIncomeValue(income, primaryCurrency)
         const adjustmentCount = income.id ? adjustmentsByIncomeId.get(income.id) ?? 0 : 0
+        const isReportable = canMarkAsReported(income, activeUsageMode)
+        const badge = getRecordReportBadge(income)
 
         return [
           `- ${getIncomeDisplayName(income)}`,
@@ -700,9 +733,16 @@ export function ReportsPage() {
           !isBasicUser
             ? `Duración: ${isServiceIncome(income) ? getIncomeDurationDisplay(income) : 'No aplica'}`
             : '',
-          !isBasicUser
-            ? `Estado operativo: ${canMarkAsReported(income, activeUsageMode) ? getRecordReportBadge(income).label : 'No aplica'}`
+          `Fecha de ingreso: ${income.date}`,
+          `Fecha de creación: ${formatExportDateTime(income.createdAt)}`,
+          !isBasicUser ? `Estado: ${isReportable ? badge.label : 'No aplica'}` : '',
+          !isBasicUser && isReportable && badge.isReported
+            ? `Fecha de reporte: ${formatExportDateTime(badge.reportedAt)}`
             : '',
+          !isBasicUser && isReportable && badge.reportReference
+            ? `Referencia: ${badge.reportReference}`
+            : '',
+          !isBasicUser && isReportable && badge.reportNotes ? `Notas: ${badge.reportNotes}` : '',
           adjustmentCount > 0 ? `Afectado por ajuste (${adjustmentCount})` : 'Sin ajustes relacionados',
           `Valor: ${formatCurrency(amount, primaryCurrency)}`,
         ].filter(Boolean).join(' | ')
@@ -1240,6 +1280,34 @@ export function ReportsPage() {
     navigate('/reports/preview')
   }
 
+  async function handleExportIncomeCsv() {
+    try {
+      const { shareIncomesAsCsv } = await import('../../services/incomeExportService')
+
+      await shareIncomesAsCsv(incomes, primaryCurrency, activeUsageMode, 'reporte-de-ingresos')
+    } catch {
+      await alert({
+        type: 'error',
+        title: 'No se pudo exportar el CSV',
+        message: 'No se pudo generar el archivo CSV de ingresos.',
+      })
+    }
+  }
+
+  async function handleExportIncomeExcel() {
+    try {
+      const { shareIncomesAsExcel } = await import('../../services/incomeExportService')
+
+      await shareIncomesAsExcel(incomes, primaryCurrency, activeUsageMode, 'reporte-de-ingresos')
+    } catch {
+      await alert({
+        type: 'error',
+        title: 'No se pudo exportar el Excel',
+        message: 'No se pudo generar el archivo Excel de ingresos.',
+      })
+    }
+  }
+
   if (loadError) {
     return (
       <section className="flex min-h-[60dvh] items-center justify-center">
@@ -1438,6 +1506,26 @@ export function ReportsPage() {
                 <Share2 className="size-4" aria-hidden="true" />
                 Compartir PDF
               </button>
+              {reportCard.kind === 'income' && (
+                <>
+                  <button
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    onClick={handleExportIncomeCsv}
+                    type="button"
+                  >
+                    <FileSpreadsheet className="size-4" aria-hidden="true" />
+                    Exportar CSV
+                  </button>
+                  <button
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    onClick={handleExportIncomeExcel}
+                    type="button"
+                  >
+                    <FileSpreadsheet className="size-4" aria-hidden="true" />
+                    Exportar Excel
+                  </button>
+                </>
+              )}
             </div>
           </article>
         ))}

@@ -16,6 +16,11 @@ import { UsageModeBadge } from '../../components/UsageModeBadge'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
+import {
+  getPendingIncomeSummary,
+  PENDING_INCOME_OVERDUE_AFTER_DAYS,
+  type PendingIncomeSummary,
+} from '../../services/incomeReport.service'
 import { buildHomeBalanceSummary, resolveHomeBalanceSummaryPromotion } from '../../services/homeBalanceSummaryService'
 import type { BalanceReportResult } from '../../services/balanceReportService'
 import { getSettings } from '../../services/settingsService'
@@ -51,6 +56,14 @@ function monthRange(offset: number) {
     to: end.toLocaleDateString('en-CA'),
     endExclusive: endExclusive.toLocaleDateString('en-CA'),
   }
+}
+
+async function fetchPendingReportSummary(settings: AppSettings) {
+  if (isBasicMode(settings)) {
+    return null
+  }
+
+  return getPendingIncomeSummary()
 }
 
 function Variation({ current, previous }: { current: number; previous: number }) {
@@ -89,6 +102,7 @@ export function HomePage() {
   const [previousExpenses, setPreviousExpenses] = useState<Expense[]>([])
   const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
   const [reportedCount, setReportedCount] = useState(0)
+  const [pendingReportSummary, setPendingReportSummary] = useState<PendingIncomeSummary | null>(null)
   const [promotedCurrentSummary, setPromotedCurrentSummary] = useState<{
     readonly requestId: UtcInstant
     readonly summary: BalanceReportResult
@@ -108,12 +122,13 @@ export function HomePage() {
 
     async function loadDashboard(nextSettings?: AppSettings) {
       const resolvedSettings = nextSettings ?? await getSettings()
-      const [period, incomes, expenses, oldIncomes, oldExpenses] = await Promise.all([
+      const [period, incomes, expenses, oldIncomes, oldExpenses, pendingSummary] = await Promise.all([
         getActiveEarningPeriod(),
         listServiceIncomes(current),
         listExpenses(current),
         listServiceIncomes(previous),
         listExpenses(previous),
+        fetchPendingReportSummary(resolvedSettings),
       ])
 
       if (!mounted) return
@@ -171,6 +186,7 @@ export function HomePage() {
       // De lo contrario, una temporada cerrada del mes anterior queda fuera y se muestra "sin datos".
       setPreviousIncomes(oldModeIncomes)
       setPreviousExpenses(oldModeExpenses)
+      setPendingReportSummary(pendingSummary)
     }
 
     void loadDashboard()
@@ -371,6 +387,44 @@ export function HomePage() {
         </div>
         <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">{reportedCard.label}</p>
         <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">{reportedCard.value}</p>
+
+        {!isBasicMode(settings) && pendingReportSummary && (
+          <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-800">
+            {pendingReportSummary.count === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                No hay ingresos pendientes de reportar.
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                    No reportados: {pendingReportSummary.count}{' '}
+                    {pendingReportSummary.count === 1 ? 'ingreso' : 'ingresos'} ·{' '}
+                    <span className="font-semibold text-slate-900 dark:text-white">
+                      <SensitiveAmount
+                        hidden={hidden}
+                        value={formatCurrency(pendingReportSummary.totalBaseCurrency, pendingReportSummary.baseCurrency)}
+                      />
+                    </span>
+                  </p>
+                  {pendingReportSummary.overdueCount > 0 && (
+                    <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                      {pendingReportSummary.overdueCount} con más de {PENDING_INCOME_OVERDUE_AFTER_DAYS} días
+                    </span>
+                  )}
+                </div>
+
+                <Link
+                  className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  to="/income/pendientes"
+                >
+                  Ver detalle por fechas
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
+              </>
+            )}
+          </div>
+        )}
       </article>
 
       <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">

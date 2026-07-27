@@ -70,6 +70,7 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
     percentage: isServiceIncome(normalizedInput)
       ? earningPeriod?.percentage ?? normalizedInput.percentage
       : 0,
+    updatedAt: createdAt,
   })
   const income: ServiceIncome = {
     ...incomeBase,
@@ -171,6 +172,7 @@ export async function updateServiceIncome(
         ...latestIncome,
         ...updates,
         usageMode: latestIncome.usageMode ?? settings.usageMode,
+        updatedAt: new Date().toISOString(),
       }),
     )
     const updatedIncomes = incomes.map((income) =>

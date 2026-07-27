@@ -63,9 +63,13 @@ export function assertCanMarkAsReported(
 }
 
 export function hasReportStatusUpdates(updates: object) {
-  return ['reportStatusCode', 'reportStatusLabel', 'reportedAt'].some((field) =>
-    Object.prototype.hasOwnProperty.call(updates, field),
-  )
+  return [
+    'reportStatusCode',
+    'reportStatusLabel',
+    'reportedAt',
+    'reportReference',
+    'reportNotes',
+  ].some((field) => Object.prototype.hasOwnProperty.call(updates, field))
 }
 
 export function assertReportStatusUpdateIsAllowed(
@@ -119,9 +123,12 @@ export function getRecordReportBadge(record: Partial<ReportStatusFields>) {
 
   return {
     isReported: normalized.reportStatusCode === 'reported',
+    isUnreviewed: normalized.reportStatusCode === 'unreviewed',
     label: getReportStatusLabel(normalized.reportStatusCode),
     reportStatusCode: normalized.reportStatusCode,
     reportStatusLabel: normalized.reportStatusLabel,
     reportedAt: normalized.reportedAt,
+    reportReference: normalized.reportReference,
+    reportNotes: normalized.reportNotes,
   }
 }

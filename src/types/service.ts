@@ -82,4 +82,8 @@ export interface ServiceIncome {
   reportStatusCode?: ReportStatusCode;
   reportStatusLabel?: ReportStatusLabel;
   reportedAt?: string;
+  reportReference?: string;
+  reportNotes?: string;
+
+  updatedAt?: string;
 }

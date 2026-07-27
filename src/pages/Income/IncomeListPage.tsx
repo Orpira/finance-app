@@ -1,16 +1,21 @@
-import { ChevronLeft, ChevronRight, Eye, Pencil, ReceiptText, Trash2 } from 'lucide-react'
+import { CheckSquare, ChevronLeft, ChevronRight, Eye, Pencil, ReceiptText, Square, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { SensitiveAmount } from '../../components/SensitiveAmount'
+import { MarkIncomeReportedDialog, type MarkIncomeReportedValues } from '../../components/income/MarkIncomeReportedDialog'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import {
   deleteServiceIncome,
   listServiceIncomes,
-  updateServiceIncome,
 } from '../../services/incomeService'
+import {
+  markIncomeAsPending,
+  markIncomeAsReported,
+  markMultipleIncomesAsReported,
+} from '../../services/incomeReport.service'
 import { getSettings } from '../../services/settingsService'
 import { listExpenses } from '../../services/expenseService'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
@@ -29,11 +34,35 @@ import {
   requiresSeason,
 } from '../../utils/usageMode'
 import { getIncomeType, getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
-import { canMarkAsReported, formatReportStatusMeta, getRecordReportBadge, toggleReportStatus } from '../../utils/reportStatus'
+import { canMarkAsReported, formatReportStatusMeta, getRecordReportBadge } from '../../utils/reportStatus'
 import { useDialog } from '../../components/dialogs/useDialog'
 
 const INCOMES_PER_PAGE = 10
-type ReportStatusFilter = 'ALL' | 'pending' | 'reported'
+type ReportStatusFilter = 'ALL' | 'unreviewed' | 'pending' | 'reported'
+
+function parseReportStatusFilter(value: string | null): ReportStatusFilter {
+  return value === 'unreviewed' || value === 'pending' || value === 'reported' ? value : 'ALL'
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(
+    new Date(`${value}T00:00`),
+  )
+}
+
+function formatDateTimeLabel(value?: string) {
+  if (!value) {
+    return '—'
+  }
+
+  const parsedDate = new Date(value)
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return '—'
+  }
+
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }).format(parsedDate)
+}
 
 const incomeStatusLabels: Record<ServiceIncomeStatus, string> = {
   PENDIENTE: 'Pendiente',
@@ -84,6 +113,7 @@ function filterAdjustmentsByMode(expenses: Expense[], settings: AppSettings) {
 export function IncomeListPage() {
   const { alert, confirm } = useDialog()
   const { hidden } = useSensitiveValues()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [relatedAdjustments, setRelatedAdjustments] = useState<Expense[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
@@ -94,12 +124,33 @@ export function IncomeListPage() {
     useState<string | 'ALL'>('ALL')
   const [selectedIncomeType, setSelectedIncomeType] =
     useState<ServiceIncomeType | 'ALL'>('ALL')
-  const [selectedReportStatus, setSelectedReportStatus] =
-    useState<ReportStatusFilter>('ALL')
+  const selectedReportStatus = useMemo(
+    () => parseReportStatusFilter(searchParams.get('reportStatus')),
+    [searchParams],
+  )
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [incomePage, setIncomePage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedIncomeIds, setSelectedIncomeIds] = useState<Set<number>>(new Set())
+  const [incomeBeingReported, setIncomeBeingReported] = useState<ServiceIncome | null>(null)
+  const [isBulkReportDialogOpen, setIsBulkReportDialogOpen] = useState(false)
+
+  function handleReportStatusFilterChange(value: ReportStatusFilter) {
+    setIncomePage(1)
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        if (value === 'ALL') {
+          next.delete('reportStatus')
+        } else {
+          next.set('reportStatus', value)
+        }
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   const adjustmentsByIncomeId = useMemo(() => {
     const grouped = new Map<number, Expense[]>()
@@ -208,6 +259,39 @@ export function IncomeListPage() {
     return filteredIncomes.slice(startIndex, startIndex + INCOMES_PER_PAGE)
   }, [currentIncomePage, filteredIncomes])
 
+  // Se agrupa por serviceDate (income.date), nunca por la fecha de creación.
+  const groupedPaginatedIncomes = useMemo(() => {
+    const groups: Array<{ date: string; incomes: ServiceIncome[] }> = []
+
+    paginatedIncomes.forEach((income) => {
+      const lastGroup = groups.at(-1)
+      if (lastGroup && lastGroup.date === income.date) {
+        lastGroup.incomes.push(income)
+      } else {
+        groups.push({ date: income.date, incomes: [income] })
+      }
+    })
+
+    return groups
+  }, [paginatedIncomes])
+
+  const selectableIncomeIds = useMemo(
+    () =>
+      paginatedIncomes
+        .filter(
+          (income) =>
+            income.id !== undefined &&
+            settings &&
+            canMarkAsReported(income, settings.usageMode) &&
+            !getRecordReportBadge(income).isReported,
+        )
+        .map((income) => income.id as number),
+    [paginatedIncomes, settings],
+  )
+  const allVisibleSelected =
+    selectableIncomeIds.length > 0 &&
+    selectableIncomeIds.every((id) => selectedIncomeIds.has(id))
+
   const getCountryLabel = (code: string): string => {
     const country = countries.find((countryOption) => countryOption.value === code)
 
@@ -265,8 +349,13 @@ export function IncomeListPage() {
       setIncomes(filterIncomesByMode(currentIncomes, nextSettings, nextActivePeriodId))
       setRelatedAdjustments(filterAdjustmentsByMode(currentExpenses, nextSettings))
       setSelectedIncomeType('ALL')
-      setSelectedReportStatus('ALL')
+      setSelectedIncomeIds(new Set())
       setIncomePage(1)
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current)
+        next.delete('reportStatus')
+        return next
+      }, { replace: true })
     }
 
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
@@ -275,43 +364,34 @@ export function IncomeListPage() {
       isMounted = false
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
     }
-  }, [])
+  }, [setSearchParams])
 
-  async function handleToggleReportStatus(income: ServiceIncome) {
-    if (!income.id || !settings) {
+  function handleRequestMarkAsReported(income: ServiceIncome) {
+    if (!income.id || !settings || !canMarkAsReported(income, settings.usageMode)) {
       return
     }
 
-    if (!canMarkAsReported(income, settings.usageMode)) {
-      await alert({
-        type: 'error',
-        title: 'Acción no permitida',
-        message: 'Solo los servicios del modo Profesional pueden marcarse como reportados.',
-      })
-      return
-    }
+    setIncomeBeingReported(income)
+  }
 
-    const reportBadge = getRecordReportBadge(income)
-    const confirmationMessage = reportBadge.isReported
-      ? '¿Quitar la marca de Reportado? El ingreso volverá a permitir modificaciones y eliminación.'
-      : 'Al marcar este ingreso como reportado quedará bloqueado y no podrá modificarse ni eliminarse. ¿Deseas continuar?'
-
-    const confirmed = await confirm({
-      title: reportBadge.isReported ? 'Quitar marca de Reportado' : 'Marcar ingreso como reportado',
-      message: confirmationMessage,
-      confirmLabel: reportBadge.isReported ? 'Quitar marca' : 'Marcar como reportado',
-      confirmTone: reportBadge.isReported ? 'primary' : 'warning',
-    })
-    if (!confirmed) {
+  async function handleConfirmMarkAsReported(values: MarkIncomeReportedValues) {
+    if (!incomeBeingReported?.id) {
       return
     }
 
     try {
-      const nextRecord = toggleReportStatus(income, settings.usageMode)
-      await updateServiceIncome(income.id, {
-        reportStatusCode: nextRecord.reportStatusCode,
-        reportStatusLabel: nextRecord.reportStatusLabel,
-        reportedAt: nextRecord.reportedAt,
+      const reportedIncomeId = incomeBeingReported.id
+      await markIncomeAsReported(reportedIncomeId, {
+        reportedAt: `${values.reportedAt}T00:00:00.000Z`,
+        reportReference: values.reportReference,
+        reportNotes: values.reportNotes,
+      })
+      setIncomeBeingReported(null)
+      setSelectedIncomeIds((current) => {
+        if (!current.has(reportedIncomeId)) return current
+        const next = new Set(current)
+        next.delete(reportedIncomeId)
+        return next
       })
       await reloadIncomes()
     } catch (error: unknown) {
@@ -319,6 +399,78 @@ export function IncomeListPage() {
         type: 'error',
         title: 'No se pudo actualizar el ingreso',
         message: error instanceof Error ? error.message : 'No se pudo actualizar el estado del ingreso.',
+      })
+    }
+  }
+
+  async function handleReturnToPending(income: ServiceIncome) {
+    if (!income.id || !settings || !canMarkAsReported(income, settings.usageMode)) {
+      return
+    }
+
+    const confirmed = await confirm({
+      title: 'Devolver a pendiente',
+      message: '¿Quitar la marca de Reportado? El ingreso volverá a permitir modificaciones y eliminación.',
+      confirmLabel: 'Devolver a pendiente',
+      confirmTone: 'primary',
+    })
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await markIncomeAsPending(income.id)
+      await reloadIncomes()
+    } catch (error: unknown) {
+      await alert({
+        type: 'error',
+        title: 'No se pudo actualizar el ingreso',
+        message: error instanceof Error ? error.message : 'No se pudo actualizar el estado del ingreso.',
+      })
+    }
+  }
+
+  function handleToggleSelectIncome(incomeId: number) {
+    setSelectedIncomeIds((current) => {
+      const next = new Set(current)
+      if (next.has(incomeId)) {
+        next.delete(incomeId)
+      } else {
+        next.add(incomeId)
+      }
+      return next
+    })
+  }
+
+  function handleToggleSelectAllVisible(selectableIds: number[]) {
+    setSelectedIncomeIds((current) => {
+      const allSelected = selectableIds.length > 0 && selectableIds.every((id) => current.has(id))
+      if (allSelected) {
+        const next = new Set(current)
+        selectableIds.forEach((id) => next.delete(id))
+        return next
+      }
+      return new Set([...current, ...selectableIds])
+    })
+  }
+
+  async function handleConfirmBulkMarkAsReported(values: MarkIncomeReportedValues) {
+    const ids = Array.from(selectedIncomeIds)
+    const result = await markMultipleIncomesAsReported(ids, {
+      reportedAt: `${values.reportedAt}T00:00:00.000Z`,
+      reportReference: values.reportReference,
+      reportNotes: values.reportNotes,
+    })
+
+    setIsBulkReportDialogOpen(false)
+    setSelectedIncomeIds(new Set())
+    await reloadIncomes()
+
+    if (result.failed.length > 0) {
+      await alert({
+        type: result.succeeded.length > 0 ? 'warning' : 'error',
+        title: 'Algunos ingresos no se pudieron marcar',
+        message: `${result.succeeded.length} ingreso(s) marcados como reportados. ${result.failed.length} no se pudieron actualizar.`,
       })
     }
   }
@@ -442,13 +594,13 @@ export function IncomeListPage() {
               <span className="text-sm font-medium text-slate-600">Estado de reporte</span>
               <select
                 className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                onChange={(event) => {
-                  setSelectedReportStatus(event.target.value as ReportStatusFilter)
-                  setIncomePage(1)
-                }}
+                onChange={(event) =>
+                  handleReportStatusFilterChange(event.target.value as ReportStatusFilter)
+                }
                 value={selectedReportStatus}
               >
                 <option value="ALL">Todos</option>
+                <option value="unreviewed">Sin revisar</option>
                 <option value="pending">Pendientes</option>
                 <option value="reported">Reportados</option>
               </select>
@@ -523,12 +675,52 @@ export function IncomeListPage() {
       </CollapsibleFilters>
 
       <section className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <ReceiptText className="size-5 text-emerald-700" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-slate-950">
-            Ingresos recientes
-          </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <ReceiptText className="size-5 text-emerald-700" aria-hidden="true" />
+            <h2 className="text-lg font-semibold text-slate-950">
+              Ingresos recientes
+            </h2>
+          </div>
+          {selectableIncomeIds.length > 0 && (
+            <button
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              onClick={() => handleToggleSelectAllVisible(selectableIncomeIds)}
+              type="button"
+            >
+              {allVisibleSelected ? (
+                <CheckSquare className="size-4" aria-hidden="true" />
+              ) : (
+                <Square className="size-4" aria-hidden="true" />
+              )}
+              Seleccionar visibles
+            </button>
+          )}
         </div>
+
+        {selectedIncomeIds.size > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950">
+            <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+              {selectedIncomeIds.size} {selectedIncomeIds.size === 1 ? 'ingreso seleccionado' : 'ingresos seleccionados'}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                className="inline-flex h-9 items-center justify-center rounded-md border border-emerald-300 px-3 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-800 dark:text-emerald-200"
+                onClick={() => setSelectedIncomeIds(new Set())}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="inline-flex h-9 items-center justify-center rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
+                onClick={() => setIsBulkReportDialogOpen(true)}
+                type="button"
+              >
+                Marcar {selectedIncomeIds.size} como reportados
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           {filteredIncomes.length === 0 ? (
@@ -540,8 +732,13 @@ export function IncomeListPage() {
                   : 'No hay ingresos de la temporada activa con los filtros seleccionados.'}
             </p>
           ) : (
-            <ul className="divide-y divide-slate-200">
-              {paginatedIncomes.map((income) => {
+            groupedPaginatedIncomes.map((group) => (
+              <div key={group.date}>
+                <p className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+                  Ingresos del {formatDate(group.date)}
+                </p>
+                <ul className="divide-y divide-slate-200">
+                  {group.incomes.map((income) => {
                 const status = getIncomeStatus(income)
                 const isService = isServiceIncome(income)
                 const incomeAdjustments = income.id
@@ -558,11 +755,23 @@ export function IncomeListPage() {
                 const canReport = Boolean(
                   settings && canMarkAsReported(income, settings.usageMode),
                 )
+                const isSelectable = income.id !== undefined && canReport && !reportBadge.isReported
+                const isSelected = income.id !== undefined && selectedIncomeIds.has(income.id)
 
                 return (
                   <li className="flex flex-col gap-3 p-4" key={income.id}>
                     <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
+                      <div className="flex min-w-0 items-start gap-3">
+                        {isSelectable && (
+                          <input
+                            aria-label={`Seleccionar ${getIncomeDisplayName(income)}`}
+                            checked={isSelected}
+                            className="mt-1 size-4 shrink-0 rounded border-slate-300 text-emerald-700 focus:ring-emerald-500"
+                            onChange={() => income.id !== undefined && handleToggleSelectIncome(income.id)}
+                            type="checkbox"
+                          />
+                        )}
+                        <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium text-slate-950">
                             {getIncomeDisplayName(income)}
@@ -578,8 +787,17 @@ export function IncomeListPage() {
                               {incomeAdjustments.length === 1 ? 'ajuste aplicado' : 'ajustes aplicados'}
                             </span>
                           )}
-                          {reportBadge.isReported && (
-                            <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                          {canReport && (
+                            <span
+                              className={[
+                                'inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold',
+                                reportBadge.isReported
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : reportBadge.isUnreviewed
+                                    ? 'border-amber-200 bg-amber-50 text-amber-800'
+                                    : 'border-slate-200 bg-slate-50 text-slate-600',
+                              ].join(' ')}
+                            >
                               {reportBadge.label}
                             </span>
                           )}
@@ -597,6 +815,9 @@ export function IncomeListPage() {
                           {income.percentage}% ·{' '}
                           {getPaymentTypeLabel(income.paymentType)}
                         </p>}
+                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                          Ingreso: {formatDate(income.date)} · Creado: {formatDateTimeLabel(income.createdAt)} · Reportado: {reportBadge.isReported ? formatDateTimeLabel(income.reportedAt) : '—'}
+                        </p>
                         {income.notes && (
                           <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
                             {income.notes}
@@ -605,6 +826,13 @@ export function IncomeListPage() {
                         {reportMeta && (
                           <p className="mt-2 text-sm font-medium text-emerald-700">{reportMeta}</p>
                         )}
+                        {reportBadge.isReported && (reportBadge.reportReference || reportBadge.reportNotes) && (
+                          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                            {reportBadge.reportReference && <>Referencia: {reportBadge.reportReference}. </>}
+                            {reportBadge.reportNotes && <>Nota: {reportBadge.reportNotes}</>}
+                          </p>
+                        )}
+                        </div>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-slate-950">
@@ -635,10 +863,10 @@ export function IncomeListPage() {
                         canReport ? (
                         <button
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
-                          onClick={() => handleToggleReportStatus(income)}
+                          onClick={() => handleReturnToPending(income)}
                           type="button"
                         >
-                          Quitar marca
+                          Devolver a pendiente
                         </button>
                         ) : (
                           <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:text-slate-200!">
@@ -656,7 +884,7 @@ export function IncomeListPage() {
                       </Link>
                       {canReport && <button
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
-                        onClick={() => handleToggleReportStatus(income)}
+                        onClick={() => handleRequestMarkAsReported(income)}
                         type="button"
                       >
                         Marcar como reportado
@@ -674,8 +902,10 @@ export function IncomeListPage() {
                     </div>
                   </li>
                 )
-              })}
-            </ul>
+                  })}
+                </ul>
+              </div>
+            ))
           )}
         </div>
 
@@ -714,6 +944,27 @@ export function IncomeListPage() {
           </div>
         ) : null}
       </section>
+
+      {incomeBeingReported !== null && (
+        <MarkIncomeReportedDialog
+          message={`${getIncomeDisplayName(incomeBeingReported)} quedará bloqueado para edición y eliminación.`}
+          onCancel={() => setIncomeBeingReported(null)}
+          onConfirm={handleConfirmMarkAsReported}
+          open
+          title="Marcar ingreso como reportado"
+        />
+      )}
+
+      {isBulkReportDialogOpen && (
+        <MarkIncomeReportedDialog
+          confirmLabel={`Marcar ${selectedIncomeIds.size} como reportados`}
+          message={`Vas a marcar ${selectedIncomeIds.size} ingreso(s) como reportados. Quedarán bloqueados para edición y eliminación. ¿Deseas continuar?`}
+          onCancel={() => setIsBulkReportDialogOpen(false)}
+          onConfirm={handleConfirmBulkMarkAsReported}
+          open
+          title="Marcar ingresos seleccionados como reportados"
+        />
+      )}
     </section>
   )
 }

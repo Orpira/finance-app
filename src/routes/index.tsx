@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import AppLayout from '../app/AppLayout'
 import { PinGate } from '../components/PinGate'
@@ -14,6 +14,7 @@ import HomePage from '../pages/Home/HomePage'
 import IncomeListPage from '../pages/Income/IncomeListPage'
 import IncomePage from '../pages/Income/IncomePage'
 import IncomeDetailPage from '../pages/Income/IncomeDetailPage'
+import IncomePendingReportPage from '../pages/Income/IncomePendingReportPage'
 import InsightDashboardPage from '../pages/Insights/InsightDashboardPage'
 import MorePage from '../pages/More/MorePage'
 import ReportPreviewPage from '../pages/Reports/ReportPreviewPage'
@@ -32,6 +33,13 @@ import SeasonFormPage from '../pages/Seasons/SeasonFormPage'
 import SeasonDetailPage from '../pages/Seasons/SeasonDetailPage'
 import ConversationPage from '../pages/Conversation/ConversationPage'
 
+/** Alias de compatibilidad: /incomes?reportStatus=pending redirige a /income preservando el query string. */
+function IncomesRouteAlias() {
+  const location = useLocation()
+
+  return <Navigate replace to={{ pathname: '/income', search: location.search }} />
+}
+
 export function RouterProvider() {
   return (
     <BrowserRouter>
@@ -48,10 +56,15 @@ export function RouterProvider() {
             />
             <Route path="dashboard/best-days-history" element={<Navigate replace to="/resumen-completo/historial-mejores-dias" />} />
             <Route path="income/nuevo" element={<IncomePage />} />
+            <Route
+              path="income/pendientes"
+              element={<UsageModeGuard allowed={['professional']}><IncomePendingReportPage /></UsageModeGuard>}
+            />
             <Route path="income/:incomeId" element={<IncomeDetailPage />} />
             <Route path="income/:incomeId/editar" element={<IncomePage />} />
             <Route path="income/list" element={<IncomeListPage />} />
             <Route path="income" element={<IncomeListPage />} />
+            <Route path="incomes" element={<IncomesRouteAlias />} />
             <Route path="expenses/list" element={<ExpenseListPage />} />
             <Route path="expenses/:expenseId/editar" element={<ExpensesPage />} />
             <Route path="expenses/nuevo" element={<ExpensesPage />} />

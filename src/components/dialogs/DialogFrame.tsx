@@ -107,7 +107,9 @@ export function DialogFrame({
     <div
       className={[
         'fixed inset-0 z-[100] flex items-end justify-center overflow-y-auto bg-slate-950/55 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-6 backdrop-blur-sm transition-opacity duration-200 sm:items-center sm:p-6',
-        isVisible ? 'opacity-100' : 'opacity-0',
+        // Invisible pero seguir montado (p. ej. durante el fade-out) nunca debe bloquear
+        // clics reales del resto de la página.
+        isVisible ? 'opacity-100' : 'pointer-events-none opacity-0',
       ].join(' ')}
     >
       <div

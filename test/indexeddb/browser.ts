@@ -264,11 +264,14 @@ async function run() {
 
   let database = new FinanceDB()
   await database.open()
-  assert(database.verno === 26, 'physical migration upgrades from v25 to v26')
-  assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v26 migration preserves v25 conversationMemories table')
-  assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v26 migration creates knowledgeDocuments from v25 base')
-  assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v26 migration creates knowledgeChunks from v25 base')
-  deepEqual(await database.services.get(25), v25Service, 'v25 migration preserves existing service data')
+  assert(database.verno === 27, 'physical migration upgrades from v25 to v27')
+  assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration preserves v25 conversationMemories table')
+  assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v25 base')
+  assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v25 base')
+  const migratedV25Service = await database.services.get(25)
+  assert(migratedV25Service?.date === v25Service.date && migratedV25Service?.amount === v25Service.amount, 'v25 migration preserves existing service data')
+  assert(migratedV25Service?.reportStatusCode === 'unreviewed', 'v27 migration backfills unreviewed report status for pre-existing services')
+  assert(typeof migratedV25Service?.updatedAt === 'string' && migratedV25Service.updatedAt.length > 0, 'v27 migration backfills updatedAt for pre-existing services')
   deepEqual(await database.settings.get('app'), v25Settings, 'v25 migration preserves existing settings data')
   deepEqual(
     await database.conversationMemories.get(v25ConversationMemory.sessionId),
@@ -318,11 +321,13 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 26, 'physical migration upgrades from v24 to v26')
-  assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v26 migration keeps conversationMemories from v24 base')
-  assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v26 migration creates knowledgeDocuments from v24 base')
-  assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v26 migration creates knowledgeChunks from v24 base')
-  deepEqual(await database.services.get(24), v24Service, 'v24 migration preserves existing service data')
+  assert(database.verno === 27, 'physical migration upgrades from v24 to v27')
+  assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration keeps conversationMemories from v24 base')
+  assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v24 base')
+  assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v24 base')
+  const migratedV24Service = await database.services.get(24)
+  assert(migratedV24Service?.date === v24Service.date && migratedV24Service?.amount === v24Service.amount, 'v24 migration preserves existing service data')
+  assert(migratedV24Service?.reportStatusCode === 'unreviewed', 'v27 migration backfills unreviewed report status for v24-origin services')
   deepEqual(await database.settings.get('app'), v24Settings, 'v24 migration preserves existing settings data')
   database.close()
 
@@ -342,14 +347,38 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 26, 'physical migration opens schema v26')
+  assert(database.verno === 27, 'physical migration opens schema v27')
   assert(database.tables.some((table) => table.name === 'financialSnapshots'), 'migration creates financialSnapshots')
   assert(database.tables.some((table) => table.name === 'knowledgeSnapshots'), 'migration creates knowledgeSnapshots')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'migration creates conversationMemories')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'migration creates knowledgeDocuments')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'migration creates knowledgeChunks')
-  deepEqual(await database.services.get(7), legacyService, 'migration preserves legacy service data')
+  const migratedLegacyService = await database.services.get(7)
+  assert(migratedLegacyService?.date === legacyService.date && migratedLegacyService?.amount === legacyService.amount, 'migration preserves legacy service data')
+  assert(migratedLegacyService?.reportStatusCode === 'unreviewed', 'v27 migration backfills unreviewed report status for legacy services')
   deepEqual(await database.settings.get('app'), legacySettings, 'migration preserves legacy settings data')
+
+  assert(
+    database.services.schema.idxByName.reportStatusCode !== undefined,
+    'v27 migration keeps a reportStatusCode index on services',
+  )
+  assert(
+    database.services.schema.idxByName.createdAt !== undefined,
+    'v27 migration adds a createdAt index on services',
+  )
+  assert(
+    database.services.schema.idxByName.reportedAt !== undefined,
+    'v27 migration adds a reportedAt index on services',
+  )
+
+  const unreviewedServices = await database.services
+    .where('reportStatusCode')
+    .equals('unreviewed')
+    .toArray()
+  assert(
+    unreviewedServices.some((service) => service.id === 7),
+    'reportStatusCode index resolves the migrated legacy income',
+  )
 
   const conversationService = createAIConversationService()
   const startedConversation = conversationService.startConversation({

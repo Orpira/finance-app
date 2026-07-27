@@ -673,6 +673,47 @@ export class FinanceDB extends Dexie {
         'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
     })
 
+    this.version(27)
+      .stores({
+        services:
+          '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt',
+        expenses:
+          '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+        appointments:
+          '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+        cutoffReports:
+          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+        earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+        licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+        automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+        communicationChannels: 'id,type,provider,status,updatedAt',
+        deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+        conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+        knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+        knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+        financialSnapshots:
+          'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+        knowledgeSnapshots:
+          'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+      })
+      .upgrade((transaction) =>
+        transaction
+          .table<ServiceIncome, number>('services')
+          .toCollection()
+          .modify((income) => {
+            // Ningún ingreso existente pasó todavía por el flujo de control de reporte:
+            // los que no estén ya marcados como 'reported' se consideran sin revisar.
+            if (income.reportStatusCode !== 'reported') {
+              income.reportStatusCode = 'unreviewed'
+              income.reportStatusLabel = 'Sin revisar'
+            }
+
+            income.updatedAt ??= income.createdAt ?? new Date().toISOString()
+          }),
+      )
+
     this.financialSnapshots.hook('updating', () => {
       throw new Error('SNAPSHOT_PERSISTENCE_APPEND_ONLY')
     })
@@ -774,6 +815,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
       ...normalizeReportStatus(income),
       type: getIncomeType(income),
       usageMode: resolveRecordUsageMode(income),
+      updatedAt: income.updatedAt ?? income.createdAt ?? new Date().toISOString(),
     }),
   )
   const normalizedExpenses = (snapshot.expenses ?? []).map((expense) => ({
