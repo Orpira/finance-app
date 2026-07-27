@@ -1158,6 +1158,13 @@ describe('PB-IS-017.1 Personal Financial Copilot Foundation', () => {
     expect(turn1.kind).toBe('success')
     if (turn1.kind === 'success') {
       expect(turn1.message.text).toContain('¿Tienes una meta mensual de ahorro?')
+      // "Quiero ahorrar." tambien es asesora (matchea "ahorr*" en la
+      // Relevance Policy de PB-IS-016.2) y ya hay Goal activo: PB-IS-017.2
+      // reemplaza el bloque generico de insights/plan por la unica Next
+      // Best Action de mayor prioridad (la accion del Planning Engine,
+      // "HIGH"/esfuerzo "LOW", por encima del insight de igual prioridad).
+      expect(turn1.message.text).toContain('Próxima acción recomendada: Reducir gastos discrecionales de alta recurrencia.')
+      expect(turn1.message.text).not.toContain('Recomendaciones proactivas')
     }
 
     const turn2 = await service.processConversation({
@@ -1169,6 +1176,9 @@ describe('PB-IS-017.1 Personal Financial Copilot Foundation', () => {
     if (turn2.kind === 'success') {
       // Ya no debe repetir la misma pregunta: el campo ya quedo informado.
       expect(turn2.message.text).not.toContain('¿Tienes una meta mensual de ahorro?')
+      // Este mensaje no es asesor ni pide una accion explicitamente: ni la
+      // Relevance Policy ni el Coach se activan.
+      expect(turn2.message.text).not.toContain('Próxima acción recomendada')
     }
 
     const turn3 = await service.processConversation({
@@ -1179,23 +1189,26 @@ describe('PB-IS-017.1 Personal Financial Copilot Foundation', () => {
     expect(turn3.kind).toBe('success')
     if (turn3.kind === 'success') {
       expect(turn3.message.text).not.toContain('¿Tienes una meta mensual de ahorro?')
-      expect(turn3.message.text).toContain('Recomendaciones proactivas')
-      // El insight de categoria "budget" (alineado con el objetivo de
-      // ahorro, seccion 9-11) debe anteponerse al de categoria "income".
-      const budgetIndex = turn3.message.text.indexOf('Gasto elevado')
-      const incomeIndex = turn3.message.text.indexOf('Ingreso estable')
-      expect(budgetIndex).toBeGreaterThanOrEqual(0)
-      expect(incomeIndex).toBeGreaterThanOrEqual(0)
-      expect(budgetIndex).toBeLessThan(incomeIndex)
+      // PB-IS-017.2 seccion 11: el Recommendation History evita repetir la
+      // misma oportunidad que ya se mostro en el turno 1 (la accion de
+      // reduccion de gastos) -- en este turno debe pasar a la siguiente
+      // oportunidad no mostrada (el insight de ingresos).
+      expect(turn3.message.text).toContain('Próxima acción recomendada: Ingreso estable')
+      expect(turn3.message.text).not.toContain('Reducir gastos discrecionales de alta recurrencia.')
     }
   })
 
   it('integracion con Planning e Insights: el Financial Copilot nunca recalcula datos, solo reordena lo ya generado', async () => {
     const service = createAIConversationService(createGoalFixtureDependencies())
 
+    // Mensaje deliberadamente sin expresion de objetivo (a diferencia de
+    // "Quiero reducir gastos..."): sin Goal activo, PB-IS-017.2 no
+    // reemplaza el bloque de insights/plan (coachingApplies exige un Goal
+    // activo), por lo que este test verifica exclusivamente la Relevance
+    // Policy/reordenamiento de PB-IS-016.2/017.1 sin interferencia del Coach.
     const result = await service.processConversation({
-      conversationRequest: createRequestFixture('Quiero reducir gastos, ¿qué me recomiendas?'),
-      userMessage: 'Quiero reducir gastos, ¿qué me recomiendas?',
+      conversationRequest: createRequestFixture('¿Qué me recomiendas?'),
+      userMessage: '¿Qué me recomiendas?',
       turn: 1,
     })
 

@@ -110,6 +110,22 @@ import {
   type ConversationGoalMetricsRecorder,
 } from './conversationGoalMetrics'
 import {
+  createOpportunityDetector,
+  type OpportunityDetector,
+} from './coachingOpportunityDetector'
+import {
+  createNextBestActionGenerator,
+  type NextBestActionGenerator,
+} from './coachingNextBestAction'
+import {
+  createInMemoryCoachingRecommendationHistory,
+} from './coachingRecommendationHistory'
+import {
+  createCoachingMetricsRecorder,
+  type CoachingMetricsRecorder,
+} from './coachingMetrics'
+import type { NextBestAction } from './coachingContracts'
+import {
   validateActivationDecision,
 } from './activationValidator'
 import {
@@ -234,6 +250,31 @@ function appendGoalFollowUpToMessage(text: string, followUpQuestion: string | nu
   }
 
   return `${text}\n\n${followUpQuestion}`
+}
+
+/**
+ * PB-IS-017.2 seccion 8: "¿Qué hago ahora?" y variantes equivalentes activan
+ * el Coach aunque el mensaje no matchee la Relevance Policy general (que
+ * exige palabras como "recomienda"/"consejo"/"riesgo").
+ */
+function detectsNextBestActionQuery(userMessage: string): boolean {
+  const normalized = userMessage
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+  return /que hago( ahora)?|que debo hacer|cual es la mejor accion|proxima accion|siguiente accion/.test(normalized)
+}
+
+/**
+ * PB-IS-017.2 seccion 7: agrega la unica Next Best Action seleccionada
+ * (DA-0172-03), con su justificacion basada en datos ya certificados.
+ */
+function appendNextBestActionToMessage(text: string, nextBestAction: NextBestAction | null): string {
+  if (nextBestAction === null) {
+    return text
+  }
+
+  return `${text}\n\nPróxima acción recomendada: ${nextBestAction.actionText} ${nextBestAction.justification}`
 }
 
 // --- Relevance Policy (PB-IS-016.2 sección 10) ---
@@ -641,6 +682,27 @@ export function createAIConversationService(
     }
   ).goalMetrics ?? createConversationGoalMetricsRecorder()
 
+  // PB-IS-017.2: mismo patron de dependencia opcional. El Opportunity
+  // Detector por defecto compone el `recommendationPrioritizer` ya resuelto
+  // arriba (nunca duplica su logica de puntuacion, DA-0172-04).
+  const opportunityDetector = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly opportunityDetector?: OpportunityDetector
+    }
+  ).opportunityDetector ?? createOpportunityDetector({ recommendationPrioritizer })
+
+  const nextBestActionGenerator = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly nextBestActionGenerator?: NextBestActionGenerator
+    }
+  ).nextBestActionGenerator ?? createNextBestActionGenerator({ history: createInMemoryCoachingRecommendationHistory() })
+
+  const coachingMetrics = (
+    dependencies as AIConversationServiceDependencies & {
+      readonly coachingMetrics?: CoachingMetricsRecorder
+    }
+  ).coachingMetrics ?? createCoachingMetricsRecorder()
+
   const toolResultMapper = createFinancialToolResultMapper()
 
   return {
@@ -818,6 +880,41 @@ export function createAIConversationService(
         })
       }
 
+      // --- PB-IS-017.2 Proactive Financial Coaching ---
+      // El Coach nunca calcula datos financieros propios (DA-0172-01):
+      // el Opportunity Detector solo envuelve, con el orden que ya calculo
+      // el Recommendation Prioritizer de PB-IS-017.1, los insights/acciones
+      // que Insight Engine/Planning Engine ya generaron. Solo se activa
+      // cuando hay un objetivo activo (seccion 10: "Goal Reinforcement") y
+      // la consulta es asesora o pregunta explicitamente "que hago ahora"
+      // (seccion 8). Cuando produce una Next Best Action, esta REEMPLAZA el
+      // bloque generico de insights/plan en vez de sumarse a el, para que
+      // exista una unica recomendacion principal (DA-0172-03).
+      const nextBestActionQueryDetected = detectsNextBestActionQuery(input.userMessage)
+      const coachingApplies = activeGoal !== null && (adviceRelevant || nextBestActionQueryDetected)
+      const opportunities = coachingApplies
+        ? opportunityDetector.detect({ insights, actionPlan, goal: activeGoal })
+        : []
+      const nextBestAction = opportunities.length > 0
+        ? nextBestActionGenerator.selectNextBestAction({
+            sessionId: input.conversationRequest.context.sessionId,
+            opportunities,
+          })
+        : null
+
+      const finalInsightsToAppend = nextBestAction !== null ? [] : prioritizedInsightsToAppend
+      const finalActionPlanToAppend = nextBestAction !== null ? null : prioritizedActionPlanToAppend
+
+      coachingMetrics.record({
+        timestamp: requestedAt,
+        sessionId: input.conversationRequest.context.sessionId,
+        opportunitiesDetected: opportunities.length,
+        recommendationEmitted: nextBestAction !== null,
+        actionAccepted: false,
+        actionDiscarded: false,
+        followUpAsked: followUpQuestion !== null,
+      })
+
       const providerUsed = decision.provider === dependencies.fallbackProvider.metadata.providerId
         ? dependencies.fallbackProvider
         : dependencies.provider
@@ -965,12 +1062,15 @@ export function createAIConversationService(
           type: 'assistant',
           origin: 'MOCK_RENDERER',
           timestamp: now(),
-          text: appendGoalFollowUpToMessage(
-            appendActionPlanToMessage(
-              appendInsightsToMessage(directToolText, prioritizedInsightsToAppend),
-              prioritizedActionPlanToAppend,
+          text: appendNextBestActionToMessage(
+            appendGoalFollowUpToMessage(
+              appendActionPlanToMessage(
+                appendInsightsToMessage(directToolText, finalInsightsToAppend),
+                finalActionPlanToAppend,
+              ),
+              followUpQuestion,
             ),
-            followUpQuestion,
+            nextBestAction,
           ),
           responseId: execution.response.responseId,
           conversationResponse: responseWithFinancialContext.response,
@@ -1041,12 +1141,15 @@ export function createAIConversationService(
 
         message = {
           ...rendered.message,
-          text: appendGoalFollowUpToMessage(
-            appendActionPlanToMessage(
-              appendInsightsToMessage(rendered.message.text, prioritizedInsightsToAppend),
-              prioritizedActionPlanToAppend,
+          text: appendNextBestActionToMessage(
+            appendGoalFollowUpToMessage(
+              appendActionPlanToMessage(
+                appendInsightsToMessage(rendered.message.text, finalInsightsToAppend),
+                finalActionPlanToAppend,
+              ),
+              followUpQuestion,
             ),
-            followUpQuestion,
+            nextBestAction,
           ),
         }
       }

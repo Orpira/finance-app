@@ -57,6 +57,9 @@ import {
   createConversationGoalModule,
 } from '../../intelligence/ai-conversation/provider-orchestration/conversationGoalFactory'
 import {
+  createCoachingModule,
+} from '../../intelligence/ai-conversation/provider-orchestration/coachingFactory'
+import {
   validateRuntimeRepositoryComposition,
 } from '../../intelligence/ai-conversation/provider-orchestration/runtimeRepositoryValidator'
 import {
@@ -250,6 +253,11 @@ export function createConversationControllerDependencies(
   // Conversation Summary y sus runtime metrics -- todos en memoria, sin
   // acceso a Dexie ni a las Financial Tools (DA-0171-01, DA-0171-02).
   const conversationGoalModule = createConversationGoalModule()
+  // PB-IS-017.2: el Coach compone el Recommendation Prioritizer ya
+  // ensamblado por el modulo de Goals (DA-0172-04), no crea uno propio.
+  const coachingModule = createCoachingModule({
+    recommendationPrioritizer: conversationGoalModule.recommendationPrioritizer,
+  })
 
   const conversationServiceDependencies = {
     facade,
@@ -269,6 +277,9 @@ export function createConversationControllerDependencies(
     recommendationPrioritizer: conversationGoalModule.recommendationPrioritizer,
     summaryBuilder: conversationGoalModule.summaryBuilder,
     goalMetrics: conversationGoalModule.goalMetrics,
+    opportunityDetector: coachingModule.opportunityDetector,
+    nextBestActionGenerator: coachingModule.nextBestActionGenerator,
+    coachingMetrics: coachingModule.coachingMetrics,
   } as AIConversationServiceDependencies & {
     readonly activationEngine: typeof activationEngine
     readonly skillResolver: typeof financialSkillModule.resolver
@@ -281,6 +292,9 @@ export function createConversationControllerDependencies(
     readonly recommendationPrioritizer: typeof conversationGoalModule.recommendationPrioritizer
     readonly summaryBuilder: typeof conversationGoalModule.summaryBuilder
     readonly goalMetrics: typeof conversationGoalModule.goalMetrics
+    readonly opportunityDetector: typeof coachingModule.opportunityDetector
+    readonly nextBestActionGenerator: typeof coachingModule.nextBestActionGenerator
+    readonly coachingMetrics: typeof coachingModule.coachingMetrics
   }
 
   const conversationService = createAIConversationService(conversationServiceDependencies)
