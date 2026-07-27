@@ -15,6 +15,12 @@ import type { UsageMode } from '../../types/settings'
 
 const settingsLinks = [
   {
+    description: 'Modo de uso, nombre, ubicación, monedas, porcentaje y tasas.',
+    href: '/settings/business',
+    icon: Building2,
+    label: 'Datos generales',
+  },
+  {
     description: 'Consulta o actualiza la licencia segura del dispositivo.',
     href: '/settings/license',
     icon: BadgeCheck,
@@ -25,12 +31,6 @@ const settingsLinks = [
     href: '/settings/communication-channels',
     icon: MessagesSquare,
     label: 'Canales de comunicación',
-  },
-  {
-    description: 'Modo de uso, nombre, ubicación, monedas, porcentaje y tasas.',
-    href: '/settings/business',
-    icon: Building2,
-    label: 'Datos generales',
   },
   {
     description: 'Activar, cambiar o desactivar el PIN de acceso.',
