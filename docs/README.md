@@ -26,6 +26,15 @@ Este directorio contiene la documentación oficial del proyecto. La fuente canó
 - [MANUAL_USUARIO.md](MANUAL_USUARIO.md) - Guía de uso funcional.
 - [WHATSAPP_E2E_CHECKLIST.md](WHATSAPP_E2E_CHECKLIST.md) - Checklist E2E para licencia y canal WhatsApp.
 - [security-test-checklist.md](security-test-checklist.md) - Checklist de pruebas de seguridad.
+- [PRIVACY.md](PRIVACY.md) - Qué datos salen del dispositivo, hacia dónde y bajo qué condición.
+
+## Presentación y colaboración (raíz del repositorio)
+
+- [../README.md](../README.md) - Presentación pública del proyecto.
+- [../AGENTS.md](../AGENTS.md) - Guía práctica para agentes de IA y nuevos colaboradores.
+- [../CONTRIBUTING.md](../CONTRIBUTING.md) - Flujo de contribución.
+- [../SECURITY.md](../SECURITY.md) - Reporte de vulnerabilidades.
+- [../CHANGELOG.md](../CHANGELOG.md) - Puntero al changelog técnico detallado de esta carpeta.
 
 ## Reglas de uso
 

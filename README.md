@@ -1,472 +1,233 @@
-# Finance App
+<div align="center">
 
-Finance App es una aplicación de finanzas personales y administración de servicios diseñada para funcionar en navegador y en Android mediante Capacitor.
+# Private Balance
 
-## 📌 Descripción
+**Tu actividad. Tus datos. Tu control.**
 
-La aplicación permite a autónomos y pequeños negocios manejar:
+Aplicación financiera privada y local-first para profesionales independientes y pequeños negocios: ingresos, gastos, agenda, temporadas, reportes, licencias y copias de seguridad, con los datos financieros siempre en el dispositivo del usuario.
 
-- Registro de ingresos por servicios y cálculo de ganancia real.
-- Control de gastos operativos.
-- Agenda de citas convertibles en ingresos.
-- Generación de reportes exportables en PDF, XLSX y CSV.
-- Respaldo e importación de datos.
-- Bloqueo de acceso con PIN.
+[![React](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)](https://vitejs.dev)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-38bdf8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![Capacitor](https://img.shields.io/badge/Capacitor-8-119eff?logo=capacitor&logoColor=white)](https://capacitorjs.com)
+![Estado](https://img.shields.io/badge/estado-en%20desarrollo%20activo-yellow)
+![Licencia](https://img.shields.io/badge/licencia-no%20definida-lightgrey)
 
-## 🚀 Tecnologías
+[Documentación](docs/README.md) · [Arquitectura](docs/00_SYSTEM_ARCHITECTURE_MASTER.md) · [Privacidad](docs/PRIVACY.md) · [Seguridad](SECURITY.md) · [Contribuir](CONTRIBUTING.md) · [Guía para agentes IA](AGENTS.md)
 
-- React
-- TypeScript
-- Vite
-- Tailwind CSS
-- Capacitor
-- React Router
-- Dexie / IndexedDB
-- ExcelJS, jsPDF
-- Frankfurter API para tasas de cambio
+</div>
 
-## 🗂️ Estructura principal
+---
 
-- `src/app/` — Layout y estructura de la app.
-- `src/components/` — Componentes reutilizables.
-- `src/pages/` — Pantallas principales.
-- `src/routes/` — Enrutamiento.
-- `src/services/` — Lógica de acceso a datos.
-- `src/database/` — Configuración Dexie e import/export.
-- `src/types/` — Tipos de datos.
-- `src/utils/` — Funciones utilitarias.
+## Tabla de contenidos
 
-## 📁 Documentación adicional
+- [Vista general](#vista-general)
+- [Estado del proyecto](#estado-del-proyecto)
+- [Características](#características)
+- [Privacidad](#privacidad)
+- [Capturas](#capturas)
+- [Arquitectura](#arquitectura)
+- [Tecnologías](#tecnologías)
+- [Inicio rápido](#inicio-rápido)
+- [Pruebas](#pruebas)
+- [PWA y Android](#pwa-y-android)
+- [Documentación](#documentación)
+- [Roadmap](#roadmap)
+- [Contribución](#contribución)
+- [Seguridad](#seguridad)
+- [Licencia](#licencia)
+- [Autor](#autor)
 
-- `DOCUMENTACION_TECNICA.md` — Detalles del diseño, arquitectura, modelo de datos y servicios.
-- `MANUAL_USUARIO.md` — Guía de uso paso a paso para la aplicación.
+---
 
-## 🧪 Instalación y ejecución
+## Vista general
+
+Private Balance permite registrar ingresos por servicios, gastos operativos, ajustes, citas de agenda y temporadas de trabajo, y generar reportes exportables, manteniendo el núcleo financiero funcionando **sin conexión** y sin depender de un backend propio para el uso diario.
+
+El proyecto está pensado para quien necesita:
+
+- Llevar el control de su actividad financiera sin subir sus datos a un servidor de terceros por defecto.
+- Trabajar en modo Básico (simple) o Profesional (con temporadas y cierres) según el tipo de negocio.
+- Usar la misma aplicación en navegador, como PWA instalable o como app Android empaquetada con Capacitor.
+- Activar, de forma opcional y explícita, automatización, mensajería y un asistente conversacional con IA sin perder el control de los datos financieros.
+
+Lo diferencia frente a una hoja de cálculo o una app financiera genérica es esa combinación: reglas de negocio explícitas y documentadas (ver la [Constitución técnica](docs/PRIVATE_BALANCE_CONSTITUTION.md)), persistencia local verificable y una capa de integraciones externas que es siempre opcional y aislada del dominio.
+
+## Estado del proyecto
+
+Private Balance está en **desarrollo activo**, no en versión estable publicada. El estado por área, verificado contra el código fuente:
+
+| Área | Estado | Notas |
+|---|---|---|
+| Ingresos, gastos, ajustes, agenda | Implementado | `src/pages`, `src/services`, `src/database` |
+| Modo Básico / Profesional y temporadas | Implementado | reglas en `docs/PRIVATE_BALANCE_CONSTITUTION.md` |
+| Persistencia local (Dexie/IndexedDB) | Implementado | `src/database`, migraciones versionadas |
+| Reportes y exportación (PDF, CSV, XLS) | Implementado | `src/services/incomeExportService.ts`, jsPDF |
+| PIN y bloqueo de acceso | Implementado | hash con sal, bloqueo por inactividad/segundo plano |
+| Licencias firmadas por dispositivo (V2) | Implementado | ECDSA P-256, ver [SECURITY.md](SECURITY.md) |
+| Backup cifrado a Google Drive (appDataFolder) | Implementado | AES-GCM en cliente antes de subir |
+| Android vía Capacitor | Implementado | `android/`, R8/ProGuard en release |
+| Web App instalable (manifest + iconos) | Parcial | manifest e iconos activos; **sin** service worker/caché offline (`vite-plugin-pwa` no está registrado en `vite.config.ts`) |
+| Automatización con n8n / Vercel Functions | Implementado, con riesgos abiertos | ver [docs/AUTOMATION_HUB.md](docs/AUTOMATION_HUB.md) y [docs/04_N8N_WORKFLOWS.md](docs/04_N8N_WORKFLOWS.md) |
+| Canal WhatsApp (Evolution API) | Implementado, con riesgos operativos | orquestado vía n8n, nunca directo desde el cliente |
+| Asistente conversacional con IA | Implementado (foundational) | resolución de intención determinista + proveedor OpenAI real opcional vía proxy servidor; ver [docs/09_AI_CORE_ARCHITECTURE.md](docs/09_AI_CORE_ARCHITECTURE.md) |
+| Sincronización multidispositivo cifrada | Planificado | ver [docs/00_SYSTEM_ARCHITECTURE_MASTER.md](docs/00_SYSTEM_ARCHITECTURE_MASTER.md) |
+| Integración continua (CI) | No implementado | no existe `.github/workflows` en este repositorio |
+
+Esta tabla resume el estado a alto nivel. El detalle completo y verificado por milestone vive en [docs/00_SYSTEM_ARCHITECTURE_MASTER.md](docs/00_SYSTEM_ARCHITECTURE_MASTER.md) y [docs/context/CURRENT_STATE.md](docs/context/CURRENT_STATE.md).
+
+## Características
+
+- **Inicio y Resumen**: resumen mensual simplificado y vista de indicadores/métricas detalladas.
+- **Ingresos**: registro de servicios con conversión de moneda, control de reporte (`pendiente`/`reportado`) y exportación.
+- **Gastos**: registro de gastos operativos por categoría, con ajustes diferenciados de gasto normal.
+- **Agenda**: citas convertibles en ingresos, con temporización.
+- **Temporadas**: cierres y periodos del modo Profesional con detalle histórico.
+- **Reportes**: exportación a PDF, CSV y XLS (formato SpreadsheetML generado sin dependencias de terceros con vulnerabilidades conocidas).
+- **Insights**: panel de indicadores financieros derivados de los datos locales (modo Profesional).
+- **Conversación con IA**: asistente que responde preguntas financieras sobre los datos locales usando herramientas deterministas, con proveedor OpenAI real opcional y respaldo determinista si la IA no está disponible.
+- **Seguridad**: PIN local con hash y sal, bloqueo por inactividad y al pasar a segundo plano.
+- **Licencias**: activación firmada digitalmente y vinculada al dispositivo.
+- **Backup**: exportación/importación cifrada local y backup automático opcional a Google Drive (`appDataFolder`).
+- **Automatización**: eventos de ingreso/gasto/agenda enviados de forma opcional a un flujo n8n a través de un proxy propio, sin exponer credenciales en el cliente.
+- **Android**: empaquetado con Capacitor, con ofuscación R8/ProGuard en los builds de release.
+
+## Privacidad
+
+Resumen; el detalle completo está en [docs/PRIVACY.md](docs/PRIVACY.md).
+
+- Los datos financieros (ingresos, gastos, agenda, temporadas, reportes) se almacenan localmente en IndexedDB mediante Dexie. No existe un backend propio que los reciba para el uso diario.
+- La conversión de moneda consulta la API pública de Frankfurter (`api.frankfurter.dev`) directamente desde el cliente; solo se envían los códigos de moneda y la fecha necesarios para la tasa, no datos financieros del usuario.
+- Si el usuario activa el asistente conversacional con IA y hay un proveedor real configurado, el mensaje del usuario y el contexto financiero estructurado necesario para responder se envían a través de un proxy propio hacia OpenAI. Sin esa activación explícita, la conversación usa resolución determinista local sin salir del dispositivo.
+- Si el usuario activa Automatización (n8n) o el canal WhatsApp, los eventos correspondientes (ingreso, gasto, cita creados) salen del dispositivo hacia un proxy propio y de ahí a n8n/Evolution API. Estas integraciones están desactivadas hasta que el usuario las configura.
+- El backup a Google Drive solo usa el scope `drive.appdata` (carpeta privada de la app) y cifra los datos con AES-GCM en el dispositivo antes de subirlos; el JSON plano nunca sale sin cifrar por esta vía.
+- Las licencias no se incluyen en los backups financieros, para evitar transferir una activación entre dispositivos.
+
+No se afirma privacidad absoluta: existen integraciones externas opcionales y, una vez activadas, implican tránsito de datos fuera del dispositivo bajo el control explícito del usuario.
+
+## Capturas
+
+Aún no hay capturas reales incorporadas al repositorio. La guía para generarlas con datos ficticios está en [docs/assets/screenshots/README.md](docs/assets/screenshots/README.md).
+
+## Arquitectura
+
+```text
+React + Capacitor + IndexedDB/Dexie   (dominio financiero local, fuente de verdad)
+        |
+        | outbox de automatización (opcional)
+        v
+Vercel Functions (/api/*)             (validación de licencia, JWT temporal, proxy)
+        |
+        v
+n8n --> Neon PostgreSQL / Evolution API (WhatsApp)
+```
+
+Resumen de capas:
+
+- **Interfaz y estado**: React 19 + React Router, Zustand y Context API según el caso, formularios con React Hook Form + Zod.
+- **Persistencia local**: Dexie sobre IndexedDB, con migraciones versionadas (`src/database/migrations`).
+- **Servicios de dominio**: `src/services` (ingresos, gastos, licencias, backup, exportación, moneda).
+- **Inteligencia/IA**: `src/intelligence` — resolución de intención, herramientas financieras de solo lectura, motor de insights y planificación, capa de coaching conversacional, todo provider-neutral y desacoplado de OpenAI.
+- **Backend ligero**: `api/` (Vercel Functions) y `server/` (utilidades, cliente Neon, seguridad de automatización).
+- **PWA/Android**: manifest web instalable + empaquetado Android vía Capacitor.
+
+El detalle completo, con límites, decisiones (ADR) y deuda técnica conocida, está en [docs/00_SYSTEM_ARCHITECTURE_MASTER.md](docs/00_SYSTEM_ARCHITECTURE_MASTER.md) y [docs/architecture/](docs/architecture/).
+
+## Tecnologías
+
+Verificadas en `package.json` y en el código fuente:
+
+- React 19, React Router 7, TypeScript 6 (estricto), Vite 8.
+- Tailwind CSS 4.
+- Zustand, React Hook Form, Zod.
+- Dexie 4 sobre IndexedDB.
+- Capacitor 8 (Android, notificaciones locales, filesystem, share, preferences).
+- jsPDF + jspdf-autotable para exportación PDF.
+- html2canvas para exportación/compartido de reportes (`src/services/reportShareService.ts`), declarado como dependencia directa.
+- OpenAI SDK, consumido únicamente desde el proxy servidor (`api/ai-provider-openai.ts`), nunca desde el cliente.
+- `@neondatabase/serverless` para el backend ligero de licencias/dispositivos/canales.
+- Vitest para pruebas.
+- ESLint + typescript-eslint.
+
+## Inicio rápido
+
+Requisitos: Node.js compatible con Vite 8 y npm.
 
 ```bash
+git clone https://github.com/Orpira/finance-app.git
+cd finance-app
 npm install
+cp .env.example .env.local   # completar según docs/AUTOMATION_HUB.md si se usará automatización
 npm run dev
 ```
 
-Accede a la aplicación en el navegador en `http://localhost:5173`.
+La app queda disponible en `http://localhost:5173`.
 
-## 📦 Compilación
+Compilación de producción:
 
 ```bash
 npm run build
 ```
 
-## 📱 Android
+Variables de entorno: ver [.env.example](.env.example) para el cliente y `api`/`server` para las exclusivas de servidor. Ninguna variable con prefijo `VITE_` puede contener secretos de automatización; `vite.config.ts` hace fallar el build si detecta una.
+
+## Pruebas
 
 ```bash
-npm run android:add
-npm run android:sync
-npm run android:open
-npm run android:apk
+npm run test              # Vitest, suite unitaria/integración (test/ y tests/)
+npm run test:indexeddb    # pruebas de migración Dexie en un navegador real
+npm run lint               # ESLint
 ```
 
-## Generar iconos de la aplicación
+La suite de Vitest es extensa (más de cien archivos de prueba) y cubre principalmente los dominios de IA/conversación, insights, licencias y automatización. No existe pipeline de integración continua configurado en este repositorio: las pruebas se ejecutan localmente antes de cada cambio relevante.
 
-El icono base de la aplicación está en:
+## PWA y Android
 
-```bash
-resources/icon.png
-```
+- **Web/PWA**: `public/manifest.webmanifest` e iconos están activos y la app es instalable, pero **no** hay un service worker registrado (`vite-plugin-pwa` es una dependencia presente pero no está conectado en `vite.config.ts`); no hay caché de assets ni uso completo offline garantizado por un service worker propio.
+- **Android**: empaquetado con Capacitor (`capacitor.config.ts`, `android/`). Comandos: `npm run android:add`, `npm run android:sync`, `npm run android:open`, `npm run android:apk`. Los builds de release usan R8/ProGuard (`minifyEnabled`, `shrinkResources`).
 
-Para cambiar el icono:
+Detalle adicional en [docs/08_DEPLOYMENT.md](docs/08_DEPLOYMENT.md).
 
-1. Reemplaza `resources/icon.png` por un PNG de `1024x1024 px`, sin texto y con el diseño centrado.
-1. Genera los assets de Capacitor:
+## Documentación
 
-```bash
-npm run generate:assets
-```
+| Documento | Contenido |
+|---|---|
+| [docs/README.md](docs/README.md) | Índice documental completo |
+| [docs/PRIVATE_BALANCE_CONSTITUTION.md](docs/PRIVATE_BALANCE_CONSTITUTION.md) | Reglas de negocio y principios técnicos, fuente principal de verdad |
+| [docs/00_SYSTEM_ARCHITECTURE_MASTER.md](docs/00_SYSTEM_ARCHITECTURE_MASTER.md) | Mapa integral de arquitectura, estado y roadmap |
+| [docs/PRIVACY.md](docs/PRIVACY.md) | Privacidad: qué datos salen del dispositivo y cuándo |
+| [docs/architecture/11_SECURITY.md](docs/architecture/11_SECURITY.md) | Modelo de seguridad técnico detallado |
+| [docs/AUTOMATION_HUB.md](docs/AUTOMATION_HUB.md) | Contrato de automatización app → Vercel → n8n |
+| [docs/MANUAL_USUARIO.md](docs/MANUAL_USUARIO.md) | Guía de uso funcional |
+| [AGENTS.md](AGENTS.md) | Guía para agentes de IA y nuevos colaboradores |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Cómo contribuir |
+| [SECURITY.md](SECURITY.md) | Cómo reportar una vulnerabilidad |
 
-1. Sincroniza Android:
+## Roadmap
 
-```bash
-npx cap sync android
-```
+Resumen de fases activas y siguientes; el detalle vivo está en [docs/03_ROADMAP_MASTER.md](docs/03_ROADMAP_MASTER.md) y [docs/context/ROADMAP.md](docs/context/ROADMAP.md).
 
-Los iconos Android se generan en `android/app/src/main/res/`.
+- **En progreso**: consolidación del asistente conversacional con IA (herramientas financieras, coaching proactivo) y control de ingresos reportados.
+- **Planificado**: sincronización multidispositivo cifrada, hardening de auditoría de workflows n8n, checklist formal de seguridad para release.
+- **En evaluación**: activación de Play Integrity API con verificación en servidor propio.
 
-## ✅ Funcionalidades principales
+## Contribución
 
-- `Inicio`: resumen mensual simplificado de ingresos, egresos y ganancia.
-- `Resumen completo`: indicadores, filtros y métricas financieras detalladas.
-- `Income`: registro de servicios con conversión de monedas.
-- `Expenses`: registro de gastos por categoría.
-- `Agenda`: gestión de citas y cronometrado.
-- `Reports`: visualización y exportación de reportes.
-- `Conversación AI (Preview)`: envío y recepción de mensajes usando AIConversationService.
-- `Prompt Builder AI`: agregado de dominio provider-neutral para ensamblar prompts estructurados a partir de segmentos tipados e inmutables.
-- `Context Builder AI`: agregado de dominio provider-neutral para ensamblar contexto estructurado con secciones tipadas e inmutables consumibles por Prompt Builder.
-- `Context Resolution AI`: agregado de dominio provider-neutral para resolver contexto relevante por estrategia y producir AIResolvedContext inmutable para Prompt Builder.
-- `AI Provider Adapter`: frontera estable provider-neutral para ejecutar `AIPrompt` contra proveedores externos y obtener `AIProviderResponse` canónico, con adaptador OpenAI inicial desacoplado.
-- `AI Execution Pipeline`: orquestador puro y determinista que coordina Conversation, Context Builder, Context Resolution, Prompt Builder y AIProvider mediante puertos inyectables.
-- `AI Execution Inspector`: capa de observabilidad pasiva con trazas exportables, snapshots de dominio y pantalla Debug de solo lectura para inspeccionar cada etapa del pipeline.
-- `AI Conversation Integration`: capa de aplicación que conecta `ConversationPage` con el motor de IA usando exclusivamente `AIConversationApplicationService` y manteniendo Conversation como fuente de verdad.
-- `AI Provider Production Activation`: composición segura del provider remoto real reutilizando `OpenAIProviderAdapter` mediante un proxy serverless autorizado sin exponer la API key al frontend.
-- `AI Long-Term Conversation Memory`: memoria conversacional local persistente con recuperación tras reinicio, implementada vía `AIConversationMemoryPort` y `LocalConversationRepository` sobre Dexie, sin acoplar la UI a IndexedDB.
-- `AI Tool Calling Infrastructure`: infraestructura provider-neutral para registrar, resolver y ejecutar herramientas con permisos, validación fail-closed y composición en `AIExecutionPipeline` vía `AIToolExecutor`, incluyendo `PingTool` demo (`{}` -> `"PONG"`).
-- `Knowledge Retrieval Tool (RAG Infrastructure)`: herramienta `knowledge_search` registrada sobre Tool Calling con repositorio documental local, indexador configurable, ranking determinista y entrega de fragmentos relevantes sin exponer documentos completos al provider.
+Ver [CONTRIBUTING.md](CONTRIBUTING.md) para el flujo de ramas, convención de commits y checklist antes de proponer un cambio.
 
-## Configuración del provider remoto real
+## Seguridad
 
-La conversation root de producción cambió en:
+Para reportar una vulnerabilidad, ver [SECURITY.md](SECURITY.md). Para el modelo de seguridad técnico implementado, ver [docs/architecture/11_SECURITY.md](docs/architecture/11_SECURITY.md).
 
-- `src/application/ai-conversation/aiConversationApplicationComposition.ts`
-- `api/ai-provider-openai.ts`
+## Licencia
 
-La credencial privada del proveedor vive exclusivamente en entorno servidor/edge:
+Este repositorio no incluye actualmente un archivo de licencia formal. El uso, copia o distribución del código está sujeto a la autorización del propietario hasta que se publique una licencia formal.
 
-- `OPENAI_API_KEY`
+## Autor
 
-Configuración mínima adicional:
+**Orlando Pineda** — OrPiRa.
 
-- Cliente: `VITE_API_BASE_URL`, `VITE_AI_PROVIDER=OPENAI`, `VITE_AI_OPENAI_MODEL`, `VITE_AI_OPENAI_TIMEOUT_MS`
-- Servidor/edge: `OPENAI_MODEL`, `OPENAI_TIMEOUT_MS` opcional, `OPENAI_BASE_URL` opcional, `AUTOMATION_JWT_SECRET`
+---
 
-Nunca se debe exponer `OPENAI_API_KEY` en variables `VITE_`, en el bundle ni en logs.
-
-## Prueba manual con proveedor remoto real
-
-1. Configura en el entorno servidor `OPENAI_API_KEY`, `OPENAI_MODEL` y `AUTOMATION_JWT_SECRET`.
-2. Configura en el cliente `VITE_API_BASE_URL`, `VITE_AI_PROVIDER=OPENAI` y `VITE_AI_OPENAI_MODEL` con el mismo modelo permitido por servidor.
-3. Inicia la app con una licencia V2 activa para que el cliente pueda solicitar el JWT temporal reutilizado por el gateway.
-4. Abre `/conversation`, envía un mensaje y verifica que se renderice la respuesta del asistente.
-5. Abre `/debug/ai-execution-inspector` y actualiza la traza para confirmar `PROVIDER_REQUEST` y `PROVIDER_RESPONSE` de la ejecución real.
-6. Desconfigura cualquiera de `VITE_AI_PROVIDER`, `VITE_AI_OPENAI_MODEL` u `OPENAI_API_KEY` y verifica que el flujo falle en cerrado sin volver al preview.
-
-- `Settings`: configuración del negocio, moneda, tema y PIN.
-- `Debug`: herramientas internas para migraciones y mantenimiento.
-
-## 💾 Persistencia
-
-Los datos se almacenan localmente usando IndexedDB con Dexie. La configuración también mantiene un respaldo en `localStorage` para recuperación rápida.
-
-## 🔐 Seguridad
-
-La función de PIN protege el ingreso a la aplicación, bloquea al pasar Android a segundo plano y tras 2 minutos de inactividad en web. El PIN se guarda como hash con sal aleatoria, nunca en texto plano. Como no existe autenticación remota, la recuperación segura exige borrar los datos locales; conviene mantener un backup cifrado actualizado.
-
-## Automation Hub con n8n
-
-Los eventos `income.created`, `expense.created` y `calendar.created` se guardan
-en una outbox IndexedDB dentro de la misma transacción que el registro local.
-Una Vercel Function valida la licencia V2, emite un JWT temporal y reenvía los
-eventos a n8n sin exponer el Bearer Token en el frontend o APK.
-La web usa el proxy del mismo origen y Android usa únicamente la URL pública
-`VITE_API_BASE_URL`; las credenciales de n8n son siempre variables de
-servidor sin prefijo `VITE_`.
-
-La configuración del proxy, variables, reintentos e idempotencia está en
-[`docs/AUTOMATION_HUB.md`](docs/AUTOMATION_HUB.md).
-
-## Seguridad de licencias
-
-Private Balance utiliza una licencia local vinculada a cada dispositivo. Antes
-del PIN y de las rutas principales, `LicenseGuard` comprueba en IndexedDB que la
-licencia esté activa, corresponda al código del dispositivo y no haya expirado.
-La comprobación funciona sin servidor y sin conexión.
-
-## Licencias firmadas V2
-
-La versión V2 reemplaza el checksum local por firma digital asimétrica:
-
-- El desarrollador conserva una clave privada fuera de la app.
-- La app incluye únicamente la clave pública en
-  `src/services/signedLicenseService.ts`.
-- La licencia se firma fuera del frontend y del APK.
-- La app valida la firma offline con Web Crypto API usando ECDSA P-256 y
-  SHA-256.
-
-El formato de licencia V2 es:
-
-```text
-PB-LIC-V2.<payloadBase64Url>.<signatureBase64Url>
-```
-
-El payload firmado incluye la aplicación, versión, código de dispositivo, tipo
-de licencia, fecha de emisión, expiración y funcionalidades habilitadas.
-
-### Código del dispositivo
-
-- En Android se obtiene un identificador estable mediante `@capacitor/device`.
-- En navegador/PWA se genera un UUID y se conserva en `localStorage`.
-- El identificador se transforma en un código legible como
-  `PB-8F3A-91BC-22DA`; el identificador nativo sin procesar no se muestra.
-
-La licencia se guarda en la tabla Dexie `licenses`. No se incluye en los
-backups financieros, para evitar transferir una activación entre dispositivos.
-
-Una licencia activa puede consultarse o actualizarse sin borrar datos desde
-`Configuración → Licencia`. El flujo acepta únicamente códigos V2 firmados,
-valida su vínculo con el dispositivo y conserva intactas todas las tablas
-financieras.
-
-## Generación de claves
-
-Genera un par de claves ECDSA P-256:
-
-```bash
-node scripts/generate-license-keys.mjs
-```
-
-Por defecto se generan:
-
-- `license-private-key.json`: clave privada local, ignorada por Git.
-- `license-public-key.json`: clave pública para copiar en la app.
-
-La clave privada también puede guardarse fuera del repositorio:
-
-```bash
-node scripts/generate-license-keys.mjs /ruta/segura/license-private-key.json license-public-key.json
-```
-
-Nunca subas la clave privada al repositorio, no la incluyas en el frontend y no
-la empaquetes en Android. Los archivos `license-private-key.json`,
-`license-private-key.pem` y `.env.license` están ignorados por Git.
-
-Si generas una nueva clave para producción, copia la clave pública resultante en
-`publicLicenseKeyJwk` dentro de `src/services/signedLicenseService.ts` y
-`server/automationSecurity.ts`, y firma las licencias con la clave privada
-correspondiente.
-
-## Generación de licencias
-
-El generador lee la clave privada desde:
-
-1. `LICENSE_PRIVATE_KEY_JWK`, con el JWK completo en una variable de entorno.
-2. `LICENSE_PRIVATE_KEY_PATH`, apuntando a un archivo JSON.
-3. `./license-private-key.json`, por defecto.
-
-Licencia demo con expiración:
-
-```bash
-node scripts/generate-signed-license.mjs PB-F78A-870C-3216 demo 2026-07-31
-```
-
-Licencia lifetime:
-
-```bash
-node scripts/generate-signed-license.mjs PB-F78A-870C-3216 lifetime
-```
-
-Tipos disponibles:
-
-- `demo`: acceso temporal de demostración.
-- `monthly`: licencia mensual; requiere fecha de expiración.
-- `annual`: licencia anual; requiere fecha de expiración.
-- `lifetime`: acceso sin expiración, con `expiresAt: null`.
-
-### Validación en la app
-
-`src/services/signedLicenseService.ts` valida:
-
-- Formato `PB-LIC-V2.<payload>.<firma>`.
-- Firma digital ECDSA P-256/SHA-256 con la clave pública.
-- `app === "private-balance"`.
-- `version === 2`.
-- `deviceCode` igual al dispositivo actual.
-- `licenseType` dentro de `demo`, `monthly`, `annual` o `lifetime`.
-- Expiración futura para licencias temporales.
-- `expiresAt: null` para licencias lifetime.
-- Protección básica contra retroceso de fecha mediante `lastValidAccessDate`.
-
-La activación sigue entrando por la pantalla de licencia. Si el código empieza
-por `PB-LIC-V2`, se valida como licencia firmada; los códigos antiguos V1 se
-mantienen solo para transición.
-
-### Compatibilidad temporal V1
-
-Las licencias V1 activas siguen funcionando durante la transición y se marcan
-internamente con `licenseVersion: 1`. Las nuevas activaciones deben generarse en
-V2 y se guardan con `licenseVersion: 2`.
-
-El formato antiguo `PB-TIPO-YYYYMMDD-HASHDISPOSITIVO-CHECKSUM` sigue disponible
-para instalaciones ya activadas o pruebas puntuales, pero no debe usarse para
-licencias nuevas.
-
-### Generar un código V1 manualmente
-
-Con el servidor de desarrollo activo (`npm run dev`), abre la consola del
-navegador y ejecuta:
-
-```js
-const { generateActivationCode } = await import('/src/utils/licenseCodeGenerator.ts')
-
-generateActivationCode('PB-8F3A-91BC-22DA', 'demo', '2026-07-31')
-generateActivationCode('PB-8F3A-91BC-22DA', 'monthly', '2026-08-31')
-generateActivationCode('PB-8F3A-91BC-22DA', 'annual', '2027-07-31')
-generateActivationCode('PB-8F3A-91BC-22DA', 'lifetime', '')
-```
-
-El resultado tiene el formato
-`PB-TIPO-YYYYMMDD-HASHDISPOSITIVO-CHECKSUM`. Las licencias `lifetime` utilizan
-`00000000` como fecha interna y no expiran.
-
-Tipos disponibles:
-
-- `demo`: acceso temporal de demostración.
-- `monthly`: licencia mensual; la fecha exacta la decide el desarrollador.
-- `annual`: licencia anual; la fecha exacta la decide el desarrollador.
-- `lifetime`: acceso sin expiración.
-
-### Expiración y protección del reloj
-
-En cada inicio, al volver a primer plano y periódicamente mientras está abierta,
-la app comprueba la expiración. También guarda `lastValidAccessDate`; si el reloj
-del dispositivo retrocede, bloquea el acceso hasta que se corrijan la fecha y la
-hora.
-
-Para probar una licencia expirada durante desarrollo, abre IndexedDB en las
-herramientas del navegador, tabla `licenses`, establece `expirationDate` en una
-fecha pasada y `status` en `active`, y recarga la página.
-
-Para limpiar solo la licencia durante desarrollo:
-
-```js
-const { db } = await import('/src/database/db.ts')
-await db.licenses.clear()
-location.reload()
-```
-
-En Android también se puede limpiar borrando los datos de la aplicación desde
-los ajustes del sistema. El restablecimiento seguro por pérdida del PIN elimina
-toda la base local, incluida la licencia.
-
-## Ofuscación Android
-
-Los builds release de Android tienen R8/ProGuard activado en
-`android/app/build.gradle`:
-
-```gradle
-minifyEnabled true
-shrinkResources true
-proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-```
-
-Las reglas de `android/app/proguard-rules.pro` conservan clases necesarias para
-Capacitor, plugins nativos, WebView, notificaciones y futuras integraciones de
-Google. Esto reduce la ingeniería inversa y el tamaño del APK/AAB release sin
-afectar al bundle web que se ejecuta dentro del WebView.
-
-Comandos de release:
-
-```bash
-cd android
-./gradlew assembleRelease
-./gradlew bundleRelease
-```
-
-## Play Integrity API
-
-`src/services/playIntegrityService.ts` deja preparada la integración para Google
-Play Integrity. En web/PWA retorna `available: false` sin bloquear la app. En
-Android también retorna estado no bloqueante hasta que exista un backend que
-emita nonces y verifique los verdicts de Google de forma segura.
-
-Play Integrity puede ayudar a detectar instalaciones fuera de Google Play,
-dispositivos con integridad débil o APKs modificados, pero la validación fuerte
-no debe confiar solo en el cliente. La verificación final debe hacerse en un
-servidor propio cuando la app se publique en Google Play.
-
-## Limitaciones de seguridad offline
-
-Una app offline nunca es 100% inviolable: una persona con control total del
-dispositivo puede inspeccionar o modificar el APK. La firma asimétrica mejora
-mucho la seguridad porque la clave privada no está dentro de la app y el
-checksum ya no puede replicarse desde el bundle, pero no sustituye una
-validación remota para escenarios de máximo riesgo.
-
-## Backup cifrado con Google Drive App Folder
-
-La app puede generar backups cifrados de IndexedDB/Dexie y guardarlos en el espacio privado de aplicación de Google Drive. Usa únicamente el scope limitado:
-
-```text
-https://www.googleapis.com/auth/drive.appdata
-```
-
-Ese permiso no da acceso al Drive completo de la usuaria. La app solo puede crear, listar y leer archivos dentro de `appDataFolder`, el espacio privado asociado a la aplicación.
-
-El JSON plano nunca se sube a Google Drive: antes de salir del dispositivo, la app cifra el backup con Web Crypto API usando AES-GCM y una clave local configurada por el usuario.
-
-El backup incluye:
-
-```json
-{
-  "version": "2",
-  "generatedAt": "2026-06-15T10:00:00.000Z",
-  "appName": "Private Balance",
-  "services": [],
-  "expenses": [],
-  "appointments": [],
-  "settings": {},
-  "exchangeRates": []
-}
-```
-
-Desde `Configuración > Backup` se pueden configurar:
-
-- Google OAuth Client ID.
-- Conectar o desconectar Google Drive.
-- Estado de conexión.
-- Activar backup automático.
-- Frecuencia diaria.
-- Último backup realizado y último estado.
-- Subir backup ahora.
-- Restaurar último backup.
-- Exportar backup cifrado local.
-- Importar backup cifrado local con la misma clave.
-- Exportar backup JSON sin cifrar solo para migraciones controladas.
-
-Al abrir la app, si Google Drive está conectado, el backup automático está activo y pasaron 24 horas desde el último envío, la app intenta generar un backup cifrado y subirlo a `appDataFolder`. También intenta ejecutarlo cuando la app pasa a segundo plano mediante `visibilitychange`; Android puede limitar este comportamiento si el proceso se suspende.
-
-La subida usa Drive API v3 con carga multipart:
-
-```text
-POST https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart
-```
-
-Metadata:
-
-```json
-{
-  "name": "private-balance-backup-YYYY-MM-DD-HH-mm.json.enc",
-  "parents": ["appDataFolder"]
-}
-```
-
-Para listar backups se usa:
-
-```text
-GET https://www.googleapis.com/drive/v3/files?spaces=appDataFolder
-```
-
-Para configurar credenciales OAuth en Google Cloud Console:
-
-1. Crea o selecciona un proyecto.
-2. Habilita Google Drive API.
-3. Configura la pantalla de consentimiento OAuth.
-4. Crea un Client ID OAuth compatible con el flujo que uses para la app.
-5. Añade el Client ID en `Configuración > Backup`.
-6. Verifica que solo se solicite el scope `drive.appdata`.
-
-Para probar en Android:
-
-```bash
-npm run build
-npx cap sync android
-```
-
-La restauración desde Google Drive descarga el último `.json.enc`, solicita confirmación destructiva, descifra con la clave local y reemplaza IndexedDB/Dexie si el backup es válido.
-
-Para restaurar un backup local cifrado, ve a `Configuración > Backup`, introduce la misma clave de cifrado usada al exportar y selecciona `Importar backup cifrado`. Si la clave no coincide, el descifrado fallará y los datos no se restaurarán.
-
-## 🛠️ Mantenimiento
-
-Para restaurar o respaldar datos, usa las funciones de exportación e importación en la sección de reportes.
-
-## 📍 Notas
-
-La aplicación está orientada a uso offline y local. No requiere backend propio para el funcionamiento básico.
+<sub>Este README describe el estado verificado del código al momento de su redacción. Si algo aquí no coincide con el comportamiento real de la aplicación, prevalece el código y agradecemos que se abra un issue.</sub>

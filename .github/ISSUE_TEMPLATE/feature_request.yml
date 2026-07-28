@@ -1,0 +1,88 @@
+name: Solicitud de funcionalidad
+description: Propón una nueva funcionalidad o mejora para Private Balance
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema
+      description: ¿Qué problema o necesidad no está cubierta hoy?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solución propuesta
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impacto
+      description: ¿A qué áreas afecta (ingresos, gastos, agenda, reportes, licencias, IA, automatización)?
+
+  - type: dropdown
+    id: privacy_impact
+    attributes:
+      label: Privacidad
+      description: ¿La funcionalidad implicaría que algún dato salga del dispositivo?
+      options:
+        - No
+        - "Sí, hacia un servicio ya integrado"
+        - "Sí, requeriría una integración externa nueva"
+        - No estoy seguro
+    validations:
+      required: true
+
+  - type: dropdown
+    id: offline_impact
+    attributes:
+      label: Offline
+      description: ¿La funcionalidad debe seguir funcionando sin conexión?
+      options:
+        - Sí, es un requisito
+        - No, puede depender de conexión
+        - No estoy seguro
+    validations:
+      required: true
+
+  - type: dropdown
+    id: web_impact
+    attributes:
+      label: Web
+      options:
+        - Aplica
+        - No aplica
+        - No estoy seguro
+    validations:
+      required: true
+
+  - type: dropdown
+    id: android_impact
+    attributes:
+      label: Android
+      options:
+        - Aplica
+        - No aplica
+        - No estoy seguro
+    validations:
+      required: true
+
+  - type: dropdown
+    id: data_migration_impact
+    attributes:
+      label: Datos o migraciones
+      description: ¿Implicaría un cambio de esquema en Dexie/IndexedDB?
+      options:
+        - No
+        - "Sí, requeriría una migración nueva"
+        - No estoy seguro
+    validations:
+      required: true
