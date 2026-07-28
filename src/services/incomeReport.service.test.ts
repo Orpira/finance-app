@@ -27,6 +27,12 @@ vi.mock('./settingsService', () => ({
   getSettings: () => getSettingsMock(),
 }))
 
+const getActiveEarningPeriodMock = vi.fn()
+
+vi.mock('./earningPeriodService', () => ({
+  getActiveEarningPeriod: () => getActiveEarningPeriodMock(),
+}))
+
 const {
   getPendingIncomeSummary,
   getPendingIncomes,
@@ -87,6 +93,7 @@ function income(overrides: Partial<ServiceIncome> = {}): ServiceIncome {
     baseCurrency: 'EUR',
     baseCurrencyValue: 50,
     reportStatusCode: 'unreviewed',
+    earningPeriodId: 1,
     ...overrides,
   }
 }
@@ -94,6 +101,7 @@ function income(overrides: Partial<ServiceIncome> = {}): ServiceIncome {
 beforeEach(() => {
   vi.clearAllMocks()
   getSettingsMock.mockResolvedValue(baseSettings())
+  getActiveEarningPeriodMock.mockResolvedValue({ id: 1 })
 })
 
 describe('markIncomeAsReported', () => {
@@ -232,5 +240,32 @@ describe('getPendingIncomes / getPendingIncomeSummary', () => {
       oldestPendingDate: null,
       overdueCount: 0,
     })
+  })
+
+  it('excludes pending incomes that belong to a previous (non-active) season', async () => {
+    getActiveEarningPeriodMock.mockResolvedValue({ id: 2 })
+
+    servicesTable.toArray.mockResolvedValue([
+      income({ id: 1, date: '2026-01-10', reportStatusCode: 'pending', earningPeriodId: 1 }),
+      income({ id: 2, date: '2026-02-05', reportStatusCode: 'unreviewed', earningPeriodId: 2 }),
+    ])
+
+    const pending = await getPendingIncomes()
+    const summary = await getPendingIncomeSummary()
+
+    expect(pending.map((item) => item.id)).toEqual([2])
+    expect(summary.count).toBe(1)
+  })
+
+  it('returns no pending incomes when there is no active season', async () => {
+    getActiveEarningPeriodMock.mockResolvedValue(undefined)
+
+    servicesTable.toArray.mockResolvedValue([
+      income({ id: 1, date: '2026-01-10', reportStatusCode: 'pending', earningPeriodId: 1 }),
+    ])
+
+    const pending = await getPendingIncomes()
+
+    expect(pending).toEqual([])
   })
 })

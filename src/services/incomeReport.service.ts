@@ -5,6 +5,7 @@ import {
   type MarkAsReportedOptions,
 } from '../catalogs/reportStatuses'
 import { updateServiceIncome } from './incomeService'
+import { getActiveEarningPeriod } from './earningPeriodService'
 import { getSettings } from './settingsService'
 import { assertCanMarkAsReported, canMarkAsReported } from '../utils/reportStatus'
 import { getStoredIncomeValue } from '../utils/financeStats'
@@ -96,17 +97,26 @@ export async function markMultipleIncomesAsReported(
 /**
  * Ingresos que aún no han sido reportados ("sin revisar" o "pendiente"), ordenados
  * por serviceDate ascendente (el más antiguo primero).
+ *
+ * Se limita a la temporada activa: los ingresos de temporadas anteriores (cerradas)
+ * ya no cuentan como pendientes de reportar en el resumen de Inicio.
  */
 export async function getPendingIncomes(): Promise<ServiceIncome[]> {
-  const settings = await getSettings()
-  const incomes = await db.services.toArray()
+  const [settings, activePeriod, incomes] = await Promise.all([
+    getSettings(),
+    getActiveEarningPeriod(),
+    db.services.toArray(),
+  ])
 
   return incomes
     .filter(
       (income) =>
         recordBelongsToUsageMode(income, settings.usageMode) &&
         canMarkAsReported(income, settings.usageMode) &&
-        income.reportStatusCode !== 'reported',
+        income.reportStatusCode !== 'reported' &&
+        activePeriod?.id !== undefined &&
+        (income.earningPeriodId === activePeriod.id ||
+          income.seasonPeriodId === activePeriod.id),
     )
     .sort((first, second) => first.date.localeCompare(second.date))
 }
