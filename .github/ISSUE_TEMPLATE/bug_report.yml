@@ -1,0 +1,111 @@
+name: Reporte de error
+description: Reporta un comportamiento incorrecto en Private Balance
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Antes de continuar, confirma que **no** vas a incluir datos financieros, personales o de licencia reales en este reporte.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción
+      description: ¿Qué ocurre?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducir
+      description: Pasos concretos, en orden.
+      placeholder: |
+        1. Ir a...
+        2. Hacer clic en...
+        3. Ver el error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Resultado esperado
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Resultado actual
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Entorno
+      placeholder: "Web / PWA instalada / Android APK, versión del navegador o dispositivo"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Navegador o dispositivo
+      options:
+        - Chrome
+        - Firefox
+        - Safari
+        - Edge
+        - Android (APK)
+        - Otro
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Versión o commit
+      description: Commit, rama o fecha de la versión usada, si la conoces.
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Capturas
+      description: Adjunta capturas si ayudan a entender el problema. No incluyas datos financieros o personales reales; usa datos ficticios o difumina la información sensible.
+
+  - type: dropdown
+    id: data_impact
+    attributes:
+      label: Impacto sobre datos
+      description: ¿El error afecta datos financieros, licencias o backups?
+      options:
+        - Ninguno
+        - Muestra datos incorrectos
+        - Pérdida o corrupción de datos
+        - Afecta licencia/activación
+        - No estoy seguro
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform_impact
+    attributes:
+      label: Impacto en web, PWA o Android
+      options:
+        - Solo web
+        - Solo PWA instalada
+        - Solo Android
+        - Todas las plataformas
+        - No estoy seguro
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: sensitive_data_confirmation
+    attributes:
+      label: Confirmación
+      options:
+        - label: Confirmo que este reporte no incluye datos financieros, personales, credenciales ni licencias reales.
+          required: true
