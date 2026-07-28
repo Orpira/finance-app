@@ -103,7 +103,8 @@ Private Balance distingue siempre entre arquitectura **implementada**, **parcial
 |---|---|---|
 | Finanzas locales y UI principal | Implementada | `src/pages`, `src/services`, `src/database` |
 | Dexie/IndexedDB y migraciones | Implementada | `src/database` |
-| PWA + Android/Capacitor | Implementada | Vite/PWA, `android/` |
+| Android/Capacitor | Implementada | `android/` |
+| Web App instalable (manifest + iconos) | Parcial: manifest e iconos activos; instalable según capacidades del navegador; sin service worker activo (`vite-plugin-pwa` no está registrado en `vite.config.ts`); existe rutina de desregistro de service workers residuales (`src/utils/staleServiceWorkerCleanup.ts`); no debe describirse como PWA offline completa hasta que exista una estrategia de caché activa | `public/manifest.webmanifest`, `vite.config.ts`, `src/utils/staleServiceWorkerCleanup.ts` |
 | Licencias y dispositivos | Implementada | `api/`, `server/` |
 | Automatización n8n | Implementada con riesgos abiertos | gateway serverless + workflows externos |
 | WhatsApp vía Evolution API | Implementada con riesgos operativos | n8n + backend contextual |

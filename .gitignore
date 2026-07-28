@@ -20,6 +20,13 @@ license-private-key.json
 license-private-key.pem
 .env.license
 
+# Private Balance — material de firma de licencias generado con nombres de
+# archivo personalizados (ver docs/KEY_ROTATION_RUNBOOK.md). scripts/generate-license-keys.mjs
+# acepta rutas de salida arbitrarias; estos patrones cubren salidas accidentales
+# en la raíz que no coinciden con los nombres por defecto de arriba.
+/PB-????-????-????
+/lifetime
+
 # Editor directories and files
 scripts/*
 !scripts/generate-docs-summary.mjs
@@ -34,3 +41,8 @@ scripts/*
 *.sw?
 .vercel
 .env*
+
+# Configuración local de túnel (ngrok Traffic Policy), no forma parte del código
+# de Private Balance. No contiene secretos reales (placeholders tipo acme.com),
+# pero es configuración de máquina local y no debe versionarse.
+/policy.yaml
