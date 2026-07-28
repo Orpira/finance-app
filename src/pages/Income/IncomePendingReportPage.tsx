@@ -143,7 +143,7 @@ export function IncomePendingReportPage() {
 
       <Link
         className="inline-flex h-12 items-center justify-center gap-2 self-stretch rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:self-end"
-        to="/income?reportStatus=pending"
+        to="/income?reportStatus=unreviewed"
       >
         Ir a Ingresos para reportarlos
         <ArrowRight className="size-4" aria-hidden="true" />

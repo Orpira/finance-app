@@ -33,6 +33,7 @@ export function getReportStatusLabel(code?: ReportStatusCode | null): ReportStat
   return 'Pendiente'
 }
 
+
 export function normalizeReportStatus<T extends Partial<ReportStatusFields>>(record: T) {
   const reportStatusCode: ReportStatusCode =
     record.reportStatusCode === 'reported' || record.reportStatusCode === 'unreviewed'
