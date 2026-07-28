@@ -154,41 +154,6 @@ export function calculateBestIncomeDay(
   )
 }
 
-export function calculateBestIncomeWeekday(
-  incomes: ServiceIncome[],
-  currency: CurrencyCode,
-) {
-  const serviceIncomes = incomes.filter(isServiceIncome)
-  const totalsByWeekday = weekdayNames.map((weekday) => ({
-    average: 0,
-    count: 0,
-    total: 0,
-    weekday,
-  }))
-
-  serviceIncomes.forEach((income) => {
-    const weekday = new Date(`${income.date}T00:00`).getDay()
-    totalsByWeekday[weekday].total += getStoredIncomeValue(income, currency)
-    totalsByWeekday[weekday].count += 1
-  })
-
-  const daysWithAverage = totalsByWeekday
-    .filter((day) => day.count > 0)
-    .map((day) => ({
-      ...day,
-      average: roundMoney(day.total / day.count),
-      total: roundMoney(day.total),
-    }))
-
-  return daysWithAverage.sort((firstDay, secondDay) => {
-    if (secondDay.average !== firstDay.average) {
-      return secondDay.average - firstDay.average
-    }
-
-    return secondDay.count - firstDay.count
-  })[0]
-}
-
 export function calculateIncomeDaysRanking(
   incomes: ServiceIncome[],
   currency: CurrencyCode,

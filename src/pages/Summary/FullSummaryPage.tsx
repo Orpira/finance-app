@@ -7,6 +7,7 @@ import {
   PlusCircle,
   Eye,
   EyeOff,
+  Trophy,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -16,23 +17,35 @@ import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { listExpenses } from '../../services/expenseService'
-import { getActiveEarningPeriod } from '../../services/earningPeriodService'
+import { getActiveEarningPeriod, getSeasonStatistics } from '../../services/earningPeriodService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { ServiceIncome } from '../../types/service'
-import type { AppSettings, CountryCode } from '../../types/settings'
+import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
 import { formatCurrency, getCurrentMonthRange } from '../../utils/currency'
 import { countries, getCountryCurrency } from '../../utils/countries'
-import {
-  calculateFinancialTotals,
-  calculateBestIncomeWeekday,
-} from '../../utils/financeStats'
+import { calculateFinancialTotals, weekdayNames } from '../../utils/financeStats'
 import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+function getWeekdayLabel(date: string) {
+  return weekdayNames[new Date(`${date}T00:00`).getDay()]
+}
+
+function formatBestDayDate(date: string) {
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${date}T00:00`))
+}
+
+interface ActiveSeasonBestDay {
+  date: string
+  amount: number
+  count: number
+  currency: CurrencyCode
 }
 
 export function FullSummaryPage() {
@@ -44,6 +57,7 @@ export function FullSummaryPage() {
   const [dateTo, setDateTo] = useState(monthRange.to)
   const [allIncomes, setAllIncomes] = useState<ServiceIncome[]>([])
   const [allExpenses, setAllExpenses] = useState<Expense[]>([])
+  const [activeSeasonBestDay, setActiveSeasonBestDay] = useState<ActiveSeasonBestDay | null>(null)
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
   const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL')
   const [selectedPaymentType, setSelectedPaymentType] =
@@ -63,13 +77,16 @@ export function FullSummaryPage() {
           listExpenses({ ...range, newestFirst: true }),
         ])
       const currentPeriod = await getActiveEarningPeriod()
-      const currentIncomes = currentPeriod?.id
-        ? await listServiceIncomes({
-            ...range,
-            earningPeriodId: currentPeriod.id,
-            newestFirst: true,
-          })
-        : []
+      const [currentIncomes, seasonStats] = await Promise.all([
+        currentPeriod?.id
+          ? listServiceIncomes({
+              ...range,
+              earningPeriodId: currentPeriod.id,
+              newestFirst: true,
+            })
+          : Promise.resolve([]),
+        currentPeriod?.id ? getSeasonStatistics(currentPeriod.id) : Promise.resolve(undefined),
+      ])
 
       if (!isMounted) {
         return
@@ -79,6 +96,25 @@ export function FullSummaryPage() {
       setActivePeriod(currentPeriod ?? null)
       setAllIncomes(currentIncomes)
       setAllExpenses(currentExpenses.filter((item) => item.earningPeriodId === currentPeriod?.id))
+
+      // Misma fuente que Temporadas y el Historial de mejores días (getSeasonStatistics),
+      // para que "Mejor día" siempre coincida entre las tres pantallas.
+      const bestDayDetail = seasonStats?.servicesByDay.find(
+        (day) => day.date === seasonStats.bestDay?.date,
+      )
+      setActiveSeasonBestDay(
+        currentPeriod && seasonStats?.bestDay && bestDayDetail
+          ? {
+              date: seasonStats.bestDay.date,
+              amount: seasonStats.bestDay.amount,
+              count: bestDayDetail.count,
+              currency:
+                currentPeriod.baseCurrency ??
+                getCountryCurrency(currentPeriod.countryCode ?? (currentPeriod.country as CountryCode)) ??
+                currentSettings.defaultCurrency,
+            }
+          : null,
+      )
     }
 
     loadFullSummary()
@@ -192,10 +228,6 @@ export function FullSummaryPage() {
         secondaryCurrency,
       ),
     [expenses, incomes, primaryCurrency, secondaryCurrency],
-  )
-  const bestIncomeWeekday = useMemo(
-    () => calculateBestIncomeWeekday(incomes, primaryCurrency),
-    [incomes, primaryCurrency],
   )
   if (!settings) {
     return (
@@ -428,13 +460,18 @@ export function FullSummaryPage() {
       </div>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_20rem]">
-        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200 p-4">
-            <h2 className="text-lg font-semibold text-slate-950">
-              Mejor día del período activo
-            </h2>
+        <div className="overflow-hidden rounded-lg border border-amber-200 bg-linear-to-br from-amber-50 via-white to-white shadow-sm dark:border-amber-900/60 dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900">
+          <div className="flex items-center justify-between gap-3 border-b border-amber-200/70 bg-amber-50/60 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                <Trophy className="size-5" aria-hidden="true" />
+              </span>
+              <h2 className="text-lg font-semibold text-slate-950 dark:text-white">
+                Mejor día del período activo
+              </h2>
+            </div>
             <Link
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-emerald-200 bg-white px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-amber-300 bg-white px-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 dark:border-amber-800 dark:bg-slate-900 dark:text-amber-300 dark:hover:bg-slate-800"
               to="/resumen-completo/historial-mejores-dias"
             >
               <ExternalLink className="size-4" aria-hidden="true" />
@@ -442,27 +479,34 @@ export function FullSummaryPage() {
             </Link>
           </div>
 
-          {!bestIncomeWeekday ? (
+          {!activeSeasonBestDay ? (
             <div className="p-4">
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Aún no hay datos suficientes para calcular el mejor día.
               </p>
             </div>
           ) : (
             <div className="p-4">
-              <p className="text-sm font-medium text-emerald-700">
-                {capitalize(bestIncomeWeekday.weekday)}
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                <Trophy className="size-3.5" aria-hidden="true" />
+                Récord de ingresos
+              </span>
+              <p className="mt-3 text-sm font-medium text-amber-700 dark:text-amber-300">
+                {capitalize(getWeekdayLabel(activeSeasonBestDay.date))}
               </p>
-              <p className="mt-2 text-3xl font-semibold text-slate-950">
-                {bestIncomeWeekday.weekday}
+              <p className="mt-1 text-3xl font-semibold text-slate-950 dark:text-white">
+                {formatBestDayDate(activeSeasonBestDay.date)}
               </p>
-              <p className="mt-2 text-sm text-slate-500">
-                Promedio:{' '}
-                <SensitiveAmount hidden={hidden} value={formatCurrency(bestIncomeWeekday.average, primaryCurrency)} />
+              <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                Ganancia:{' '}
+                <SensitiveAmount
+                  hidden={hidden}
+                  value={formatCurrency(activeSeasonBestDay.amount, activeSeasonBestDay.currency)}
+                />
               </p>
-              <p className="mt-1 text-sm text-slate-500">
-                {bestIncomeWeekday.count} ingreso
-                {bestIncomeWeekday.count === 1 ? '' : 's'} del período activo
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {activeSeasonBestDay.count} servicio
+                {activeSeasonBestDay.count === 1 ? '' : 's'} ese día
               </p>
             </div>
           )}
