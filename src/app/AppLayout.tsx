@@ -386,7 +386,7 @@ export function AppLayout() {
 
       <button
         aria-label={themeLabel}
-        className="fixed right-4 z-50 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg shadow-slate-900/10 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-950 md:hidden"
+        className="fixed right-4 z-50 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-white text-slate-700 shadow-lg shadow-slate-900/10 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-white dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-950 md:hidden"
         onClick={toggleTheme}
         style={{ bottom: 'calc(max(env(safe-area-inset-bottom), 0.5rem) + 5.25rem)' }}
         title={themeLabel}
