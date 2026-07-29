@@ -9,6 +9,8 @@ import {
   verify,
 } from 'node:crypto'
 
+import { trialPublicLicenseKeyJwk } from './trialLicenseSecurity.js'
+
 const SIGNED_LICENSE_PREFIX = 'PB-LIC-V2'
 const LICENSE_APP_ID = 'private-balance'
 const LICENSE_VERSION = 2
@@ -16,6 +18,7 @@ const JWT_ISSUER = 'private-balance-automation'
 const JWT_AUDIENCE = 'private-balance-automation-proxy'
 const JWT_TTL_SECONDS = 15 * 60
 const ALLOWED_LICENSE_TYPES = new Set([
+  'trial',
   'demo',
   'monthly',
   'annual',
@@ -30,6 +33,20 @@ const publicLicenseKeyJwk = {
   y: 'LLO8InWuxK-EZDBqDegKqK8WQlvnnnzFSLqxynmqlzU',
   crv: 'P-256',
 } as const
+
+/**
+ * El licenseType leído aquí NO está aún verificado criptográficamente, solo
+ * se usa para elegir qué clave pública probar (misma técnica que el cliente
+ * en signedLicenseService.ts). Si alguien falsifica el tipo para forzar la
+ * clave equivocada, la firma simplemente no valida más abajo.
+ */
+function peekLicenseTypeUnsafe(payloadBase64Url: string): unknown {
+  try {
+    return decodeJson<{ licenseType?: unknown }>(payloadBase64Url).licenseType
+  } catch {
+    return undefined
+  }
+}
 
 export interface SignedLicensePayload {
   app: string
@@ -93,8 +110,9 @@ export function verifySignedLicense(activationCode: string) {
     throw new Error('La licencia firmada está incompleta.')
   }
 
+  const isTrialPayload = peekLicenseTypeUnsafe(payloadBase64Url) === 'trial'
   const publicKey = createPublicKey({
-    key: publicLicenseKeyJwk,
+    key: isTrialPayload ? trialPublicLicenseKeyJwk : publicLicenseKeyJwk,
     format: 'jwk',
   })
   const validSignature = verify(

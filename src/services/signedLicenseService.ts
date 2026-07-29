@@ -1,4 +1,5 @@
 import { db } from '../database/db'
+import type { DeviceIdentity } from '../types/deviceIdentity'
 import type { AppLicense, LicenseStatus, LicenseType } from '../types/license'
 import {
   CURRENT_LICENSE_ID,
@@ -240,8 +241,11 @@ export async function verifySignedLicense(code: string, deviceCode: string) {
   return parseAndVerifySignedLicense(code, deviceCode, { checkExpiration: true })
 }
 
-export async function activateSignedLicense(code: string) {
-  const identity = await getOrCreateDeviceIdentity()
+export async function activateSignedLicense(
+  code: string,
+  knownIdentity?: DeviceIdentity,
+) {
+  const identity = knownIdentity ?? await getOrCreateDeviceIdentity()
   const validation = await verifySignedLicense(code, identity.deviceCode)
   const authorization = await authorizeSignedLicenseDevice(
     validation.activationCode,

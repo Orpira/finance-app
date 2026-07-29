@@ -1,11 +1,6 @@
-import { Capacitor } from '@capacitor/core'
-
 import type { DeviceIdentity } from '../types/deviceIdentity'
+import { getPrivateBalanceApiUrl } from './apiBaseUrl'
 
-const CONFIGURED_API_URL =
-  typeof import.meta.env.VITE_API_BASE_URL === 'string'
-    ? import.meta.env.VITE_API_BASE_URL.trim()
-    : ''
 const REQUEST_TIMEOUT_MS = 10_000
 
 export interface LicenseDeviceAuthorizationResult {
@@ -13,22 +8,6 @@ export interface LicenseDeviceAuthorizationResult {
   deviceAuthorization: 'existing' | 'registered'
   activeDevices: number
   maxDevices: number
-}
-
-function isLocalDevelopmentUrl(url: URL) {
-  return url.protocol === 'http:' &&
-    ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-}
-
-function getLicenseApiUrl() {
-  const runtimeOrigin = new URL(globalThis.location.origin)
-  const shouldUseConfiguredApi =
-    Capacitor.isNativePlatform() || isLocalDevelopmentUrl(runtimeOrigin)
-  const baseUrl = shouldUseConfiguredApi
-    ? CONFIGURED_API_URL || runtimeOrigin.href
-    : runtimeOrigin.href
-
-  return `${baseUrl.replace(/\/$/, '')}/api/license-activate`
 }
 
 export async function authorizeSignedLicenseDevice(
@@ -42,7 +21,7 @@ export async function authorizeSignedLicenseDevice(
   )
 
   try {
-    const response = await fetch(getLicenseApiUrl(), {
+    const response = await fetch(getPrivateBalanceApiUrl('/api/license-activate'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

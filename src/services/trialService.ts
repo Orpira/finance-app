@@ -1,48 +1,71 @@
-import { getOrCreateDeviceIdentity } from './deviceIdentityService'
+import { getPrivateBalanceApiUrl } from './apiBaseUrl'
 import { activateSignedLicense } from './signedLicenseService'
-
-export class TrialUnavailableError extends Error {}
+import type { DeviceIdentity } from '../types/deviceIdentity'
 
 interface TrialStartResponse {
   activationCode: string
   expiresAt: string
 }
 
-/**
- * Solicita un trial de 7 días para este dispositivo, sin mostrar ni pedir
- * nada al usuario: el deviceCode ya existe (generado en silencio por
- * deviceIdentityService). Si el servidor lo concede, el código firmado se
- * activa localmente igual que cualquier licencia de pago — reutilizando
- * toda la validación de expiración y detección de manipulación de reloj.
- *
- * Lanza TrialUnavailableError si este dispositivo ya usó su prueba antes
- * (el llamador debe entonces mostrar la pantalla normal de activación).
- */
-export async function startFreeTrial() {
-  const identity = await getOrCreateDeviceIdentity()
+const GENERIC_SERVER_ERROR_MESSAGE = 'No se pudo iniciar la prueba gratuita.'
 
-  const response = await fetch('/api/trial-start', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      deviceCode: identity.deviceCode,
-      userCode: identity.userCode,
-      platform: identity.platform,
-    }),
-  })
+export type TrialAttemptOutcome =
+  | { outcome: 'granted'; license: Awaited<ReturnType<typeof activateSignedLicense>> }
+  | { outcome: 'already-used' }
+  | { outcome: 'server-error'; status: number; detail: string }
+  | { outcome: 'network-error'; detail: string }
+  | { outcome: 'activation-error'; detail: string }
+
+/**
+ * Intenta un trial de 7 días para este dispositivo, sin mostrar ni pedir
+ * nada al usuario. Nunca lanza: cualquier fallo (red, rechazo del servidor,
+ * activación local) se devuelve como un outcome estructurado para que el
+ * llamador pueda registrar/actuar sobre datos, no sobre mensajes sueltos.
+ */
+export async function attemptFreeTrial(
+  identity: DeviceIdentity,
+): Promise<TrialAttemptOutcome> {
+  let response: Response
+
+  try {
+    response = await fetch(getPrivateBalanceApiUrl('/api/trial-start'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceCode: identity.deviceCode,
+        userCode: identity.userCode,
+        platform: identity.platform,
+      }),
+    })
+  } catch (error) {
+    return {
+      outcome: 'network-error',
+      detail: error instanceof Error ? error.message : String(error),
+    }
+  }
 
   if (response.status === 409) {
-    throw new TrialUnavailableError(
-      'Este dispositivo ya usó su prueba gratuita de 7 días.',
-    )
+    return { outcome: 'already-used' }
   }
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}) as { error?: string })
-    throw new Error(body.error ?? 'No se pudo iniciar la prueba gratuita.')
+    return {
+      outcome: 'server-error',
+      status: response.status,
+      detail: body.error ?? GENERIC_SERVER_ERROR_MESSAGE,
+    }
   }
 
   const { activationCode } = (await response.json()) as TrialStartResponse
 
-  return activateSignedLicense(activationCode)
+  try {
+    const license = await activateSignedLicense(activationCode, identity)
+    return { outcome: 'granted', license }
+  } catch (error) {
+    return {
+      outcome: 'activation-error',
+      detail: error instanceof Error ? error.message : String(error),
+    }
+  }
 }

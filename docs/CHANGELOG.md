@@ -202,6 +202,49 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 - The obsolete 06_MCP_RULES.md document is no longer part of the tree.
 
+### Fixed
+
+- El auto-trial silencioso introducido en el milestone anterior nunca podía
+  completarse: `server/automationSecurity.ts` (usado por `/api/license-activate`,
+  el paso de autorización que sigue a `/api/trial-start`) solo conocía la
+  clave pública de licencias de pago y ni siquiera incluía `'trial'` en sus
+  tipos permitidos, así que cualquier licencia firmada con la clave de trial
+  era rechazada con "La firma digital de la licencia no es válida.". El
+  cliente (`signedLicenseService.ts`) ya elegía correctamente entre ambas
+  claves según el tipo de licencia; ahora `automationSecurity.ts` hace lo
+  mismo, reutilizando `trialPublicLicenseKeyJwk` de
+  `server/trialLicenseSecurity.ts` en vez de duplicarla. Cubierto por
+  `test/automationTrialSignature.test.ts` con un par de claves generado en
+  el momento (sin secretos reales), que prueba tanto la aceptación de una
+  licencia trial válida como el rechazo de una firmada con una clave
+  distinta.
+- El `rewrites` de `vercel.json` pensado para el fallback de rutas del SPA
+  en producción (`/((?!api(?:/|$)).*)` → `/index.html`) también interceptaba,
+  dentro de `vercel dev`, los propios módulos internos de Vite
+  (`/@vite/client`, `/@react-refresh`, `/src/main.tsx`, `/manifest.webmanifest`),
+  reescribiéndolos a `index.html` antes de que Vite pudiera servirlos y
+  dejando la app en blanco en desarrollo local. El patrón ahora excluye
+  además cualquier ruta que empiece con `@` o contenga un punto (archivos
+  estáticos reales), sin afectar el fallback de rutas del SPA en producción.
+- `licenseAuthorizationService.ts` y `trialService.ts` resolvían la URL base
+  de la API cada uno por su cuenta con lógica casi idéntica pero no
+  compartida, lo que permitía que `/api/trial-start` y `/api/license-activate`
+  —dos llamadas del mismo flujo de auto-trial— terminaran apuntando a
+  orígenes distintos si algún día divergían. Se extrajo
+  `src/services/apiBaseUrl.ts` (`getPrivateBalanceApiUrl`) como única fuente
+  de verdad, cubierta por `test/apiBaseUrl.test.ts` (incluye un caso que
+  verifica explícitamente que ambos endpoints resuelven siempre a la misma
+  base).
+- `trialService.startFreeTrial()` lanzaba errores genéricos que el llamador
+  solo podía registrar como texto suelto, dificultando distinguir entre "sin
+  conexión", "el servidor lo rechazó" (y por qué) o "el servidor lo concedió
+  pero la activación local falló". Se reemplazó por `attemptFreeTrial()`,
+  que nunca lanza y siempre devuelve un `TrialAttemptOutcome` estructurado
+  (`granted` / `already-used` / `server-error` / `network-error` /
+  `activation-error`, con `status`/`detail` cuando aplica). `LicenseGuard.tsx`
+  registra ese outcome completo en consola en cada intento. Cubierto por
+  `test/trialService.test.ts`.
+
 ## [2026-07-06]
 
 ### Added

@@ -345,6 +345,18 @@ export function provisionDeviceIdentity() {
   return provisioningRequest
 }
 
+export async function logDeviceIdentitySourcesForDebugOnly() {
+  if (!import.meta.env.DEV) {
+    throw new Error('Este diagnóstico solo está disponible en desarrollo.')
+  }
+
+  const localStorageIdentity = readLocalStorageIdentity()
+  const indexedDbIdentity = await readIndexedDbIdentity()
+
+  console.info('[Private Balance] localStorage:', localStorageIdentity?.deviceCode)
+  console.info('[Private Balance] IndexedDB:', indexedDbIdentity?.deviceCode)
+}
+
 export async function resetDeviceIdentityForDebugOnly() {
   if (!import.meta.env.DEV) {
     throw new Error('La identidad solo se puede regenerar en desarrollo.')

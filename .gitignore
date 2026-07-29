@@ -49,3 +49,4 @@ scripts/*
 trial-private-key.json
 trial-public-key.json
 .claude/
+.env.local
