@@ -1,8 +1,12 @@
 <div align="center">
 
-# Private Balance
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.png">
+  <img alt="Private Balance — Tu actividad. Tus datos. Tu control." src="docs/assets/banner-light.png">
+</picture>
 
-**Tu actividad. Tus datos. Tu control.**
+# Private Balance
 
 Aplicación financiera privada y local-first para profesionales independientes y pequeños negocios: ingresos, gastos, agenda, temporadas, reportes, licencias y copias de seguridad, con los datos financieros siempre en el dispositivo del usuario.
 
@@ -226,7 +230,7 @@ Este repositorio no incluye actualmente un archivo de licencia formal. El uso, c
 
 ## Autor
 
-**Orlando Pineda** — OrPiRa.
+<img src="docs/assets/isotype.svg" alt="" width="16" height="16" align="absmiddle"> **Orlando Pineda** — OrPiRa.
 
 ---
 
