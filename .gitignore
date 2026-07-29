@@ -46,3 +46,6 @@ scripts/*
 # de Private Balance. No contiene secretos reales (placeholders tipo acme.com),
 # pero es configuración de máquina local y no debe versionarse.
 /policy.yaml
+trial-private-key.json
+trial-public-key.json
+.claude/

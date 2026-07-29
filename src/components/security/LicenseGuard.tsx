@@ -6,6 +6,7 @@ import {
   getLicenseStatus,
   type LicenseAccessStatus,
 } from '../../services/licenseService'
+import { startFreeTrial } from '../../services/trialService'
 
 interface LicenseGuardProps {
   children: ReactNode
@@ -19,7 +20,21 @@ export function LicenseGuard({ children }: LicenseGuardProps) {
   const refreshLicense = useCallback(async () => {
     try {
       await getOrCreateDeviceIdentity()
-      const result = await getLicenseStatus()
+      let result = await getLicenseStatus()
+
+      // Instalación nueva sin ninguna licencia local: intentar un trial
+      // de 7 días de forma silenciosa, sin mostrar nada al usuario. Si el
+      // servidor lo rechaza (ya usado, sin conexión, etc.) simplemente se
+      // cae a la pantalla normal de activación manual más abajo.
+      if (result.status === 'inactive' && !result.license) {
+        try {
+          await startFreeTrial()
+          result = await getLicenseStatus()
+        } catch {
+          // El trial no estaba disponible: continuar con el flujo normal.
+        }
+      }
+
       setStatus(result.status)
     } catch {
       setStatus('error')

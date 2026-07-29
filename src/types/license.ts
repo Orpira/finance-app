@@ -1,5 +1,5 @@
 export type LicenseStatus = 'inactive' | 'active' | 'expired'
-export type LicenseType = 'demo' | 'monthly' | 'annual' | 'lifetime'
+export type LicenseType = 'trial' | 'demo' | 'monthly' | 'annual' | 'lifetime'
 
 export interface AppLicense {
   id: string

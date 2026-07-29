@@ -17,6 +17,7 @@ import { copyText } from '../../utils/clipboard'
 import { useDialog } from '../../components/dialogs/useDialog'
 
 const LICENSE_TYPE_LABELS: Record<LicenseType, string> = {
+  trial: 'Prueba gratuita',
   demo: 'Demo',
   monthly: 'Mensual',
   annual: 'Anual',

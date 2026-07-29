@@ -4,6 +4,11 @@ const LICENSE_PREFIX = 'PB'
 const CHECKSUM_SALT = 'PRIVATE-BALANCE-OFFLINE-V1'
 
 const licenseTypeTokens: Record<LicenseType, string> = {
+  // El trial solo se emite como licencia firmada V2 (ver trialService.ts);
+  // este generador es el esquema offline V1 heredado. Se incluye aquí
+  // únicamente para que el tipo Record<LicenseType, string> siga siendo
+  // exhaustivo.
+  trial: 'TRIAL',
   demo: 'DEMO',
   monthly: 'MONTHLY',
   annual: 'ANNUAL',

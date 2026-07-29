@@ -12,6 +12,7 @@ const SIGNED_LICENSE_PREFIX = 'PB-LIC-V2'
 const LICENSE_APP_ID = 'private-balance'
 const LICENSE_VERSION = 2
 const ALLOWED_LICENSE_TYPES = [
+  'trial',
   'demo',
   'monthly',
   'annual',
@@ -24,6 +25,19 @@ const publicLicenseKeyJwk: JsonWebKey = {
   kty: 'EC',
   x: 'DYNiVDNSdO_PV1g6QE4n2xtPkZXdlxuY2T0FV2md7fs',
   y: 'LLO8InWuxK-EZDBqDegKqK8WQlvnnnzFSLqxynmqlzU',
+  crv: 'P-256',
+}
+
+// Clave pública DEDICADA a licencias de prueba (trial), distinta de la
+// clave de licencias de pago. Debe coincidir exactamente con
+// server/trialLicenseSecurity.ts (trialPublicLicenseKeyJwk). Ver ese
+// archivo para la explicación de por qué están separadas.
+const trialPublicLicenseKeyJwk: JsonWebKey = {
+  key_ops: ['verify'],
+  ext: true,
+  kty: 'EC',
+  x: 'DYNiVDNSdO_PV1g6QE4n2xtPkZXdlxuY2T0FV2md7fs',
+  y: 'EZDBqDegKqK8WQlvnnnzFSLqxynmqlzU',
   crv: 'P-256',
 }
 
@@ -149,14 +163,30 @@ function validatePayloadShape(
   return payload as SignedLicensePayload
 }
 
-async function importPublicLicenseKey() {
+async function importPublicLicenseKey(jwk: JsonWebKey) {
   return globalThis.crypto.subtle.importKey(
     'jwk',
-    publicLicenseKeyJwk,
+    jwk,
     { name: 'ECDSA', namedCurve: 'P-256' },
     false,
     ['verify'],
   )
+}
+
+/**
+ * El campo licenseType leído aquí NO está aún verificado criptográficamente:
+ * solo se usa para elegir qué clave pública probar. La verificación real
+ * ocurre después, comparando la firma contra esa clave — si alguien
+ * falsifica licenseType para intentar usar la clave equivocada, la firma
+ * simplemente no validará y parseAndVerifySignedLicense lanzará un error.
+ */
+function peekLicenseTypeUnsafe(payloadBase64Url: string): unknown {
+  try {
+    return decodeBase64UrlJson<{ licenseType?: unknown }>(payloadBase64Url)
+      .licenseType
+  } catch {
+    return undefined
+  }
 }
 
 async function parseAndVerifySignedLicense(
@@ -177,7 +207,10 @@ async function parseAndVerifySignedLicense(
     throw new Error('La licencia firmada está incompleta.')
   }
 
-  const key = await importPublicLicenseKey()
+  const isTrialPayload = peekLicenseTypeUnsafe(payloadBase64Url) === 'trial'
+  const key = await importPublicLicenseKey(
+    isTrialPayload ? trialPublicLicenseKeyJwk : publicLicenseKeyJwk,
+  )
   const isValidSignature = await globalThis.crypto.subtle.verify(
     { name: 'ECDSA', hash: 'SHA-256' },
     key,

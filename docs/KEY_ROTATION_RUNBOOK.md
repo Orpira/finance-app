@@ -20,6 +20,29 @@ Esto reduce la probabilidad de que licencias de producción reales puedan habers
 
 Acción de contención ya aplicada en esta rama: ambos archivos se retiraron del índice de Git (`git rm --cached`, conservando la copia local) y se añadieron patrones específicos a `.gitignore`. Esto **no** elimina el material del historial de Git; ver [Plan de purga del historial](#plan-de-purga-del-historial).
 
+## 0. Clave de trial: un perfil de riesgo distinto
+
+Todo lo anterior en este runbook describe la clave de licencias **de pago**,
+que solo se usa offline. Desde la introducción del trial autoservicio de 7
+días existe una **segunda clave, independiente**, `TRIAL_LICENSE_PRIVATE_KEY_JWK`,
+que sí vive como variable de entorno en el runtime de Vercel (ver
+`docs/LICENSE_DEVICE_REGISTRY.md#prueba-gratuita-de-7-días-trial-autoservicio`).
+
+Esto es una decisión deliberada, no un descuido: la clave de trial necesita
+firmar automáticamente en cada solicitud, así que no puede quedarse offline
+como la de pago. A cambio, si se filtrara, el daño se limita a permitir
+generar pruebas gratuitas de 7 días — nunca licencias de pago ni acceso
+indefinido. Aun así, trátala con el mismo cuidado operativo:
+
+- Rotarla sigue el mismo procedimiento (`generate-license-keys.mjs`), pero
+  el nuevo valor se actualiza en las variables de entorno de Vercel, no en
+  un archivo local — y la nueva clave pública debe copiarse en **dos**
+  sitios que deben coincidir exactamente: `server/trialLicenseSecurity.ts`
+  y `src/services/signedLicenseService.ts`.
+- Si alguna vez se sospecha de exposición, rota primero esta clave (impacto
+  bajo, sin usuarios de pago afectados) y evalúa la clave de pago por
+  separado según el resto de este documento.
+
 ## 1. Cómo reconocer una posible exposición
 
 Señales de alerta:
