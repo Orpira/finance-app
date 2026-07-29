@@ -30,8 +30,8 @@ export function LicenseGuard({ children }: LicenseGuardProps) {
         try {
           await startFreeTrial()
           result = await getLicenseStatus()
-        } catch {
-          // El trial no estaba disponible: continuar con el flujo normal.
+        } catch (error) {
+          console.warn('[trial] auto-inicio no completado:', error)
         }
       }
 
