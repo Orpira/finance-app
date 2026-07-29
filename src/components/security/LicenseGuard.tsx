@@ -6,6 +6,7 @@ import {
   getLicenseStatus,
   type LicenseAccessStatus,
 } from '../../services/licenseService'
+import { deriveTrialState, runTrialFlow } from '../../services/trialFlow'
 import { attemptFreeTrial } from '../../services/trialService'
 
 interface LicenseGuardProps {
@@ -22,16 +23,27 @@ export function LicenseGuard({ children }: LicenseGuardProps) {
       const identity = await getOrCreateDeviceIdentity()
       let result = await getLicenseStatus()
 
-      // Instalación nueva sin ninguna licencia local: intentar un trial
-      // de 7 días de forma silenciosa, sin mostrar nada al usuario. Si el
-      // servidor lo rechaza (ya usado, sin conexión, etc.) simplemente se
-      // cae a la pantalla normal de activación manual más abajo.
-      if (result.status === 'inactive' && !result.license) {
-        const trialOutcome = await attemptFreeTrial(identity)
-        console.info('[trial] resultado del auto-inicio', trialOutcome)
+      // Instalación nueva sin ninguna licencia local: intentar un trial de
+      // 7 días de forma silenciosa, sin mostrar nada al usuario. Si el
+      // dispositivo ya tiene un trial vigente, el servidor lo REACTIVA
+      // (nunca un 409 en bucle); solo un trial ya expirado o un reloj
+      // manipulado terminan mostrando pantalla. Reintentos acotados: nunca
+      // más de 2 llamadas por refresh, nunca bucle silencioso.
+      if (deriveTrialState(result) === 'eligible') {
+        const trialResult = await runTrialFlow(() => attemptFreeTrial(identity))
+        console.info('[trial] resultado del auto-inicio', trialResult)
 
-        if (trialOutcome.outcome === 'granted') {
+        if (trialResult.state === 'trial-active') {
           result = await getLicenseStatus()
+        } else if (trialResult.state === 'trial-expired') {
+          setStatus('expired')
+          return
+        } else if (trialResult.state === 'clock-tampered') {
+          setStatus('clock-tampered')
+          return
+        } else {
+          setStatus('error')
+          return
         }
       }
 
