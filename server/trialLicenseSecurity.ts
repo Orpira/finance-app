@@ -92,9 +92,12 @@ async function importTrialPrivateKey() {
  * lógica de validación, expiración y detección de manipulación de reloj que
  * ya existe en el cliente.
  */
-export async function signTrialLicense(deviceCode: string) {
+export async function signTrialLicense(deviceCode: string, expiresAtOverride?: Date) {
   const now = new Date()
-  const expiresAt = new Date(now.getTime() + TRIAL_DURATION_MS)
+  // La reactivación de un trial vigente firma un nuevo activationCode (por
+  // ejemplo tras cambiar de dispositivo o reinstalar) pero NUNCA extiende la
+  // ventana de 7 días: reusa el expiresAt original vía expiresAtOverride.
+  const expiresAt = expiresAtOverride ?? new Date(now.getTime() + TRIAL_DURATION_MS)
 
   const payload: TrialLicensePayload = {
     app: TRIAL_APP_ID,

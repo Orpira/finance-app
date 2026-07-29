@@ -8,9 +8,11 @@ import {
   type VercelResponse,
 } from '../server/apiUtils.js'
 import { LicenseRegistryError } from '../server/licenseDeviceRegistry.js'
+import { neonTrialGrantsRepository } from '../server/neonTrialGrantsRepository.js'
 import {
-  issueTrialLicense,
-  TrialAlreadyUsedError,
+  ClockTamperedError,
+  issueOrReactivateTrial,
+  TrialExpiredError,
 } from '../server/trialLicenseService.js'
 
 const requestSchema = z.object({
@@ -32,12 +34,17 @@ export default async function handler(
 
   try {
     const input = requestSchema.parse(request.body)
-    const result = await issueTrialLicense(input)
+    const result = await issueOrReactivateTrial(input, neonTrialGrantsRepository)
 
     response.status(200).json(result)
   } catch (error) {
-    if (error instanceof TrialAlreadyUsedError) {
-      response.status(409).json({ error: error.message })
+    if (error instanceof TrialExpiredError) {
+      response.status(409).json({ outcome: 'expired', error: error.message })
+      return
+    }
+
+    if (error instanceof ClockTamperedError) {
+      response.status(409).json({ outcome: 'clock-tampered', error: error.message })
       return
     }
 
