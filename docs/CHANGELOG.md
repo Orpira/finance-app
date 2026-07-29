@@ -244,6 +244,81 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
   `activation-error`, con `status`/`detail` cuando aplica). `LicenseGuard.tsx`
   registra ese outcome completo en consola en cada intento. Cubierto por
   `test/trialService.test.ts`.
+- **Rediseño del trial: idempotente, con enforcement mecánico de TDD.**
+  El diseño anterior trataba "device ya tiene trial" como un error
+  (`409 TrialAlreadyUsedError`), lo que producía un bucle sin salida para
+  un dispositivo con trial **vigente** que simplemente reabría la app
+  (409 → pantalla manual → reintento → 409...). Ahora un trial vigente se
+  **reactiva** (`200`, `outcome: 'reactivated'`, mismo `expiresAt`, nunca
+  extiende la ventana de 7 días); solo un trial ya **expirado** o un
+  **reloj manipulado** siguen devolviendo `409` (con `outcome: 'expired'`
+  / `'clock-tampered'` explícito en el body — esto reemplaza y refina el
+  `outcome: 'already-used'` descrito en la entrada anterior). Detalle
+  completo del contrato, la tabla de decisión y el diagrama de estados en
+  el nuevo [TRIAL_FLOW.md](TRIAL_FLOW.md).
+  - `server/trialEligibility.ts` (nuevo): `resolveTrialDecision`, función
+    pura sin red ni DB que decide `issue`/`reactivate`/`expired`/
+    `clock-tampered` a partir de `{ now, existing }`.
+  - `server/trialGrantsRepository.ts` (nuevo): interfaz
+    `TrialGrantsRepository` + `InMemoryTrialGrantsRepository`, para
+    testear el servicio sin Neon.
+  - `server/neonTrialGrantsRepository.ts` (nuevo): implementación real
+    contra Postgres (crea el esquema de `trial_grants` de forma
+    idempotente, igual que el diseño anterior).
+  - `server/trialLicenseService.ts`: `issueOrReactivateTrial` reemplaza a
+    `issueTrialLicense`; `TrialExpiredError`/`ClockTamperedError`
+    reemplazan a `TrialAlreadyUsedError`.
+  - `server/trialLicenseSecurity.ts`: `signTrialLicense` admite un
+    `expiresAtOverride` opcional, usado por la reactivación para firmar
+    un `activationCode` nuevo sin extender la expiración original.
+  - `api/trial-start.ts`: `issued`/`reactivated` → `200`;
+    `expired`/`clock-tampered` → `409` con `outcome` explícito en el
+    body.
+  - `src/services/trialService.ts`: `TrialAttemptOutcome` cambia
+    `already-used` por `expired`/`clock-tampered` explícitos, leídos del
+    nuevo `outcome` del body 409 (con fallback a `server-error` si el
+    409 no trae un `outcome` reconocido, p. ej. límite de dispositivos).
+  - `src/services/trialFlow.ts` (nuevo, sin React): `deriveTrialState`
+    (elegibilidad: solo instalación nueva sin ninguna licencia local) y
+    `runTrialFlow` (reintentos **acotados**, máximo 2 por defecto;
+    `granted`/`expired`/`clock-tampered` son finales, el resto se
+    reintenta hasta agotar el límite y ahí sí termina en `error`
+    visible — nunca bucle).
+  - `LicenseGuard.tsx`: consume `deriveTrialState`/`runTrialFlow` en vez
+    de llamar a `attemptFreeTrial` a mano; ya no queda ningún `catch {}`
+    silencioso en el camino del trial, cada outcome tiene manejo
+    explícito.
+  - Nota de trade-off documentada en TRIAL_FLOW.md: cada reactivación
+    firma un `activationCode` distinto, por lo que crea una fila nueva en
+    `license_devices` (no reutiliza la de la emisión original). No rompe
+    la autorización (`devicePolicy: 'single'` sigue funcionando por
+    fila), pero es acumulación de filas a monitorear a futuro.
+  - Marcador para el próximo incremento de producto (anclaje del trial
+    también por email, no implementado ahora):
+    `it.todo('ancla el trial por email para bloquear reinstalación')` en
+    `test/trialEligibility.test.ts`.
+  - **Enforcement mecánico de TDD**: `lefthook.yml` (nuevo) — pre-commit
+    corre `eslint` + `tsc --noEmit` (app y api) sobre los `.ts`/`.tsx` en
+    stage; pre-push corre la suite completa y bloquea el push si falla
+    algo. `.github/workflows/ci.yml` (nuevo) replica los mismos cuatro
+    checks en cada push/PR a `main`. `package.json`: nuevo script
+    `typecheck`, `prepare: lefthook install`.
+  - Documentación nueva/actualizada en el mismo ciclo: este changelog,
+    [TRIAL_FLOW.md](TRIAL_FLOW.md) (nuevo), [TESTING.md](TESTING.md)
+    (nuevo) y la sección "Prueba gratuita de 7 días" de
+    [LICENSE_DEVICE_REGISTRY.md](LICENSE_DEVICE_REGISTRY.md).
+  - Cubierto por `test/trialEligibility.test.ts` (5 casos + 1 todo),
+    `test/trialLicenseService.test.ts` (4 casos, incluye verificación
+    real de firma — el tipo de test que habría atrapado en rojo el bug
+    de claves de firma de trial descubierto en producción),
+    `test/trialStartEndpoint.test.ts` (5 casos) y
+    `test/trialClientFlow.test.ts` (7 casos). **Validación técnica
+    ejecutada**: `npm run typecheck` (tsc, app + api) limpio, `eslint .`
+    limpio, `npm run build` limpio, `vitest run` → 123 archivos, 1700
+    tests en verde + 1 `it.todo` pendiente (marcador intencional).
+    Verificado además manualmente contra Neon real: issue → reactivate
+    → reactivate sobre el mismo `deviceCode`, sin duplicar fila y con
+    `expiresAt` estable en las tres llamadas.
 
 ## [2026-07-06]
 

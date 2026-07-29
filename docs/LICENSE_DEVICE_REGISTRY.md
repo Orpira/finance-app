@@ -70,6 +70,11 @@ masiva:
    detección de manipulación de reloj (`clock-tampered`) y el resto de la
    validación se reutilizan sin cambios.
 
+El endpoint es **idempotente**: reabrir la app en un dispositivo con un
+trial vigente nunca produce un error, ni un bucle de reintentos. El
+contrato completo del endpoint, el diagrama de estados del cliente y la
+tabla de decisión están documentados en [TRIAL_FLOW.md](TRIAL_FLOW.md).
+
 ### Por qué una clave de firma separada para trials
 
 La clave privada de licencias de pago se usa **solo offline**, a mano, por
@@ -104,18 +109,34 @@ Después:
   `server/trialLicenseSecurity.ts` como en
   `src/services/signedLicenseService.ts` (deben coincidir exactamente).
 
-### Anti-abuso: un trial por dispositivo
+### Anti-abuso: un trial por dispositivo, con reactivación idempotente
 
-Una nueva tabla `trial_grants` (clave primaria `device_code`) impide que el
-mismo dispositivo reclame un segundo trial, incluso después de que el
-primero expire o sea revocado — el intento simplemente devuelve
-`409 Este dispositivo ya usó su prueba gratuita de 7 días.`.
+Una tabla `trial_grants` (clave primaria `device_code`) guarda como máximo
+una fila por dispositivo. A partir del rediseño idempotente, esa fila ya
+**no** se trata como "usado = error": `server/trialEligibility.ts` decide,
+según `issuedAt`/`expiresAt` frente al reloj del servidor, uno de cuatro
+resultados:
+
+- sin fila previa → emite un trial nuevo (`outcome: 'issued'`, `200`);
+- fila con trial **vigente** → **reactiva** la misma fila, firmando un
+  `activationCode` nuevo que conserva el `expiresAt` original — nunca
+  extiende la ventana de 7 días (`outcome: 'reactivated'`, `200`). Esto es
+  lo que permite que reabrir la app en un dispositivo que ya tiene trial
+  **entre**, en vez de quedar en un bucle de `409`;
+- fila con trial **expirado** → único caso que sigue devolviendo `409`
+  (`outcome: 'expired'`);
+- `issuedAt` en el futuro respecto al reloj del servidor (reloj del
+  dispositivo manipulado) → `409` con `outcome: 'clock-tampered'`.
+
+Detalle completo del contrato, la tabla de decisión y el diagrama de
+estados del cliente en [TRIAL_FLOW.md](TRIAL_FLOW.md).
 
 Esto **no** impide que alguien borre los datos de la app (o reinstale) para
 generar un `deviceCode` nuevo y reclamar otro trial: es una limitación
 conocida y aceptada, coherente con el objetivo de atracción masiva de
 usuarios más que blindaje anti-piratería. Si en el futuro se requiere cerrar
-ese hueco, las opciones son limitar por IP en `api/trial-start.ts`, pedir un
-email al iniciar el trial, o migrar el trial al sistema nativo de prueba de
-las tiendas (Google Play Billing / StoreKit vía RevenueCat), que gestiona
-esto a nivel de cuenta de la tienda.
+ese hueco, las opciones son limitar por IP en `api/trial-start.ts`, anclar
+el trial también por **email** además del `deviceCode` (ver "Próximo
+incremento" en TRIAL_FLOW.md), o migrar el trial al sistema nativo de
+prueba de las tiendas (Google Play Billing / StoreKit vía RevenueCat), que
+gestiona esto a nivel de cuenta de la tienda.

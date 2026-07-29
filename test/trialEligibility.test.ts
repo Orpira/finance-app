@@ -58,4 +58,10 @@ describe('resolveTrialDecision', () => {
 
     expect(result).toEqual({ decision: 'clock-tampered', existing })
   })
+
+  // Marcador vivo del siguiente incremento (ver docs/TRIAL_FLOW.md,
+  // "Próximo incremento"): anclar el trial también por email, además de
+  // deviceCode, para cerrar el hueco de "borrar datos/reinstalar y
+  // reclamar otro trial" documentado en LICENSE_DEVICE_REGISTRY.md.
+  it.todo('ancla el trial por email para bloquear reinstalación')
 })
