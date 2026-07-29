@@ -74,13 +74,40 @@ describe('attemptFreeTrial', () => {
     )
   })
 
-  it('devuelve already-used en 409 y no intenta activar nada', async () => {
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(false, 409, { error: 'ya usado' }))
+  it('devuelve expired en 409 con outcome expired y no intenta activar nada', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      jsonResponse(false, 409, { outcome: 'expired', error: 'expiro' }),
+    )
 
     const outcome = await attemptFreeTrial(identity)
 
-    expect(outcome).toEqual({ outcome: 'already-used' })
+    expect(outcome).toEqual({ outcome: 'expired' })
     expect(activateSignedLicense).not.toHaveBeenCalled()
+  })
+
+  it('devuelve clock-tampered en 409 con outcome clock-tampered', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      jsonResponse(false, 409, { outcome: 'clock-tampered', error: 'reloj no confiable' }),
+    )
+
+    const outcome = await attemptFreeTrial(identity)
+
+    expect(outcome).toEqual({ outcome: 'clock-tampered' })
+    expect(activateSignedLicense).not.toHaveBeenCalled()
+  })
+
+  it('un 409 sin outcome reconocido cae a server-error', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      jsonResponse(false, 409, { error: 'limite de dispositivos alcanzado' }),
+    )
+
+    const outcome = await attemptFreeTrial(identity)
+
+    expect(outcome).toEqual({
+      outcome: 'server-error',
+      status: 409,
+      detail: 'limite de dispositivos alcanzado',
+    })
   })
 
   it('devuelve server-error con status y detail cuando el servidor rechaza', async () => {

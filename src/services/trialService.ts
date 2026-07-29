@@ -11,7 +11,8 @@ const GENERIC_SERVER_ERROR_MESSAGE = 'No se pudo iniciar la prueba gratuita.'
 
 export type TrialAttemptOutcome =
   | { outcome: 'granted'; license: Awaited<ReturnType<typeof activateSignedLicense>> }
-  | { outcome: 'already-used' }
+  | { outcome: 'expired' }
+  | { outcome: 'clock-tampered' }
   | { outcome: 'server-error'; status: number; detail: string }
   | { outcome: 'network-error'; detail: string }
   | { outcome: 'activation-error'; detail: string }
@@ -45,7 +46,18 @@ export async function attemptFreeTrial(
   }
 
   if (response.status === 409) {
-    return { outcome: 'already-used' }
+    const body = await response
+      .json()
+      .catch(() => ({}) as { outcome?: string; error?: string })
+
+    if (body.outcome === 'expired') return { outcome: 'expired' }
+    if (body.outcome === 'clock-tampered') return { outcome: 'clock-tampered' }
+
+    return {
+      outcome: 'server-error',
+      status: 409,
+      detail: body.error ?? GENERIC_SERVER_ERROR_MESSAGE,
+    }
   }
 
   if (!response.ok) {
