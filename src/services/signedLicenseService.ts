@@ -36,8 +36,8 @@ const trialPublicLicenseKeyJwk: JsonWebKey = {
   key_ops: ['verify'],
   ext: true,
   kty: 'EC',
-  x: 'DYNiVDNSdO_PV1g6QE4n2xtPkZXdlxuY2T0FV2md7fs',
-  y: 'EZDBqDegKqK8WQlvnnnzFSLqxynmqlzU',
+  x: 'LzRzoVexyh_gLcNQ1FUR2FNP9cVht6bPwB6KaIVhslQ',
+  y: 'LLxQ49VMUVnMeEZ9yScyjKWPlEFGFprZ32Zkh6aS-j8',
   crv: 'P-256',
 }
 
