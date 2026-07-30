@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "prepare": "lefthook install",
+    "prepare": "node -e \"if (!process.env.VERCEL && !process.env.CI) require('child_process').execSync('lefthook install', {stdio: 'inherit'})\""
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
