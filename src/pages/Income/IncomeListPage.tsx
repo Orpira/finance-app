@@ -1,4 +1,4 @@
-import { CheckCircle2, CheckSquare, ChevronLeft, ChevronRight, Eye, Pencil, Plus, ReceiptText, RotateCcw, Square, Trash2 } from 'lucide-react'
+import { CheckCircle2, CheckSquare, ChevronLeft, ChevronRight, Pencil, Plus, ReceiptText, RotateCcw, Square, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
@@ -856,14 +856,7 @@ export function IncomeListPage() {
                     </div>
 
                     <div className="flex flex-wrap justify-start gap-2">
-                      <Link
-                        aria-label="Ver detalle"
-                        className="inline-flex size-10 items-center justify-center rounded-md border border-sky-200 text-sky-700 transition hover:bg-sky-50"
-                        title="Ver detalle"
-                        to={`/income/${income.id}`}
-                      >
-                        <Eye className="size-4" aria-hidden="true" />
-                      </Link>
+                      
                       {isClosedSeason ? (
                         <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:text-slate-200!">
                           Solo consulta

@@ -1,4 +1,5 @@
 import type { ServiceIncome } from '../types/service'
+import type { IncomeCalculationMethod, WorkedTimeUnit } from '../catalogs/incomeCalculationMethods'
 import { DEFAULT_EXIT_DURATION_MINUTES } from '../config/serviceTimer'
 
 export type ServiceDurationLabel = '15' | '30' | '60' | '120' | 'Salida'
@@ -20,12 +21,25 @@ export interface EffectiveFinancialDurationInput {
   actualDuration?: number
   duration?: number
   durationLabel?: string
+  incomeCalculationMethod?: IncomeCalculationMethod
+  workedTime?: number
+  workedTimeUnit?: WorkedTimeUnit
 }
 
-/** Preserves the stored-duration precedence used by financial summaries. */
+/**
+ * Preserves the stored-duration precedence used by financial summaries.
+ * 'hourly_workday' no guarda duration/actualDuration (siempre 0): la
+ * duración real vive en workedTime/workedTimeUnit.
+ */
 export function getEffectiveFinancialDuration(
   input: EffectiveFinancialDurationInput,
 ) {
+  if (input.incomeCalculationMethod === 'hourly_workday') {
+    return input.workedTimeUnit === 'hours'
+      ? (input.workedTime ?? 0) * 60
+      : (input.workedTime ?? 0)
+  }
+
   return input.actualDuration ?? input.duration
 }
 

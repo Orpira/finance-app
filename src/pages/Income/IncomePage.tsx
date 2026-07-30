@@ -768,25 +768,7 @@ export function IncomePage() {
               </div>
             </label>
 
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-700">
-                Valor por hora
-              </span>
-              <input
-                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                min={0}
-                onChange={(event) => setHourlyRateApplied(Number(event.target.value))}
-                step="0.01"
-                type="number"
-                value={hourlyRateApplied}
-              />
-              <span className="text-xs text-slate-500">
-                Autocompletado desde Configuración. Modificarlo solo afecta
-                este ingreso.
-              </span>
-            </label>
-
-            <div className="flex flex-col gap-2 sm:col-span-2">
+            <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-700">
                 Total calculado
               </span>
