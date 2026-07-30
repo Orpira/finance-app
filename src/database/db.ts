@@ -5,6 +5,7 @@ import type { CutoffReport } from '../types/cutoffReport'
 import type { EarningPeriod } from '../types/earningPeriod'
 import type { ExchangeRate } from '../types/exchangeRate'
 import type { Expense } from '../types/expense'
+import type { IncomeAdditional } from '../types/incomeAdditional'
 import type { AppLicense } from '../types/license'
 import type { ServiceIncome } from '../types/service'
 import type { AppSettings } from '../types/settings'
@@ -22,6 +23,7 @@ import {
   toLegacyUserType,
 } from '../utils/usageMode'
 import { assertAllExpenseAdjustmentsAreValid } from '../utils/expenseAdjustments'
+import { assertAllIncomeAdditionalsAreValid } from '../utils/incomeAdditionals'
 import { getIncomeType, normalizeAdjustmentIncome } from '../utils/incomeTypes'
 import { getNumericDurationLabel } from '../utils/serviceDuration'
 import { normalizeReportStatus } from '../catalogs/reportStatuses'
@@ -50,6 +52,9 @@ export function createDefaultSettings(): AppSettings {
     defaultCurrency: 'EUR',
     secondaryCurrency: 'COP',
     incomePercentage: 50,
+    incomeCalculationMethod: 'service_duration',
+    hourlyRate: 0,
+    workedTimeUnit: 'minutes',
     rateMode: 'manual',
     usageMode: 'professional',
     userType: 'primary',
@@ -101,6 +106,7 @@ export class FinanceDB extends Dexie {
     PersistedKnowledgeSnapshot,
     PersistedKnowledgeSnapshot['knowledgeSnapshotId']
   >
+  incomeAdditionals!: Table<IncomeAdditional, number>
 
   constructor() {
     super('finance-app')
@@ -767,6 +773,46 @@ export class FinanceDB extends Dexie {
           }),
       )
 
+    this.version(29)
+      .stores({
+        services:
+          '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt',
+        expenses:
+          '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+        appointments:
+          '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+        cutoffReports:
+          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+        earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+        licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+        automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+        communicationChannels: 'id,type,provider,status,updatedAt',
+        deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+        conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+        knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+        knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+        financialSnapshots:
+          'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+        knowledgeSnapshots:
+          'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+        // PB-IS-0007: Adicionales — 0..N por ingreso, tabla nueva.
+        incomeAdditionals: '++id,incomeId,createdAt',
+      })
+      .upgrade((transaction) =>
+        transaction
+          .table<AppSettings, AppSettings['id']>('settings')
+          .toCollection()
+          .modify((settings) => {
+            // Usuario existente sin método configurado: se asume 'service_duration',
+            // el único método que existía antes de PB-IS-0007. Nunca se toca 'services'.
+            settings.incomeCalculationMethod ??= 'service_duration'
+            settings.hourlyRate ??= 0
+            settings.workedTimeUnit ??= 'minutes'
+          }),
+      )
+
     this.financialSnapshots.hook('updating', () => {
       throw new Error('SNAPSHOT_PERSISTENCE_APPEND_ONLY')
     })
@@ -806,6 +852,7 @@ export async function resetDatabase() {
       db.earningPeriods,
       db.automationOutbox,
       db.communicationChannels,
+      db.incomeAdditionals,
     ],
     async () => {
       await Promise.all([
@@ -818,6 +865,7 @@ export async function resetDatabase() {
         db.earningPeriods.clear(),
         db.automationOutbox.clear(),
         db.communicationChannels.clear(),
+        db.incomeAdditionals.clear(),
       ])
 
       await db.settings.put(createDefaultSettings())
@@ -835,6 +883,7 @@ export async function exportDatabaseSnapshot() {
     cutoffReports,
     earningPeriods,
     communicationChannels,
+    incomeAdditionals,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -845,6 +894,7 @@ export async function exportDatabaseSnapshot() {
       db.cutoffReports.toArray(),
       db.earningPeriods.toArray(),
       db.communicationChannels.toArray(),
+      db.incomeAdditionals.toArray(),
     ])
 
   return {
@@ -856,6 +906,7 @@ export async function exportDatabaseSnapshot() {
     cutoffReports,
     earningPeriods,
     communicationChannels,
+    incomeAdditionals,
     exportedAt: new Date().toISOString(),
   }
 }
@@ -880,6 +931,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
 
   // Validate before clearing local data: an invalid backup must never partially restore.
   assertAllExpenseAdjustmentsAreValid(normalizedServices, normalizedExpenses)
+  assertAllIncomeAdditionalsAreValid(normalizedServices, snapshot.incomeAdditionals ?? [])
 
   await db.transaction(
     'rw',
@@ -893,6 +945,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
       db.earningPeriods,
       db.automationOutbox,
       db.communicationChannels,
+      db.incomeAdditionals,
     ],
     async () => {
       await Promise.all([
@@ -905,6 +958,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.earningPeriods.clear(),
         db.automationOutbox.clear(),
         db.communicationChannels.clear(),
+        db.incomeAdditionals.clear(),
       ])
 
       await Promise.all([
@@ -928,6 +982,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.cutoffReports.bulkPut(snapshot.cutoffReports ?? []),
         db.earningPeriods.bulkPut(snapshot.earningPeriods ?? []),
         db.communicationChannels.bulkPut(snapshot.communicationChannels ?? []),
+        db.incomeAdditionals.bulkPut(snapshot.incomeAdditionals ?? []),
       ])
 
       if (!snapshot.settings?.length) {

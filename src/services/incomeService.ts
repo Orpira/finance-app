@@ -70,6 +70,7 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
     percentage: isServiceIncome(normalizedInput)
       ? earningPeriod?.percentage ?? normalizedInput.percentage
       : 0,
+    incomeCalculationMethod: normalizedInput.incomeCalculationMethod ?? 'service_duration',
     updatedAt: createdAt,
   })
   const income: ServiceIncome = {
@@ -167,10 +168,15 @@ export async function updateServiceIncome(
     assertReportStatusUpdateIsAllowed(latestIncome, settings.usageMode, updates)
     assertReportedRecordUpdateIsAllowed(latestIncome, updates)
 
+    // El método de cálculo es inmutable una vez creado el ingreso (PB-IS-0007,
+    // sección 9): editar Configuración nunca debe alterar ingresos históricos.
+    const safeUpdates: UpdateServiceIncomeInput = { ...updates }
+    delete safeUpdates.incomeCalculationMethod
+
     const updatedIncome = normalizeIncomeByType(
       normalizeReportStatus({
         ...latestIncome,
-        ...updates,
+        ...safeUpdates,
         usageMode: latestIncome.usageMode ?? settings.usageMode,
         updatedAt: new Date().toISOString(),
       }),
@@ -197,7 +203,7 @@ export async function deleteServiceIncome(id: number) {
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentIncome)
   }
-  return db.transaction('rw', [db.services, db.expenses], async () => {
+  return db.transaction('rw', [db.services, db.expenses, db.incomeAdditionals], async () => {
     assertRecordIsNotReported(await db.services.get(id))
     const linkedAdjustment = await db.expenses
       .where('relatedIncomeId')
@@ -209,6 +215,9 @@ export async function deleteServiceIncome(id: number) {
         'No puedes eliminar un ingreso que tiene ajustes relacionados. Elimina primero sus ajustes.',
       )
     }
+    // Los Adicionales no son un movimiento financiero independiente (PB-IS-0007,
+    // 16): se borran en cascada con el ingreso, a diferencia de los ajustes.
+    await db.incomeAdditionals.where('incomeId').equals(id).delete()
     return db.services.delete(id)
   })
 }

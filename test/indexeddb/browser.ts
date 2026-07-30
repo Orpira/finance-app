@@ -1,6 +1,11 @@
 import Dexie from 'dexie'
 
-import { FinanceDB } from '../../src/database/db'
+import {
+  exportDatabaseSnapshot,
+  FinanceDB,
+  importDatabaseSnapshot,
+  resetDatabase,
+} from '../../src/database/db'
 import { createAIConversationService } from '../../src/intelligence/ai-conversation/service'
 import { FinancialSnapshotRepository } from '../../src/intelligence/financial-snapshot/financialSnapshotRepository'
 import { canonicalizeValidatedSnapshotCandidate } from '../../src/intelligence/financial-snapshot/snapshotCanonicalizer'
@@ -280,7 +285,7 @@ async function run() {
 
   let database = new FinanceDB()
   await database.open()
-  assert(database.verno === 28, 'physical migration upgrades from v25 to v28')
+  assert(database.verno === 29, 'physical migration upgrades from v25 to v29')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration preserves v25 conversationMemories table')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v25 base')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v25 base')
@@ -339,7 +344,7 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 28, 'physical migration upgrades from v24 to v28')
+  assert(database.verno === 29, 'physical migration upgrades from v24 to v29')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration keeps conversationMemories from v24 base')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v24 base')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v24 base')
@@ -367,7 +372,7 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 28, 'physical migration opens schema v28')
+  assert(database.verno === 29, 'physical migration opens schema v29')
   assert(database.tables.some((table) => table.name === 'financialSnapshots'), 'migration creates financialSnapshots')
   assert(database.tables.some((table) => table.name === 'knowledgeSnapshots'), 'migration creates knowledgeSnapshots')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'migration creates conversationMemories')
@@ -379,6 +384,26 @@ async function run() {
   const migratedLegacySettings = await database.settings.get('app')
   assert(migratedLegacySettings?.businessName === legacySettings.businessName, 'v28 migration preserves legacy settings businessName (v22 origin)')
   assertOnboardingBackfilledForExistingUser(migratedLegacySettings, 'v22')
+
+  assert(migratedLegacySettings?.incomeCalculationMethod === 'service_duration', 'v29 migration backfills incomeCalculationMethod with service_duration for pre-existing settings')
+  assert(migratedLegacySettings?.hourlyRate === 0, 'v29 migration backfills hourlyRate with 0 for pre-existing settings')
+  assert(migratedLegacySettings?.workedTimeUnit === 'minutes', 'v29 migration backfills workedTimeUnit with minutes for pre-existing settings')
+  assert(database.tables.some((table) => table.name === 'incomeAdditionals'), 'v29 migration creates the incomeAdditionals table')
+
+  const additionalId = await database.incomeAdditionals.add({
+    incomeId: 7,
+    amount: 15,
+    description: 'Propina',
+    createdAt: at,
+  })
+  const additionalsForMigratedIncome = await database.incomeAdditionals
+    .where('incomeId')
+    .equals(7)
+    .toArray()
+  assert(
+    additionalsForMigratedIncome.some((item) => item.id === additionalId && item.amount === 15),
+    'incomeAdditionals table supports add() and where(incomeId) lookups against a migrated income',
+  )
 
   assert(
     database.services.schema.idxByName.reportStatusCode !== undefined,
@@ -400,6 +425,41 @@ async function run() {
   assert(
     unreviewedServices.some((service) => service.id === 7),
     'reportStatusCode index resolves the migrated legacy income',
+  )
+
+  const snapshotWithAdditionals = await exportDatabaseSnapshot()
+  assert(
+    snapshotWithAdditionals.incomeAdditionals.some(
+      (item) => item.incomeId === 7 && item.amount === 15,
+    ),
+    'exportDatabaseSnapshot includes incomeAdditionals',
+  )
+
+  await importDatabaseSnapshot(snapshotWithAdditionals)
+  const additionalsAfterRoundtrip = await database.incomeAdditionals
+    .where('incomeId')
+    .equals(7)
+    .toArray()
+  assert(
+    additionalsAfterRoundtrip.some((item) => item.amount === 15),
+    'importDatabaseSnapshot restores incomeAdditionals',
+  )
+
+  await expectReject(
+    () =>
+      importDatabaseSnapshot({
+        ...snapshotWithAdditionals,
+        incomeAdditionals: [{ incomeId: 999999, amount: 5, createdAt: at }],
+      }),
+    'importDatabaseSnapshot rejects a backup with an orphaned incomeAdditional (fail-closed)',
+  )
+  const additionalsAfterRejectedImport = await database.incomeAdditionals
+    .where('incomeId')
+    .equals(7)
+    .toArray()
+  assert(
+    additionalsAfterRejectedImport.some((item) => item.amount === 15),
+    'a rejected import does not clear pre-existing incomeAdditionals',
   )
 
   const conversationService = createAIConversationService()
@@ -944,6 +1004,38 @@ async function run() {
   assert(await database.financialSnapshots.count() === 7, 'second full reopen preserves repository, coexistence and shadow revisions')
   assert(await database.knowledgeSnapshots.count() === 5, 'second full reopen preserves knowledge append-only history including shadow observations')
   database.close()
+  await Dexie.delete(databaseName)
+
+  const resetDatabaseInstance = new FinanceDB()
+  await resetDatabaseInstance.open()
+  const seededIncomeId = await resetDatabaseInstance.services.add({
+    date: '2026-01-01',
+    duration: 0,
+    totalAmount: 10,
+    currency: 'EUR',
+    percentage: 50,
+    realGain: 10,
+    eurValue: 10,
+    copValue: 0,
+    exchangeRateUsed: 1,
+  })
+  await resetDatabaseInstance.incomeAdditionals.add({
+    incomeId: seededIncomeId,
+    amount: 5,
+    createdAt: at,
+  })
+  await resetDatabase()
+  assert((await resetDatabaseInstance.services.count()) === 0, 'resetDatabase clears services')
+  assert(
+    (await resetDatabaseInstance.incomeAdditionals.count()) === 0,
+    'resetDatabase clears incomeAdditionals',
+  )
+  const settingsAfterReset = await resetDatabaseInstance.settings.get('app')
+  assert(
+    settingsAfterReset?.incomeCalculationMethod === 'service_duration',
+    'resetDatabase reseeds the default incomeCalculationMethod',
+  )
+  resetDatabaseInstance.close()
   await Dexie.delete(databaseName)
 
   localStorage.removeItem('finance-app:settings')

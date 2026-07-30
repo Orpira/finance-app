@@ -9,6 +9,7 @@ import type { CutoffReport } from '../types/cutoffReport'
 import type { EarningPeriod } from '../types/earningPeriod'
 import type { ExchangeRate } from '../types/exchangeRate'
 import type { Expense } from '../types/expense'
+import type { IncomeAdditional } from '../types/incomeAdditional'
 import type { ServiceIncome } from '../types/service'
 import type { CommunicationChannel } from '../types/communicationChannel'
 import { downloadText } from '../utils/download'
@@ -37,6 +38,7 @@ export interface BackupData {
   cutoffReports?: CutoffReport[]
   earningPeriods?: EarningPeriod[]
   communicationChannels?: CommunicationChannel[]
+  incomeAdditionals?: IncomeAdditional[]
 }
 
 export interface EncryptedBackupFile {
@@ -123,7 +125,7 @@ export async function importBackup(file: File) {
   await migrateLegacyRecordsToSeasons()
 }
 
-function backupDataToSnapshot(backupData: BackupData): DatabaseSnapshot {
+export function backupDataToSnapshot(backupData: BackupData): DatabaseSnapshot {
   return {
     appointments: backupData.appointments ?? [],
     exchangeRates: backupData.exchangeRates ?? [],
@@ -134,6 +136,7 @@ function backupDataToSnapshot(backupData: BackupData): DatabaseSnapshot {
     cutoffReports: backupData.cutoffReports ?? [],
     earningPeriods: backupData.earningPeriods ?? [],
     communicationChannels: backupData.communicationChannels ?? [],
+    incomeAdditionals: backupData.incomeAdditionals ?? [],
   }
 }
 
@@ -147,6 +150,7 @@ export async function generateBackupData(): Promise<BackupData> {
     cutoffReports,
     earningPeriods,
     communicationChannels,
+    incomeAdditionals,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -157,6 +161,7 @@ export async function generateBackupData(): Promise<BackupData> {
       db.cutoffReports.toArray(),
       db.earningPeriods.toArray(),
       db.communicationChannels.toArray(),
+      db.incomeAdditionals.toArray(),
     ])
 
   return {
@@ -171,6 +176,7 @@ export async function generateBackupData(): Promise<BackupData> {
     cutoffReports,
     earningPeriods,
     communicationChannels,
+    incomeAdditionals,
   }
 }
 

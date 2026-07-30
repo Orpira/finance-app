@@ -9,7 +9,7 @@ El proyecto usa dos capas de persistencia con responsabilidades distintas:
 
 ## Base local Dexie
 
-La base FinanceDB está definida en src/database/db.ts y llega actualmente a la versión 24.
+La base FinanceDB está definida en src/database/db.ts y llega actualmente a la versión 29.
 
 ### Tablas locales confirmadas
 
@@ -24,15 +24,19 @@ La base FinanceDB está definida en src/database/db.ts y llega actualmente a la 
 - automationOutbox.
 - communicationChannels.
 - deviceIdentity.
+- conversationMemories.
+- knowledgeDocuments.
+- knowledgeChunks.
 - financialSnapshots.
 - knowledgeSnapshots.
+- incomeAdditionals.
 
 ### Finalidad de tablas clave
 
-- services: ingresos y servicios completados.
+- services: ingresos y servicios completados. Desde PB-IS-0007 (v29) cada ingreso de tipo servicio guarda además el método de cálculo usado (`incomeCalculationMethod`), snapshot inmutable, y los parámetros con los que se calculó (`hourlyRateApplied`, `workedTime`/`workedTimeUnit`, `additionalsTotal`, `totalIncome`).
 - expenses: egresos y ajustes.
 - appointments: agenda y citas.
-- settings: configuración global del negocio y del dispositivo.
+- settings: configuración global del negocio y del dispositivo. Desde PB-IS-0007 (v29) incluye el método de cálculo del ingreso por defecto, la unidad de tiempo y el valor por hora.
 - exchangeRates: tasas históricas y fallback offline.
 - cutoffReports: snapshots o cierres de reportes.
 - earningPeriods: temporadas / periodos del modo Profesional.
@@ -40,8 +44,11 @@ La base FinanceDB está definida en src/database/db.ts y llega actualmente a la 
 - automationOutbox: cola local de eventos hacia Vercel/n8n.
 - communicationChannels: estado local del canal de comunicación en cliente.
 - deviceIdentity: userCode y deviceCode persistidos localmente.
+- conversationMemories: historial de sesiones conversacionales del Copiloto IA.
+- knowledgeDocuments / knowledgeChunks: material de conocimiento indexado para el Copiloto IA.
 - financialSnapshots: artefactos Financial Snapshot sellados, persistidos de forma local y append-only; no forma parte del libro financiero operativo.
 - knowledgeSnapshots: artefactos Knowledge Snapshot sellados, persistidos localmente de forma transaccional, append-only e idempotente; no forma parte del libro financiero operativo.
+- incomeAdditionals: entidad "Adicional" (PB-IS-0007) — 0..N importes positivos vinculados a un ingreso vía `incomeId`, que se suman íntegros (100%, nunca sujetos al % de temporada) al `realGain` final. Se eliminan en cascada cuando se borra el ingreso padre, a diferencia de los ajustes en `expenses`, que bloquean ese borrado.
 
 ### Financial Snapshot local (v23)
 
@@ -74,6 +81,18 @@ La misma key y fingerprint se resuelven idempotentemente incluso tras cerrar y r
 Con `VITE_KNOWLEDGE_SHADOW_ENABLED=true`, esa misma ruta observacional puede ejecutar a continuación el pipeline completo de Knowledge sobre el `SealedFinancialSnapshot` ya resuelto y persistir `knowledgeSnapshots` mediante `KnowledgeSnapshotRepository`. La operación sigue siendo local-first, append-only, idempotente y sin cambios sobre tablas financieras operativas.
 
 Knowledge Shadow Mode no crea UI, no altera Home ni Reports, no promueve Knowledge a fuente oficial y no introduce sincronización remota. Si el pipeline de Knowledge falla, `financialSnapshots` conserva su comportamiento observacional normal y no se persisten artefactos parciales en `knowledgeSnapshots`.
+
+### Método de cálculo del ingreso y Adicionales (v29)
+
+`incomeAdditionals` usa `id` autoincremental como clave primaria, con índices `incomeId` y `createdAt`. Cada fila representa un importe positivo ("Adicional") vinculado a un ingreso de `services` vía `incomeId`, con `amount`, `description` opcional y timestamps.
+
+La migración v29 es 100% aditiva: no modifica ningún registro existente de `services`. Los campos nuevos de `ServiceIncome` (`incomeCalculationMethod`, `additionalsTotal`, `totalIncome`, `workedTime`, `workedTimeUnit`, `workedHours`, `hourlyRateApplied`, `timerUsed`) son opcionales y se resuelven con fallback (`?? 'service_duration'`) en tiempo de lectura, por lo que los ingresos históricos no requieren backfill. El `.upgrade()` de la migración solo inicializa `settings.incomeCalculationMethod`/`hourlyRate`/`workedTimeUnit` con sus valores por defecto (`'service_duration'`/`0`/`'minutes'`) si el usuario no tenía ninguno configurado.
+
+`resetDatabase()`, `exportDatabaseSnapshot()`/`importDatabaseSnapshot()` y la cadena de backup (`generateBackupData`/`backupDataToSnapshot`) incluyen `incomeAdditionals`. La importación de un backup con un `incomeAdditional` que referencia un `incomeId` inexistente se rechaza entera antes de limpiar datos locales (`assertAllIncomeAdditionalsAreValid`, fail-closed), igual que ya ocurre con los ajustes de `expenses`.
+
+Al eliminar un ingreso (`deleteServiceIncome`), sus `incomeAdditionals` se borran en cascada dentro de la misma transacción — a diferencia de los ajustes de `expenses`, que bloquean el borrado del ingreso padre mientras existan.
+
+Migración verificada con el harness real de IndexedDB (`test/indexeddb/browser.ts`, Chrome real vía CDP): backfill de settings sobre orígenes v25/v24/v22, tabla `incomeAdditionals` operativa, y roundtrip completo de export/import/reset.
 
 ## Neon PostgreSQL
 

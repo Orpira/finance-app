@@ -3,9 +3,9 @@ import {
   CalendarRange,
   Eye,
   EyeOff,
-  Landmark,
   MinusCircle,
   PlusCircle,
+  Sparkles,
   TrendingUp,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -27,8 +27,8 @@ import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings } from '../../types/settings'
-import { formatCurrency } from '../../utils/currency'
-import { calculateFinancialTotals } from '../../utils/financeStats'
+import { formatCurrency, roundMoney } from '../../utils/currency'
+import { calculateFinancialTotals, sumIncomeAdditionalsValue } from '../../utils/financeStats'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type {
@@ -302,12 +302,17 @@ export function HomePage() {
     </section>
   }
 
+  const currentAdditionalsTotal = sumIncomeAdditionalsValue(currentIncomes, settings.defaultCurrency)
+  const previousAdditionalsTotal = sumIncomeAdditionalsValue(previousIncomes, settings.defaultCurrency)
+
   const cards = [
     {
       icon: PlusCircle,
       label: 'Ingresos',
-      value: totals.current.primaryIncome,
-      previous: totals.previous.primaryIncome,
+      // additionalsTotal se muestra aparte en la tarjeta "Adicionales": no se
+      // suma acá para no mostrar el mismo dinero contado dos veces.
+      value: roundMoney(totals.current.primaryIncome - currentAdditionalsTotal),
+      previous: roundMoney(totals.previous.primaryIncome - previousAdditionalsTotal),
       sensitive: true,
       tone: 'text-emerald-700 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300',
     },
@@ -319,7 +324,20 @@ export function HomePage() {
       sensitive: true,
       tone: 'text-rose-700 bg-rose-100 dark:bg-rose-950 dark:text-rose-300',
     },
-    {
+   
+    ...(!isBasicMode(settings)
+      ? [
+          {
+            icon: Sparkles,
+            label: 'Adicionales',
+            value: currentAdditionalsTotal,
+            previous: previousAdditionalsTotal,
+            sensitive: true,
+            tone: 'text-amber-700 bg-amber-100 dark:bg-amber-950 dark:text-amber-300',
+          },
+        ]
+      : []),
+       {
       icon: TrendingUp,
       label: isBasicMode(settings) ? 'Balance' : 'Ganancia',
       value: totals.current.primaryNet,
@@ -359,7 +377,7 @@ export function HomePage() {
         </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {cards.map(({ icon: Icon, label, previous, sensitive, tone, value }) => (
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900" key={label}>
             <div className="flex items-center justify-between gap-3">
@@ -427,7 +445,7 @@ export function HomePage() {
         )}
       </article>
 
-      <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      {/* <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between gap-3">
           <span className="flex size-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
             <Landmark className="size-5" aria-hidden="true" />
@@ -454,7 +472,7 @@ export function HomePage() {
             </span>
           </p>
         </div>
-      </article>
+      </article> */}
 
       {!isBasicMode(settings) && (
         <Link className="inline-flex h-12 items-center justify-center gap-2 self-stretch rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:self-end" to="/resumen-completo">

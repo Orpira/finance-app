@@ -1,4 +1,4 @@
-import { CheckSquare, ChevronLeft, ChevronRight, Eye, Pencil, ReceiptText, Square, Trash2 } from 'lucide-react'
+import { CheckCircle2, CheckSquare, ChevronLeft, ChevronRight, Eye, Pencil, Plus, ReceiptText, RotateCcw, Square, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
@@ -812,9 +812,17 @@ export function IncomeListPage() {
                         </div>
                         {!isBasicMode(settings ?? undefined) && isService && <p className="mt-1 text-sm text-slate-500">
                           {getIncomeDurationDisplay(income)} ·{' '}
-                          {income.percentage}% ·{' '}
+                          {/* {income.percentage}% ·{' '} */}
                           {getPaymentTypeLabel(income.paymentType)}
                         </p>}
+                        {!isBasicMode(settings ?? undefined) && isService && Boolean(income.additionalsTotal) && (
+                          <p className="mt-1 text-sm text-emerald-700">
+                            + Adicionales: <SensitiveAmount hidden={hidden} value={formatCurrency(
+                              income.additionalsTotal as number,
+                              income.currency as CurrencyCode,
+                            )} />
+                          </p>
+                        )}
                         {/* <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                           Ingreso: {formatDate(income.date)} · Creado: {formatDateTimeLabel(income.createdAt)} · Reportado: {reportBadge.isReported ? formatDateTimeLabel(income.reportedAt) : '—'}
                         </p> */} 
@@ -849,11 +857,12 @@ export function IncomeListPage() {
 
                     <div className="flex flex-wrap justify-start gap-2">
                       <Link
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-sky-200 px-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-50"
+                        aria-label="Ver detalle"
+                        className="inline-flex size-10 items-center justify-center rounded-md border border-sky-200 text-sky-700 transition hover:bg-sky-50"
+                        title="Ver detalle"
                         to={`/income/${income.id}`}
                       >
                         <Eye className="size-4" aria-hidden="true" />
-                        Ver detalle
                       </Link>
                       {isClosedSeason ? (
                         <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:text-slate-200!">
@@ -862,11 +871,13 @@ export function IncomeListPage() {
                       ) : reportBadge.isReported ? (
                         canReport ? (
                         <button
-                          className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                          aria-label="Devolver a pendiente"
+                          className="inline-flex size-10 items-center justify-center rounded-md border border-emerald-200 text-emerald-700 transition hover:bg-emerald-50"
                           onClick={() => handleReturnToPending(income)}
+                          title="Devolver a pendiente"
                           type="button"
                         >
-                          Devolver a pendiente
+                          <RotateCcw className="size-4" aria-hidden="true" />
                         </button>
                         ) : (
                           <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:text-slate-200!">
@@ -876,26 +887,40 @@ export function IncomeListPage() {
                       ) : (
                       <>
                       <Link
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                        aria-label="Modificar"
+                        className="inline-flex size-10 items-center justify-center rounded-md border border-slate-200 text-slate-700 transition hover:bg-slate-50"
+                        title="Modificar"
                         to={`/income/${income.id}/editar`}
                       >
                         <Pencil className="size-4" aria-hidden="true" />
-                        Modificar
                       </Link>
+                      {isService && (
+                        <Link
+                          aria-label="Adicional"
+                          className="inline-flex size-10 items-center justify-center rounded-md border border-emerald-200 text-emerald-700 transition hover:bg-emerald-50"
+                          title="Añadir adicional"
+                          to={`/income/${income.id}/editar`}
+                        >
+                          <Plus className="size-4" aria-hidden="true" />
+                        </Link>
+                      )}
                       {canReport && <button
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-200 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                        aria-label="Marcar como reportado"
+                        className="inline-flex size-10 items-center justify-center rounded-md border border-emerald-200 text-emerald-700 transition hover:bg-emerald-50"
                         onClick={() => handleRequestMarkAsReported(income)}
+                        title="Marcar como reportado"
                         type="button"
                       >
-                        Marcar como reportado
+                        <CheckCircle2 className="size-4" aria-hidden="true" />
                       </button>}
                       <button
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+                        aria-label="Eliminar"
+                        className="inline-flex size-10 items-center justify-center rounded-md border border-rose-200 text-rose-700 transition hover:bg-rose-50"
                         onClick={() => handleDeleteIncome(income)}
+                        title="Eliminar"
                         type="button"
                       >
                         <Trash2 className="size-4" aria-hidden="true" />
-                        Eliminar
                       </button>
                       </>
                       )}

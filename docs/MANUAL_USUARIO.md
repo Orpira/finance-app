@@ -30,17 +30,46 @@ La pantalla principal ofrece accesos rápidos a las funciones clave:
 
 ## 3. Registrar ingresos
 
+El formulario de `Ingresos` se adapta automáticamente según el **Método de cálculo del ingreso** que hayas elegido en `Configuración → Datos generales` (ver sección 8). Hay dos métodos disponibles:
+
+### 3.1. Servicio por tiempo (método por defecto)
+
 1. Ve a `Ingresos`.
 2. Selecciona la fecha del servicio.
-3. Indica la duración en minutos.
+3. Indica la duración (activa el cronómetro del servicio).
 4. Ingresa el importe total y la moneda.
 5. Ajusta el porcentaje de ganancia real si es necesario.
 6. Selecciona la tasa de cambio manual o usa la automática.
-7. Presiona `Guardar` para registrar el ingreso.
+7. Opcionalmente, indicá si el ingreso tiene un **Adicional** (ver 3.3).
+8. Presiona `Guardar` para registrar el ingreso.
+
+### 3.2. Jornada por horas
+
+Si en Configuración elegiste "Jornada por horas", el formulario ya no pide duración ni activa ningún cronómetro. En su lugar:
+
+1. Ve a `Ingresos`.
+2. Selecciona la fecha.
+3. Ingresa el **Tiempo trabajado** (en la unidad que configuraste: horas o minutos).
+4. El **Valor por hora** aparece precargado desde Configuración; podés modificarlo, pero el cambio solo afecta a este ingreso puntual, nunca al valor configurado.
+5. El sistema calcula automáticamente el **Total calculado** (tiempo trabajado × valor por hora). No hay cronómetro ni importe manual en este método.
+6. Opcionalmente, indicá si el ingreso tiene un **Adicional** (ver 3.3).
+7. Presiona `Guardar`.
+
+Cambiar el método en Configuración nunca modifica ingresos ya registrados: cada ingreso conserva el método y los parámetros con los que fue creado.
+
+### 3.3. Adicionales
+
+Un Adicional es un importe positivo que complementa el ingreso principal (por ejemplo, una propina).
+
+**Importante**: el Adicional siempre se muestra y se calcula **aparte** del total del ingreso. El total que ves en la tarjeta de cada ingreso (y el "Total calculado" del formulario) es siempre y únicamente el trabajo realizado (servicio o tiempo trabajado × valor por hora) — nunca incluye los Adicionales, ni al crear el ingreso ni después de agregarlos o quitarlos.
+
+- Al **registrar** un ingreso nuevo, marcá "Sí" en "¿Este ingreso tiene un adicional?" para que aparezca el formulario de Importe/Descripción antes de guardar.
+- Al **editar** un ingreso ya guardado, la sección "Adicionales" siempre está disponible: podés añadir o eliminar adicionales en cualquier momento (mientras el ingreso no esté reportado ni pertenezca a una temporada cerrada). También hay un acceso directo "Adicional" en el listado de `Ingresos`.
+- El total de Adicionales de cada ingreso se muestra por separado en su tarjeta del listado. El balance de `Inicio` sí suma los Adicionales al calcular `Ganancia` (la tarjeta "Ingresos" los descuenta para no contarlos dos veces, y hay una tarjeta "Adicionales" propia con el total del mes).
 
 El sistema calculará automáticamente:
 
-- ganancia real
+- ganancia real del trabajo realizado (sin Adicionales)
 - valor convertido a la moneda secundaria
 - valor en EUR y COP
 
@@ -93,6 +122,8 @@ En `Configuración` puedes ajustar:
 - país y moneda base
 - moneda secundaria
 - porcentaje de ganancia
+- **método de cálculo del ingreso** (`Servicio por tiempo` o `Jornada por horas`) — ver sección 3
+- si el método es `Jornada por horas`: **valor por hora** y **unidad de tiempo** (`Horas` o `Minutos`)
 - modo de tasa de cambio (`Automático` o `Manual`)
 - tema visual (`Sistema`, `Claro`, `Oscuro`)
 - activar, cambiar o desactivar el PIN de acceso

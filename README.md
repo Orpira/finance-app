@@ -84,7 +84,7 @@ Esta tabla resume el estado a alto nivel. El detalle completo y verificado por m
 ## Características
 
 - **Inicio y Resumen**: resumen mensual simplificado y vista de indicadores/métricas detalladas.
-- **Ingresos**: registro de servicios con conversión de moneda, control de reporte (`pendiente`/`reportado`) y exportación.
+- **Ingresos**: registro de servicios con conversión de moneda, control de reporte (`pendiente`/`reportado`) y exportación. Método de cálculo configurable por método Strategy (`src/utils/incomeCalculation/`): "Servicio por tiempo" (duración + % de temporada, con cronómetro) o "Jornada por horas" (tiempo trabajado × valor por hora, sin cronómetro ni % de temporada), más Adicionales (importes extra sobre el ingreso principal).
 - **Gastos**: registro de gastos operativos por categoría, con ajustes diferenciados de gasto normal.
 - **Agenda**: citas convertibles en ingresos, con temporización.
 - **Temporadas**: cierres y periodos del modo Profesional con detalle histórico.

@@ -1,3 +1,7 @@
+import type {
+  IncomeCalculationMethod,
+  WorkedTimeUnit,
+} from '../catalogs/incomeCalculationMethods'
 import type { ReportStatusCode, ReportStatusLabel } from '../catalogs/reportStatuses'
 import type { UsageMode } from './settings'
 
@@ -84,6 +88,30 @@ export interface ServiceIncome {
   reportedAt?: string;
   reportReference?: string;
   reportNotes?: string;
+
+  /** Snapshot: método con el que se creó este ingreso (PB-IS-0007). Nunca se recalcula al editar Configuración. */
+  incomeCalculationMethod?: IncomeCalculationMethod;
+
+  /** Suma cacheada de los IncomeAdditional vinculados. */
+  additionalsTotal?: number;
+
+  /** totalAmount + additionalsTotal ("Total del ingreso" bruto). */
+  totalIncome?: number;
+
+  /** Solo 'hourly_workday': tiempo trabajado tal cual lo tecleó la usuaria, en workedTimeUnit. */
+  workedTime?: number;
+
+  /** Snapshot de la unidad usada para workedTime en este ingreso. */
+  workedTimeUnit?: WorkedTimeUnit;
+
+  /** workedTime ya convertido a horas (snapshot). */
+  workedHours?: number;
+
+  /** Valor por hora efectivamente aplicado a este ingreso (autocompletado desde Configuración, sobreescribible por ingreso). */
+  hourlyRateApplied?: number;
+
+  /** true si este ingreso inició el cronómetro de "Servicio por tiempo". */
+  timerUsed?: boolean;
 
   updatedAt?: string;
 }

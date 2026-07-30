@@ -39,6 +39,19 @@ Nota: estas cifras son métricas de inventario textual, no porcentaje de cobertu
 - `financialEngineAdapter.test.ts`
 - `financialEngineShadowMode.test.ts`
 - `homeBalanceSummaryService.test.ts`
+- `financeStats.test.ts`
+
+### Método de cálculo del ingreso y Adicionales (PB-IS-0007)
+
+- `incomeCalculationMethods.test.ts` — catálogo de métodos/unidades.
+- `incomeSettingsDefaults.test.ts` — defaults de `AppSettings` (`createDefaultSettings`).
+- `incomeCalculation.test.ts` — motor Strategy: equivalencia byte-a-byte con `calculateStoredRealGain` para "Servicio por tiempo", cálculo sin % para "Jornada por horas", validaciones, despachador.
+- `incomeAdditionals.test.ts` — validación/suma pura de la entidad Adicional.
+- `incomeService.test.ts` — defaults de método, inmutabilidad al editar, cascade-delete de Adicionales (gap detectado: este archivo no tenía tests previos a este milestone).
+- `incomeAdditionalService.test.ts` — CRUD de Adicionales, recálculo de `realGain`/`totalIncome`/valores convertidos por método.
+- `serviceTimerService.test.ts` — regresión: "Jornada por horas" nunca inicia el cronómetro (test sobre el guard ya existente, sin cambio de producción).
+- `appointmentCompletionService.test.ts` — las citas agendadas siempre persisten `service_duration`, sin leer la configuración del método.
+- `backupService.test.ts` — `incomeAdditionals` viaja en la cadena de backup.
 
 ### Snapshot / Knowledge
 

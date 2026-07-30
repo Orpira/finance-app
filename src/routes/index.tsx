@@ -4,6 +4,7 @@ import AppLayout from '../app/AppLayout'
 import { PinGate } from '../components/PinGate'
 import { OnboardingGate } from '../components/onboarding/OnboardingGate'
 import { LicenseGuard } from '../components/security/LicenseGuard'
+import { LicenseTypeGuard } from '../components/security/LicenseTypeGuard'
 import { UsageModeGuard } from '../components/security/UsageModeGuard'
 import AppointmentFormPage from '../pages/Agenda/AppointmentFormPage'
 import AgendaPage from '../pages/Agenda/AgendaPage'
@@ -51,7 +52,7 @@ export function RouterProvider() {
           <Route element={<AppLayout />}>
             <Route index element={<HomePage />} />
             <Route path="resumen-completo" element={<UsageModeGuard allowed={['professional']}><FullSummaryPage /></UsageModeGuard>} />
-            <Route path="dashboard" element={<UsageModeGuard allowed={['professional']}><InsightDashboardPage /></UsageModeGuard>} />
+            <Route path="dashboard" element={<UsageModeGuard allowed={['professional']}><LicenseTypeGuard blocked={['trial']}><InsightDashboardPage /></LicenseTypeGuard></UsageModeGuard>} />
             <Route
               path="resumen-completo/historial-mejores-dias"
               element={<UsageModeGuard allowed={['professional']}><BestDaysHistoryPage /></UsageModeGuard>}
@@ -89,7 +90,7 @@ export function RouterProvider() {
             <Route path="settings/communication-channels" element={<CommunicationChannelsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="more" element={<MorePage />} />
-            <Route path="conversation" element={<ConversationPage />} />
+            <Route path="conversation" element={<LicenseTypeGuard blocked={['trial']}><ConversationPage /></LicenseTypeGuard>} />
             <Route path="debug" element={<DebugPage />} />
             <Route path="debug/ai-execution-inspector" element={<AIExecutionInspectorPage />} />
             <Route path="debug/ai-developer-playground" element={<AIDeveloperPlaygroundPage />} />

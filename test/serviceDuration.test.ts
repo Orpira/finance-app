@@ -4,6 +4,7 @@ import { DEFAULT_EXIT_DURATION_MINUTES } from '../src/config/serviceTimer'
 import {
   calculateEffectiveDuration,
   getEffectiveFinancialDuration,
+  getIncomeDurationDisplay,
 } from '../src/utils/serviceDuration'
 
 describe('getEffectiveFinancialDuration', () => {
@@ -25,5 +26,35 @@ describe('getEffectiveFinancialDuration', () => {
     expect(calculateEffectiveDuration({ duration: 12, durationLabel: 'Salida' })).toBe(
       DEFAULT_EXIT_DURATION_MINUTES,
     )
+  })
+})
+
+describe('getIncomeDurationDisplay — PB-IS-0007', () => {
+  it('"Servicio por tiempo" conserva el formato existente (regresión)', () => {
+    expect(
+      getIncomeDurationDisplay({ duration: 60, durationLabel: '60' }),
+    ).toBe('60 minutos')
+  })
+
+  it('"Jornada por horas" muestra el tiempo trabajado en minutos cuando esa es la unidad', () => {
+    expect(
+      getIncomeDurationDisplay({
+        duration: 0,
+        incomeCalculationMethod: 'hourly_workday',
+        workedTime: 90,
+        workedTimeUnit: 'minutes',
+      }),
+    ).toBe('90 minutos')
+  })
+
+  it('"Jornada por horas" muestra el tiempo trabajado en horas cuando esa es la unidad', () => {
+    expect(
+      getIncomeDurationDisplay({
+        duration: 0,
+        incomeCalculationMethod: 'hourly_workday',
+        workedTime: 2,
+        workedTimeUnit: 'hours',
+      }),
+    ).toBe('2 horas')
   })
 })

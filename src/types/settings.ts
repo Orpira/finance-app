@@ -1,3 +1,4 @@
+import type { IncomeCalculationMethod, WorkedTimeUnit } from '../catalogs/incomeCalculationMethods'
 import type { OnboardingState } from './onboarding'
 
 export type CurrencyCode =
@@ -77,6 +78,9 @@ export interface AppSettings {
   defaultCurrency: CurrencyCode
   secondaryCurrency: CurrencyCode
   incomePercentage: number
+  incomeCalculationMethod: IncomeCalculationMethod
+  hourlyRate: number
+  workedTimeUnit: WorkedTimeUnit
   rateMode: RateMode
   usageMode: UsageMode
   userType: UserType

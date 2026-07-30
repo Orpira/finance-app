@@ -26,6 +26,38 @@
 - Se registran como servicios o variantes derivadas según utilidades de tipo.
 - Pueden incluir duración, porcentaje y tipo de pago.
 - Se calculan valores base, secundarios y equivalentes agregados para reportes.
+- Cada ingreso de tipo servicio se calcula según un **Método de cálculo del
+  ingreso** (`incomeCalculationMethod`, snapshot inmutable fijado al crear el
+  ingreso): `service_duration` ("Servicio por tiempo", el flujo histórico:
+  duración fija + importe tecleado + % de temporada) o `hourly_workday`
+  ("Jornada por horas": tiempo trabajado manual × valor por hora). El motor
+  de cálculo (`src/utils/incomeCalculation/`) sigue un patrón Strategy —
+  cada método es una implementación aislada, sin condicionales por método
+  fuera del despachador (`incomeCalculatorRegistry.ts`).
+- `service_duration` aplica el % de la temporada activa igual que siempre
+  (`realGain = totalAmount * percentage / 100`). `hourly_workday` **nunca**
+  aplica ese %: el pago por hora ya es el 100% del ingreso final de la
+  profesional. El cronómetro es exclusivo de `service_duration` y jamás se
+  inicia para `hourly_workday`.
+- Un ingreso puede tener 0..N **Adicionales** (importes positivos que
+  complementan el ingreso, nunca negativos, sin tope). **Nunca se suman al
+  `realGain`/`totalAmount` del ingreso**: el registro del ingreso refleja
+  siempre y exclusivamente el trabajo realizado (servicio o jornada), tanto
+  al crearlo como después. Solo el campo `additionalsTotal` se mantiene al
+  día al agregar/quitar un Adicional; el resto del registro (incluidos los
+  valores convertidos a otras monedas) nunca se recalcula por esa causa. Los
+  Adicionales se suman exclusivamente a nivel de **balance agregado**
+  (Inicio, Ganancia, Reportes, exportaciones), en el punto central
+  `getStoredIncomeValue` (`src/utils/financeStats.ts`) — nunca dentro del
+  registro individual. No son un movimiento financiero independiente: se
+  eliminan en cascada si se borra el ingreso al que pertenecen (a diferencia
+  de los ajustes, que bloquean ese borrado).
+- "Jornada por horas" tampoco captura ni persiste ningún porcentaje de
+  temporada (`percentage`/`earningPercentage` quedan en `0`): ese % no aplica
+  a este método bajo ninguna circunstancia.
+- Cambiar el método de cálculo o el valor por hora en Configuración solo
+  afecta a los ingresos creados después del cambio; nunca recalcula ni
+  altera ingresos históricos.
 
 ## Egresos
 
