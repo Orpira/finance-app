@@ -76,8 +76,21 @@ export function getDurationDisplay(
 }
 
 export function getIncomeDurationDisplay(
-  income: Pick<ServiceIncome, 'actualDuration' | 'duration' | 'durationLabel'>,
+  income: Pick<
+    ServiceIncome,
+    | 'actualDuration'
+    | 'duration'
+    | 'durationLabel'
+    | 'incomeCalculationMethod'
+    | 'workedTime'
+    | 'workedTimeUnit'
+  >,
 ) {
+  if (income.incomeCalculationMethod === 'hourly_workday') {
+    const unitLabel = income.workedTimeUnit === 'hours' ? 'horas' : 'minutos'
+    return `${income.workedTime ?? 0} ${unitLabel}`
+  }
+
   return getDurationDisplay(
     getEffectiveFinancialDuration(income) ?? 0,
     income.durationLabel,

@@ -8,14 +8,21 @@ El sistema separa estrictamente:
 - datos derivados de análisis (append-only);
 - datos remotos de licencia/dispositivo/canal para automatización.
 
-## 2) Persistencia local Dexie (v24)
+## 2) Persistencia local Dexie (v29)
 
 ### Tablas operativas
 
-- `services`: ingresos y servicios.
+- `services`: ingresos y servicios. Cada ingreso de tipo servicio guarda un
+  snapshot inmutable del método de cálculo usado (`incomeCalculationMethod`:
+  `service_duration` | `hourly_workday`, PB-IS-0007) y los parámetros con los
+  que se calculó (`hourlyRateApplied`, `workedTime`/`workedTimeUnit`,
+  `additionalsTotal`, `totalIncome`), para que cambios posteriores en
+  Configuración nunca alteren ingresos históricos.
 - `expenses`: egresos y ajustes.
 - `appointments`: agenda y ejecución de citas.
-- `settings`: configuración de negocio y dispositivo.
+- `settings`: configuración de negocio y dispositivo, incluyendo el método
+  de cálculo del ingreso por defecto, la unidad de tiempo y el valor por
+  hora (PB-IS-0007).
 - `exchangeRates`: tasas históricas.
 - `cutoffReports`: cortes/reportes periódicos.
 - `earningPeriods`: temporadas/modos de operación.
@@ -23,6 +30,11 @@ El sistema separa estrictamente:
 - `automationOutbox`: cola de eventos a gateway.
 - `communicationChannels`: cache local de estado de canal.
 - `deviceIdentity`: vínculo `userCode/deviceCode` local.
+- `incomeAdditionals` (PB-IS-0007): 0..N importes positivos ("Adicionales")
+  vinculados a un ingreso vía `incomeId`, que se suman íntegros (100%,
+  nunca sujetos al % de temporada) al `realGain` final. Se eliminan en
+  cascada cuando se borra el ingreso padre — a diferencia de los ajustes en
+  `expenses`, que bloquean ese borrado.
 
 ### Tablas derivadas append-only
 

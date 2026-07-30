@@ -11,7 +11,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
+import { getCurrentLicense } from '../../services/licenseService'
 import { getSettings } from '../../services/settingsService'
+import type { LicenseType } from '../../types/license'
 import type { UsageMode } from '../../types/settings'
 
 const moreSections = [
@@ -70,9 +72,11 @@ const moreSections = [
 
 export function MorePage() {
   const [usageMode, setUsageMode] = useState<UsageMode>('professional')
+  const [licenseType, setLicenseType] = useState<LicenseType | null>(null)
 
   useEffect(() => {
     getSettings().then((settings) => setUsageMode(settings.usageMode))
+    getCurrentLicense().then((license) => setLicenseType(license?.licenseType ?? null))
 
     function handleSettingsChanged(event: Event) {
       setUsageMode(
@@ -87,6 +91,11 @@ export function MorePage() {
     }
   }, [])
 
+  // La prueba gratuita no incluye el módulo Inteligencia (Análisis
+  // inteligente / Asistente IA); las rutas quedan bloqueadas además por
+  // LicenseTypeGuard (routes/index.tsx) como defensa en profundidad.
+  const isTrialLicense = licenseType === 'trial'
+
   const visibleSections = moreSections
     .map((section) => ({
       ...section,
@@ -96,6 +105,7 @@ export function MorePage() {
           : section.links,
     }))
     .filter((section) => section.links.length > 0)
+    .filter((section) => !(isTrialLicense && section.title === 'Inteligencia'))
 
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">

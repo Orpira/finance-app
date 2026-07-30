@@ -127,6 +127,11 @@ export async function completeAppointmentAsIncome(
     baseCurrencyValue: roundMoney(convertedPairValues.primaryValue),
     secondaryCurrencyValue: roundMoney(convertedPairValues.secondaryValue),
     exchangeRateBaseToSecondary: convertedPairValues.rate,
+    // Una cita agendada siempre corresponde al cronómetro de "Servicio por
+    // tiempo" (PB-IS-0007, 43.3): nunca debe depender de la configuración de
+    // método del usuario ni ofrecer Adicionales.
+    incomeCalculationMethod: 'service_duration',
+    additionalsTotal: 0,
     actualDuration,
     timerStartedAt,
     timerStoppedAt,

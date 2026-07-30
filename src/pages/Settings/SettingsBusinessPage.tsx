@@ -4,6 +4,10 @@ import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import {
+  INCOME_CALCULATION_METHODS,
+  WORKED_TIME_UNITS,
+} from '../../catalogs/incomeCalculationMethods'
+import {
   getSettings,
   updateSettings,
 } from '../../services/settingsService'
@@ -99,6 +103,9 @@ export function SettingsBusinessPage() {
           defaultCurrency: settings.defaultCurrency,
           secondaryCurrency: settings.secondaryCurrency,
           incomePercentage: settings.incomePercentage,
+          incomeCalculationMethod: settings.incomeCalculationMethod,
+          hourlyRate: settings.hourlyRate,
+          workedTimeUnit: settings.workedTimeUnit,
           rateMode: settings.rateMode,
           usageMode: settings.usageMode,
         },
@@ -313,6 +320,91 @@ export function SettingsBusinessPage() {
             </select>
           </label>
         </div>
+
+        
+
+        {settings.usageMode === 'professional' && (
+          <fieldset className="flex flex-col gap-3">
+            <legend className="text-sm font-medium text-slate-700">
+              Método de cálculo del ingreso
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {INCOME_CALCULATION_METHODS.map((method) => (
+                <label
+                  className="flex min-h-11 items-center gap-3 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700"
+                  key={method.code}
+                >
+                  <input
+                    checked={settings.incomeCalculationMethod === method.code}
+                    className="size-4 accent-emerald-700"
+                    name="incomeCalculationMethod"
+                    onChange={() =>
+                      updateLocalSettings({ incomeCalculationMethod: method.code })
+                    }
+                    type="radio"
+                  />
+                  {method.label}
+                </label>
+              ))}
+            </div>
+            <span className="text-sm text-slate-500">
+              El método determina el formulario predeterminado para nuevos
+              ingresos. Cambiarlo nunca modifica ingresos ya registrados.
+            </span>
+
+            {settings.incomeCalculationMethod === 'hourly_workday' && (
+              <div className="flex flex-col gap-4 rounded-md border border-slate-200 p-3">
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm font-medium text-slate-700">
+                    Valor por hora
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <input
+                      className="h-11 w-32 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                      min={0}
+                      onChange={(event) =>
+                        updateLocalSettings({
+                          hourlyRate: Number(event.target.value),
+                        })
+                      }
+                      step="0.01"
+                      type="number"
+                      value={settings.hourlyRate}
+                    />
+                    <span className="text-sm font-medium text-slate-500">
+                      {settings.defaultCurrency}
+                    </span>
+                  </div>
+                </label>
+
+                <fieldset className="flex flex-col gap-3">
+                  <legend className="text-sm font-medium text-slate-700">
+                    Unidad de tiempo
+                  </legend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {WORKED_TIME_UNITS.map((unit) => (
+                      <label
+                        className="flex min-h-11 items-center gap-3 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700"
+                        key={unit.code}
+                      >
+                        <input
+                          checked={settings.workedTimeUnit === unit.code}
+                          className="size-4 accent-emerald-700"
+                          name="workedTimeUnit"
+                          onChange={() =>
+                            updateLocalSettings({ workedTimeUnit: unit.code })
+                          }
+                          type="radio"
+                        />
+                        {unit.label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              </div>
+            )}
+          </fieldset>
+        )}
 
         {settings.usageMode === 'professional' && (
           <label className="flex flex-col gap-2">

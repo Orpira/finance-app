@@ -15,10 +15,15 @@ export const weekdayNames = [
   'Sábado',
 ]
 
-export function getStoredIncomeValue(
-  income: ServiceIncome,
-  currency: CurrencyCode,
-) {
+/**
+ * Valor almacenado del ingreso PRINCIPAL (servicio u horas) ya convertido a
+ * `currency`, sin Adicionales — exactamente lo que quedó calculado al crear
+ * o editar el ingreso. Uso interno: `getStoredIncomeValue` (agregados de
+ * balance) y `getStoredAdditionalsValue` (derivar la tasa de conversión) se
+ * apoyan en esta función en vez de una en la otra, para no reintroducir
+ * Adicionales dentro de sí misma.
+ */
+function getStoredBaseIncomeValue(income: ServiceIncome, currency: CurrencyCode) {
   if (income.baseCurrency === currency && income.baseCurrencyValue !== undefined) {
     return income.baseCurrencyValue
   }
@@ -39,6 +44,55 @@ export function getStoredIncomeValue(
   }
 
   return 0
+}
+
+/**
+ * Porción de additionalsTotal ya convertida a `currency`, derivada
+ * proporcionalmente del importe principal ya convertido (mismo tipo de
+ * cambio implícito en baseCurrencyValue/eurValue/copValue), ya que
+ * additionalsTotal no tiene su propio snapshot por moneda.
+ */
+export function getStoredAdditionalsValue(
+  income: ServiceIncome,
+  currency: CurrencyCode,
+) {
+  const additionalsTotal = income.additionalsTotal ?? 0
+
+  if (additionalsTotal <= 0 || !income.realGain) {
+    return 0
+  }
+
+  const convertedBaseValue = getStoredBaseIncomeValue(income, currency)
+  return roundMoney(convertedBaseValue * (additionalsTotal / income.realGain))
+}
+
+/**
+ * Valor total del ingreso para efectos de BALANCE agregado (Inicio,
+ * Ganancia, reportes): importe principal + Adicionales. El registro del
+ * ingreso en sí (`realGain`/`totalAmount`) nunca incluye Adicionales — esta
+ * función es el único punto donde ambos se suman, exclusivamente para
+ * agregados, nunca persistido sobre el ingreso individual.
+ */
+export function getStoredIncomeValue(
+  income: ServiceIncome,
+  currency: CurrencyCode,
+) {
+  return roundMoney(
+    getStoredBaseIncomeValue(income, currency) +
+      getStoredAdditionalsValue(income, currency),
+  )
+}
+
+export function sumIncomeAdditionalsValue(
+  incomes: ServiceIncome[],
+  currency: CurrencyCode,
+) {
+  return roundMoney(
+    incomes.reduce(
+      (total, income) => total + getStoredAdditionalsValue(income, currency),
+      0,
+    ),
+  )
 }
 
 export function getStoredExpenseValue(expense: Expense, currency: CurrencyCode) {

@@ -54,6 +54,28 @@
 - Estado: aceptada.
 - Resultado: UI consume 7D/7E sin acoplar runtime interno.
 
+## 2.1) Decisiones PB-IS-0007 (Método de cálculo del ingreso + Adicionales)
+
+### D-011 "Jornada por horas" nunca aplica el % de temporada
+
+- Estado: aceptada (confirmada explícitamente con el propietario del proyecto ante ambigüedad de la especificación original).
+- Resultado: `realGain = workedHours × hourlyRate` para este método, sin recorte por `EarningPeriod.percentage`. El pago por hora ya es el 100% del ingreso final de la profesional, a diferencia de "Servicio por tiempo" (reparto vía `calculateStoredRealGain`).
+
+### D-012 Los Adicionales nunca se suman al registro del ingreso — solo al balance agregado
+
+- Estado: aceptada. **Supersede** una decisión anterior de esta misma sesión (`additionalsTotal` sumado a `realGain` del ingreso), revertida tras probar la funcionalidad en el navegador: mezclar Adicionales dentro de `realGain` generaba un total confuso en el listado de ingresos ("no debés sumar al total calculado los adicionales, ese total es solo de horas trabajadas").
+- Resultado: `ServiceIncome.realGain`/`totalAmount`/`totalIncome`/`eurValue`/`copValue`/etc. reflejan ÚNICAMENTE el trabajo realizado (servicio o jornada), calculados una sola vez al crear/editar el ingreso, y **nunca se recalculan** por agregar o quitar un Adicional — ni siquiera al crear el ingreso con adicionales ya cargados en el borrador. Solo `additionalsTotal` (campo propio) se mantiene al día. Los Adicionales se suman EXCLUSIVAMENTE a nivel de balance agregado, en el único punto central `getStoredIncomeValue` (`src/utils/financeStats.ts`) — de ahí se propaga automáticamente a Inicio, Ganancia, Reportes y exportaciones, sin tocar el registro individual del ingreso.
+
+### D-013 `totalAmount` reutilizado como "ingreso principal" en vez de una columna nueva
+
+- Estado: aceptada.
+- Resultado: en lugar de agregar un campo `ingreso_principal` duplicado (como sugería literalmente la especificación), `ServiceIncome.totalAmount` extiende su significado ya establecido a "Jornada por horas" (`workedHours × hourlyRateApplied`). No es un rename: el campo conserva su nombre y su rol de "importe principal del ingreso" en ambos métodos.
+
+### D-014 Adicionales se eliminan en cascada con el ingreso, a diferencia de los Ajustes
+
+- Estado: aceptada.
+- Resultado: `incomeAdditionals` no bloquea el borrado del ingreso padre (`deleteServiceIncome` los borra en la misma transacción), porque un Adicional no es un movimiento financiero independiente — a diferencia de los ajustes en `expenses`, que sí bloquean el borrado mientras existan.
+
 ## 3) Decisiones pendientes (requieren ADR futura)
 
 1. Definición normativa oficial del milestone 8A con criterios medibles.

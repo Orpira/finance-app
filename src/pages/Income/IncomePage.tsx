@@ -3,7 +3,18 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { ServiceDurationSelect } from '../../components/forms/ServiceDurationSelect'
+import {
+  IncomeAdditionalsSection,
+  type IncomeAdditionalItem,
+} from '../../components/income/IncomeAdditionalsSection'
 import { PageHeader } from '../../components/layout/PageHeader'
+import type { IncomeCalculationMethod, WorkedTimeUnit } from '../../catalogs/incomeCalculationMethods'
+import { WORKED_TIME_UNITS } from '../../catalogs/incomeCalculationMethods'
+import {
+  addIncomeAdditional,
+  deleteIncomeAdditional,
+  listIncomeAdditionals,
+} from '../../services/incomeAdditionalService'
 import {
   createServiceIncome,
   getServiceIncomeById,
@@ -18,11 +29,13 @@ import {
   convertCurrencyToEurCop,
   type ExchangeRateResolutionSource,
 } from '../../services/currencyConversionService'
+import type { IncomeAdditional } from '../../types/incomeAdditional'
 import type { ServiceIncome, ServiceIncomeType } from '../../types/service'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import {
   EUR_COP_DEFAULT_RATE,
+  formatCurrency,
   roundMoney,
 } from '../../utils/currency'
 import { paymentTypes } from '../../utils/paymentTypes'
@@ -44,7 +57,7 @@ import {
   isServiceDurationLabel,
   type ServiceDurationLabel,
 } from '../../utils/serviceDuration'
-import { calculateStoredRealGain } from '../../utils/realGain'
+import { runIncomeCalculation } from '../../utils/incomeCalculation/incomeCalculatorRegistry'
 import { isReported } from '../../catalogs/reportStatuses'
 import { useDialog } from '../../components/dialogs/useDialog'
 
@@ -90,6 +103,16 @@ function formatReadOnlyDateTime(value: string) {
     dateStyle: 'short',
     timeStyle: 'short',
   }).format(date)
+}
+
+function toAdditionalItems(additionals: IncomeAdditional[]): IncomeAdditionalItem[] {
+  return additionals
+    .filter((additional): additional is IncomeAdditional & { id: number } => additional.id !== undefined)
+    .map((additional) => ({
+      id: additional.id,
+      amount: additional.amount,
+      description: additional.description,
+    }))
 }
 
 function hasIncomeAtSameDateTime(
@@ -139,6 +162,12 @@ export function IncomePage() {
   const [durationSelectionChanged, setDurationSelectionChanged] =
     useState(false)
   const [totalAmount, setTotalAmount] = useState(0)
+  const [workedTime, setWorkedTime] = useState(0)
+  const [workedTimeUnit, setWorkedTimeUnit] = useState<WorkedTimeUnit>('minutes')
+  const [hourlyRateApplied, setHourlyRateApplied] = useState(0)
+  const [hasAdditionalsOnCreate, setHasAdditionalsOnCreate] = useState<'yes' | 'no'>('no')
+  const [draftAdditionals, setDraftAdditionals] = useState<IncomeAdditionalItem[]>([])
+  const [persistedAdditionals, setPersistedAdditionals] = useState<IncomeAdditionalItem[]>([])
   const [currency, setCurrency] = useState<CurrencyCode>('EUR')
   const [paymentType, setPaymentType] = useState(paymentTypes[0].value)
   const [notes, setNotes] = useState('')
@@ -235,6 +264,11 @@ export function IncomePage() {
         )
         setDurationSelectionChanged(false)
         setTotalAmount(currentIncome.totalAmount)
+        setWorkedTime(currentIncome.workedTime ?? 0)
+        setWorkedTimeUnit(currentIncome.workedTimeUnit ?? currentSettings.workedTimeUnit)
+        setHourlyRateApplied(
+          currentIncome.hourlyRateApplied ?? currentSettings.hourlyRate,
+        )
         setCurrency(currentIncome.currency as CurrencyCode)
         setPaymentType(currentIncome.paymentType ?? paymentTypes[0].value)
         setNotes(currentIncome.notes ?? '')
@@ -244,12 +278,17 @@ export function IncomePage() {
             currentIncome.exchangeRateUsed ??
             EUR_COP_DEFAULT_RATE,
         )
+        if (currentIncome.id) {
+          setPersistedAdditionals(toAdditionalItems(await listIncomeAdditionals(currentIncome.id)))
+        }
       } else {
         setPercentage(currentPeriod?.percentage ?? currentSettings.incomePercentage)
         setCurrency(
           (currentPeriod?.baseCurrency as CurrencyCode | undefined) ??
             currentSettings.defaultCurrency,
         )
+        setWorkedTimeUnit(currentSettings.workedTimeUnit)
+        setHourlyRateApplied(currentSettings.hourlyRate)
       }
     }
 
@@ -260,21 +299,107 @@ export function IncomePage() {
     }
   }, [alert, navigate, parsedIncomeId])
 
+  async function refreshEditingIncomeAfterAdditionalsChange() {
+    if (!parsedIncomeId) {
+      return
+    }
+
+    const [updatedIncome, updatedAdditionals] = await Promise.all([
+      getServiceIncomeById(parsedIncomeId),
+      listIncomeAdditionals(parsedIncomeId),
+    ])
+
+    if (updatedIncome) {
+      setEditingIncome(updatedIncome)
+    }
+    setPersistedAdditionals(toAdditionalItems(updatedAdditionals))
+  }
+
+  async function handleAddPersistedAdditional(input: { amount: number; description?: string }) {
+    if (!parsedIncomeId) {
+      return
+    }
+
+    await addIncomeAdditional(parsedIncomeId, input)
+    await refreshEditingIncomeAfterAdditionalsChange()
+  }
+
+  async function handleDeletePersistedAdditional(id: number | string) {
+    if (!parsedIncomeId) {
+      return
+    }
+
+    await deleteIncomeAdditional(Number(id), parsedIncomeId)
+    await refreshEditingIncomeAfterAdditionalsChange()
+  }
+
+  function handleAddDraftAdditional(input: { amount: number; description?: string }) {
+    setDraftAdditionals((current) => [
+      ...current,
+      { id: crypto.randomUUID(), amount: input.amount, description: input.description },
+    ])
+  }
+
+  function handleDeleteDraftAdditional(id: number | string) {
+    setDraftAdditionals((current) => current.filter((item) => item.id !== id))
+  }
+
   const isBasicUser = isBasicMode(settings ?? undefined)
   const isServiceType = isBasicUser || isServiceIncome({ type: incomeType })
-  const usesServiceDuration = !isBasicUser && isServiceType
   const isAdjustmentType = !isBasicUser && isAdjustmentIncome({ type: incomeType })
-  const realGain = useMemo(
-    () =>
-      calculateStoredRealGain({
+  // El método de cálculo solo aplica a ingresos de tipo "Servicio". Los
+  // ajustes y el modo básico conservan exactamente el flujo existente
+  // (equivalente a 'service_duration' con additionalsTotal=0).
+  const effectiveMethod: IncomeCalculationMethod =
+    isBasicUser || isAdjustmentType
+      ? 'service_duration'
+      : editingIncome?.incomeCalculationMethod ??
+        settings?.incomeCalculationMethod ??
+        'service_duration'
+  const usesServiceDuration =
+    !isBasicUser && isServiceType && effectiveMethod === 'service_duration'
+  const usesHourlyWorkday =
+    !isBasicUser && isServiceType && effectiveMethod === 'hourly_workday'
+  // additionalsTotal es solo informativo (usado para el snapshot inicial del
+  // ingreso al crear); nunca entra al motor de cálculo — el total del
+  // registro (realGain/totalAmount) es siempre exclusivamente el importe de
+  // horas/servicio trabajado, sin adicionales. Los adicionales viven aparte
+  // y solo se suman a nivel de balance agregado (Inicio/Ganancia).
+  const draftAdditionalsTotal = draftAdditionals.reduce((sum, item) => sum + item.amount, 0)
+  const additionalsTotal =
+    editingIncome?.additionalsTotal ??
+    (hasAdditionalsOnCreate === 'yes' ? roundMoney(draftAdditionalsTotal) : 0)
+  const calculation = useMemo(() => {
+    try {
+      return runIncomeCalculation(effectiveMethod, {
         totalAmount,
         percentage,
         usageMode: isBasicUser ? 'basic' : 'professional',
         incomeType,
+        workedTime,
+        workedTimeUnit,
+        hourlyRate: hourlyRateApplied,
         storedRealGain: editingIncome?.realGain,
-      }),
-    [editingIncome?.realGain, incomeType, isBasicUser, percentage, totalAmount],
-  )
+      })
+    } catch {
+      // Input incompleto durante la edición en vivo (p.ej. tiempo trabajado
+      // aún no ingresado en Jornada por horas). La validación real ocurre en
+      // handleSubmit antes de guardar.
+      return { realGain: 0 }
+    }
+  }, [
+    editingIncome?.realGain,
+    effectiveMethod,
+    hourlyRateApplied,
+    incomeType,
+    isBasicUser,
+    percentage,
+    totalAmount,
+    workedTime,
+    workedTimeUnit,
+  ])
+  const realGain = calculation.realGain
+  const principalAmount = usesHourlyWorkday ? calculation.realGain : totalAmount
 
   useEffect(() => {
     let isMounted = true
@@ -353,6 +478,18 @@ export function IncomePage() {
       return
     }
 
+    if (usesHourlyWorkday && (!workedTime || workedTime <= 0)) {
+      setSaveStatus('error')
+      setSaveError('Ingresa el tiempo trabajado antes de guardar.')
+      return
+    }
+
+    if (usesHourlyWorkday && (!hourlyRateApplied || hourlyRateApplied <= 0)) {
+      setSaveStatus('error')
+      setSaveError('El valor por hora debe ser mayor a cero.')
+      return
+    }
+
     setSaveStatus('saving')
     setSaveError('')
 
@@ -394,21 +531,31 @@ export function IncomePage() {
         paymentType: isAdjustmentType ? undefined : paymentType,
         duration: isBasicUser
           ? editingIncome?.duration ?? 0
-          : isAdjustmentType
+          : isAdjustmentType || usesHourlyWorkday
             ? 0
             : duration,
         durationLabel: isBasicUser
           ? editingIncome?.durationLabel
-          : isAdjustmentType
+          : isAdjustmentType || usesHourlyWorkday
             ? undefined
             : durationSelectionChanged
               ? durationLabel || undefined
               : editingIncome?.durationLabel,
         notes: notes.trim() || undefined,
-        totalAmount,
+        totalAmount: principalAmount,
+        // Snapshot: el método nunca se sobreescribe al editar (incomeService.ts
+        // lo refuerza descartando este campo en las actualizaciones).
+        incomeCalculationMethod: editingIncome?.incomeCalculationMethod ?? effectiveMethod,
+        additionalsTotal,
+        totalIncome: principalAmount,
+        workedTime: usesHourlyWorkday ? workedTime : undefined,
+        workedTimeUnit: usesHourlyWorkday ? workedTimeUnit : undefined,
+        hourlyRateApplied: usesHourlyWorkday ? hourlyRateApplied : undefined,
         currency,
         earningPeriodId: editingIncome?.earningPeriodId ?? activePeriod?.id,
-        earningPercentage: isAdjustmentType
+        // "Jornada por horas" no usa el % de temporada (100% para la
+        // profesional): no se captura/persiste ningún porcentaje para ese método.
+        earningPercentage: isAdjustmentType || usesHourlyWorkday
           ? 0
           : isServiceType
           ? isBasicUser
@@ -418,7 +565,7 @@ export function IncomePage() {
               activePeriod?.percentage ??
               percentage
           : editingIncome?.earningPercentage ?? percentage,
-        percentage: isAdjustmentType
+        percentage: isAdjustmentType || usesHourlyWorkday
           ? 0
           : isServiceType
             ? isBasicUser ? 100 : percentage
@@ -436,7 +583,7 @@ export function IncomePage() {
         exchangeRateBaseToSecondary: exchangeRate,
         actualDuration: isBasicUser
           ? editingIncome?.actualDuration ?? 0
-          : isAdjustmentType
+          : isAdjustmentType || usesHourlyWorkday
             ? 0
             : duration,
         country: editingIncome?.country ?? settings.country,
@@ -449,11 +596,21 @@ export function IncomePage() {
         return
       }
 
-      await createServiceIncome({
+      const newIncomeId = await createServiceIncome({
         ...incomeValues,
         createdAt: registrationDateTime,
         date: registrationDate,
       })
+
+      if (hasAdditionalsOnCreate === 'yes' && draftAdditionals.length > 0) {
+        for (const draftAdditional of draftAdditionals) {
+          await addIncomeAdditional(newIncomeId, {
+            amount: draftAdditional.amount,
+            description: draftAdditional.description,
+          })
+        }
+      }
+
       navigate('/income')
     } catch (error: unknown) {
       setSaveStatus('error')
@@ -590,21 +747,129 @@ export function IncomePage() {
           />
         )}
 
-        <div className="grid gap-4">
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">
-              {isServiceType ? 'Importe total' : 'Cantidad del ajuste'}
-            </span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              min={0}
-              onChange={(event) => setTotalAmount(Number(event.target.value))}
-              step="0.01"
-              type="number"
-              value={totalAmount}
-            />
-          </label>
-        </div>
+        {usesHourlyWorkday ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                Tiempo trabajado
+              </span>
+              <div className="flex items-center gap-3">
+                <input
+                  className="h-11 flex-1 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  min={0}
+                  onChange={(event) => setWorkedTime(Number(event.target.value))}
+                  step="1"
+                  type="number"
+                  value={workedTime}
+                />
+                <span className="text-sm font-medium text-slate-500">
+                  {WORKED_TIME_UNITS.find((unit) => unit.code === workedTimeUnit)?.label}
+                </span>
+              </div>
+            </label>
+
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                Valor por hora
+              </span>
+              <input
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                min={0}
+                onChange={(event) => setHourlyRateApplied(Number(event.target.value))}
+                step="0.01"
+                type="number"
+                value={hourlyRateApplied}
+              />
+              <span className="text-xs text-slate-500">
+                Autocompletado desde Configuración. Modificarlo solo afecta
+                este ingreso.
+              </span>
+            </label>
+
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <span className="text-sm font-medium text-slate-700">
+                Total calculado
+              </span>
+              <p className="h-11 rounded-md border border-slate-200 bg-slate-50 px-3 text-base font-semibold text-slate-950 flex items-center">
+                {formatCurrency(calculation.realGain, currency)}
+              </p>
+              <span className="text-xs text-slate-500">
+                Tiempo trabajado × valor por hora. Los Adicionales se suman
+                aparte, no están incluidos en este total.
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                {isServiceType ? 'Importe total' : 'Cantidad del ajuste'}
+              </span>
+              <input
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                min={0}
+                onChange={(event) => setTotalAmount(Number(event.target.value))}
+                step="0.01"
+                type="number"
+                value={totalAmount}
+              />
+            </label>
+          </div>
+        )}
+
+        {!isBasicUser && isServiceType && isEditing && (
+          <IncomeAdditionalsSection
+            additionals={persistedAdditionals}
+            currency={currency}
+            defaultOpen
+            onAdd={handleAddPersistedAdditional}
+            onDelete={handleDeletePersistedAdditional}
+          />
+        )}
+
+        {!isBasicUser && isServiceType && !isEditing && (
+          <fieldset className="flex flex-col gap-3">
+            <legend className="text-sm font-medium text-slate-700">
+              ¿Este ingreso tiene un adicional?
+            </legend>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { label: 'No', value: 'no' },
+                { label: 'Sí', value: 'yes' },
+              ] as const).map((option) => (
+                <label
+                  className={[
+                    'flex h-11 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-semibold transition',
+                    hasAdditionalsOnCreate === option.value
+                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                      : 'border-slate-300 text-slate-600 hover:bg-slate-50',
+                  ].join(' ')}
+                  key={option.value}
+                >
+                  <input
+                    checked={hasAdditionalsOnCreate === option.value}
+                    className="sr-only"
+                    name="hasAdditionalsOnCreate"
+                    onChange={() => setHasAdditionalsOnCreate(option.value)}
+                    type="radio"
+                    value={option.value}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+
+            {hasAdditionalsOnCreate === 'yes' && (
+              <IncomeAdditionalsSection
+                additionals={draftAdditionals}
+                currency={currency}
+                defaultOpen
+                onAdd={handleAddDraftAdditional}
+                onDelete={handleDeleteDraftAdditional}
+              />
+            )}
+          </fieldset>
+        )}
 
         {!isBasicUser && isServiceType && <div className="grid gap-4">
           <label className="flex flex-col gap-2">
@@ -649,7 +914,7 @@ export function IncomePage() {
             className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
             disabled={
               saveStatus === 'saving' ||
-              totalAmount <= 0
+              (usesHourlyWorkday ? principalAmount <= 0 : totalAmount <= 0)
             }
             type="submit"
           >
