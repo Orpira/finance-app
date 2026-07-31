@@ -16,11 +16,6 @@ import { UsageModeBadge } from '../../components/UsageModeBadge'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
-import {
-  getPendingIncomeSummary,
-  PENDING_INCOME_OVERDUE_AFTER_DAYS,
-  type PendingIncomeSummary,
-} from '../../services/incomeReport.service'
 import { buildHomeBalanceSummary, resolveHomeBalanceSummaryPromotion } from '../../services/homeBalanceSummaryService'
 import type { BalanceReportResult } from '../../services/balanceReportService'
 import { getSettings } from '../../services/settingsService'
@@ -38,7 +33,6 @@ import type {
   SnapshotNormativeCode,
   UtcInstant,
 } from '../../types/financialSnapshot'
-import { getReportedCountByUsageMode } from '../../utils/reportStatus'
 import {
   isBasicMode,
   recordBelongsToUsageMode,
@@ -56,14 +50,6 @@ function monthRange(offset: number) {
     to: end.toLocaleDateString('en-CA'),
     endExclusive: endExclusive.toLocaleDateString('en-CA'),
   }
-}
-
-async function fetchPendingReportSummary(settings: AppSettings) {
-  if (isBasicMode(settings)) {
-    return null
-  }
-
-  return getPendingIncomeSummary()
 }
 
 function Variation({ current, previous }: { current: number; previous: number }) {
@@ -101,8 +87,6 @@ export function HomePage() {
   const [previousIncomes, setPreviousIncomes] = useState<ServiceIncome[]>([])
   const [previousExpenses, setPreviousExpenses] = useState<Expense[]>([])
   const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
-  const [reportedCount, setReportedCount] = useState(0)
-  const [pendingReportSummary, setPendingReportSummary] = useState<PendingIncomeSummary | null>(null)
   const [promotedCurrentSummary, setPromotedCurrentSummary] = useState<{
     readonly requestId: UtcInstant
     readonly summary: BalanceReportResult
@@ -122,13 +106,12 @@ export function HomePage() {
 
     async function loadDashboard(nextSettings?: AppSettings) {
       const resolvedSettings = nextSettings ?? await getSettings()
-      const [period, incomes, expenses, oldIncomes, oldExpenses, pendingSummary] = await Promise.all([
+      const [period, incomes, expenses, oldIncomes, oldExpenses] = await Promise.all([
         getActiveEarningPeriod(),
         listServiceIncomes(current),
         listExpenses(current),
         listServiceIncomes(previous),
         listExpenses(previous),
-        fetchPendingReportSummary(resolvedSettings),
       ])
 
       if (!mounted) return
@@ -158,13 +141,6 @@ export function HomePage() {
       const contextualExpenses = isBasicUser
         ? modeExpenses
         : modeExpenses.filter(belongsToActivePeriod)
-      const matchesActiveLocation = (item: { country?: string; city?: string }) =>
-        (!item.country || item.country === resolvedSettings.country) &&
-        (!resolvedSettings.city || !item.city || item.city === resolvedSettings.city)
-      const reportableContextRecords = (
-        isBasicUser ? contextualExpenses : contextualIncomes
-      ).filter(matchesActiveLocation)
-
       setSettings(resolvedSettings)
       const explicitInstant = new Date().toISOString() as UtcInstant
       setSnapshotTime({
@@ -174,19 +150,12 @@ export function HomePage() {
         periodEndExclusive: current.endExclusive as CivilDate,
       })
       setActivePeriod(period ?? null)
-      setReportedCount(
-        getReportedCountByUsageMode(
-          reportableContextRecords,
-          resolvedSettings.usageMode,
-        ),
-      )
       setCurrentIncomes(contextualIncomes)
       setCurrentExpenses(contextualExpenses)
       // Para variación mensual, el mes anterior no debe limitarse a la temporada activa actual.
       // De lo contrario, una temporada cerrada del mes anterior queda fuera y se muestra "sin datos".
       setPreviousIncomes(oldModeIncomes)
       setPreviousExpenses(oldModeExpenses)
-      setPendingReportSummary(pendingSummary)
     }
 
     void loadDashboard()
@@ -347,15 +316,6 @@ export function HomePage() {
     },
   ]
 
-  const reportedCard = {
-    icon: CalendarRange,
-    label: isBasicMode(settings) ? 'Egresos reportados' : 'Servicios reportados',
-    value: reportedCount,
-    previous: 0,
-    sensitive: false,
-    tone: 'text-violet-700 bg-violet-100 dark:bg-violet-950 dark:text-violet-300',
-  }
-
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6 py-6 md:py-10">
       <header className="rounded-2xl bg-linear-to-br from-slate-950 via-slate-900 to-emerald-950 p-5 text-white shadow-xl sm:p-7">
@@ -392,7 +352,7 @@ export function HomePage() {
         ))}
       </div>
 
-      <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+  {/*     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between gap-3">
           <span className={`flex size-11 items-center justify-center rounded-xl ${reportedCard.tone}`}>
             <CalendarRange className="size-5" aria-hidden="true" />
@@ -443,7 +403,7 @@ export function HomePage() {
             )}
           </div>
         )}
-      </article>
+      </article> */}
 
       {/* <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between gap-3">
