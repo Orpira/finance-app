@@ -50,6 +50,18 @@ function formatDate(value: string) {
   )
 }
 
+function formatRegistrationTime(value?: string) {
+  if (!value) return ''
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  return new Intl.DateTimeFormat('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
 /* function formatDateTimeLabel(value?: string) {
   if (!value) {
     return '—'
@@ -757,6 +769,7 @@ export function IncomeListPage() {
                 )
                 const isSelectable = income.id !== undefined && canReport && !reportBadge.isReported
                 const isSelected = income.id !== undefined && selectedIncomeIds.has(income.id)
+                const registrationTime = formatRegistrationTime(income.createdAt)
 
                 return (
                   <li className="flex flex-col gap-3 p-4" key={income.id}>
@@ -774,6 +787,7 @@ export function IncomeListPage() {
                         <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium text-slate-950">
+                            {registrationTime && `${registrationTime} · `}
                             {getIncomeDisplayName(income)}
                           </p>
                           {!isService && (
