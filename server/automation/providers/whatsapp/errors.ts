@@ -4,8 +4,11 @@ export class WhatsAppProviderError extends Error {
   readonly status: number
   readonly code: string
 
-  constructor(message: string, status: number, code: string, options?: ErrorOptions) {
-    super(message, options)
+  constructor(message: string, status: number, code: string, options?: { cause?: unknown }) {
+    super(message)
+    if (options && 'cause' in options) {
+      ;(this as { cause?: unknown }).cause = options.cause
+    }
     this.name = 'WhatsAppProviderError'
     this.status = status
     this.code = code
