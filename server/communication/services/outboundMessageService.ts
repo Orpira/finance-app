@@ -2,6 +2,8 @@ import type { MarkAsReadRequest, SendTemplateRequest, SendTextRequest } from '..
 import type { CommunicationSuccessResult } from '../contracts/communicationResult.js'
 import type { MetaCloudEnabledConfig } from '../config/metaCloudConfig.js'
 import { CommunicationTemplateRequiredError } from '../errors/communicationErrors.js'
+import { touchMetaChannelOutbound } from '../repositories/metaChannelRepository.js'
+import { recordCorrelation } from '../repositories/correlationRepository.js'
 import { createMetaCloudClient } from './metaCloudClient.js'
 import { withIdempotency } from './idempotencyService.js'
 import { getStatus as getServiceWindowStatus } from './serviceWindowService.js'
@@ -9,6 +11,36 @@ import { recordOutboundStatus } from './messageStatusService.js'
 
 function simulatedResult(requestId: string): CommunicationSuccessResult {
   return { success: true, requestId, provider: 'meta-cloud', status: 'simulated', simulation: true }
+}
+
+interface OutboundContext {
+  requestId: string
+  context?: {
+    eventId?: string
+    eventType?: string
+    workflowId?: string
+    userReference?: string
+    deviceReference?: string
+  }
+}
+
+/**
+ * Correlación técnica (requestId ↔ eventId/workflowId/providerMessageId ↔
+ * referencias opacas de usuario/dispositivo que envía n8n), nunca datos
+ * financieros ni el texto del mensaje. Se registra tanto en simulación como
+ * en envío real, para que la trazabilidad de staging sea la misma que en
+ * producción.
+ */
+async function recordOutboundCorrelation(input: OutboundContext, status: string, providerMessageId?: string) {
+  await recordCorrelation({
+    requestId: input.requestId,
+    eventId: input.context?.eventId ?? null,
+    workflowId: input.context?.workflowId ?? null,
+    userReference: input.context?.userReference ?? null,
+    deviceReference: input.context?.deviceReference ?? null,
+    providerMessageId: providerMessageId ?? null,
+    status,
+  })
 }
 
 /**
@@ -26,6 +58,7 @@ export async function sendTextMessage(
     config.idempotencyRetentionDays,
     async () => {
       if (!config.allowRealSend) {
+        await recordOutboundCorrelation(input, 'simulated')
         return { status: 200, body: simulatedResult(input.requestId) }
       }
 
@@ -36,12 +69,15 @@ export async function sendTextMessage(
 
       const client = createMetaCloudClient(config)
       const result = await client.sendText({ recipient: input.recipient, text: input.text })
+      const occurredAt = new Date().toISOString()
       await recordOutboundStatus({
         providerMessageId: result.providerMessageId,
         requestId: input.requestId,
         status: 'sent',
-        occurredAt: new Date().toISOString(),
+        occurredAt,
       })
+      await recordOutboundCorrelation(input, 'accepted', result.providerMessageId)
+      await touchMetaChannelOutbound(input.recipient, occurredAt)
 
       const successBody: CommunicationSuccessResult = {
         success: true,
@@ -67,6 +103,7 @@ export async function sendTemplateMessage(
     config.idempotencyRetentionDays,
     async () => {
       if (!config.allowRealSend) {
+        await recordOutboundCorrelation(input, 'simulated')
         return { status: 200, body: simulatedResult(input.requestId) }
       }
 
@@ -77,12 +114,15 @@ export async function sendTemplateMessage(
         languageCode: input.template.languageCode,
         components: input.template.components,
       })
+      const occurredAt = new Date().toISOString()
       await recordOutboundStatus({
         providerMessageId: result.providerMessageId,
         requestId: input.requestId,
         status: 'sent',
-        occurredAt: new Date().toISOString(),
+        occurredAt,
       })
+      await recordOutboundCorrelation(input, 'accepted', result.providerMessageId)
+      await touchMetaChannelOutbound(input.recipient, occurredAt)
 
       const successBody: CommunicationSuccessResult = {
         success: true,

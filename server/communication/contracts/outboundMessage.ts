@@ -7,8 +7,10 @@ import { z } from 'zod'
  */
 const contextSchema = z.object({
   eventType: z.string().min(1).max(100).optional(),
+  eventId: z.string().min(1).max(100).optional(),
   workflowId: z.string().min(1).max(100).optional(),
   userReference: z.string().min(1).max(200).optional(),
+  deviceReference: z.string().min(1).max(200).optional(),
 }).strict()
 
 export const sendTextRequestSchema = z.object({
