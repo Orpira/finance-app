@@ -405,3 +405,19 @@ gestionándose enteramente dentro de n8n, y este backend sigue sin llamarla
 directamente. Detalle completo en
 [provider-abstraction.md](provider-abstraction.md) y
 [n8n-current-contracts.md](n8n-current-contracts.md).
+
+## Actualización — Fase 3 (Backend de comunicaciones WhatsApp Cloud API)
+
+La Fase 3 añadió `server/communication/*` y las rutas
+`/api/communication/whatsapp/*` / `/api/communication/meta/webhook`: un
+backend nuevo que puede hablar directamente con WhatsApp Cloud API (Meta),
+deshabilitado por defecto (`WHATSAPP_CLOUD_ENABLED=false`) y sin conectar
+todavía a los workflows de producción de n8n. `MetaCloudWhatsAppProvider`
+implementa la interfaz `WhatsAppProvider` de la Fase 2. Evolution sigue
+siendo el proveedor activo (`WHATSAPP_PROVIDER=evolution`) y su
+comportamiento no cambió. Detalle completo en
+[meta-cloud-backend.md](meta-cloud-backend.md),
+[meta-cloud-webhooks.md](meta-cloud-webhooks.md),
+[meta-cloud-security.md](meta-cloud-security.md),
+[meta-cloud-environment.md](meta-cloud-environment.md) y
+[meta-cloud-testing.md](meta-cloud-testing.md).

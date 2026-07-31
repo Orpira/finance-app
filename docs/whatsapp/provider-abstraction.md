@@ -113,12 +113,36 @@ suposiciones):
 | `supportsInboundWebhooks` | `true` | workflow "03 WhatsApp Status" recibe callbacks de Evolution |
 | `supportsCoexistence` | `false` | concepto específico de WhatsApp Cloud API, sin equivalente en Evolution/WhatsApp Web |
 
-### `meta-cloud` (no implementado)
+### `meta-cloud` (implementado en la Fase 3)
 
-`createWhatsAppProvider('meta-cloud')` lanza `ProviderNotImplementedError`
-(HTTP 501) de forma explícita y controlada. No existe ninguna clase
-`MetaCloudWhatsAppProvider` todavía — se añadirá en una fase posterior junto
-con el Backend Comunicaciones real.
+`createWhatsAppProvider('meta-cloud')` devuelve `MetaCloudWhatsAppProvider`
+(`server/automation/providers/whatsapp/MetaCloudWhatsAppProvider.ts`), que
+implementa las operaciones de canal usando el nuevo backend de
+comunicaciones (`server/communication/*`, ver
+[meta-cloud-backend.md](meta-cloud-backend.md)) en vez de reenviar a n8n.
+
+Capacidades declaradas:
+
+| Capacidad | Valor | Motivo |
+|---|---|---|
+| `supportsQr` | `false` | Cloud API no usa sesión de WhatsApp Web |
+| `supportsPairingCode` | `false` | Cloud API se activa con `phone_number_id`, no con pairing code |
+| `supportsTemplates` | `true` | Meta exige plantillas aprobadas fuera de la ventana de 24h |
+| `supportsMessageStatus` | `true` | El webhook de Meta reporta `sent/delivered/read/failed` por mensaje |
+| `supportsInboundWebhooks` | `true` | `POST /api/communication/meta/webhook` |
+| `supportsCoexistence` | `false` | No se asume sin validarlo contra una configuración real de Meta |
+
+`communication.whatsapp.qr.requested` lanza `UnsupportedProviderCapabilityError`
+de forma explícita para este proveedor — nunca simula un QR.
+
+**Alcance deliberadamente limitado en esta fase:** `connect`/`disconnect`/
+`status`/`preferences` responden en base a `metaCloudConfig` (si Cloud está
+habilitado y configurado), no persisten nada en `communication_channels`
+(Neon). Ver "Alcance de esta fase" en
+[meta-cloud-backend.md](meta-cloud-backend.md) para el razonamiento
+completo. `test.requested` sí reutiliza el flujo real de envío
+(`metaCloudClient`) cuando `WHATSAPP_CLOUD_ALLOW_REAL_SEND=true` y se indica
+un destinatario de prueba explícito.
 
 ## Factory / resolver
 
@@ -243,27 +267,41 @@ esta fase.
 - Los tests existentes (`automationGateway.test.ts`, `webhookDispatcher.test.ts`,
   `automationHandler.test.ts`, `communicationChannelService.test.ts`, ...)
   siguen pasando sin modificaciones en su lógica de aserción.
+- El backend de comunicaciones de la Fase 3
+  (`server/communication/*`, `api/communication/*`) es aditivo: no toca
+  ningún archivo de la Fase 2 salvo `WhatsAppProviderFactory.ts` (para
+  resolver `meta-cloud` a una implementación real en vez de
+  `ProviderNotImplementedError`) y `.env.example`. Con
+  `WHATSAPP_CLOUD_ENABLED=false` (por defecto), es indistinguible de que no
+  existiera.
 
-## Estrategia para Meta Cloud API (fases posteriores)
+## Meta Cloud API — estado tras la Fase 3
 
-Cuando se implemente `MetaCloudWhatsAppProvider`:
+`MetaCloudWhatsAppProvider` ya existe y está descrito arriba. Lo que queda
+para fases posteriores:
 
-1. Su `dispatchChannelEvent` probablemente **no** llamará a
-   `dispatchWebhook` (n8n): según el documento de arquitectura de la
-   migración, hablará directamente con el Backend Comunicaciones / Graph API
-   de Meta, o con una nueva ruta de n8n si se decide mantenerlo en el
-   camino. Es decisión de una fase posterior, no de esta.
-2. Sus capacidades serán al menos: `supportsQr: false`,
-   `supportsPairingCode: false` (Cloud API se activa con `phone_number_id` y
-   Embedded Signup, no QR/pairing de WhatsApp Web), `supportsTemplates: true`
-   (Meta exige plantillas aprobadas fuera de la ventana de 24 h),
-   `supportsCoexistence`: según se implemente.
-3. Cuando este backend empiece a enviar mensajes realmente (en vez de que lo
-   haga n8n de forma opaca), la interfaz `WhatsAppProvider` se ampliará con
-   los métodos de envío (`sendText`/`sendTemplate` u equivalentes) — no antes,
-   para no fabricar una capacidad sin implementación real detrás.
-4. La UI podrá usar `GET /api/communication-channel/capabilities` para dejar
-   de asumir QR/pairing code como único flujo de conexión.
+1. **Persistencia real del canal.** `connect`/`disconnect`/`status`/
+   `preferences` deben empezar a leer/escribir `communication_channels`
+   (Neon) igual que hoy hace n8n para Evolution, resolviendo
+   `userCode`/`deviceCode` desde el payload del evento.
+2. **Conexión con los workflows de n8n reales.** Esta fase construyó
+   `/api/communication/whatsapp/*` como destino, pero n8n todavía no lo
+   llama — sigue usando `N8N_WHATSAPP_WEBHOOK_URL` hacia Evolution mientras
+   `WHATSAPP_PROVIDER=evolution` sea el valor activo en producción.
+3. **Envío real de notificaciones de negocio** (`income.created`,
+   `expense.created`, etc.) a través de Cloud API: hoy sigue haciéndolo n8n
+   contra Evolution vía el nodo "HTTP Request WhatsApp"; migrar esa
+   responsabilidad al backend de comunicaciones es una decisión de una fase
+   posterior, no de esta.
+4. La interfaz `WhatsAppProvider` (Fase 2) sigue sin `sendText`/`sendTemplate`:
+   ese envío vive en `server/communication/services/outboundMessageService.ts`,
+   consumido directamente por n8n vía HTTP, no a través de
+   `WhatsAppProvider`. Ambas capas conviven a propósito (ver sección 3 del
+   documento de la Fase 3: "no alterar artificialmente la interfaz
+   WhatsAppProvider para hacerla coincidir con documentación anterior").
+5. La UI podrá usar `GET /api/communication-channel/capabilities` (Fase 2)
+   para dejar de asumir QR/pairing code como único flujo de conexión, una
+   vez el punto 1 esté resuelto.
 
 ## Estrategia de retirada de Evolution
 

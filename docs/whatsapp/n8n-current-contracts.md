@@ -190,3 +190,14 @@ WhatsApp pasan ahora por `resolveActiveWhatsAppProvider().dispatchChannelEvent(.
 en vez de llamar a `dispatchWebhook` directamente. Para `WHATSAPP_PROVIDER=evolution`
 (el valor por defecto), esa función delega en el mismo `dispatchWebhook` de
 siempre, con el mismo payload.
+
+## Actualización — Fase 3 (Backend de comunicaciones)
+
+La Fase 3 añadió `server/communication/*` y las rutas
+`/api/communication/whatsapp/*` y `/api/communication/meta/webhook`, un
+destino nuevo y separado que n8n **todavía no llama**. Estos contratos con
+n8n (los 3 webhooks documentados arriba) no cambiaron en absoluto: siguen
+siendo la única vía real de comunicación entre este backend y n8n mientras
+`WHATSAPP_PROVIDER=evolution` sea el proveedor activo. Ver
+[meta-cloud-backend.md](meta-cloud-backend.md) para el contrato nuevo
+(pensado para que n8n lo consuma en una fase posterior, no en esta).
