@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { getConfiguredWhatsAppProviderName } from '../server/automation/providers/whatsapp/config'
 import { EvolutionWhatsAppProvider } from '../server/automation/providers/whatsapp/EvolutionWhatsAppProvider'
+import { MetaCloudWhatsAppProvider } from '../server/automation/providers/whatsapp/MetaCloudWhatsAppProvider'
 import {
-  ProviderNotImplementedError,
   UnsupportedWhatsAppProviderError,
   WhatsAppProviderConfigurationError,
 } from '../server/automation/providers/whatsapp/errors'
@@ -27,7 +27,7 @@ describe('Configuración WHATSAPP_PROVIDER', () => {
     expect(getConfiguredWhatsAppProviderName()).toBe('evolution')
   })
 
-  it('acepta meta-cloud como valor válido aunque no esté implementado', () => {
+  it('acepta meta-cloud como valor válido', () => {
     process.env.WHATSAPP_PROVIDER = 'meta-cloud'
     expect(getConfiguredWhatsAppProviderName()).toBe('meta-cloud')
   })
@@ -57,8 +57,10 @@ describe('WhatsAppProviderFactory', () => {
     expect(provider.name).toBe('evolution')
   })
 
-  it('informa que meta-cloud no está implementado, sin hacer fallback a evolution', () => {
-    expect(() => createWhatsAppProvider('meta-cloud')).toThrow(ProviderNotImplementedError)
+  it('resuelve meta-cloud como MetaCloudWhatsAppProvider (Fase 3)', () => {
+    const provider = createWhatsAppProvider('meta-cloud')
+    expect(provider).toBeInstanceOf(MetaCloudWhatsAppProvider)
+    expect(provider.name).toBe('meta-cloud')
   })
 
   it('rechaza un nombre de proveedor desconocido', () => {
@@ -66,9 +68,9 @@ describe('WhatsAppProviderFactory', () => {
       .toThrow(UnsupportedWhatsAppProviderError)
   })
 
-  it('resolveActiveWhatsAppProvider respeta WHATSAPP_PROVIDER sin fallback silencioso', () => {
+  it('resolveActiveWhatsAppProvider respeta WHATSAPP_PROVIDER=meta-cloud sin caer en Evolution', () => {
     process.env.WHATSAPP_PROVIDER = 'meta-cloud'
-    expect(() => resolveActiveWhatsAppProvider()).toThrow(ProviderNotImplementedError)
+    expect(resolveActiveWhatsAppProvider()).toBeInstanceOf(MetaCloudWhatsAppProvider)
   })
 
   it('resolveActiveWhatsAppProvider usa evolution cuando la variable está ausente', () => {
