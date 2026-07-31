@@ -1,0 +1,146 @@
+{
+  "name": "PB — WhatsApp Cloud — Message Status — STAGING",
+  "nodes": [
+    {
+      "id": "webhook-status",
+      "name": "Webhook: estado de mensaje normalizado",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pb-whatsapp-cloud-status-staging",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "webhookId": "REPLACE_WITH_STAGING_WEBHOOK_ID",
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "PB WhatsApp Forward Auth Token (staging)" }
+      }
+    },
+    {
+      "id": "validate-status-contract",
+      "name": "Validar contrato (event/provider/providerMessageId/state)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? $input.first().json;\nconst status = body.status ?? {};\nconst KNOWN_STATES = ['sent', 'delivered', 'read', 'failed', 'unknown'];\nconst valid = body.event === 'whatsapp.message.status.updated'\n  && body.provider === 'meta-cloud'\n  && typeof status.providerMessageId === 'string'\n  && status.providerMessageId.length > 0\n  && KNOWN_STATES.includes(status.state);\nreturn [{ json: { valid, ...body, status } }];"
+      }
+    },
+    {
+      "id": "if-valid-status",
+      "name": "¿Contrato válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "leftValue": "={{ $json.valid }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "log-status",
+      "name": "Registrar estado técnico (Code, sin contenido del mensaje)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, -60],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn [{\n  json: {\n    providerMessageId: item.status.providerMessageId,\n    state: item.status.state,\n    timestamp: item.status.timestamp,\n    errorCode: item.status.errorCode ?? null,\n    loggedAt: new Date().toISOString(),\n  },\n}];"
+      }
+    },
+    {
+      "id": "if-failed",
+      "name": "¿Estado failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, -60],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "leftValue": "={{ $json.state }}", "rightValue": "failed", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "mark-failed-for-review",
+      "name": "Marcar entrega fallida para revisión (NoOp)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, -140],
+      "parameters": {}
+    },
+    {
+      "id": "noop-ok-state",
+      "name": "Sin acción adicional (NoOp)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, 20],
+      "parameters": {}
+    },
+    {
+      "id": "respond-ok",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [1320, -60],
+      "parameters": { "respondWith": "json", "responseBody": "={{ { success: true } }}", "options": {} }
+    },
+    {
+      "id": "respond-invalid-status",
+      "name": "Respond 400 (contrato inválido)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [660, 160],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: { code: 'STATUS_CONTRACT_INVALID', message: 'Payload de estado no reconocido.' } } }}",
+        "options": { "responseCode": 400 }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: estado de mensaje normalizado": {
+      "main": [[{ "node": "Validar contrato (event/provider/providerMessageId/state)", "type": "main", "index": 0 }]]
+    },
+    "Validar contrato (event/provider/providerMessageId/state)": {
+      "main": [[{ "node": "¿Contrato válido?", "type": "main", "index": 0 }]]
+    },
+    "¿Contrato válido?": {
+      "main": [
+        [{ "node": "Registrar estado técnico (Code, sin contenido del mensaje)", "type": "main", "index": 0 }],
+        [{ "node": "Respond 400 (contrato inválido)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Registrar estado técnico (Code, sin contenido del mensaje)": {
+      "main": [[{ "node": "¿Estado failed?", "type": "main", "index": 0 }]]
+    },
+    "¿Estado failed?": {
+      "main": [
+        [{ "node": "Marcar entrega fallida para revisión (NoOp)", "type": "main", "index": 0 }],
+        [{ "node": "Sin acción adicional (NoOp)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Marcar entrega fallida para revisión (NoOp)": {
+      "main": [[{ "node": "Respond 200", "type": "main", "index": 0 }]]
+    },
+    "Sin acción adicional (NoOp)": {
+      "main": [[{ "node": "Respond 200", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "note": "Exportación sanitizada de staging. No contiene credenciales, tokens ni URLs reales."
+  }
+}

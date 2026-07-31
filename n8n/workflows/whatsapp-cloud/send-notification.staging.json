@@ -1,0 +1,257 @@
+{
+  "name": "PB — WhatsApp Cloud — Send Notification — STAGING",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook: evento funcional",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pb-whatsapp-cloud-send-staging",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "REPLACE_WITH_STAGING_WEBHOOK_ID"
+    },
+    {
+      "id": "validate-payload",
+      "name": "Validar event/userCode/deviceCode/recipient/notificationText",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? $input.first().json;\nconst required = ['event', 'userCode', 'deviceCode'];\nconst missing = required.filter((key) => !body[key]);\nconst payload = body.payload ?? {};\nif (!payload.recipient) missing.push('payload.recipient');\nif (!payload.notificationText) missing.push('payload.notificationText');\nreturn [{\n  json: {\n    valid: missing.length === 0,\n    missing,\n    event: body.event,\n    userCode: body.userCode,\n    deviceCode: body.deviceCode,\n    occurredAt: body.occurredAt ?? new Date().toISOString(),\n    recipient: payload.recipient,\n    notificationText: payload.notificationText,\n    includeAmount: Boolean(payload.includeAmount),\n  },\n}];"
+      }
+    },
+    {
+      "id": "if-valid",
+      "name": "¿Payload válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "build-request-id",
+      "name": "Generar requestId determinista",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, -120],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst item = $input.first().json;\nconst eventId = $json.eventId || $execution.id;\nconst recipientHash = crypto.createHash('sha256').update(item.recipient).digest('hex').slice(0, 8);\nconst requestId = `pb:${item.event}:${eventId}:${recipientHash}`;\nreturn [{ json: { ...item, eventId, recipientHash, requestId } }];"
+      }
+    },
+    {
+      "id": "get-backend-status",
+      "name": "GET status (backend de comunicaciones)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, -120],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.PRIVATE_BALANCE_COMMUNICATION_BASE_URL }}/api/communication/whatsapp/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": { "timeout": 8000 }
+      },
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "Private Balance Communication Backend (staging)" }
+      }
+    },
+    {
+      "id": "if-channel-active",
+      "name": "¿WhatsApp activo y canal meta-cloud conectado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, -120],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.enabled }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "send-text",
+      "name": "POST send-text",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, -220],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.PRIVATE_BALANCE_COMMUNICATION_BASE_URL }}/api/communication/whatsapp/send-text",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {},
+        "jsonBody": "={{ { requestId: $json.requestId, recipient: $json.recipient, text: $json.notificationText, context: { eventType: $json.event, eventId: $json.eventId, workflowId: 'pb-whatsapp-cloud-send-staging', userReference: $json.userCode, deviceReference: $json.deviceCode } } }}",
+        "options": { "timeout": 10000, "response": { "response": { "neverError": true } } }
+      },
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "Private Balance Communication Backend (staging)" }
+      }
+    },
+    {
+      "id": "if-template-required",
+      "name": "¿WHATSAPP_TEMPLATE_REQUIRED?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, -220],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.error?.code }}",
+              "rightValue": "WHATSAPP_TEMPLATE_REQUIRED",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "select-template",
+      "name": "Seleccionar plantilla (mapeo explícito event → template)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, -160],
+      "parameters": {
+        "jsCode": "const TEMPLATE_BY_EVENT = {\n  'income.created': 'income_registered',\n  'appointment.reminder': 'appointment_reminder',\n  'conversation.reactivation': 'conversation_reactivation',\n};\nconst item = $('Generar requestId determinista').first().json;\nconst templateName = TEMPLATE_BY_EVENT[item.event];\nif (!templateName) {\n  throw new Error(`No hay plantilla mapeada para el evento ${item.event}`);\n}\nreturn [{ json: { ...item, templateName } }];"
+      }
+    },
+    {
+      "id": "send-template",
+      "name": "POST send-template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, -160],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.PRIVATE_BALANCE_COMMUNICATION_BASE_URL }}/api/communication/whatsapp/send-template",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "jsonBody": "={{ { requestId: $json.requestId, recipient: $json.recipient, template: { name: $json.templateName, languageCode: 'es', components: [] }, context: { eventType: $json.event, eventId: $json.eventId, workflowId: 'pb-whatsapp-cloud-send-staging', userReference: $json.userCode, deviceReference: $json.deviceCode } } }}",
+        "options": { "timeout": 10000, "response": { "response": { "neverError": true } } }
+      },
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "Private Balance Communication Backend (staging)" }
+      }
+    },
+    {
+      "id": "record-result",
+      "name": "Registrar resultado técnico (Code)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, -190],
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nreturn [{\n  json: {\n    success: result.success === true,\n    status: result.status,\n    simulation: result.simulation === true,\n    providerMessageId: result.providerMessageId ?? null,\n    requestId: result.requestId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "respond-ok",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [2420, -190],
+      "parameters": { "respondWith": "allIncomingItems", "options": {} }
+    },
+    {
+      "id": "respond-invalid",
+      "name": "Respond 422 (payload inválido)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [660, 120],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: { code: 'PAYLOAD_INVALID', message: 'Faltan campos obligatorios: ' + $json.missing.join(', ') } } }}",
+        "options": { "responseCode": 422 }
+      }
+    },
+    {
+      "id": "respond-channel-inactive",
+      "name": "Respond 200 (canal inactivo, no se envía)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [1320, 60],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, status: 'skipped', reason: 'whatsapp_channel_not_active' } }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: evento funcional": {
+      "main": [[{ "node": "Validar event/userCode/deviceCode/recipient/notificationText", "type": "main", "index": 0 }]]
+    },
+    "Validar event/userCode/deviceCode/recipient/notificationText": {
+      "main": [[{ "node": "¿Payload válido?", "type": "main", "index": 0 }]]
+    },
+    "¿Payload válido?": {
+      "main": [
+        [{ "node": "Generar requestId determinista", "type": "main", "index": 0 }],
+        [{ "node": "Respond 422 (payload inválido)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generar requestId determinista": {
+      "main": [[{ "node": "GET status (backend de comunicaciones)", "type": "main", "index": 0 }]]
+    },
+    "GET status (backend de comunicaciones)": {
+      "main": [[{ "node": "¿WhatsApp activo y canal meta-cloud conectado?", "type": "main", "index": 0 }]]
+    },
+    "¿WhatsApp activo y canal meta-cloud conectado?": {
+      "main": [
+        [{ "node": "POST send-text", "type": "main", "index": 0 }],
+        [{ "node": "Respond 200 (canal inactivo, no se envía)", "type": "main", "index": 0 }]
+      ]
+    },
+    "POST send-text": {
+      "main": [[{ "node": "¿WHATSAPP_TEMPLATE_REQUIRED?", "type": "main", "index": 0 }]]
+    },
+    "¿WHATSAPP_TEMPLATE_REQUIRED?": {
+      "main": [
+        [{ "node": "Seleccionar plantilla (mapeo explícito event → template)", "type": "main", "index": 0 }],
+        [{ "node": "Registrar resultado técnico (Code)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Seleccionar plantilla (mapeo explícito event → template)": {
+      "main": [[{ "node": "POST send-template", "type": "main", "index": 0 }]]
+    },
+    "POST send-template": {
+      "main": [[{ "node": "Registrar resultado técnico (Code)", "type": "main", "index": 0 }]]
+    },
+    "Registrar resultado técnico (Code)": {
+      "main": [[{ "node": "Respond 200", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "note": "Exportación sanitizada de staging. No contiene credenciales, tokens ni URLs reales. Ver n8n/workflows/whatsapp-cloud/README.md antes de importar."
+  }
+}
