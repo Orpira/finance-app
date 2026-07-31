@@ -3,9 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const { getMetaCloudConfig } = vi.hoisted(() => ({ getMetaCloudConfig: vi.fn() }))
 vi.mock('../server/communication/config/metaCloudConfig', () => ({ getMetaCloudConfig }))
 
-import healthHandler from '../api/communication/whatsapp/health'
-import statusHandler from '../api/communication/whatsapp/status'
+import actionHandler from '../api/communication/whatsapp/[action]'
 import type { VercelRequest, VercelResponse } from '../server/apiUtils'
+
+const healthHandler = (request: VercelRequest, response: VercelResponse) =>
+  actionHandler({ ...request, query: { action: 'health' } } as VercelRequest, response)
+const statusHandler = (request: VercelRequest, response: VercelResponse) =>
+  actionHandler({ ...request, query: { action: 'status' } } as VercelRequest, response)
 
 const DISABLED_CONFIG = {
   enabled: false, allowRealSend: false, webhookEnabled: false, forwardInboundToN8n: false,

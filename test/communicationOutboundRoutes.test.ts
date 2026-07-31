@@ -14,11 +14,16 @@ vi.mock('../server/communication/services/outboundMessageService', () => ({
   sendTextMessage, sendTemplateMessage, markMessageAsRead,
 }))
 
-import sendTextHandler from '../api/communication/whatsapp/send-text'
-import sendTemplateHandler from '../api/communication/whatsapp/send-template'
-import markReadHandler from '../api/communication/whatsapp/mark-read'
+import actionHandler from '../api/communication/whatsapp/[action]'
 import type { VercelRequest, VercelResponse } from '../server/apiUtils'
 import { CommunicationAuthenticationError } from '../server/communication/errors/communicationErrors'
+
+const sendTextHandler = (request: VercelRequest, response: VercelResponse) =>
+  actionHandler({ ...request, query: { action: 'send-text' } } as VercelRequest, response)
+const sendTemplateHandler = (request: VercelRequest, response: VercelResponse) =>
+  actionHandler({ ...request, query: { action: 'send-template' } } as VercelRequest, response)
+const markReadHandler = (request: VercelRequest, response: VercelResponse) =>
+  actionHandler({ ...request, query: { action: 'mark-read' } } as VercelRequest, response)
 
 const ENABLED_CONFIG = {
   enabled: true, allowRealSend: false, webhookEnabled: false, forwardInboundToN8n: false,

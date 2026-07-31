@@ -56,13 +56,15 @@ server/communication/
   index.ts                           barrel de exports públicos
 
 api/communication/
-  whatsapp/send-text.ts
-  whatsapp/send-template.ts
-  whatsapp/mark-read.ts
-  whatsapp/status.ts
-  whatsapp/health.ts
+  whatsapp/[action].ts               dispatcher: send-text/send-template/mark-read/status/health
   meta/webhook.ts
 ```
+
+`whatsapp/[action].ts` es una ruta dinámica de Vercel: un único archivo (una
+sola Serverless Function) que resuelve internamente las 5 acciones según el
+segmento de la URL, sin cambiar ninguna de las rutas públicas. Se consolidó
+así para no superar el límite de 12 Serverless Functions del plan Hobby de
+Vercel (`api/` pasó de 13 a 9 funciones).
 
 ## Endpoints
 
