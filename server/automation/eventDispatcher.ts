@@ -6,6 +6,8 @@ import {
 } from './eventTypes.js'
 import { dispatchWebhook } from './webhookDispatcher.js'
 import { resolveActiveWhatsappChannel, resolveUserCodeFromDeviceCode } from './communicationResolver.js'
+import { resolveActiveWhatsAppProvider } from './providers/whatsapp/WhatsAppProviderFactory.js'
+import { isWhatsAppChannelEvent } from './providers/whatsapp/WhatsAppProvider.js'
 
 const identityCodesSchema = z.object({
   userCode: z.string().regex(/^PB-USER-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
@@ -166,11 +168,17 @@ export async function dispatchAutomationEvent(input: {
     input.licenseDeviceCode,
     communicationChannel,
   )
-  const webhook = await dispatchWebhook({
-    event: input.envelope.event,
-    eventId: input.envelope.eventId,
-    payload: payloadToN8N,
-  })
+  const webhook = isWhatsAppChannelEvent(input.envelope.event)
+    ? await resolveActiveWhatsAppProvider().dispatchChannelEvent({
+        event: input.envelope.event,
+        eventId: input.envelope.eventId,
+        payload: payloadToN8N,
+      })
+    : await dispatchWebhook({
+        event: input.envelope.event,
+        eventId: input.envelope.eventId,
+        payload: payloadToN8N,
+      })
 
   if (!webhook.successful || isSynchronousAutomationEvent(input.envelope.event)) {
     return {

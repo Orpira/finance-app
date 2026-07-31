@@ -20,6 +20,7 @@ import {
   hasWebhookRoute,
   WebhookDispatchError,
 } from '../server/automation/webhookDispatcher.js'
+import { WhatsAppProviderError } from '../server/automation/providers/whatsapp/errors.js'
 import { verifyAutomationJwt } from '../server/automationSecurity.js'
 
 const identityCodesSchema = z.object({
@@ -139,6 +140,11 @@ export default async function handler(
     }
 
     if (error instanceof WebhookDispatchError) {
+      response.status(error.status).json({ error: error.message })
+      return
+    }
+
+    if (error instanceof WhatsAppProviderError) {
       response.status(error.status).json({ error: error.message })
       return
     }
