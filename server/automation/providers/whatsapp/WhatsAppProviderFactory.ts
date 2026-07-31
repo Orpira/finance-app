@@ -1,6 +1,7 @@
 import { getConfiguredWhatsAppProviderName } from './config.js'
 import { EvolutionWhatsAppProvider } from './EvolutionWhatsAppProvider.js'
-import { ProviderNotImplementedError, UnsupportedWhatsAppProviderError } from './errors.js'
+import { MetaCloudWhatsAppProvider } from './MetaCloudWhatsAppProvider.js'
+import { UnsupportedWhatsAppProviderError } from './errors.js'
 import type { WhatsAppProvider, WhatsAppProviderName } from './WhatsAppProvider.js'
 
 export function createWhatsAppProvider(providerName: WhatsAppProviderName): WhatsAppProvider {
@@ -8,7 +9,7 @@ export function createWhatsAppProvider(providerName: WhatsAppProviderName): What
     case 'evolution':
       return new EvolutionWhatsAppProvider()
     case 'meta-cloud':
-      throw new ProviderNotImplementedError(providerName)
+      return new MetaCloudWhatsAppProvider()
     default:
       throw new UnsupportedWhatsAppProviderError(providerName)
   }
