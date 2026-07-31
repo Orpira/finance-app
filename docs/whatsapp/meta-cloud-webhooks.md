@@ -133,10 +133,19 @@ por fallos de firma (`401`) o servicio deshabilitado (`403`) son intencional
 y correctamente no-200, ya que Meta no debería seguir insistiendo con una
 firma que nunca va a validar sin cambiar el App Secret.
 
-## Reenvío a n8n (Fase 4, no implementado)
+## Reenvío a n8n (implementado en la Fase 4)
 
-`WHATSAPP_CLOUD_FORWARD_INBOUND_TO_N8N` existe (por defecto `false`) pero no
-dispara ninguna llamada de red en esta fase. Si se activa, el procesamiento
-registra un log (`whatsapp.webhook.forward_not_implemented`) explicando que
-el reenvío real llega en la Fase 4, y continúa procesando con normalidad —
-no falla el webhook por tener la bandera mal configurada.
+Con `WHATSAPP_CLOUD_FORWARD_INBOUND_TO_N8N=true` (mensajes) y/o
+`WHATSAPP_CLOUD_FORWARD_STATUS_TO_N8N=true` (estados), cada evento nuevo
+(no duplicado) se reenvía mediante
+`server/communication/services/n8nInboundForwarder.ts` a
+`N8N_WHATSAPP_INBOUND_WEBHOOK_URL` / `N8N_WHATSAPP_STATUS_WEBHOOK_URL`
+respectivamente, autenticado con `N8N_WHATSAPP_FORWARD_AUTH_TOKEN`. Es un
+único intento (sin reintentos programados, ver
+[n8n-inbound-workflow.md](n8n-inbound-workflow.md) para el razonamiento
+completo) con timeout de 8s; el resultado se clasifica como reintentable o
+no y se registra en el log técnico, pero nunca bloquea ni hace fallar la
+respuesta al webhook de Meta — el reenvío ocurre después de que el evento
+ya quedó normalizado y persistido. Contratos completos en
+[n8n-inbound-workflow.md](n8n-inbound-workflow.md) y
+[n8n-status-workflow.md](n8n-status-workflow.md).

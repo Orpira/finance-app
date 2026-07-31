@@ -275,19 +275,27 @@ esta fase.
   `WHATSAPP_CLOUD_ENABLED=false` (por defecto), es indistinguible de que no
   existiera.
 
-## Meta Cloud API — estado tras la Fase 3
+## Meta Cloud API — estado tras la Fase 4
 
-`MetaCloudWhatsAppProvider` ya existe y está descrito arriba. Lo que queda
-para fases posteriores:
+`MetaCloudWhatsAppProvider` ya existe y está descrito arriba. La Fase 4
+resolvió los dos primeros puntos que antes quedaban pendientes:
 
-1. **Persistencia real del canal.** `connect`/`disconnect`/`status`/
-   `preferences` deben empezar a leer/escribir `communication_channels`
-   (Neon) igual que hoy hace n8n para Evolution, resolviendo
-   `userCode`/`deviceCode` desde el payload del evento.
-2. **Conexión con los workflows de n8n reales.** Esta fase construyó
-   `/api/communication/whatsapp/*` como destino, pero n8n todavía no lo
-   llama — sigue usando `N8N_WHATSAPP_WEBHOOK_URL` hacia Evolution mientras
-   `WHATSAPP_PROVIDER=evolution` sea el valor activo en producción.
+1. **Persistencia real del canal (resuelto en la Fase 4).**
+   `connect`/`disconnect`/`status`/`preferences` ahora leen/escriben
+   `communication_channels` (Neon) por usuario/dispositivo, resolviendo
+   `userCode`/`deviceCode` desde el payload del evento con el mismo patrón
+   que ya usaba `eventDispatcher.ts` para los eventos financieros. Ver
+   [meta-channel-persistence.md](meta-channel-persistence.md).
+2. **Workflows n8n de staging (creados en la Fase 4, no verificados en vivo).**
+   `n8n/workflows/whatsapp-cloud/` ya definen cómo n8n llamaría a
+   `/api/communication/whatsapp/*`, pero son plantillas escritas a mano —
+   ningún workflow de **producción** llama a este backend todavía. Sigue
+   usando `N8N_WHATSAPP_WEBHOOK_URL` hacia Evolution mientras
+   `WHATSAPP_PROVIDER=evolution` sea el valor activo. Ver
+   [n8n-meta-cloud-integration.md](n8n-meta-cloud-integration.md).
+
+Lo que queda para fases posteriores:
+
 3. **Envío real de notificaciones de negocio** (`income.created`,
    `expense.created`, etc.) a través de Cloud API: hoy sigue haciéndolo n8n
    contra Evolution vía el nodo "HTTP Request WhatsApp"; migrar esa

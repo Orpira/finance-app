@@ -201,3 +201,14 @@ siendo la única vía real de comunicación entre este backend y n8n mientras
 `WHATSAPP_PROVIDER=evolution` sea el proveedor activo. Ver
 [meta-cloud-backend.md](meta-cloud-backend.md) para el contrato nuevo
 (pensado para que n8n lo consuma en una fase posterior, no en esta).
+
+## Actualización — Fase 4 (Integración n8n con WhatsApp Cloud API)
+
+La Fase 4 añadió tres workflows de **staging** (plantillas de exportación
+sanitizadas, no importadas en ninguna instancia real de n8n desde esta
+sesión — ver [n8n-meta-cloud-integration.md](n8n-meta-cloud-integration.md))
+que sí consumen el contrato nuevo del backend de comunicaciones. Estos
+contratos siguen sin afectar a los workflows de producción documentados en
+este archivo: son workflows nuevos e independientes
+(`n8n/workflows/whatsapp-cloud/`), activos solo cuando un operador los
+importa y activa manualmente en un entorno de n8n de staging.

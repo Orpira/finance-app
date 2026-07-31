@@ -191,25 +191,35 @@ conversación.
 Ver [meta-cloud-environment.md](meta-cloud-environment.md) para la tabla
 completa de variables y reglas de validación.
 
-## Alcance de esta fase (qué queda fuera deliberadamente)
+## Alcance de la Fase 3 (histórico, resuelto en la Fase 4)
 
-- **`MetaCloudWhatsAppProvider` no persiste el estado del canal en
-  `communication_channels` (Neon).** Sus operaciones `connect` / `disconnect`
-  / `status` / `preferences` devuelven información derivada de la
-  configuración (`metaCloudConfig`), no del estado guardado por usuario.
-  Hacerlo bien exige resolver `userCode`/`deviceCode` desde el payload del
-  evento con la misma lógica que ya usa
-  `server/automation/eventDispatcher.ts` (`resolveEnvelopeUserCode`), y se
-  deja para cuando este proveedor se conecte a un flujo de migración real
-  (Fase 6 del documento de migración, "Integración Private Balance").
-- **No hay reenvío real de mensajes entrantes a n8n.**
-  `WHATSAPP_CLOUD_FORWARD_INBOUND_TO_N8N` existe como bandera pero no dispara
-  ninguna llamada de red todavía (Fase 4).
-- **`lastInboundAt` / `lastOutboundAt` / `lastError` en `/status` son
-  siempre `null`.** Poblarlos requiere decidir un alcance de consulta
-  (¿global? ¿por número?) que no está definido todavía.
-- **El `console.log` de depuración en `api/automation.ts` (líneas 116-117,
-  detectado en la Fase 1) sigue sin tocarse.** Es deuda técnica de otro
-  módulo, fuera del alcance de esta fase; no se amplió ni se reutilizó ese
-  patrón aquí — todo el logging nuevo pasa por
-  `logCommunicationEvent`/`redactCommunicationData`.
+Los tres primeros puntos de esta sección (persistencia del canal por
+usuario, reenvío real de mensajes entrantes/estados, `lastInboundAt`/
+`lastOutboundAt` siempre `null`) quedaron resueltos en la Fase 4: ver
+[meta-channel-persistence.md](meta-channel-persistence.md),
+[n8n-inbound-workflow.md](n8n-inbound-workflow.md) y
+[n8n-status-workflow.md](n8n-status-workflow.md).
+
+El `console.log` de depuración en `api/automation.ts` (líneas 116-117,
+detectado en la Fase 1) sigue sin tocarse — deuda técnica de otro módulo,
+todavía fuera del alcance de esta migración.
+
+## Alcance de la Fase 4 (qué queda fuera deliberadamente)
+
+- **`MetaCloudWhatsAppProvider` no distingue `mode: 'test'` de
+  `'simulation'`/`'production'` automáticamente.** Hoy solo alterna entre
+  `'simulation'` y `'production'` según `WHATSAPP_CLOUD_ALLOW_REAL_SEND`.
+- **El reenvío hacia n8n es de un único intento**, sin reintentos
+  programados (ver "Reintentos" en
+  [meta-cloud-webhooks.md](meta-cloud-webhooks.md) y
+  [n8n-inbound-workflow.md](n8n-inbound-workflow.md)). Una cola o Vercel
+  Cron para reintentos reales queda para una fase posterior.
+- **Los workflows n8n de `n8n/workflows/whatsapp-cloud/` son plantillas
+  escritas a mano**, no verificadas contra una instancia real de n8n (esta
+  sesión no tuvo acceso a una). Requieren revisión e importación manual —
+  ver `n8n/workflows/whatsapp-cloud/README.md`.
+- **`communicationChannelStore.ts` sigue siendo código muerto** con un
+  esquema incompatible con la tabla real de `communication_channels`
+  (hallazgo documentado en
+  [meta-channel-persistence.md](meta-channel-persistence.md)). No se tocó
+  en esta fase.
