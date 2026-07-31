@@ -1,8 +1,11 @@
 import type { NormalizedMetaWebhookEvent } from '../contracts/metaWebhook.js'
 import type { MetaCloudEnabledConfig } from '../config/metaCloudConfig.js'
 import { getIdempotencyRecord, saveIdempotencyRecord } from '../repositories/idempotencyRepository.js'
+import { touchMetaChannelInbound } from '../repositories/metaChannelRepository.js'
+import { updateCorrelationStatusByProviderMessageId } from '../repositories/correlationRepository.js'
 import { registerInbound } from './serviceWindowService.js'
 import { processInboundStatus } from './messageStatusService.js'
+import { forwardInboundMessage, forwardMessageStatus } from './n8nInboundForwarder.js'
 import { logCommunicationEvent } from '../security/redactCommunicationData.js'
 
 export interface ProcessWebhookResult {
@@ -11,6 +14,8 @@ export interface ProcessWebhookResult {
   processedStatuses: number
   duplicateStatuses: number
   unknownEntries: number
+  forwardedMessages: number
+  forwardedStatuses: number
 }
 
 /**
@@ -28,9 +33,11 @@ async function claimEventOnce(key: string, retentionDays: number): Promise<boole
 }
 
 /**
- * Normaliza, aplica idempotencia y registra estado técnico mínimo. No activa
- * respuestas automáticas ni reenvía a workflows de n8n reales todavía (ver
- * WHATSAPP_CLOUD_FORWARD_INBOUND_TO_N8N en docs/whatsapp/meta-cloud-webhooks.md).
+ * Normaliza, aplica idempotencia, registra estado técnico mínimo, actualiza
+ * la actividad del canal persistido (Fase 4) y reenvía a n8n cuando las
+ * banderas correspondientes están activas. El reenvío es de un único
+ * intento (ver n8nInboundForwarder.ts); no bloquea ni falla el webhook si
+ * n8n no responde.
  */
 export async function processNormalizedWebhookEvent(
   event: NormalizedMetaWebhookEvent,
@@ -40,6 +47,8 @@ export async function processNormalizedWebhookEvent(
   let duplicateMessages = 0
   let processedStatuses = 0
   let duplicateStatuses = 0
+  let forwardedMessages = 0
+  let forwardedStatuses = 0
 
   for (const message of event.messages) {
     const isNew = await claimEventOnce(`inbound:${message.providerMessageId}`, config.idempotencyRetentionDays)
@@ -49,12 +58,18 @@ export async function processNormalizedWebhookEvent(
     }
 
     await registerInbound(message.senderPhone, message.timestamp)
+    await touchMetaChannelInbound(message.senderPhone, message.timestamp)
     logCommunicationEvent('whatsapp.message.inbound', {
       providerMessageId: message.providerMessageId,
       type: message.type,
       senderPhone: message.senderPhone,
     })
     processedMessages += 1
+
+    if (config.forwardInboundToN8n) {
+      const result = await forwardInboundMessage(message)
+      if (result.forwarded) forwardedMessages += 1
+    }
   }
 
   for (const status of event.statuses) {
@@ -66,17 +81,17 @@ export async function processNormalizedWebhookEvent(
     }
 
     await processInboundStatus(status)
+    await updateCorrelationStatusByProviderMessageId(status.providerMessageId, status.status)
     logCommunicationEvent('whatsapp.message.status', {
       providerMessageId: status.providerMessageId,
       status: status.status,
     })
     processedStatuses += 1
-  }
 
-  if (config.forwardInboundToN8n && (event.messages.length > 0 || event.statuses.length > 0)) {
-    logCommunicationEvent('whatsapp.webhook.forward_not_implemented', {
-      note: 'WHATSAPP_CLOUD_FORWARD_INBOUND_TO_N8N está activo; el reenvío real llega en la Fase 4.',
-    })
+    if (config.forwardStatusToN8n) {
+      const result = await forwardMessageStatus(status)
+      if (result.forwarded) forwardedStatuses += 1
+    }
   }
 
   return {
@@ -85,5 +100,7 @@ export async function processNormalizedWebhookEvent(
     processedStatuses,
     duplicateStatuses,
     unknownEntries: event.unknownEntries,
+    forwardedMessages,
+    forwardedStatuses,
   }
 }
