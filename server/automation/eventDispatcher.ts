@@ -173,6 +173,8 @@ export async function dispatchAutomationEvent(input: {
         event: input.envelope.event,
         eventId: input.envelope.eventId,
         payload: payloadToN8N,
+        userCode: await resolveEnvelopeUserCode(input.envelope, input.licenseDeviceCode),
+        deviceCode: input.licenseDeviceCode,
       })
     : await dispatchWebhook({
         event: input.envelope.event,

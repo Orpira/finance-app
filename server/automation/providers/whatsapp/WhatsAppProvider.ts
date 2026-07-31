@@ -43,6 +43,15 @@ export interface WhatsAppChannelEventInput {
   event: WhatsAppChannelEvent
   eventId: string
   payload: unknown
+  /**
+   * Resueltas por eventDispatcher.ts con el mismo patrón que ya usa para
+   * los eventos financieros (resolveEnvelopeUserCode). deviceCode viene
+   * siempre del JWT autenticado (licenseDeviceCode); userCode puede faltar
+   * si no se pudo resolver desde el payload — el proveedor decide qué hacer
+   * en ese caso (Fase 4: MetaCloudWhatsAppProvider).
+   */
+  userCode?: string
+  deviceCode: string
 }
 
 export type WhatsAppChannelEventResult = WebhookDispatchResult

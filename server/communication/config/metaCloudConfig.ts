@@ -24,6 +24,7 @@ export interface MetaCloudDisabledConfig {
   allowRealSend: boolean
   webhookEnabled: boolean
   forwardInboundToN8n: boolean
+  forwardStatusToN8n: boolean
   messageRetentionDays: number
   idempotencyRetentionDays: number
 }
@@ -33,6 +34,7 @@ export interface MetaCloudEnabledConfig {
   allowRealSend: boolean
   webhookEnabled: boolean
   forwardInboundToN8n: boolean
+  forwardStatusToN8n: boolean
   messageRetentionDays: number
   idempotencyRetentionDays: number
   appId?: string
@@ -68,6 +70,7 @@ export function getMetaCloudConfig(): MetaCloudConfig {
     allowRealSend: parseBooleanFlag(process.env.WHATSAPP_CLOUD_ALLOW_REAL_SEND, false),
     webhookEnabled: parseBooleanFlag(process.env.WHATSAPP_CLOUD_WEBHOOK_ENABLED, false),
     forwardInboundToN8n: parseBooleanFlag(process.env.WHATSAPP_CLOUD_FORWARD_INBOUND_TO_N8N, false),
+    forwardStatusToN8n: parseBooleanFlag(process.env.WHATSAPP_CLOUD_FORWARD_STATUS_TO_N8N, false),
     messageRetentionDays: parseRetentionDays(process.env.WHATSAPP_MESSAGE_RETENTION_DAYS, 0),
     idempotencyRetentionDays: parseRetentionDays(process.env.WHATSAPP_IDEMPOTENCY_RETENTION_DAYS, 30),
   }
