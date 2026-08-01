@@ -3,7 +3,6 @@ import {
   Building2,
   ChevronRight,
   LockKeyhole,
-  MessagesSquare,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -25,12 +24,6 @@ const settingsLinks = [
     href: '/settings/license',
     icon: BadgeCheck,
     label: 'Licencia',
-  },
-  {
-    description: 'Conecta WhatsApp y elige qué notificaciones enviar.',
-    href: '/settings/communication-channels',
-    icon: MessagesSquare,
-    label: 'Canales de comunicación',
   },
   {
     description: 'Activar, cambiar o desactivar el PIN de acceso.',

@@ -90,7 +90,7 @@ export function RouterProvider() {
             <Route path="settings/business" element={<SettingsBusinessPage />} />
             <Route path="settings/security" element={<SettingsSecurityPage />} />
             <Route path="settings/license" element={<SettingsLicensePage />} />
-            <Route path="settings/communication-channels" element={<CommunicationChannelsPage />} />
+            <Route path="settings/communication-channels" element={<DevOnlyGuard><CommunicationChannelsPage /></DevOnlyGuard>} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="more" element={<MorePage />} />
             <Route path="conversation" element={<LicenseTypeGuard blocked={['trial']}><ConversationPage /></LicenseTypeGuard>} />

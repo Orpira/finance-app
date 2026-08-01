@@ -191,7 +191,7 @@ export function SettingsLicensePage() {
           <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
             Esta licencia V1 permite usar la aplicación, pero no puede
             autenticarse en Automation Hub. Actualízala a una licencia firmada
-            V2 para habilitar canales de comunicación y automatizaciones.
+            V2 para habilitar automatizaciones.
           </p>
         )}
       </article>

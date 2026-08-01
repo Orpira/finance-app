@@ -137,14 +137,17 @@ function addDays(date: Date, days: number): Date {
   return next
 }
 
-const APPOINTMENT_PATTERN = /\b(cita|agenda(?:r)?|reunion|reunión|turno)\b/i
-const EXPENSE_PATTERN = /\b(gaste|gasté|pague|pagué|compre|compré|gasto de|gasto por)\b/i
-const INCOME_PATTERN = /\b(recibi|recibí|cobre|cobré|ingreso de|ingrese|ingresé|gane|gané)\b/i
+// Los patrones se evalúan sobre texto ya normalizado (sin tildes, minúsculas):
+// `\b` en JS no reconoce letras acentuadas como caracteres de palabra, así que
+// `\bgasté\b` nunca podría casar de forma fiable contra el texto original.
+const APPOINTMENT_PATTERN = /\b(cita|agenda(?:r)?|reunion|turno)\b/i
+const EXPENSE_PATTERN = /\b(gaste|pague|compre|gasto de|gasto por)\b/i
+const INCOME_PATTERN = /\b(recibi|cobre|ingreso de|ingrese|gane)\b/i
 
-function detectKind(rawText: string): AssistantProposalKind | 'none' {
-  if (APPOINTMENT_PATTERN.test(rawText)) return 'create_appointment'
-  if (EXPENSE_PATTERN.test(rawText)) return 'register_expense'
-  if (INCOME_PATTERN.test(rawText)) return 'register_income'
+function detectKind(normalizedText: string): AssistantProposalKind | 'none' {
+  if (APPOINTMENT_PATTERN.test(normalizedText)) return 'create_appointment'
+  if (EXPENSE_PATTERN.test(normalizedText)) return 'register_expense'
+  if (INCOME_PATTERN.test(normalizedText)) return 'register_income'
   return 'none'
 }
 
@@ -155,8 +158,15 @@ export function parseAssistantIntent(
   const sourceText = text.trim()
   if (sourceText.length === 0) return { kind: 'none' }
 
+  // Una pregunta ("¿Cuánto gané esta semana?") es una consulta, nunca una
+  // acción, aunque contenga un verbo que también aparece en frases de
+  // acción ("gané"). Se resuelve por el camino de consulta existente.
+  if (sourceText.includes('?') || sourceText.includes('¿')) {
+    return { kind: 'none' }
+  }
+
   const now = input.now ?? new Date()
-  const kind = detectKind(sourceText)
+  const kind = detectKind(normalize(sourceText))
 
   if (kind === 'none') return { kind: 'none' }
 
