@@ -2,6 +2,8 @@
 
 Ver [ADR-030](../adr/ADR-030-Intelligent-Assistant-Platform.md) (decisión), [16_CORE_AND_INTEGRATIONS.md](16_CORE_AND_INTEGRATIONS.md) (límite núcleo/integraciones), [AI_INTERACTION_ARCHITECTURE.md](AI_INTERACTION_ARCHITECTURE.md) y ADR-010 a ADR-028 (arquitectura de IA ya construida, que este documento evalúa y extiende — no reemplaza). Cubre las entregas 4 (arquitectura definitiva), 5 (servicios recomendados), 6 (modelo IA) y 7 (modelo determinista).
 
+> **Nota de implementación (2026-08-02):** el diseño de §4 (tools de acción resueltas vía `AIToolRegistry`/`aiExecutionPipeline.ts`) partía de un supuesto que resultó incorrecto: ese pipeline no es el que usa `/conversation` en producción. La implementación real de los tres flujos de acción usa un parser determinista local en su lugar — ver [ADR-031](../adr/ADR-031-Assistant-Action-Flow-Implementation.md) y [19_ASSISTANT_ACTION_FLOW.md](19_ASSISTANT_ACTION_FLOW.md) para la arquitectura tal como quedó construida. El resto de este documento (servicios recomendados, huecos del Insight Engine, etc.) sigue vigente.
+
 ## 1. Separación de responsabilidades (ya vigente, se mantiene)
 
 ```

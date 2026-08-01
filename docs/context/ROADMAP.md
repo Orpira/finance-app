@@ -9,13 +9,19 @@ Entregables de la primera iteración:
 - n8n desactivable sin errores para eventos financieros/agenda (hecho);
 - navegación consolidada Inicio/Movimientos/Agenda/Asistente/Más (hecho);
 - Inicio con ingresos sin reportar, acciones rápidas, agenda próxima, resumen inteligente (ad-hoc, ver corrección en P1) y actividad reciente (hecho);
-- Asistente promovido a experiencia principal, con la *nota* de propuesta→confirmación visible en la UI (hecho) — corrección importante: el flujo de propuesta→confirmación **todavía no existe en el pipeline** (el asistente es 100% de solo lectura hoy); la nota de la UI describe una garantía que se vuelve exigible recién en la Fase P1;
+- Asistente promovido a experiencia principal, con la *nota* de propuesta→confirmación visible en la UI (hecho) — esa garantía ya es real desde la Fase P2 (el flujo de propuesta→confirmación no existía en la Fase P0, se implementó en P2);
 - pendiente: vista "Todos" de Movimientos con filtros avanzados equivalentes a Ingresos/Egresos;
 - pendiente: verificación visual en navegador (bloqueada en este entorno por el backend de licencias, ver informe de la iteración).
 
-## Fase P1 - Intelligent Assistant Platform (diseño completado, ver ADR-030)
+## Fase P1 - Intelligent Assistant Platform, diseño (completada, ver ADR-030)
 
-Objetivo: el asistente pasa de solo-consulta a poder proponer acciones (con confirmación obligatoria), y la frontera de privacidad 8A se conecta al pipeline real. Ver `docs/roadmap/private-balance-intelligent-platform-roadmap.md` para el plan detallado por iteraciones (3 a 9) y `docs/architecture/17_INTELLIGENT_ASSISTANT_DEFINITIVE_ARCHITECTURE.md` / `18_AI_MEMORY_AND_PRIVACY_MODEL.md` para la arquitectura. Ningún código de esta fase se implementó todavía (iteración de solo diseño).
+Objetivo: diseñar cómo el asistente pasa de solo-consulta a poder proponer acciones (con confirmación obligatoria), y cómo se conecta la frontera de privacidad 8A. Solo documentación — sin código de producto (aparte de un fix de seguridad puntual: ocultar `/debug` de producción, commit `2df85c7`).
+
+## Fase P2 - Intelligent Assistant Platform, implementación (completada para su alcance, ver ADR-031)
+
+Objetivo: implementar el primer flujo completo Usuario → Interpretación → Propuesta → Edición → Confirmación → Validación → Persistencia → Resultado, para registrar ingreso/gasto y crear cita. Ver `docs/architecture/19_ASSISTANT_ACTION_FLOW.md` para la arquitectura tal como quedó construida (distinta a la planeada en P1 — ver ADR-031) y `docs/roadmap/private-balance-intelligent-platform-roadmap.md` §2 para lo pendiente (iteraciones 4 a 7): resto de acciones, conectar 8A al camino de consulta, consolidar Movimientos, limpieza de pantallas.
+
+Entregables: los tres flujos de acción funcionando end-to-end con tests; frontera 8A conectada para ese flujo (modo local); "Canales de comunicación" oculto de la experiencia de usuario (código conservado); corrección de un hallazgo de seguridad real (`VITE_OPENAI_API_KEY` sin bloquear en `vite.config.ts`, commit `bca00bb`).
 
 ## Fase R1 - Robustez operativa (corto plazo)
 

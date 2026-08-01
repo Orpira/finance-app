@@ -2,6 +2,8 @@
 
 Ver [ADR-030](../adr/ADR-030-Intelligent-Assistant-Platform.md), [ADR-026](../adr/ADR-026-AI-Conversation-Long-Term-Memory.md) (memoria, ya implementada) y [26_AI_FOUNDATION_PRIVACY_BOUNDARY.md](../26_AI_FOUNDATION_PRIVACY_BOUNDARY.md) (frontera de privacidad 8A, ya implementada como contrato). Cubre las entregas 8 (modelo de privacidad) y 9 (modelo de memoria).
 
+> **Nota de implementación (2026-08-02):** la recomendación de §2 (conectar `AIPrivacyBoundary.authorize()` en `aiExecutionPipeline.ts`) ya se hizo, pero no en ese archivo — ver [ADR-031](../adr/ADR-031-Assistant-Action-Flow-Implementation.md), que explica por qué `aiExecutionPipeline.ts` no es el pipeline real. 8A está conectado y probado para el flujo de acción del Asistente (`src/intelligence/assistant/assistantPrivacyContext.ts`, modo `LOCAL_ONLY`); conectarlo también al camino de *consulta* (que sí puede usar `EXTERNAL_PROVIDER`) sigue pendiente, y sigue bloqueado por lo mismo que decía este documento: no existe todavía una forma de que el usuario otorgue el `AIConsentRecord` que la política exige para `EXTERNAL_PROVIDER`. Ver [19_ASSISTANT_ACTION_FLOW.md](19_ASSISTANT_ACTION_FLOW.md) §5.
+
 ## 1. Modelo de memoria: lo que ya existe es correcto, se documenta qué recordar/olvidar/reutilizar
 
 ADR-026 ya resuelve la arquitectura de persistencia (`ConversationPage → ConversationController → AIConversationApplicationService → AIConversationMemoryPort → LocalConversationRepository → Dexie`, local-first, fail-closed). Lo que faltaba — y que esta iteración de diseño fija — es la **política de contenido**, no de transporte:

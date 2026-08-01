@@ -24,41 +24,35 @@ El modelo `LOCAL_ONLY`/`EXTERNAL_PROVIDER` de 8A ya anticipa esta distinción a 
 
 Fuera de alcance de cualquier iteración cercana. Si se persigue en el futuro, debe evaluarse contra el principio rector de ADR-030 ("inteligencia/simplificación/automatización antes que interfaz nueva") — un agente especializado solo se justifica si resuelve algo que el modelo conversacional único, con sus tools, no puede resolver ya.
 
-## 2. Plan de implementación por iteraciones (siguientes, ninguna implementada en esta sesión)
+## 2. Plan de implementación por iteraciones
 
-### Iteración 3 — Conectar la frontera de privacidad (prerequisito de todo lo demás)
+### Iteración 3 — Flujo de acción del Asistente ✅ implementada (2026-08-02)
 
-- Insertar `AIPrivacyBoundary.authorize()` en `aiExecutionPipeline.ts` entre Context Builder y Provider.
-- Tests de que una autorización denegada nunca hace fallback silencioso a enviar igual.
-- Exponer en la UI del Asistente qué se envía y un botón real de "Borrar conversación" (usa `clearMemory`, ya existe).
+Ver [ADR-031](../adr/ADR-031-Assistant-Action-Flow-Implementation.md) y [19_ASSISTANT_ACTION_FLOW.md](19_ASSISTANT_ACTION_FLOW.md). Se implementó con un diseño distinto al planeado aquí originalmente (parser determinista local en vez de tools resueltas por el pipeline LLM — el pipeline asumido, `aiExecutionPipeline.ts`, no era el real):
 
-### Iteración 4 — Tools de consulta faltantes (bajo riesgo, sin tocar escritura)
+- `register_income`, `register_expense`, `create_appointment` de punta a punta: interpretación → propuesta → Proposal Editor → confirmación → Execution Guard → servicio de dominio real → auditoría.
+- Frontera de privacidad 8A conectada y probada para este flujo (modo `LOCAL_ONLY`, ver §5 de `19_ASSISTANT_ACTION_FLOW.md`).
+- `mark_income_reported`, `generate_report`, `create_season`/`close_season` **no** se implementaron — quedan en la Iteración 4.
+- Pendiente de esta iteración: botón visible de "Borrar conversación" en la UI (`clearMemory` ya existe en el backend, ADR-026).
 
-- `financial_unreported_income`, `compare_periods`, `best_period`, `smart_insights` (puente al Insight Engine real) — todas `read-only`, envolviendo servicios ya existentes y probados.
-- Sin cambios de esquema ni de UI fuera del Asistente.
+### Iteración 4 — Resto de acciones + tools de consulta faltantes
 
-### Iteración 5 — Modelo de permisos con comportamiento real
+- Acciones: `mark_income_reported`, `generate_report`, `create_season`/`close_season`, siguiendo el mismo patrón (parser determinista + Execution Guard + servicio real), salvo que se decida que alguna sí necesita interpretación por IA (frases más abiertas) — evaluar caso por caso.
+- Consultas: `financial_unreported_income`, `compare_periods`, `best_period`, `smart_insights` (puente al Insight Engine real) como tools `read-only` del pipeline conversacional existente (`ai-tools/financial/*`), envolviendo servicios ya probados.
+- Botón de "Borrar conversación" visible en la UI del Asistente.
 
-- Extender `aiToolExecutor.ts` para diferenciar `read-only` de `write`/`dangerous` (hoy son solo etiquetas).
-- Contrato `ActionProposal` (`17_INTELLIGENT_ASSISTANT_DEFINITIVE_ARCHITECTURE.md` §4).
-- Aún sin tools de escritura registradas — solo la infraestructura y sus tests.
+### Iteración 5 — Conectar 8A al camino de consulta (requiere UI de consentimiento)
 
-### Iteración 6 — Primera tool de acción end-to-end (la de mayor valor y menor riesgo)
+- Diseñar y construir la UI mínima de consentimiento para `EXTERNAL_PROVIDER` (la política ya exige `AIConsentRecord`; hoy no hay forma de otorgarlo).
+- Insertar `AIPrivacyBoundary.authorize()` en el camino real de consulta (`conversationComposition.ts` → `provider-orchestration`), no en `aiExecutionPipeline.ts`.
+- Resolver, como parte de este trabajo, cuál composition root (`conversationComposition.ts` vs. `aiConversationApplicationComposition.ts`) debería ser la fuente de verdad — hoy conviven dos, solo una está conectada a la UI real (ver ADR-031).
 
-- `register_expense` como piloto (menor complejidad de reglas que ingreso — sin temporada/porcentaje/adicionales).
-- Componentes de UI: `AssistantProposalCard`, `ConfirmationSheet` (reutilizables para las siguientes).
-- Validación exhaustiva de que el guardado pasa por `expenseService.createExpense` sin bypass.
-
-### Iteración 7 — Resto de tools de acción
-
-- `register_income`, `create_appointment`, `mark_income_reported`, `generate_report`, `create_season`/`close_season`, en ese orden de complejidad creciente.
-
-### Iteración 8 — Consolidación de Movimientos e Inicio
+### Iteración 6 — Consolidación de Movimientos e Inicio
 
 - Unificar de verdad `IncomeListPage`/`ExpenseListPage`/`MovementsPage` (hoy la segunda envuelve a las dos primeras) en una sola vista con filtros compartidos.
 - Migrar el "resumen inteligente" de `HomePage` al Insight Engine real, evaluando extender su disponibilidad más allá de licencias no-trial/modo profesional si el producto lo requiere para Básico.
 
-### Iteración 9 — Limpieza de pantallas identificadas en la auditoría
+### Iteración 7 — Limpieza de pantallas identificadas en la auditoría
 
 - `IncomeDetailPage`, `IncomePendingReportPage`, `ReportPreviewPage`, flujo de 3 pantallas de Temporadas, `BestDaysHistoryPage` — evaluar cada una individualmente contra el principio rector antes de tocarla (algunas pueden justificar quedarse igual).
 
