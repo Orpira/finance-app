@@ -62,31 +62,10 @@ export class CommunicationTemplateRequiredError extends CommunicationError {
   }
 }
 
-export class CommunicationTemplateRejectedError extends CommunicationError {
-  constructor(message: string) {
-    super(message, 422, 'WHATSAPP_TEMPLATE_REJECTED')
-    this.name = 'CommunicationTemplateRejectedError'
-  }
-}
-
 export class CommunicationDuplicateRequestError extends CommunicationError {
   constructor(message: string) {
     super(message, 409, 'COMMUNICATION_DUPLICATE_REQUEST')
     this.name = 'CommunicationDuplicateRequestError'
-  }
-}
-
-export class CommunicationWebhookSignatureError extends CommunicationError {
-  constructor(message: string) {
-    super(message, 401, 'COMMUNICATION_WEBHOOK_SIGNATURE_INVALID')
-    this.name = 'CommunicationWebhookSignatureError'
-  }
-}
-
-export class CommunicationRealSendDisabledError extends CommunicationError {
-  constructor(message: string) {
-    super(message, 422, 'WHATSAPP_CLOUD_REAL_SEND_DISABLED')
-    this.name = 'CommunicationRealSendDisabledError'
   }
 }
 
