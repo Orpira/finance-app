@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import AppLayout from '../app/AppLayout'
 import { PinGate } from '../components/PinGate'
 import { OnboardingGate } from '../components/onboarding/OnboardingGate'
+import { DevOnlyGuard } from '../components/security/DevOnlyGuard'
 import { LicenseGuard } from '../components/security/LicenseGuard'
 import { LicenseTypeGuard } from '../components/security/LicenseTypeGuard'
 import { UsageModeGuard } from '../components/security/UsageModeGuard'
@@ -93,9 +94,9 @@ export function RouterProvider() {
             <Route path="settings" element={<SettingsPage />} />
             <Route path="more" element={<MorePage />} />
             <Route path="conversation" element={<LicenseTypeGuard blocked={['trial']}><ConversationPage /></LicenseTypeGuard>} />
-            <Route path="debug" element={<DebugPage />} />
-            <Route path="debug/ai-execution-inspector" element={<AIExecutionInspectorPage />} />
-            <Route path="debug/ai-developer-playground" element={<AIDeveloperPlaygroundPage />} />
+            <Route path="debug" element={<DevOnlyGuard><DebugPage /></DevOnlyGuard>} />
+            <Route path="debug/ai-execution-inspector" element={<DevOnlyGuard><AIExecutionInspectorPage /></DevOnlyGuard>} />
+            <Route path="debug/ai-developer-playground" element={<DevOnlyGuard><AIDeveloperPlaygroundPage /></DevOnlyGuard>} />
           </Route>
           </Routes>
         </PinGate>
