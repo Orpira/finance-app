@@ -1,5 +1,7 @@
 # 05 Evolution API
 
+> **Proveedor `evolution`**: este documento describe el proveedor histórico de WhatsApp. Desde la migración a WhatsApp Cloud API de Meta, el proveedor activo se selecciona con `WHATSAPP_PROVIDER` (`evolution` | `meta-cloud`) sin cambios de código — ver [docs/whatsapp/provider-routing.md](whatsapp/provider-routing.md) y [docs/whatsapp/](whatsapp/) para el proveedor `meta-cloud`.
+
 ## Rol en la plataforma
 
 Evolution API es la integración externa encargada de gestionar instancias de WhatsApp, conexión de sesión, desconexión, consulta de estado y envío de mensajes de prueba o notificaciones.
