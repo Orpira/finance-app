@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
-  getIdempotencyRecord, saveIdempotencyRecord, touchMetaChannelInbound,
+  getIdempotencyRecord, saveIdempotencyRecord, deleteIdempotencyRecord, touchMetaChannelInbound,
   updateCorrelationStatusByProviderMessageId, registerInbound, processInboundStatus,
   forwardInboundMessage, forwardMessageStatus,
 } = vi.hoisted(() => ({
   getIdempotencyRecord: vi.fn(),
   saveIdempotencyRecord: vi.fn(),
+  deleteIdempotencyRecord: vi.fn(),
   touchMetaChannelInbound: vi.fn(),
   updateCorrelationStatusByProviderMessageId: vi.fn(),
   registerInbound: vi.fn(),
@@ -15,7 +16,9 @@ const {
   forwardMessageStatus: vi.fn(),
 }))
 
-vi.mock('../server/communication/repositories/idempotencyRepository', () => ({ getIdempotencyRecord, saveIdempotencyRecord }))
+vi.mock('../server/communication/repositories/idempotencyRepository', () => ({
+  getIdempotencyRecord, saveIdempotencyRecord, deleteIdempotencyRecord,
+}))
 vi.mock('../server/communication/repositories/metaChannelRepository', () => ({ touchMetaChannelInbound }))
 vi.mock('../server/communication/repositories/correlationRepository', () => ({ updateCorrelationStatusByProviderMessageId }))
 vi.mock('../server/communication/services/serviceWindowService', () => ({ registerInbound }))
@@ -47,6 +50,7 @@ function event(overrides: Partial<NormalizedMetaWebhookEvent> = {}): NormalizedM
 beforeEach(() => {
   getIdempotencyRecord.mockReset()
   saveIdempotencyRecord.mockReset()
+  deleteIdempotencyRecord.mockReset()
   touchMetaChannelInbound.mockReset()
   updateCorrelationStatusByProviderMessageId.mockReset()
   registerInbound.mockReset()
@@ -54,6 +58,7 @@ beforeEach(() => {
   forwardInboundMessage.mockReset()
   forwardMessageStatus.mockReset()
   getIdempotencyRecord.mockResolvedValue(null)
+  deleteIdempotencyRecord.mockResolvedValue(undefined)
   forwardInboundMessage.mockResolvedValue({ forwarded: true, status: 200 })
   forwardMessageStatus.mockResolvedValue({ forwarded: true, status: 200 })
 })
@@ -95,5 +100,50 @@ describe('processNormalizedWebhookEvent — reenvío condicionado por flags', ()
   it('un estado nuevo actualiza la correlación por providerMessageId', async () => {
     await processNormalizedWebhookEvent(event({ statuses: [STATUS] }), BASE_CONFIG)
     expect(updateCorrelationStatusByProviderMessageId).toHaveBeenCalledWith('wamid.1', 'delivered')
+  })
+})
+
+describe('processNormalizedWebhookEvent — fallo parcial tras reclamar la idempotencia', () => {
+  it('si el procesamiento de un mensaje falla después de reclamar la clave, la libera para permitir un reintento', async () => {
+    registerInbound.mockRejectedValue(new Error('fallo transitorio de base de datos'))
+
+    const result = await processNormalizedWebhookEvent(event({ messages: [MESSAGE] }), BASE_CONFIG)
+
+    expect(deleteIdempotencyRecord).toHaveBeenCalledWith('inbound:wamid.1')
+    expect(result.processedMessages).toBe(0)
+    expect(result.duplicateMessages).toBe(0)
+  })
+
+  it('si el procesamiento de un estado falla después de reclamar la clave, la libera para permitir un reintento', async () => {
+    processInboundStatus.mockRejectedValue(new Error('fallo transitorio de base de datos'))
+
+    const result = await processNormalizedWebhookEvent(event({ statuses: [STATUS] }), BASE_CONFIG)
+
+    expect(deleteIdempotencyRecord).toHaveBeenCalledWith('status:wamid.1:delivered:2026-07-31T10:01:00.000Z')
+    expect(result.processedStatuses).toBe(0)
+  })
+
+  it('el fallo de un mensaje no impide procesar el resto del lote', async () => {
+    const OTHER_MESSAGE = { ...MESSAGE, providerMessageId: 'wamid.2' }
+    registerInbound
+      .mockRejectedValueOnce(new Error('fallo transitorio de base de datos'))
+      .mockResolvedValueOnce(undefined)
+
+    const result = await processNormalizedWebhookEvent(
+      event({ messages: [MESSAGE, OTHER_MESSAGE] }),
+      BASE_CONFIG,
+    )
+
+    expect(deleteIdempotencyRecord).toHaveBeenCalledWith('inbound:wamid.1')
+    expect(touchMetaChannelInbound).toHaveBeenCalledWith(OTHER_MESSAGE.senderPhone, OTHER_MESSAGE.timestamp)
+    expect(result.processedMessages).toBe(1)
+  })
+
+  it('no reenvía a n8n cuando el procesamiento del mensaje falla antes del reenvío', async () => {
+    registerInbound.mockRejectedValue(new Error('fallo transitorio de base de datos'))
+
+    await processNormalizedWebhookEvent(event({ messages: [MESSAGE] }), { ...BASE_CONFIG, forwardInboundToN8n: true })
+
+    expect(forwardInboundMessage).not.toHaveBeenCalled()
   })
 })

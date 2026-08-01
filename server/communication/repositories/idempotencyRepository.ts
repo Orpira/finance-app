@@ -67,6 +67,20 @@ export async function getIdempotencyRecord(key: string): Promise<IdempotencyReco
   }
 }
 
+/**
+ * Libera una clave reclamada por `claimEventOnce` (ver metaWebhookService.ts)
+ * cuando el procesamiento posterior a la reclama falla: sin esto, un fallo
+ * transitorio (p. ej. la base de datos rechaza `touchMetaChannelInbound`)
+ * dejaría el evento marcado como "ya procesado" para siempre, aunque nunca
+ * se completó — un reintento futuro de Meta (o el operador) nunca podría
+ * reprocesarlo.
+ */
+export async function deleteIdempotencyRecord(key: string): Promise<void> {
+  await ensureCommunicationIdempotencySchema()
+  const sql = getNeonClient()
+  await sql`DELETE FROM communication_idempotency_keys WHERE idempotency_key = ${key}`
+}
+
 export async function saveIdempotencyRecord(input: {
   key: string
   payloadHash: string

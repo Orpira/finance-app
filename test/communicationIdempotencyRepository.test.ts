@@ -13,7 +13,7 @@ vi.mock('@neondatabase/serverless', () => {
   return { neon: () => sqlFunction }
 })
 
-import { getIdempotencyRecord, saveIdempotencyRecord } from '../server/communication/repositories/idempotencyRepository'
+import { deleteIdempotencyRecord, getIdempotencyRecord, saveIdempotencyRecord } from '../server/communication/repositories/idempotencyRepository'
 
 const DUMMY_DB_URL = 'postgresql://user:pass@localhost/db'
 
@@ -62,5 +62,12 @@ describe('idempotencyRepository', () => {
       resultBody: { ok: true },
       retentionDays: 30,
     })).resolves.toBeUndefined()
+  })
+
+  it('deleteIdempotencyRecord completa sin lanzar (libera una clave reclamada)', async () => {
+    const sql = (await import('@neondatabase/serverless')).neon() as NeonSqlMock
+    sql._nextResponse = []
+
+    await expect(deleteIdempotencyRecord('inbound:wamid.1')).resolves.toBeUndefined()
   })
 })
