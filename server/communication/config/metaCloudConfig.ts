@@ -2,12 +2,22 @@
 
 import { CommunicationConfigurationError } from '../errors/communicationErrors.js'
 
-function parseBooleanFlag(value: string | undefined, defaultValue: boolean) {
+/**
+ * Estricto a propósito: solo "true"/"false" (sin distinguir mayúsculas) son
+ * valores válidos. Un valor ausente usa `defaultValue` (siempre `false` para
+ * estas banderas), pero un valor presente y no reconocido (typo, "1", "yes",
+ * espacio en blanco con basura, etc.) lanza en vez de degradar en silencio a
+ * `defaultValue` — un typo en WHATSAPP_CLOUD_ALLOW_REAL_SEND nunca debe leerse
+ * como "false" sin que quede constancia explícita del error.
+ */
+function parseBooleanFlag(envName: string, value: string | undefined, defaultValue: boolean) {
   const normalized = value?.trim().toLowerCase()
   if (!normalized) return defaultValue
-  if (['true', '1', 'yes'].includes(normalized)) return true
-  if (['false', '0', 'no'].includes(normalized)) return false
-  return defaultValue
+  if (normalized === 'true') return true
+  if (normalized === 'false') return false
+  throw new CommunicationConfigurationError(
+    `${envName} debe ser exactamente "true" o "false" (valor no reconocido).`,
+  )
 }
 
 function parseRetentionDays(value: string | undefined, defaultValue: number) {
@@ -66,16 +76,16 @@ const REQUIRED_WHEN_ENABLED: readonly [string, string][] = [
  * nunca degrada en silencio a un estado "medio configurado".
  */
 export function getMetaCloudConfig(): MetaCloudConfig {
+  const enabled = parseBooleanFlag('WHATSAPP_CLOUD_ENABLED', process.env.WHATSAPP_CLOUD_ENABLED, false)
   const shared = {
-    allowRealSend: parseBooleanFlag(process.env.WHATSAPP_CLOUD_ALLOW_REAL_SEND, false),
-    webhookEnabled: parseBooleanFlag(process.env.WHATSAPP_CLOUD_WEBHOOK_ENABLED, false),
-    forwardInboundToN8n: parseBooleanFlag(process.env.WHATSAPP_CLOUD_FORWARD_INBOUND_TO_N8N, false),
-    forwardStatusToN8n: parseBooleanFlag(process.env.WHATSAPP_CLOUD_FORWARD_STATUS_TO_N8N, false),
+    allowRealSend: parseBooleanFlag('WHATSAPP_CLOUD_ALLOW_REAL_SEND', process.env.WHATSAPP_CLOUD_ALLOW_REAL_SEND, false),
+    webhookEnabled: parseBooleanFlag('WHATSAPP_CLOUD_WEBHOOK_ENABLED', process.env.WHATSAPP_CLOUD_WEBHOOK_ENABLED, false),
+    forwardInboundToN8n: parseBooleanFlag('WHATSAPP_CLOUD_FORWARD_INBOUND_TO_N8N', process.env.WHATSAPP_CLOUD_FORWARD_INBOUND_TO_N8N, false),
+    forwardStatusToN8n: parseBooleanFlag('WHATSAPP_CLOUD_FORWARD_STATUS_TO_N8N', process.env.WHATSAPP_CLOUD_FORWARD_STATUS_TO_N8N, false),
     messageRetentionDays: parseRetentionDays(process.env.WHATSAPP_MESSAGE_RETENTION_DAYS, 0),
     idempotencyRetentionDays: parseRetentionDays(process.env.WHATSAPP_IDEMPOTENCY_RETENTION_DAYS, 30),
   }
 
-  const enabled = parseBooleanFlag(process.env.WHATSAPP_CLOUD_ENABLED, false)
   if (!enabled) {
     return { enabled: false, ...shared }
   }
