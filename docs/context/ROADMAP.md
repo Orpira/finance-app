@@ -1,5 +1,18 @@
 # Roadmap
 
+## Fase P0 - Private Balance Core Redesign (en curso, ver ADR-029)
+
+Objetivo: núcleo (finanzas, agenda, reportes, asistente) operativo sin WhatsApp/Evolution/n8n, con esas integraciones conservadas pero opcionales.
+
+Entregables de la primera iteración:
+
+- n8n desactivable sin errores para eventos financieros/agenda (hecho);
+- navegación consolidada Inicio/Movimientos/Agenda/Asistente/Más (hecho);
+- Inicio con ingresos sin reportar, acciones rápidas, agenda próxima, resumen inteligente y actividad reciente (hecho);
+- Asistente promovido a experiencia principal, con flujo propuesta→confirmación visible (hecho);
+- pendiente: vista "Todos" de Movimientos con filtros avanzados equivalentes a Ingresos/Egresos;
+- pendiente: verificación visual en navegador (bloqueada en este entorno por el backend de licencias, ver informe de la iteración).
+
 ## Fase R1 - Robustez operativa (corto plazo)
 
 Objetivo: cerrar riesgos críticos de automatización y gobernanza.

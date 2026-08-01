@@ -72,3 +72,15 @@ La aplicación prioriza:
 - Estrategia futura de IA aplicada a resúmenes, auditoría y asistencia operativa.
 - Estandarización final de todos los workflows legacy de n8n sobre communication_channels y license_devices.
 
+## Evolución 2026 — plataforma privada e inteligente (ADR-029)
+
+A partir de 2026-08-01, Private Balance evoluciona hacia: *"Una plataforma privada e inteligente para gestionar finanzas personales, agenda y decisiones económicas, manteniendo al usuario en control de sus datos y de todas las acciones realizadas."* Mensaje central: **"Tus finanzas. Tu agenda. Tus datos. Bajo tu control."**
+
+Esto reordena las prioridades del resumen anterior sin invalidarlo:
+
+- El **núcleo** (finanzas, agenda, reportes, seguridad, asistente) debe funcionar íntegramente sin WhatsApp, Evolution API ni n8n configurados — ver [docs/architecture/16_CORE_AND_INTEGRATIONS.md](architecture/16_CORE_AND_INTEGRATIONS.md).
+- WhatsApp, Evolution y n8n **se conservan** en el repositorio, con sus tests, pero pasan a ser integraciones opcionales, aisladas y desactivadas por defecto — nunca se borran ni se consideran fuera de alcance del proyecto, solo fuera de la experiencia principal.
+- El **asistente inteligente** deja de ser una funcionalidad secundaria ("Más → Inteligencia") para convertirse en un pilar de producto con acceso principal en la navegación, sin depender de WhatsApp.
+- Los cálculos financieros siguen siendo deterministas; la IA explica y propone, nunca calcula saldos oficiales ni actúa sin confirmación explícita del usuario.
+
+Ver [ADR-029](adr/ADR-029-Private-Balance-Core-Redesign.md) para el detalle de la decisión y su alcance.

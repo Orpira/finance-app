@@ -23,7 +23,7 @@ Todo lo anterior se guarda localmente en IndexedDB mediante Dexie (`src/database
 |---|---|---|---|
 | Conversión de moneda (Frankfurter) | Siempre que se registra un ingreso en moneda distinta a la base | Códigos de moneda y fecha, sin datos financieros del usuario | `api.frankfurter.dev` (API pública) |
 | Asistente conversacional con IA (proveedor OpenAI real) | Solo si el usuario tiene el proveedor configurado (`VITE_AI_PROVIDER=OPENAI`) y licencia activa | El mensaje del usuario y el contexto financiero estructurado necesario para responder | Proxy propio (`api/ai-provider-openai.ts`) → OpenAI |
-| Automatización (n8n) | Solo si el usuario configura y activa la automatización | Eventos `income.created`, `expense.created`, `calendar.created` (outbox local) | Proxy propio en Vercel → n8n → Neon PostgreSQL |
+| Automatización (n8n) | Solo si `N8N_AUTOMATION_WEBHOOK_URL` está configurada en el servidor; si no lo está, el evento se marca como entregado localmente y no se reintenta (ver [ADR-029](adr/ADR-029-Private-Balance-Core-Redesign.md)) | Eventos `income.created`, `expense.created`, `calendar.created` (outbox local) | Proxy propio en Vercel → n8n → Neon PostgreSQL |
 | Canal WhatsApp (Evolution API) | Solo si el usuario conecta un canal de comunicación | Mensajes y estado del canal, resueltos por dispositivo/usuario | n8n → Evolution API |
 | Backup en Google Drive | Solo si el usuario conecta Google Drive y activa el backup | Backup cifrado (AES-GCM) de las tablas financieras | `appDataFolder` de Google Drive del propio usuario |
 | Activación de licencia | Al activar o renovar una licencia | Código de licencia firmado y código de dispositivo | Backend de licencias (`api/license-activate.ts`, Neon) |
