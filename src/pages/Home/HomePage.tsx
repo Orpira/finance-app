@@ -1,10 +1,15 @@
 import {
   ArrowRight,
+  CalendarClock,
+  CalendarPlus,
   CalendarRange,
   Eye,
   EyeOff,
+  Lightbulb,
+  MessageCircleMore,
   MinusCircle,
   PlusCircle,
+  ReceiptText,
   Sparkles,
   TrendingUp,
 } from 'lucide-react'
@@ -14,16 +19,21 @@ import { Link } from 'react-router-dom'
 import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { UsageModeBadge } from '../../components/UsageModeBadge'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
+import { listAppointments } from '../../services/appointmentService'
 import { listExpenses } from '../../services/expenseService'
+import { getPendingIncomeSummary, type PendingIncomeSummary } from '../../services/incomeReport.service'
 import { listServiceIncomes } from '../../services/incomeService'
 import { buildHomeBalanceSummary, resolveHomeBalanceSummaryPromotion } from '../../services/homeBalanceSummaryService'
 import type { BalanceReportResult } from '../../services/balanceReportService'
 import { getSettings } from '../../services/settingsService'
+import type { Appointment } from '../../types/appointment'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
-import type { AppSettings } from '../../types/settings'
+import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { formatCurrency, roundMoney } from '../../utils/currency'
 import { calculateFinancialTotals, sumIncomeAdditionalsValue } from '../../utils/financeStats'
+import { getIncomeTypeLabel } from '../../utils/incomeTypes'
+import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type {
@@ -38,6 +48,113 @@ import {
   recordBelongsToUsageMode,
   requiresSeason,
 } from '../../utils/usageMode'
+
+function formatShortDateTime(value: string) {
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+}
+
+function formatShortDate(value: string) {
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${value}T00:00`))
+}
+
+interface SmartInsight {
+  id: string
+  text: string
+  tone: 'positive' | 'warning' | 'neutral'
+}
+
+/**
+ * Reglas deterministas (sin IA): comparan totales ya calculados por el motor
+ * financiero. El asistente solo podrá explicar estos resultados, nunca
+ * recalcularlos (ver docs/architecture/16_CORE_AND_INTEGRATIONS.md).
+ */
+function buildSmartInsights(input: {
+  currentExpenses: number
+  previousExpenses: number
+  currentIncome: number
+  previousIncome: number
+  pendingIncomeSummary: PendingIncomeSummary | null
+}): SmartInsight[] {
+  const insights: SmartInsight[] = []
+
+  if (input.previousExpenses > 0) {
+    const change = ((input.currentExpenses - input.previousExpenses) / input.previousExpenses) * 100
+    if (Math.abs(change) >= 15) {
+      insights.push({
+        id: 'expense-trend',
+        text: `Tus gastos ${change >= 0 ? 'subieron' : 'bajaron'} un ${Math.abs(change).toFixed(0)}% respecto al mes anterior.`,
+        tone: change >= 0 ? 'warning' : 'positive',
+      })
+    }
+  }
+
+  if (input.previousIncome > 0) {
+    const change = ((input.currentIncome - input.previousIncome) / input.previousIncome) * 100
+    if (Math.abs(change) >= 15) {
+      insights.push({
+        id: 'income-trend',
+        text: `Tus ingresos ${change >= 0 ? 'subieron' : 'bajaron'} un ${Math.abs(change).toFixed(0)}% respecto al mes anterior.`,
+        tone: change >= 0 ? 'positive' : 'warning',
+      })
+    }
+  }
+
+  if (input.pendingIncomeSummary && input.pendingIncomeSummary.count > 0) {
+    insights.push({
+      id: 'pending-income',
+      text:
+        input.pendingIncomeSummary.overdueCount > 0
+          ? `Tienes ${input.pendingIncomeSummary.count} ingresos sin reportar, ${input.pendingIncomeSummary.overdueCount} de ellos con más de 7 días.`
+          : `Tienes ${input.pendingIncomeSummary.count} ingresos sin reportar todavía.`,
+      tone: input.pendingIncomeSummary.overdueCount > 0 ? 'warning' : 'neutral',
+    })
+  }
+
+  if (insights.length === 0) {
+    insights.push({
+      id: 'stable',
+      text: 'Tu actividad financiera se mantiene estable respecto al mes anterior.',
+      tone: 'neutral',
+    })
+  }
+
+  return insights
+}
+
+interface RecentMovement {
+  key: string
+  kind: 'ingreso' | 'gasto'
+  date: string
+  label: string
+  amount: number
+  currency: string
+  href: string
+}
+
+function buildRecentMovements(incomes: ServiceIncome[], expenses: Expense[]): RecentMovement[] {
+  const incomeMovements: RecentMovement[] = incomes.map((income) => ({
+    key: `income-${income.id}`,
+    kind: 'ingreso',
+    date: income.date,
+    label: `${getIncomeTypeLabel(income)} · ${getPaymentTypeLabel(income.paymentType)}`,
+    amount: income.totalAmount,
+    currency: income.currency,
+    href: `/income/${income.id}`,
+  }))
+  const expenseMovements: RecentMovement[] = expenses.map((expense) => ({
+    key: `expense-${expense.id}`,
+    kind: 'gasto',
+    date: expense.date,
+    label: expense.category,
+    amount: expense.amount,
+    currency: expense.currency,
+    href: `/expenses/${expense.id}/editar`,
+  }))
+
+  return [...incomeMovements, ...expenseMovements]
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    .slice(0, 5)
+}
 
 function monthRange(offset: number) {
   const now = new Date()
@@ -97,7 +214,49 @@ export function HomePage() {
     periodStart: CivilDate
     periodEndExclusive: CivilDate
   } | null>(null)
+  const [pendingIncomeSummary, setPendingIncomeSummary] = useState<PendingIncomeSummary | null>(null)
+  const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([])
   const { hidden, toggle } = useSensitiveValues()
+
+  useEffect(() => {
+    let mounted = true
+
+    function loadPendingIncomeSummary() {
+      getPendingIncomeSummary()
+        .then((summary) => {
+          if (mounted) setPendingIncomeSummary(summary)
+        })
+        .catch((error) => {
+          console.warn('No se pudo cargar el resumen de ingresos sin reportar.', error)
+        })
+    }
+
+    function loadUpcomingAppointments() {
+      const now = new Date()
+      const twoWeeksAhead = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+      listAppointments({
+        from: now.toISOString(),
+        to: twoWeeksAhead.toISOString(),
+        completed: false,
+      })
+        .then((appointments) => {
+          if (mounted) setUpcomingAppointments(appointments.slice(0, 3))
+        })
+        .catch((error) => {
+          console.warn('No se pudo cargar la agenda próxima.', error)
+        })
+    }
+
+    loadPendingIncomeSummary()
+    loadUpcomingAppointments()
+
+    window.addEventListener('finance-app:settings-changed', loadPendingIncomeSummary)
+
+    return () => {
+      mounted = false
+      window.removeEventListener('finance-app:settings-changed', loadPendingIncomeSummary)
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -259,6 +418,23 @@ export function HomePage() {
     return () => { active = false }
   }, [activePeriod?.id, currentExpenses, currentIncomes, settings, snapshotTime])
 
+  const smartInsights = useMemo(
+    () =>
+      buildSmartInsights({
+        currentExpenses: totals?.current.primaryExpenses ?? 0,
+        previousExpenses: totals?.previous.primaryExpenses ?? 0,
+        currentIncome: totals?.current.primaryIncome ?? 0,
+        previousIncome: totals?.previous.primaryIncome ?? 0,
+        pendingIncomeSummary,
+      }),
+    [totals, pendingIncomeSummary],
+  )
+
+  const recentMovements = useMemo(
+    () => buildRecentMovements(currentIncomes, currentExpenses),
+    [currentIncomes, currentExpenses],
+  )
+
   if (!settings || !totals || !balanceSummary) {
     return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando...</section>
   }
@@ -352,87 +528,169 @@ export function HomePage() {
         ))}
       </div>
 
-  {/*     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex items-center justify-between gap-3">
-          <span className={`flex size-11 items-center justify-center rounded-xl ${reportedCard.tone}`}>
-            <CalendarRange className="size-5" aria-hidden="true" />
-          </span>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            {isBasicMode(settings)
-              ? 'Egresos marcados como cumplidos'
-              : 'Servicios marcados como cumplidos'}
-          </span>
-        </div>
-        <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">{reportedCard.label}</p>
-        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">{reportedCard.value}</p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Link className="flex h-14 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100" to="/income/nuevo">
+          <PlusCircle className="size-5 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+          Registrar ingreso
+        </Link>
+        <Link className="flex h-14 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-rose-200 hover:bg-rose-50/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100" to="/expenses/nuevo">
+          <ReceiptText className="size-5 text-rose-700 dark:text-rose-300" aria-hidden="true" />
+          Registrar gasto
+        </Link>
+        {!isBasicMode(settings) && (
+          <Link className="flex h-14 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-sky-200 hover:bg-sky-50/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100" to="/agenda/nueva">
+            <CalendarPlus className="size-5 text-sky-700 dark:text-sky-300" aria-hidden="true" />
+            Crear cita
+          </Link>
+        )}
+        <Link className="flex h-14 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-violet-200 hover:bg-violet-50/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100" to="/conversation">
+          <MessageCircleMore className="size-5 text-violet-700 dark:text-violet-300" aria-hidden="true" />
+          Consultar al asistente
+        </Link>
+      </div>
 
-        {!isBasicMode(settings) && pendingReportSummary && (
-          <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-800">
-            {pendingReportSummary.count === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                No hay ingresos pendientes de reportar.
-              </p>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                    No reportados: {pendingReportSummary.count}{' '}
-                    {pendingReportSummary.count === 1 ? 'ingreso' : 'ingresos'} ·{' '}
-                    <span className="font-semibold text-slate-900 dark:text-white">
-                      <SensitiveAmount
-                        hidden={hidden}
-                        value={formatCurrency(pendingReportSummary.totalBaseCurrency, pendingReportSummary.baseCurrency)}
-                      />
-                    </span>
-                  </p>
-                  {pendingReportSummary.overdueCount > 0 && (
-                    <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-300">
-                      {pendingReportSummary.overdueCount} con más de {PENDING_INCOME_OVERDUE_AFTER_DAYS} días
-                    </span>
-                  )}
-                </div>
-
-                <Link
-                  className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                  to="/income/pendientes"
-                >
-                  Ver detalle por fechas
-                  <ArrowRight className="size-4" aria-hidden="true" />
-                </Link>
-              </>
+      {pendingIncomeSummary && (
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex size-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+              <CalendarRange className="size-5" aria-hidden="true" />
+            </span>
+            {pendingIncomeSummary.overdueCount > 0 && (
+              <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                {pendingIncomeSummary.overdueCount} con más de 7 días
+              </span>
             )}
           </div>
-        )}
-      </article> */}
+          <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">Ingresos sin reportar</p>
 
-      {/* <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {pendingIncomeSummary.count === 0 ? (
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              No hay ingresos pendientes de reportar.
+            </p>
+          ) : (
+            <>
+              <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                <SensitiveAmount
+                  hidden={hidden}
+                  value={formatCurrency(pendingIncomeSummary.totalBaseCurrency, pendingIncomeSummary.baseCurrency)}
+                />
+              </p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {pendingIncomeSummary.count} {pendingIncomeSummary.count === 1 ? 'ingreso' : 'ingresos'}
+                {pendingIncomeSummary.oldestPendingDate
+                  ? ` · el más antiguo del ${formatShortDate(pendingIncomeSummary.oldestPendingDate)}`
+                  : ''}
+              </p>
+              <Link
+                className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                to="/income/pendientes"
+              >
+                Ver detalle por fechas
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
+            </>
+          )}
+        </article>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {!isBasicMode(settings) && (
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <CalendarClock className="size-5 text-sky-700 dark:text-sky-300" aria-hidden="true" />
+                Agenda próxima
+              </h2>
+              <Link className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300" to="/agenda">
+                Ver agenda
+              </Link>
+            </div>
+            {upcomingAppointments.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
+                No tienes citas próximas en los siguientes 14 días.
+              </p>
+            ) : (
+              <ul className="mt-4 flex flex-col gap-2">
+                {upcomingAppointments.map((appointment) => (
+                  <li key={appointment.id}>
+                    <Link
+                      className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 text-sm transition hover:border-emerald-200 hover:bg-emerald-50/40 dark:border-slate-800 dark:hover:border-emerald-900 dark:hover:bg-emerald-950/40"
+                      to={`/agenda/${appointment.id}/editar`}
+                    >
+                      <span className="text-slate-700 dark:text-slate-200">{formatShortDateTime(appointment.dateTime)}</span>
+                      <span className="font-semibold text-slate-950 dark:text-white">
+                        <SensitiveAmount hidden={hidden} value={formatCurrency(appointment.expectedAmount, settings.defaultCurrency)} />
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </article>
+        )}
+
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <Lightbulb className="size-5 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+            Resumen inteligente
+          </h2>
+          <ul className="mt-4 flex flex-col gap-2">
+            {smartInsights.map((insight) => (
+              <li
+                className={[
+                  'rounded-lg border px-3 py-2 text-sm',
+                  insight.tone === 'warning'
+                    ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200'
+                    : insight.tone === 'positive'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
+                      : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200',
+                ].join(' ')}
+                key={insight.id}
+              >
+                {insight.text}
+              </li>
+            ))}
+          </ul>
+        </article>
+      </div>
+
+      <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between gap-3">
-          <span className="flex size-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-            <Landmark className="size-5" aria-hidden="true" />
-          </span>
-          <Variation current={balanceSummary.current.generalBalance} previous={balanceSummary.previous.generalBalance} />
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Actividad reciente</h2>
+          <Link className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300" to="/movements">
+            Ver todos
+          </Link>
         </div>
-        <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">
-          {isBasicMode(settings) ? 'Balance general' : 'Balance operativo'}
-        </p>
-        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
-          <SensitiveAmount hidden={hidden} value={formatCurrency(balanceSummary.current.generalBalance, settings.defaultCurrency)} />
-        </p>
-        <div className="mt-4 grid gap-2 text-sm text-slate-600 dark:text-slate-300 sm:grid-cols-2">
-          <p>
-            Neto sin ajustes:{' '}
-            <span className="font-semibold text-slate-900 dark:text-white">
-              <SensitiveAmount hidden={hidden} value={formatCurrency(balanceSummary.current.netProfit, settings.defaultCurrency)} />
-            </span>
-          </p>
-          <p>
-            Impacto ajustes:{' '}
-            <span className="font-semibold text-slate-900 dark:text-white">
-              <SensitiveAmount hidden={hidden} value={formatCurrency(balanceSummary.current.impactByAdjustments, settings.defaultCurrency)} />
-            </span>
-          </p>
-        </div>
-      </article> */}
+        {recentMovements.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">Todavía no hay movimientos este mes.</p>
+        ) : (
+          <ul className="mt-4 flex flex-col gap-2">
+            {recentMovements.map((movement) => (
+              <li key={movement.key}>
+                <Link
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 text-sm transition hover:border-emerald-200 hover:bg-emerald-50/40 dark:border-slate-800 dark:hover:border-emerald-900 dark:hover:bg-emerald-950/40"
+                  to={movement.href}
+                >
+                  <span className="min-w-0 truncate text-slate-700 dark:text-slate-200">
+                    {movement.label} · {formatShortDate(movement.date)}
+                  </span>
+                  <span
+                    className={[
+                      'shrink-0 font-semibold',
+                      movement.kind === 'ingreso'
+                        ? 'text-emerald-700 dark:text-emerald-300'
+                        : 'text-rose-700 dark:text-rose-300',
+                    ].join(' ')}
+                  >
+                    {movement.kind === 'ingreso' ? '+' : '-'}
+                    <SensitiveAmount hidden={hidden} value={formatCurrency(movement.amount, movement.currency as CurrencyCode)} />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </article>
 
       {!isBasicMode(settings) && (
         <Link className="inline-flex h-12 items-center justify-center gap-2 self-stretch rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:self-end" to="/resumen-completo">

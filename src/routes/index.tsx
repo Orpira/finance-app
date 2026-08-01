@@ -19,6 +19,7 @@ import IncomeDetailPage from '../pages/Income/IncomeDetailPage'
 import IncomePendingReportPage from '../pages/Income/IncomePendingReportPage'
 import InsightDashboardPage from '../pages/Insights/InsightDashboardPage'
 import MorePage from '../pages/More/MorePage'
+import MovementsPage from '../pages/Movements/MovementsPage'
 import ReportPreviewPage from '../pages/Reports/ReportPreviewPage'
 import ReportsPage from '../pages/Reports/ReportsPage'
 import SettingsBackupPage from '../pages/Settings/SettingsBackupPage'
@@ -72,6 +73,7 @@ export function RouterProvider() {
             <Route path="expenses/:expenseId/editar" element={<ExpensesPage />} />
             <Route path="expenses/nuevo" element={<ExpensesPage />} />
             <Route path="expenses" element={<ExpenseListPage />} />
+            <Route path="movements" element={<MovementsPage />} />
             <Route path="agenda/nueva" element={<UsageModeGuard allowed={['professional']}><AppointmentFormPage /></UsageModeGuard>} />
             <Route
               path="agenda/:appointmentId/editar"

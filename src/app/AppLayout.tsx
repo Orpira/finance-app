@@ -1,13 +1,13 @@
 import {
+  ArrowLeftRight,
   BriefcaseBusiness,
   CalendarDays,
-  CircleDollarSign,
   ChartNoAxesCombined,
   House,
   Moon,
   MoreHorizontal,
-  ReceiptText,
   Settings,
+  Sparkles,
   Sun,
 } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
@@ -25,50 +25,55 @@ import {
 import { initializeAutomationOutbox } from '../services/automationOutboxService'
 import { provisionDeviceIdentity } from '../services/deviceIdentityService'
 import { migrateLegacyRecordsToSeasons } from '../services/earningPeriodService'
+import { getCurrentLicense } from '../services/licenseService'
 import { getRuntimeIntegrityStatus } from '../services/playIntegrityService'
 import { initializeReminderNotifications } from '../services/reminderService'
 import { applyTheme, getSettings, updateSettings } from '../services/settingsService'
+import type { LicenseType } from '../types/license'
 import type { ThemeMode, UsageMode } from '../types/settings'
 import { usesProfessionalAgenda } from '../utils/usageMode'
 
-const navItems = [
-  {
-    label: 'Inicio',
-    path: '/',
-    icon: House,
-  },
-  {
-    label: 'Ingresos',
-    path: '/income',
-    icon: CircleDollarSign,
-    onboardingTarget: 'nav-income',
-  },
-  {
-    label: 'Egresos',
-    path: '/expenses',
-    icon: ReceiptText,
-    onboardingTarget: 'nav-expenses',
-  },
-  {
-    label: 'Agenda',
-    path: '/agenda',
-    icon: CalendarDays,
-    onboardingTarget: 'nav-agenda',
-  },
-  {
-    label: 'Más',
-    path: '/more',
-    icon: MoreHorizontal,
-  },
-]
+interface NavItem {
+  label: string
+  path: string
+  icon: typeof House
+  onboardingTarget?: string
+  hiddenForTrial?: boolean
+}
 
-const basicNavItems = [
-  navItems[0],
-  navItems[1],
-  navItems[2],
-  { label: 'Reportes', path: '/reports', icon: ChartNoAxesCombined, onboardingTarget: 'nav-reports' },
-  { label: 'Configuración', path: '/settings', icon: Settings },
-]
+const HOME_ITEM: NavItem = { label: 'Inicio', path: '/', icon: House }
+const MOVEMENTS_ITEM: NavItem = {
+  label: 'Movimientos',
+  path: '/movements',
+  icon: ArrowLeftRight,
+  onboardingTarget: 'nav-movements',
+}
+const AGENDA_ITEM: NavItem = {
+  label: 'Agenda',
+  path: '/agenda',
+  icon: CalendarDays,
+  onboardingTarget: 'nav-agenda',
+}
+const REPORTS_ITEM: NavItem = {
+  label: 'Reportes',
+  path: '/reports',
+  icon: ChartNoAxesCombined,
+  onboardingTarget: 'nav-reports',
+}
+/** Oculto para licencias `trial`: el Asistente no está disponible en esa modalidad (ver LicenseTypeGuard en routes/index.tsx). */
+const ASSISTANT_ITEM: NavItem = {
+  label: 'Asistente',
+  path: '/conversation',
+  icon: Sparkles,
+  onboardingTarget: 'nav-asistente',
+  hiddenForTrial: true,
+}
+const MORE_ITEM: NavItem = { label: 'Más', path: '/more', icon: MoreHorizontal }
+const SETTINGS_ITEM: NavItem = { label: 'Configuración', path: '/settings', icon: Settings }
+
+const navItems = [HOME_ITEM, MOVEMENTS_ITEM, AGENDA_ITEM, ASSISTANT_ITEM, MORE_ITEM]
+
+const basicNavItems = [HOME_ITEM, MOVEMENTS_ITEM, REPORTS_ITEM, ASSISTANT_ITEM, SETTINGS_ITEM]
 
 let automaticBackupCheckStarted = false
 let automaticBackupTimeoutId: number | null = null
@@ -133,6 +138,7 @@ export function AppLayout() {
   const location = useLocation()
   const [theme, setTheme] = useState<ThemeMode>('system')
   const [usageMode, setUsageMode] = useState<UsageMode>('professional')
+  const [licenseType, setLicenseType] = useState<LicenseType | null>(null)
   const [isTogglingUsageMode, setIsTogglingUsageMode] = useState(false)
   const [isUsageModeTransitioning, setIsUsageModeTransitioning] = useState(false)
   const usageModeTransitionTimeoutRef = useRef<number | null>(null)
@@ -170,6 +176,12 @@ export function AppLayout() {
       })
       setIsDarkTheme(document.documentElement.classList.contains('dark'))
     }
+
+    getCurrentLicense()
+      .then((license) => setLicenseType(license?.licenseType ?? null))
+      .catch((error) => {
+        console.warn('No se pudo cargar el tipo de licencia.', error)
+      })
 
     getSettings()
       .then((settings) => {
@@ -310,7 +322,9 @@ export function AppLayout() {
 
   const ThemeIcon = isDarkTheme ? Sun : Moon
   const themeLabel = isDarkTheme ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'
-  const visibleNavItems = usageMode === 'basic' ? basicNavItems : navItems
+  const visibleNavItems = (usageMode === 'basic' ? basicNavItems : navItems).filter(
+    (item) => !(item.hiddenForTrial && licenseType === 'trial'),
+  )
 
   return (
     <div className="min-h-dvh bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">

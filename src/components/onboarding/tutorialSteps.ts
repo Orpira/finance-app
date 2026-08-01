@@ -7,21 +7,21 @@ export interface TutorialStepConfig {
 
 export const TUTORIAL_STEPS: readonly TutorialStepConfig[] = [
   {
-    id: 'income',
-    title: 'Registra un ingreso',
-    description: 'Desde aquí accedes a tus ingresos y puedes añadir uno nuevo.',
-    targetKeys: ['nav-income'],
-  },
-  {
-    id: 'expense',
-    title: 'Registra un egreso',
-    description: 'Desde aquí accedes a tus egresos y puedes añadir uno nuevo.',
-    targetKeys: ['nav-expenses'],
+    id: 'movements',
+    title: 'Registra tus movimientos',
+    description: 'Desde aquí accedes a tus ingresos y egresos, y puedes añadir uno nuevo.',
+    targetKeys: ['nav-movements'],
   },
   {
     id: 'agenda-reports',
     title: 'Agenda y reportes',
     description: 'Desde aquí accedes a tu agenda o a tus reportes.',
     targetKeys: ['nav-agenda', 'nav-reports'],
+  },
+  {
+    id: 'assistant',
+    title: 'Consulta al Asistente',
+    description: 'Pregunta en lenguaje natural por tus ingresos, gastos o citas, sin salir de la app.',
+    targetKeys: ['nav-asistente'],
   },
 ]

@@ -1,5 +1,4 @@
 import {
-  MessagesSquare,
   ChartNoAxesCombined,
   ChevronRight,
   DatabaseBackup,
@@ -42,12 +41,6 @@ const moreSections = [
         href: '/dashboard',
         icon: Lightbulb,
         label: 'Análisis inteligente',
-      },
-      {
-        description: 'Envía mensajes y recibe respuestas del asistente en fase preliminar.',
-        href: '/conversation',
-        icon: MessagesSquare,
-        label: 'Asistente IA',
       },
     ],
   },
