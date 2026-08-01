@@ -67,6 +67,26 @@ function normalizeStatusValue(rawStatus: unknown): NormalizedWhatsAppMessageStat
 }
 
 /**
+ * Meta envía message.timestamp/status.timestamp como Unix timestamp en
+ * segundos, expresado como cadena (p. ej. "1504902988"). Guardarlo literal
+ * hace que Postgres falle con "date/time field value out of range" al
+ * intentar interpretarlo como fecha. Cualquier valor que no sea una cadena
+ * de solo dígitos representando un instante válido cae al momento actual.
+ */
+export function normalizeMetaTimestamp(value: unknown): string {
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    const seconds = Number(value)
+    if (Number.isFinite(seconds)) {
+      const date = new Date(seconds * 1000)
+      if (!Number.isNaN(date.getTime())) {
+        return date.toISOString()
+      }
+    }
+  }
+  return new Date().toISOString()
+}
+
+/**
  * Estructura real de Meta:
  * { object, entry: [{ id, changes: [{ value: { metadata, contacts, messages, statuses }, field }] }] }
  * Cualquier forma inesperada se cuenta como `unknownEntries` en lugar de
@@ -111,7 +131,7 @@ export function normalizeMetaWebhookPayload(payload: unknown): NormalizedMetaWeb
           phoneNumberId,
           senderPhone: message.from,
           senderName,
-          timestamp: typeof message.timestamp === 'string' ? message.timestamp : new Date().toISOString(),
+          timestamp: normalizeMetaTimestamp(message.timestamp),
           type: normalizeMessageType(message.type),
           ...(typeof text?.body === 'string' ? { text: text.body } : {}),
         })
@@ -131,7 +151,7 @@ export function normalizeMetaWebhookPayload(payload: unknown): NormalizedMetaWeb
           providerMessageId: status.id,
           recipientPhone: typeof status.recipient_id === 'string' ? status.recipient_id : undefined,
           status: normalizeStatusValue(status.status),
-          timestamp: typeof status.timestamp === 'string' ? status.timestamp : new Date().toISOString(),
+          timestamp: normalizeMetaTimestamp(status.timestamp),
           ...(firstError && typeof firstError.code !== 'undefined' ? { errorCode: String(firstError.code) } : {}),
           ...(typeof firstError?.title === 'string' ? { errorMessage: firstError.title } : {}),
         })
