@@ -18,10 +18,10 @@ function resolveStatusLabel(input: {
   }
 
   if (input.status === 'loading') {
-    return 'Preparando conversacion...'
+    return 'Preparando conversación...'
   }
 
-  return 'Conversacion activa'
+  return 'Puedes escribir en lenguaje natural: ingresos, gastos, citas o consultas.'
 }
 
 export function ConversationHeader({ status, isSending }: ConversationHeaderProps) {
@@ -31,13 +31,9 @@ export function ConversationHeader({ status, isSending }: ConversationHeaderProp
   })
 
   return (
-    <header className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">AI Conversation</p>
-      <h1 className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">Conversacion</h1>
-      <p aria-live="polite" className="mt-2 text-sm text-slate-500 dark:text-slate-300">
-        {statusLabel}
-      </p>
-    </header>
+    <p aria-live="polite" className="text-sm text-slate-500 dark:text-slate-400">
+      {statusLabel}
+    </p>
   )
 }
 

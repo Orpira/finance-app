@@ -23,10 +23,10 @@ export function ConversationPage() {
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-4 py-2">
       <PageHeader
-        backLabel="Mas"
-        backTo="/more"
-        eyebrow="AI Conversation"
-        title="Preview conversacional"
+        backLabel="Inicio"
+        backTo="/"
+        eyebrow="Private Balance"
+        title="Asistente"
       />
 
       <ConversationHeader isSending={isSending} status={state.status} />
