@@ -5,12 +5,19 @@ interface MessageListProps {
   readonly messages: readonly ConversationUiMessage[]
   readonly isLoadingConversation: boolean
   readonly isSending: boolean
+  readonly onConfirmProposal?: (input: {
+    readonly messageId: string
+    readonly edits: Readonly<Record<string, string | number | null>>
+  }) => void
+  readonly onCancelProposal?: (input: { readonly messageId: string }) => void
 }
 
 export function MessageList({
   messages,
   isLoadingConversation,
   isSending,
+  onConfirmProposal,
+  onCancelProposal,
 }: MessageListProps) {
   if (isLoadingConversation) {
     return (
@@ -34,7 +41,13 @@ export function MessageList({
         </p>
       ) : (
         messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <MessageBubble
+            key={message.id}
+            message={message}
+            onCancelProposal={onCancelProposal}
+            onConfirmProposal={onConfirmProposal}
+            proposalActionsDisabled={isSending}
+          />
         ))
       )}
 

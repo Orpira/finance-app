@@ -12,7 +12,7 @@ export function ConversationPage() {
     () => createConversationControllerDependencies(),
     [],
   )
-  const { state, sendMessage } = useConversation(dependencies)
+  const { state, sendMessage, confirmProposal, cancelProposal } = useConversation(dependencies)
 
   const isLoadingConversation =
     state.status === 'idle' ||
@@ -45,6 +45,8 @@ export function ConversationPage() {
         isLoadingConversation={isLoadingConversation}
         isSending={isSending}
         messages={state.messages}
+        onCancelProposal={cancelProposal}
+        onConfirmProposal={(input) => void confirmProposal(input)}
       />
 
       <MessageComposer

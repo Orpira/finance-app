@@ -1,7 +1,14 @@
+import { AssistantProposalCard } from './AssistantProposalCard'
 import type { ConversationUiMessage } from './conversationState'
 
 interface MessageBubbleProps {
   readonly message: ConversationUiMessage
+  readonly proposalActionsDisabled?: boolean
+  readonly onConfirmProposal?: (input: {
+    readonly messageId: string
+    readonly edits: Readonly<Record<string, string | number | null>>
+  }) => void
+  readonly onCancelProposal?: (input: { readonly messageId: string }) => void
 }
 
 function resolveTone(role: ConversationUiMessage['role']): string {
@@ -24,7 +31,12 @@ function resolveRoleLabel(role: ConversationUiMessage['role']): string {
   return 'Sistema'
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  proposalActionsDisabled = false,
+  onConfirmProposal,
+  onCancelProposal,
+}: MessageBubbleProps) {
   return (
     <article
       aria-label={`Mensaje de ${resolveRoleLabel(message.role)}`}
@@ -37,6 +49,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         {resolveRoleLabel(message.role)}
       </p>
       <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{message.text}</p>
+
+      {message.proposal ? (
+        <AssistantProposalCard
+          disabled={proposalActionsDisabled}
+          onCancel={() => onCancelProposal?.({ messageId: message.id })}
+          onConfirm={(edits) => onConfirmProposal?.({ messageId: message.id, edits })}
+          proposal={message.proposal}
+        />
+      ) : null}
     </article>
   )
 }

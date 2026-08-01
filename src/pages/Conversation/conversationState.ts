@@ -1,3 +1,5 @@
+import type { AssistantProposalRecord } from '../../intelligence/assistant'
+
 export type ConversationUiStatus =
   | 'idle'
   | 'loading'
@@ -12,6 +14,8 @@ export interface ConversationUiMessage {
   readonly role: ConversationUiMessageRole
   readonly text: string
   readonly createdAt: string
+  /** Presente solo en mensajes del asistente que contienen una propuesta de acción pendiente de confirmar. */
+  readonly proposal?: AssistantProposalRecord
 }
 
 export interface ConversationUiState {

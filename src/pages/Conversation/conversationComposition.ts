@@ -25,6 +25,7 @@ import {
   createMockAIProvider,
   validateAIProvider,
 } from '../../intelligence/ai-provider/aiProvider'
+import { getSettings } from '../../services/settingsService'
 import {
   createPromptContextBuilder,
 } from '../../intelligence/prompt-context-builder'
@@ -300,6 +301,10 @@ export function createConversationControllerDependencies(
   const conversationService = createAIConversationService(conversationServiceDependencies)
 
   return {
+    async getAssistantContext() {
+      const settings = await getSettings()
+      return { defaultCurrency: settings.defaultCurrency, usageMode: settings.usageMode }
+    },
     pipeline: {
       async generateAssistantMessage(input): Promise<
         | { readonly kind: 'success'; readonly message: ChatMessage }

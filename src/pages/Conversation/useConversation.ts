@@ -12,6 +12,11 @@ import {
 export interface ConversationHookResult {
   readonly state: ConversationUiState
   readonly sendMessage: (message: string) => Promise<void>
+  readonly confirmProposal: (input: {
+    readonly messageId: string
+    readonly edits?: Readonly<Record<string, string | number | null>>
+  }) => Promise<void>
+  readonly cancelProposal: (input: { readonly messageId: string }) => void
 }
 
 export function useConversation(
@@ -42,5 +47,7 @@ export function useConversation(
   return {
     state,
     sendMessage: (message) => controller.sendMessage(message),
+    confirmProposal: (input) => controller.confirmProposal(input),
+    cancelProposal: (input) => controller.cancelProposal(input),
   }
 }
