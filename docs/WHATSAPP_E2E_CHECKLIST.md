@@ -2,6 +2,8 @@
 
 Fecha: 2026-07-05
 
+> **Nota (proveedor `meta-cloud`)**: este checklist es específico del proveedor `evolution` (código de vinculación / QR vía n8n). Para el proveedor alternativo `meta-cloud` (WhatsApp Cloud API de Meta, sin código de vinculación ni QR), usar [docs/whatsapp/staging-test-plan.md](whatsapp/staging-test-plan.md) en su lugar.
+
 Objetivo: validar que el flujo de licencia y el flujo de canal WhatsApp están desacoplados, que se prioriza código de vinculación sobre QR, y que las automatizaciones reutilizan el canal guardado en Neon.
 
 ## Precondiciones

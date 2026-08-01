@@ -199,7 +199,7 @@ export function CommunicationChannelsPage() {
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-slate-950">WhatsApp</h2>
               <p className="mt-0.5 text-sm text-slate-500">
-                Notificaciones automáticas mediante n8n y Evolution API
+                Notificaciones automáticas mediante n8n
               </p>
               {isConnected && connectedNumber && (
                 <p className="mt-1 text-sm font-medium text-slate-700">
@@ -245,7 +245,7 @@ export function CommunicationChannelsPage() {
                     value={phoneNumber}
                   />
                   <span className="text-xs leading-5 text-slate-500">
-                    Incluye el prefijo internacional. Se usa para solicitar el código de vinculación; si Evolution no lo ofrece, se mostrará un QR alternativo.
+                    Incluye el prefijo internacional. Según el proveedor de WhatsApp configurado, es posible que se muestre un código de vinculación o un QR para completar la conexión.
                   </span>
                 </label>
               )}

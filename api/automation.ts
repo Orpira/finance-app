@@ -20,6 +20,7 @@ import {
   hasWebhookRoute,
   WebhookDispatchError,
 } from '../server/automation/webhookDispatcher.js'
+import { WhatsAppProviderError } from '../server/automation/providers/whatsapp/errors.js'
 import { verifyAutomationJwt } from '../server/automationSecurity.js'
 
 const identityCodesSchema = z.object({
@@ -113,8 +114,6 @@ export default async function handler(
   }
 
   const envelope = parseGatewayRequest(request)
-  console.log('===== ENVELOPE RECIBIDO =====');
-  console.log(JSON.stringify(envelope, null, 2));   
   if (!envelope || !hasWebhookRoute(envelope.event)) {
     response.status(422).json({ error: 'Evento no válido.' })
     return
@@ -139,6 +138,11 @@ export default async function handler(
     }
 
     if (error instanceof WebhookDispatchError) {
+      response.status(error.status).json({ error: error.message })
+      return
+    }
+
+    if (error instanceof WhatsAppProviderError) {
       response.status(error.status).json({ error: error.message })
       return
     }

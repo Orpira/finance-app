@@ -74,7 +74,7 @@ Private Balance está en **desarrollo activo**, no en versión estable publicada
 | Android vía Capacitor | Implementado | `android/`, R8/ProGuard en release |
 | Web App instalable (manifest + iconos) | Parcial | manifest e iconos activos; **sin** service worker/caché offline (`vite-plugin-pwa` no está registrado en `vite.config.ts`) |
 | Automatización con n8n / Vercel Functions | Implementado, con riesgos abiertos | ver [docs/AUTOMATION_HUB.md](docs/AUTOMATION_HUB.md) y [docs/04_N8N_WORKFLOWS.md](docs/04_N8N_WORKFLOWS.md) |
-| Canal WhatsApp (Evolution API) | Implementado, con riesgos operativos | orquestado vía n8n, nunca directo desde el cliente |
+| Canal WhatsApp (Evolution API / Meta Cloud API) | Implementado, con riesgos operativos | proveedor seleccionable vía `WHATSAPP_PROVIDER` (`evolution` \| `meta-cloud`), nunca directo desde el cliente; Meta Cloud API añade webhook propio con firma HMAC e idempotencia — ver [docs/whatsapp/](docs/whatsapp/) |
 | Asistente conversacional con IA | Implementado (foundational) | resolución de intención determinista + proveedor OpenAI real opcional vía proxy servidor; ver [docs/09_AI_CORE_ARCHITECTURE.md](docs/09_AI_CORE_ARCHITECTURE.md) |
 | Sincronización multidispositivo cifrada | Planificado | ver [docs/00_SYSTEM_ARCHITECTURE_MASTER.md](docs/00_SYSTEM_ARCHITECTURE_MASTER.md) |
 | Integración continua (CI) | No implementado | no existe `.github/workflows` en este repositorio |
@@ -104,7 +104,7 @@ Resumen; el detalle completo está en [docs/PRIVACY.md](docs/PRIVACY.md).
 - Los datos financieros (ingresos, gastos, agenda, temporadas, reportes) se almacenan localmente en IndexedDB mediante Dexie. No existe un backend propio que los reciba para el uso diario.
 - La conversión de moneda consulta la API pública de Frankfurter (`api.frankfurter.dev`) directamente desde el cliente; solo se envían los códigos de moneda y la fecha necesarios para la tasa, no datos financieros del usuario.
 - Si el usuario activa el asistente conversacional con IA y hay un proveedor real configurado, el mensaje del usuario y el contexto financiero estructurado necesario para responder se envían a través de un proxy propio hacia OpenAI. Sin esa activación explícita, la conversación usa resolución determinista local sin salir del dispositivo.
-- Si el usuario activa Automatización (n8n) o el canal WhatsApp, los eventos correspondientes (ingreso, gasto, cita creados) salen del dispositivo hacia un proxy propio y de ahí a n8n/Evolution API. Estas integraciones están desactivadas hasta que el usuario las configura.
+- Si el usuario activa Automatización (n8n) o el canal WhatsApp (Evolution API o Meta Cloud API, según `WHATSAPP_PROVIDER`), los eventos correspondientes (ingreso, gasto, cita creados) salen del dispositivo hacia un proxy propio y de ahí a n8n/Evolution API o directamente al backend de Meta Cloud API. Estas integraciones están desactivadas hasta que el usuario las configura.
 - El backup a Google Drive solo usa el scope `drive.appdata` (carpeta privada de la app) y cifra los datos con AES-GCM en el dispositivo antes de subirlos; el JSON plano nunca sale sin cifrar por esta vía.
 - Las licencias no se incluyen en los backups financieros, para evitar transferir una activación entre dispositivos.
 
@@ -124,8 +124,10 @@ React + Capacitor + IndexedDB/Dexie   (dominio financiero local, fuente de verda
 Vercel Functions (/api/*)             (validación de licencia, JWT temporal, proxy)
         |
         v
-n8n --> Neon PostgreSQL / Evolution API (WhatsApp)
+n8n --> Neon PostgreSQL / WhatsApp (Evolution API o Meta Cloud API, según WHATSAPP_PROVIDER)
 ```
+
+Con `WHATSAPP_PROVIDER=meta-cloud`, además del envío saliente orquestado vía n8n, existe un webhook entrante propio (`/api/communication/meta/webhook`) que recibe mensajes y estados directamente de Meta con verificación de firma HMAC e idempotencia — sin pasar por n8n. El reenvío de esos eventos hacia n8n es opcional (`WHATSAPP_CLOUD_FORWARD_INBOUND_TO_N8N`/`WHATSAPP_CLOUD_FORWARD_STATUS_TO_N8N`) y está desactivado por defecto. Ver [docs/whatsapp/](docs/whatsapp/).
 
 Resumen de capas:
 
@@ -203,6 +205,7 @@ Detalle adicional en [docs/08_DEPLOYMENT.md](docs/08_DEPLOYMENT.md).
 | [docs/PRIVACY.md](docs/PRIVACY.md) | Privacidad: qué datos salen del dispositivo y cuándo |
 | [docs/architecture/11_SECURITY.md](docs/architecture/11_SECURITY.md) | Modelo de seguridad técnico detallado |
 | [docs/AUTOMATION_HUB.md](docs/AUTOMATION_HUB.md) | Contrato de automatización app → Vercel → n8n |
+| [docs/whatsapp/](docs/whatsapp/) | Integración WhatsApp Cloud API de Meta: configuración, seguridad, webhooks, pruebas y contratos n8n |
 | [docs/MANUAL_USUARIO.md](docs/MANUAL_USUARIO.md) | Guía de uso funcional |
 | [AGENTS.md](AGENTS.md) | Guía para agentes de IA y nuevos colaboradores |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Cómo contribuir |

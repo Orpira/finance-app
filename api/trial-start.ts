@@ -13,6 +13,7 @@ import {
   ClockTamperedError,
   issueOrReactivateTrial,
   TrialExpiredError,
+  type TrialIssueInput,
 } from '../server/trialLicenseService.js'
 
 const requestSchema = z.object({
@@ -33,7 +34,7 @@ export default async function handler(
   if (rejectInvalidRequest(request, response, 2 * 1024)) return
 
   try {
-    const input = requestSchema.parse(request.body)
+    const input = requestSchema.parse(request.body) as TrialIssueInput
     const result = await issueOrReactivateTrial(input, neonTrialGrantsRepository)
 
     response.status(200).json(result)

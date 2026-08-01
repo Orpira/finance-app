@@ -15,6 +15,10 @@ vi.mock('../server/automationSecurity', () => ({
 
 import handler from '../api/automation'
 import type { VercelRequest, VercelResponse } from '../server/apiUtils'
+import {
+  ProviderNotImplementedError,
+  WhatsAppProviderConfigurationError,
+} from '../server/automation/providers/whatsapp/errors'
 
 const PAYLOAD_EVENT_ID = '11111111-1111-4111-8111-111111111111'
 const IDEMPOTENCY_KEY = '22222222-2222-4222-8222-222222222222'
@@ -113,6 +117,34 @@ describe('/api/automation idempotency headers', () => {
     expect(dispatchAutomationEvent).toHaveBeenCalledWith({
       envelope: expect.objectContaining({ eventId: PAYLOAD_EVENT_ID }),
       licenseDeviceCode: DEVICE_CODE,
+    })
+  })
+})
+
+describe('/api/automation errores del proveedor de WhatsApp', () => {
+  it('mapea WhatsAppProviderConfigurationError a su status normalizado, sin caer en 504 genérico', async () => {
+    dispatchAutomationEvent.mockRejectedValue(
+      new WhatsAppProviderConfigurationError('WHATSAPP_PROVIDER="foo" no es válido. Usa uno de: evolution, meta-cloud.'),
+    )
+    const response = createResponse()
+
+    await handler(createRequest({}), response)
+
+    expect(response.statusCode).toBe(503)
+    expect(response.body).toEqual({
+      error: 'WHATSAPP_PROVIDER="foo" no es válido. Usa uno de: evolution, meta-cloud.',
+    })
+  })
+
+  it('mapea ProviderNotImplementedError a 501 en lugar de simular éxito', async () => {
+    dispatchAutomationEvent.mockRejectedValue(new ProviderNotImplementedError('meta-cloud'))
+    const response = createResponse()
+
+    await handler(createRequest({}), response)
+
+    expect(response.statusCode).toBe(501)
+    expect(response.body).toEqual({
+      error: 'El proveedor de WhatsApp "meta-cloud" aún no está implementado en Private Balance.',
     })
   })
 })

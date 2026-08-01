@@ -35,9 +35,12 @@ export class WebhookDispatchError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    options?: ErrorOptions,
+    options?: { cause?: unknown },
   ) {
-    super(message, options)
+    super(message)
+    if (options && 'cause' in options) {
+      ;(this as { cause?: unknown }).cause = options.cause
+    }
   }
 }
 

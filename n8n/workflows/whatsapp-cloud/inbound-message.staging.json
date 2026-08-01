@@ -1,0 +1,183 @@
+{
+  "name": "PB — WhatsApp Cloud — Inbound Message — STAGING",
+  "nodes": [
+    {
+      "id": "webhook-inbound",
+      "name": "Webhook: mensaje entrante normalizado",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pb-whatsapp-cloud-inbound-staging",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "webhookId": "REPLACE_WITH_STAGING_WEBHOOK_ID",
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "PB WhatsApp Forward Auth Token (staging)" }
+      }
+    },
+    {
+      "id": "validate-contract",
+      "name": "Validar contrato (event/provider/providerMessageId)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? $input.first().json;\nconst message = body.message ?? {};\nconst valid = body.event === 'whatsapp.message.received'\n  && body.provider === 'meta-cloud'\n  && typeof message.providerMessageId === 'string'\n  && message.providerMessageId.length > 0;\nreturn [{ json: { valid, ...body, message } }];"
+      }
+    },
+    {
+      "id": "if-valid-contract",
+      "name": "¿Contrato válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "leftValue": "={{ $json.valid }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "classify-message",
+      "name": "Clasificar (SAFE_AUTOMATIC / REQUIRES_REVIEW / UNSUPPORTED)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, -80],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst message = item.message;\nconst text = (message.text || '').toLowerCase().trim();\n\nconst SAFE_PATTERNS = [/^hola/, /^buenas/, /^ayuda$/, /^prueba$/, /^gracias/];\nconst REVIEW_PATTERNS = [/importe/, /saldo/, /agenda/, /cita/, /datos personales/, /cambiar/];\n\nlet classification = 'REQUIRES_REVIEW';\nif (message.type !== 'text' || !text) {\n  classification = 'UNSUPPORTED';\n} else if (SAFE_PATTERNS.some((pattern) => pattern.test(text))) {\n  classification = 'SAFE_AUTOMATIC';\n} else if (REVIEW_PATTERNS.some((pattern) => pattern.test(text))) {\n  classification = 'REQUIRES_REVIEW';\n} else {\n  classification = 'REQUIRES_REVIEW';\n}\n\nreturn [{ json: { ...item, classification } }];"
+      }
+    },
+    {
+      "id": "switch-classification",
+      "name": "Switch por clasificación",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [880, -80],
+      "parameters": {
+        "rules": {
+          "values": [
+            { "outputKey": "SAFE_AUTOMATIC", "conditions": { "conditions": [{ "leftValue": "={{ $json.classification }}", "rightValue": "SAFE_AUTOMATIC", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputKey": "REQUIRES_REVIEW", "conditions": { "conditions": [{ "leftValue": "={{ $json.classification }}", "rightValue": "REQUIRES_REVIEW", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputKey": "UNSUPPORTED", "conditions": { "conditions": [{ "leftValue": "={{ $json.classification }}", "rightValue": "UNSUPPORTED", "operator": { "type": "string", "operation": "equals" } }] } }
+          ]
+        },
+        "options": { "fallbackOutput": "UNSUPPORTED" }
+      }
+    },
+    {
+      "id": "build-staging-reply",
+      "name": "Construir respuesta de staging (fija, sin IA)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, -220],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst crypto = require('crypto');\nconst requestId = `pb:whatsapp.reply:${item.message.providerMessageId}:${crypto.createHash('sha256').update(item.message.senderPhone).digest('hex').slice(0, 8)}`;\nreturn [{ json: { ...item, requestId, replyText: 'Gracias por escribir a Private Balance. Este es un entorno de staging; un miembro del equipo revisará tu mensaje si hace falta.' } }];"
+      }
+    },
+    {
+      "id": "send-staging-reply",
+      "name": "POST send-text (respuesta staging)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, -220],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.PRIVATE_BALANCE_COMMUNICATION_BASE_URL }}/api/communication/whatsapp/send-text",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "jsonBody": "={{ { requestId: $json.requestId, recipient: $json.message.senderPhone, text: $json.replyText, context: { eventType: 'whatsapp.message.received', eventId: $json.eventId, workflowId: 'pb-whatsapp-cloud-inbound-staging' } } }}",
+        "options": { "timeout": 10000, "response": { "response": { "neverError": true } } }
+      },
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "Private Balance Communication Backend (staging)" }
+      }
+    },
+    {
+      "id": "mark-review",
+      "name": "Marcar para revisión manual (NoOp, sin acción sensible)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, 0],
+      "parameters": {}
+    },
+    {
+      "id": "mark-unsupported",
+      "name": "Registrar como no soportado (NoOp)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, 220],
+      "parameters": {}
+    },
+    {
+      "id": "respond-ok",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [1540, -80],
+      "parameters": { "respondWith": "json", "responseBody": "={{ { success: true } }}", "options": {} }
+    },
+    {
+      "id": "respond-invalid",
+      "name": "Respond 400 (contrato inválido)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [660, 160],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: { code: 'INBOUND_CONTRACT_INVALID', message: 'Payload de mensaje entrante no reconocido.' } } }}",
+        "options": { "responseCode": 400 }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: mensaje entrante normalizado": {
+      "main": [[{ "node": "Validar contrato (event/provider/providerMessageId)", "type": "main", "index": 0 }]]
+    },
+    "Validar contrato (event/provider/providerMessageId)": {
+      "main": [[{ "node": "¿Contrato válido?", "type": "main", "index": 0 }]]
+    },
+    "¿Contrato válido?": {
+      "main": [
+        [{ "node": "Clasificar (SAFE_AUTOMATIC / REQUIRES_REVIEW / UNSUPPORTED)", "type": "main", "index": 0 }],
+        [{ "node": "Respond 400 (contrato inválido)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Clasificar (SAFE_AUTOMATIC / REQUIRES_REVIEW / UNSUPPORTED)": {
+      "main": [[{ "node": "Switch por clasificación", "type": "main", "index": 0 }]]
+    },
+    "Switch por clasificación": {
+      "main": [
+        [{ "node": "Construir respuesta de staging (fija, sin IA)", "type": "main", "index": 0 }],
+        [{ "node": "Marcar para revisión manual (NoOp, sin acción sensible)", "type": "main", "index": 0 }],
+        [{ "node": "Registrar como no soportado (NoOp)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Construir respuesta de staging (fija, sin IA)": {
+      "main": [[{ "node": "POST send-text (respuesta staging)", "type": "main", "index": 0 }]]
+    },
+    "POST send-text (respuesta staging)": {
+      "main": [[{ "node": "Respond 200", "type": "main", "index": 0 }]]
+    },
+    "Marcar para revisión manual (NoOp, sin acción sensible)": {
+      "main": [[{ "node": "Respond 200", "type": "main", "index": 0 }]]
+    },
+    "Registrar como no soportado (NoOp)": {
+      "main": [[{ "node": "Respond 200", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "note": "Exportación sanitizada de staging. Solo SAFE_AUTOMATIC responde automáticamente, con un texto fijo (sin IA, sin datos financieros). REQUIRES_REVIEW y UNSUPPORTED no ejecutan ninguna acción sensible en esta fase."
+  }
+}
