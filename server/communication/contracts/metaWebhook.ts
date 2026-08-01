@@ -66,24 +66,55 @@ function normalizeStatusValue(rawStatus: unknown): NormalizedWhatsAppMessageStat
   return (known as readonly string[]).includes(status) ? status as NormalizedWhatsAppMessageStatusValue : 'unknown'
 }
 
+// Antes de 2001-09-09 (el propio origen del formato de webhooks de Meta) y
+// después de 2100-01-01: fuera de rango razonable, se trata como inválido.
+const MIN_VALID_UNIX_SECONDS = 1_000_000_000
+const MAX_VALID_UNIX_SECONDS = 4_102_444_800
+
+/**
+ * Marcador determinista para "timestamp ausente o inválido" (época Unix).
+ * Deliberadamente NO se usa `new Date()` (la hora de recepción): la clave de
+ * idempotencia de un estado es `status:<id>:<status>:<timestamp>` (ver
+ * metaWebhookService.ts). Si dos entregas del mismo estado con un timestamp
+ * inválido normalizaran a la hora actual, cada entrega generaría una clave
+ * distinta y la deduplicación dejaría de funcionar exactamente para el caso
+ * que más la necesita (payloads malformados que Meta reintenta). Un
+ * marcador fijo mantiene la misma clave en cada reintento; el campo
+ * `unknownEntries` ya deja constancia de que hubo datos con forma
+ * inesperada, así que esto no oculta el problema, solo evita que rompa la
+ * deduplicación.
+ */
+const UNKNOWN_TIMESTAMP_ISO = new Date(0).toISOString()
+
 /**
  * Meta envía message.timestamp/status.timestamp como Unix timestamp en
- * segundos, expresado como cadena (p. ej. "1504902988"). Guardarlo literal
- * hace que Postgres falle con "date/time field value out of range" al
- * intentar interpretarlo como fecha. Cualquier valor que no sea una cadena
- * de solo dígitos representando un instante válido cae al momento actual.
+ * segundos, normalmente como cadena de dígitos (p. ej. "1504902988"), pero
+ * el contrato también admite un número ya parseado. Guardar el valor
+ * literal como texto hace que Postgres falle con "date/time field value out
+ * of range" al intentar interpretarlo como fecha, así que aquí siempre se
+ * produce un ISO 8601 válido o el marcador `UNKNOWN_TIMESTAMP_ISO` anterior.
  */
 export function normalizeMetaTimestamp(value: unknown): string {
+  let seconds: number | undefined
   if (typeof value === 'string' && /^\d+$/.test(value)) {
-    const seconds = Number(value)
-    if (Number.isFinite(seconds)) {
-      const date = new Date(seconds * 1000)
-      if (!Number.isNaN(date.getTime())) {
-        return date.toISOString()
-      }
+    seconds = Number(value)
+  } else if (typeof value === 'number' && Number.isFinite(value)) {
+    seconds = value
+  }
+
+  if (
+    seconds !== undefined &&
+    Number.isFinite(seconds) &&
+    seconds >= MIN_VALID_UNIX_SECONDS &&
+    seconds <= MAX_VALID_UNIX_SECONDS
+  ) {
+    const date = new Date(seconds * 1000)
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString()
     }
   }
-  return new Date().toISOString()
+
+  return UNKNOWN_TIMESTAMP_ISO
 }
 
 /**

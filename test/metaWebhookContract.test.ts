@@ -80,29 +80,39 @@ describe('normalizeMetaWebhookPayload — estados', () => {
   })
 })
 
+const UNKNOWN_TIMESTAMP_ISO = new Date(0).toISOString()
+
 describe('normalizeMetaTimestamp', () => {
   it('convierte un timestamp Unix válido (segundos, como cadena) a ISO 8601', () => {
     expect(normalizeMetaTimestamp('1504902988')).toBe(isoFromUnixSeconds(1504902988))
   })
 
-  it('usa la hora actual cuando el timestamp está ausente', () => {
-    const before = Date.now()
-    const result = normalizeMetaTimestamp(undefined)
-    const after = Date.now()
-
-    const resultMs = new Date(result).getTime()
-    expect(resultMs).toBeGreaterThanOrEqual(before)
-    expect(resultMs).toBeLessThanOrEqual(after)
+  it('convierte un timestamp Unix válido expresado como número', () => {
+    expect(normalizeMetaTimestamp(1504902988)).toBe(isoFromUnixSeconds(1504902988))
   })
 
-  it('usa la hora actual cuando el timestamp es inválido (no son solo dígitos)', () => {
-    const before = Date.now()
-    const result = normalizeMetaTimestamp('not-a-timestamp')
-    const after = Date.now()
+  it('usa el marcador determinista cuando el timestamp está ausente', () => {
+    expect(normalizeMetaTimestamp(undefined)).toBe(UNKNOWN_TIMESTAMP_ISO)
+  })
 
-    const resultMs = new Date(result).getTime()
-    expect(resultMs).toBeGreaterThanOrEqual(before)
-    expect(resultMs).toBeLessThanOrEqual(after)
+  it('usa el marcador determinista cuando el timestamp es inválido (no son solo dígitos)', () => {
+    expect(normalizeMetaTimestamp('not-a-timestamp')).toBe(UNKNOWN_TIMESTAMP_ISO)
+  })
+
+  it('usa el marcador determinista cuando el timestamp es negativo', () => {
+    expect(normalizeMetaTimestamp(-1504902988)).toBe(UNKNOWN_TIMESTAMP_ISO)
+  })
+
+  it('usa el marcador determinista cuando el timestamp es demasiado grande', () => {
+    expect(normalizeMetaTimestamp('99999999999999')).toBe(UNKNOWN_TIMESTAMP_ISO)
+  })
+
+  it('usa el marcador determinista ante una fecha ISO inesperada en vez de Unix', () => {
+    expect(normalizeMetaTimestamp('2026-07-31T10:00:00.000Z')).toBe(UNKNOWN_TIMESTAMP_ISO)
+  })
+
+  it('produce la misma clave en reintentos: dos llamadas con el mismo timestamp inválido devuelven el mismo valor', () => {
+    expect(normalizeMetaTimestamp(undefined)).toBe(normalizeMetaTimestamp(undefined))
   })
 })
 
@@ -114,16 +124,11 @@ describe('normalizeMetaWebhookPayload — timestamps', () => {
     expect(result.messages[0]?.timestamp).toBe(isoFromUnixSeconds(1504902988))
   })
 
-  it('usa la hora actual cuando el mensaje no trae timestamp', () => {
-    const before = Date.now()
+  it('usa el marcador determinista cuando el mensaje no trae timestamp', () => {
     const result = normalizeMetaWebhookPayload(envelope({
       messages: [{ id: 'wamid.ts-2', from: '34600000000', type: 'text', text: { body: 'Hola' } }],
     }))
-    const after = Date.now()
-
-    const resultMs = new Date(result.messages[0]?.timestamp ?? '').getTime()
-    expect(resultMs).toBeGreaterThanOrEqual(before)
-    expect(resultMs).toBeLessThanOrEqual(after)
+    expect(result.messages[0]?.timestamp).toBe(UNKNOWN_TIMESTAMP_ISO)
   })
 
   it('normaliza el timestamp de un estado a ISO 8601', () => {
@@ -133,16 +138,11 @@ describe('normalizeMetaWebhookPayload — timestamps', () => {
     expect(result.statuses[0]?.timestamp).toBe(isoFromUnixSeconds(1504902988))
   })
 
-  it('usa la hora actual cuando el estado no trae timestamp', () => {
-    const before = Date.now()
+  it('usa el marcador determinista cuando el estado no trae timestamp', () => {
     const result = normalizeMetaWebhookPayload(envelope({
       statuses: [{ id: 'wamid.ts-4', status: 'sent' }],
     }))
-    const after = Date.now()
-
-    const resultMs = new Date(result.statuses[0]?.timestamp ?? '').getTime()
-    expect(resultMs).toBeGreaterThanOrEqual(before)
-    expect(resultMs).toBeLessThanOrEqual(after)
+    expect(result.statuses[0]?.timestamp).toBe(UNKNOWN_TIMESTAMP_ISO)
   })
 })
 
