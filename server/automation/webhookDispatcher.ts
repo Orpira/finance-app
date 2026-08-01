@@ -24,6 +24,20 @@ const EVENT_WEBHOOKS: Record<AutomationEvent, N8nWebhookEnvironment> = {
 const N8N_TIMEOUT_MS = 10_000
 const MAX_N8N_RESPONSE_BYTES = 2_100_000
 
+/**
+ * Eventos financieros/agenda que deben funcionar sin n8n: si no hay webhook
+ * configurado se tratan como "automatización desactivada" (no-op exitoso),
+ * no como un error. El resto de eventos (canal WhatsApp, aprovisionamiento
+ * de dispositivo) conserva el comportamiento estricto anterior porque su UI
+ * depende de una respuesta real de n8n (p. ej. el QR de conexión).
+ */
+const OPTIONAL_N8N_EVENTS = new Set<AutomationEvent>([
+  'income.created',
+  'expense.created',
+  'calendar.created',
+  'service.completed',
+])
+
 export interface WebhookDispatchResult {
   status: number
   body?: unknown
@@ -52,6 +66,10 @@ function getN8nConfiguration(event: AutomationEvent) {
   const environmentName = EVENT_WEBHOOKS[event]
   const rawUrl = process.env[environmentName]?.trim()
   const token = process.env.N8N_INTERNAL_TOKEN?.trim()
+
+  if (!rawUrl && OPTIONAL_N8N_EVENTS.has(event)) {
+    return undefined
+  }
 
   if (!rawUrl || !token) {
     throw new Error(`Falta configurar ${environmentName} o N8N_INTERNAL_TOKEN.`)
@@ -113,6 +131,9 @@ export async function dispatchWebhook(input: {
 
   try {
     const n8n = getN8nConfiguration(input.event)
+    if (!n8n) {
+      return { status: 204, empty: true, successful: true }
+    }
     const response = await fetch(n8n.url, {
       method: 'POST',
       headers: {
