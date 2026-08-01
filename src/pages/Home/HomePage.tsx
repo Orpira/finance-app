@@ -549,7 +549,7 @@ export function HomePage() {
         </Link>
       </div>
 
-      {pendingIncomeSummary && (
+      {/* {pendingIncomeSummary && (
         <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between gap-3">
             <span className="flex size-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
@@ -591,7 +591,7 @@ export function HomePage() {
             </>
           )}
         </article>
-      )}
+      )} */}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {!isBasicMode(settings) && (
