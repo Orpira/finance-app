@@ -60,6 +60,7 @@ La aplicación prioriza:
 - Evitar secretos en frontend o APK.
 - Resolver automatizaciones críticas del lado servidor.
 - Mantener trazabilidad de eventos y documentación de decisiones.
+- **Inteligencia, simplificación o automatización antes que interfaz nueva**: antes de añadir una pantalla, un paso de formulario o una opción de configuración, evaluar si el Asistente, una simplificación o una automatización ya resuelven la necesidad. Ver [ADR-030](adr/ADR-030-Intelligent-Assistant-Platform.md).
 
 ## Fuera de alcance confirmado
 
