@@ -24,6 +24,9 @@ export const ASSISTANT_PROPOSAL_KINDS = [
   'register_income',
   'register_expense',
   'create_appointment',
+  'mark_income_reported',
+  'generate_report',
+  'create_financial_goal',
 ] as const
 
 export type AssistantProposalKind = (typeof ASSISTANT_PROPOSAL_KINDS)[number]
@@ -50,10 +53,39 @@ export interface AppointmentProposalFields {
   readonly currency: CurrencyCode | null
 }
 
+export interface MarkIncomeReportedProposalFields {
+  readonly incomeId: number | null
+  readonly date: string | null
+  readonly amount: number | null
+  readonly currency: CurrencyCode | null
+  readonly category: string | null
+  readonly currentStatus: string | null
+}
+
+export interface GenerateReportProposalFields {
+  readonly periodStart: string | null
+  readonly periodEnd: string | null
+  readonly format: 'pdf' | null
+  readonly includedData: string
+}
+
+export interface FinancialGoalProposalFields {
+  readonly goalType: 'saving' | 'expense_limit' | 'income_target' | null
+  readonly name: string | null
+  readonly targetAmount: number | null
+  readonly currency: CurrencyCode | null
+  readonly period: 'monthly'
+  readonly startDate: string | null
+  readonly endDate: string | null
+}
+
 export type AssistantProposalFields =
   | IncomeProposalFields
   | ExpenseProposalFields
   | AppointmentProposalFields
+  | MarkIncomeReportedProposalFields
+  | GenerateReportProposalFields
+  | FinancialGoalProposalFields
 
 interface AssistantProposalBase {
   readonly proposalId: string
@@ -62,7 +94,7 @@ interface AssistantProposalBase {
   readonly sourceText: string
   readonly missingRequiredFields: readonly string[]
   readonly failureReason?: string
-  readonly executedRecordId?: number
+  readonly executedRecordId?: number | string
 }
 
 export interface IncomeProposal extends AssistantProposalBase {
@@ -80,7 +112,28 @@ export interface AppointmentProposal extends AssistantProposalBase {
   readonly fields: AppointmentProposalFields
 }
 
-export type AssistantProposalRecord = IncomeProposal | ExpenseProposal | AppointmentProposal
+export interface MarkIncomeReportedProposal extends AssistantProposalBase {
+  readonly kind: 'mark_income_reported'
+  readonly fields: MarkIncomeReportedProposalFields
+}
+
+export interface GenerateReportProposal extends AssistantProposalBase {
+  readonly kind: 'generate_report'
+  readonly fields: GenerateReportProposalFields
+}
+
+export interface FinancialGoalProposal extends AssistantProposalBase {
+  readonly kind: 'create_financial_goal'
+  readonly fields: FinancialGoalProposalFields
+}
+
+export type AssistantProposalRecord =
+  | IncomeProposal
+  | ExpenseProposal
+  | AppointmentProposal
+  | MarkIncomeReportedProposal
+  | GenerateReportProposal
+  | FinancialGoalProposal
 
 export function isProposalReadyToConfirm(proposal: AssistantProposalRecord): boolean {
   return proposal.missingRequiredFields.length === 0

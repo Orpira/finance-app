@@ -25,6 +25,21 @@ vi.mock('../../services/settingsService', () => ({
   getSettings: () => getSettingsMock(),
 }))
 
+const markIncomeAsReportedMock = vi.fn()
+vi.mock('../../services/incomeReport.service', () => ({
+  markIncomeAsReported: (...args: unknown[]) => markIncomeAsReportedMock(...args),
+}))
+
+const createFinancialGoalMock = vi.fn()
+vi.mock('../../services/financialGoalService', () => ({
+  financialGoalService: { create: (...args: unknown[]) => createFinancialGoalMock(...args) },
+}))
+
+const exportCopilotPeriodReportMock = vi.fn()
+vi.mock('../../services/copilotReportExportService', () => ({
+  exportCopilotPeriodReport: (...args: unknown[]) => exportCopilotPeriodReportMock(...args),
+}))
+
 const { executeAssistantProposal } = await import('./assistantExecutionService')
 const { getAssistantAuditTrail, clearAssistantAuditTrail } = await import('./assistantAuditLog')
 import type { AssistantProposalRecord } from './assistantProposalContracts'
@@ -152,5 +167,41 @@ describe('executeAssistantProposal', () => {
     expect(Object.keys(trail[0]).sort()).toEqual(
       ['executedRecordId', 'kind', 'proposalId', 'status', 'timestamp'].sort(),
     )
+  })
+
+  it('marca un único ingreso como reportado solo después de confirmar', async () => {
+    markIncomeAsReportedMock.mockResolvedValue(undefined)
+    const proposal: AssistantProposalRecord = {
+      proposalId: 'assistant-proposal:mark:1', kind: 'mark_income_reported', status: 'confirmed',
+      createdAt: '2026-08-02T10:00:00.000Z', sourceText: 'Marca el ingreso', missingRequiredFields: [],
+      fields: { incomeId: 7, date: '2026-07-30', amount: 120, currency: 'EUR', category: 'Ingreso', currentStatus: 'Sin revisar' },
+    }
+    expect(await executeAssistantProposal(proposal)).toEqual({ ok: true, recordId: 7 })
+    expect(markIncomeAsReportedMock).toHaveBeenCalledWith(7)
+
+    await executeAssistantProposal({ ...proposal, status: 'cancelled' })
+    expect(markIncomeAsReportedMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('genera el PDF confirmado mediante el exportador existente', async () => {
+    exportCopilotPeriodReportMock.mockResolvedValue('reporte.pdf')
+    const proposal: AssistantProposalRecord = {
+      proposalId: 'assistant-proposal:report:1', kind: 'generate_report', status: 'confirmed',
+      createdAt: '2026-08-02T10:00:00.000Z', sourceText: 'Prepara PDF', missingRequiredFields: [],
+      fields: { periodStart: '2026-08-01', periodEnd: '2026-08-31', format: 'pdf', includedData: 'Resumen' },
+    }
+    expect(await executeAssistantProposal(proposal)).toEqual({ ok: true, recordId: 'reporte.pdf' })
+    expect(exportCopilotPeriodReportMock).toHaveBeenCalledWith({ periodStart: '2026-08-01', periodEnd: '2026-08-31' })
+  })
+
+  it('crea el objetivo confirmado mediante financialGoalService', async () => {
+    createFinancialGoalMock.mockResolvedValue({ id: 'goal-created' })
+    const proposal: AssistantProposalRecord = {
+      proposalId: 'assistant-proposal:goal:1', kind: 'create_financial_goal', status: 'confirmed',
+      createdAt: '2026-08-02T10:00:00.000Z', sourceText: 'Quiero ahorrar', missingRequiredFields: [],
+      fields: { goalType: 'saving', name: 'Ahorro mensual', targetAmount: 300, currency: 'EUR', period: 'monthly', startDate: '2026-08-01', endDate: '2026-08-31' },
+    }
+    expect(await executeAssistantProposal(proposal)).toEqual({ ok: true, recordId: 'goal-created' })
+    expect(createFinancialGoalMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'saving', targetAmount: 300 }))
   })
 })

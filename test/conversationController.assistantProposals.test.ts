@@ -49,6 +49,20 @@ describe('ConversationController - flujo de propuestas del Asistente', () => {
     expect(lastMessage?.proposal?.kind).toBe('register_income')
   })
 
+  it('prioriza una propuesta contextual local y no llama al pipeline externo', async () => {
+    const proposal = baseProposal({ kind: 'generate_report', fields: { periodStart: '2026-08-01', periodEnd: '2026-08-31', format: 'pdf', includedData: 'Resumen' } })
+    const pipeline = { generateAssistantMessage: vi.fn() }
+    const controller = createConversationController({
+      pipeline,
+      getAssistantContext: async () => ({ defaultCurrency: 'EUR', usageMode: 'professional' }),
+      prepareContextualAction: vi.fn().mockResolvedValue({ kind: 'proposal', proposal }),
+    })
+    await controller.sendMessage('Prepara un PDF de este mes')
+    expect(pipeline.generateAssistantMessage).not.toHaveBeenCalled()
+    expect(interpretAssistantMessageMock).not.toHaveBeenCalled()
+    expect(controller.getState().messages.at(-1)?.proposal?.kind).toBe('generate_report')
+  })
+
   it('sigue el camino de consulta existente cuando no hay acción detectada', async () => {
     interpretAssistantMessageMock.mockReturnValue({ kind: 'no-action' })
     const pipeline = {

@@ -105,5 +105,8 @@ export function applyProposalEdits(
 function isRequiredField(kind: AssistantProposalRecord['kind'], field: string): boolean {
   if (kind === 'register_income') return field === 'amount' || field === 'date'
   if (kind === 'register_expense') return field === 'amount' || field === 'date' || field === 'category'
-  return field === 'date' || field === 'time' || field === 'expectedAmount'
+  if (kind === 'create_appointment') return field === 'date' || field === 'time' || field === 'expectedAmount'
+  if (kind === 'mark_income_reported') return field === 'incomeId'
+  if (kind === 'generate_report') return field === 'periodStart' || field === 'periodEnd' || field === 'format'
+  return field === 'goalType' || field === 'name' || field === 'targetAmount' || field === 'startDate'
 }

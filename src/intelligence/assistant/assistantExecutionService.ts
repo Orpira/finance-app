@@ -3,6 +3,9 @@ import { createAppointment } from '../../services/appointmentService'
 import { createExpense } from '../../services/expenseService'
 import { createServiceIncome } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
+import { markIncomeAsReported } from '../../services/incomeReport.service'
+import { financialGoalService } from '../../services/financialGoalService'
+import { exportCopilotPeriodReport } from '../../services/copilotReportExportService'
 import { calculateStoredRealGain } from '../../utils/realGain'
 import { recordAssistantAudit } from './assistantAuditLog'
 import { assertProposalReadyForExecution } from './assistantExecutionGuard'
@@ -10,7 +13,7 @@ import type { AssistantProposalRecord } from './assistantProposalContracts'
 
 export interface AssistantExecutionSuccess {
   readonly ok: true
-  readonly recordId: number
+  readonly recordId: number | string
 }
 
 export interface AssistantExecutionFailure {
@@ -51,7 +54,7 @@ export async function executeAssistantProposal(
       proposalId: proposal.proposalId,
       kind: proposal.kind,
       status: 'completed',
-      executedRecordId: recordId,
+      ...(typeof recordId === 'number' ? { executedRecordId: recordId } : {}),
     })
     return { ok: true, recordId }
   } catch (error) {
@@ -69,7 +72,34 @@ export async function executeAssistantProposal(
   }
 }
 
-async function executeByKind(proposal: AssistantProposalRecord): Promise<number> {
+async function executeByKind(proposal: AssistantProposalRecord): Promise<number | string> {
+  if (proposal.kind === 'mark_income_reported') {
+    const incomeId = proposal.fields.incomeId as number
+    await markIncomeAsReported(incomeId)
+    return incomeId
+  }
+
+  if (proposal.kind === 'generate_report') {
+    return exportCopilotPeriodReport({
+      periodStart: proposal.fields.periodStart as string,
+      periodEnd: proposal.fields.periodEnd as string,
+    })
+  }
+
+  if (proposal.kind === 'create_financial_goal') {
+    const fields = proposal.fields
+    const goal = await financialGoalService.create({
+      type: fields.goalType as 'saving' | 'expense_limit' | 'income_target',
+      name: fields.name as string,
+      targetAmount: fields.targetAmount as number,
+      currency: fields.currency as NonNullable<typeof fields.currency>,
+      period: fields.period,
+      startDate: fields.startDate as string,
+      ...(fields.endDate === null ? {} : { endDate: fields.endDate }),
+    })
+    return goal.id
+  }
+
   const settings = await getSettings()
 
   if (proposal.kind === 'register_income') {

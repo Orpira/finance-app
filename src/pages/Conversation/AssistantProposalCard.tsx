@@ -18,6 +18,9 @@ const KIND_LABEL: Readonly<Record<AssistantProposalRecord['kind'], string>> = {
   register_income: 'Ingreso detectado',
   register_expense: 'Gasto detectado',
   create_appointment: 'Cita detectada',
+  mark_income_reported: 'Marcar ingreso como reportado',
+  generate_report: 'Reporte preparado',
+  create_financial_goal: 'Objetivo financiero',
 }
 
 const STATUS_BADGE: Readonly<Record<AssistantProposalRecord['status'], { label: string; tone: string } | null>> = {
@@ -39,6 +42,17 @@ const FIELD_LABEL: Readonly<Record<string, string>> = {
   time: 'Hora',
   durationMinutes: 'Duración (min)',
   expectedAmount: 'Importe esperado',
+  periodStart: 'Desde',
+  periodEnd: 'Hasta',
+  format: 'Formato',
+  includedData: 'Incluye',
+  goalType: 'Tipo de objetivo',
+  name: 'Nombre',
+  targetAmount: 'Importe objetivo',
+  period: 'Periodo',
+  startDate: 'Inicio',
+  endDate: 'Fin',
+  currentStatus: 'Estado actual',
 }
 
 function isFieldEditable(status: AssistantProposalRecord['status']): boolean {
@@ -58,7 +72,7 @@ export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel 
     onConfirm(draft)
   }
 
-  const fieldEntries = Object.keys(proposal.fields)
+  const fieldEntries = Object.keys(proposal.fields).filter((field) => field !== 'incomeId')
 
   return (
     <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
@@ -83,7 +97,7 @@ export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel 
                 {isMissing ? <span className="ml-1 text-rose-600 dark:text-rose-400">*</span> : null}
               </dt>
               <dd className="mt-0.5">
-                {field === 'currency' && editable ? (
+                {field === 'currency' && editable && proposal.kind !== 'mark_income_reported' ? (
                   <select
                     aria-label={FIELD_LABEL.currency}
                     className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900"
@@ -95,7 +109,17 @@ export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel 
                       <option key={code} value={code}>{code}</option>
                     ))}
                   </select>
-                ) : editable ? (
+                ) : field === 'goalType' && editable ? (
+                  <select aria-label={FIELD_LABEL.goalType} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900" onChange={(event) => updateField(field, event.target.value)} value={(value as string) ?? ''}>
+                    <option value="saving">Ahorro mensual</option>
+                    <option value="expense_limit">Límite de gasto mensual</option>
+                    <option value="income_target">Objetivo de ingreso mensual</option>
+                  </select>
+                ) : field === 'format' && editable ? (
+                  <select aria-label={FIELD_LABEL.format} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900" onChange={(event) => updateField(field, event.target.value)} value={(value as string) ?? ''}>
+                    <option value="pdf">PDF</option>
+                  </select>
+                ) : editable && proposal.kind !== 'mark_income_reported' && field !== 'includedData' && field !== 'period' ? (
                   <input
                     aria-label={FIELD_LABEL[field] ?? field}
                     className={[
@@ -106,11 +130,11 @@ export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel 
                     ].join(' ')}
                     onChange={(event) => {
                       const raw = event.target.value
-                      const isNumeric = field === 'amount' || field === 'expectedAmount' || field === 'durationMinutes'
+                      const isNumeric = field === 'amount' || field === 'expectedAmount' || field === 'durationMinutes' || field === 'targetAmount'
                       updateField(field, raw === '' ? null : isNumeric ? Number(raw) : raw)
                     }}
                     placeholder={isMissing ? 'Obligatorio' : undefined}
-                    type={field === 'date' ? 'date' : field === 'time' ? 'time' : isNumeric(field) ? 'number' : 'text'}
+                    type={field === 'date' || field === 'startDate' || field === 'endDate' || field === 'periodStart' || field === 'periodEnd' ? 'date' : field === 'time' ? 'time' : isNumeric(field) ? 'number' : 'text'}
                     value={value === null || value === undefined ? '' : String(value)}
                   />
                 ) : (
@@ -151,7 +175,7 @@ export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel 
 }
 
 function isNumeric(field: string): boolean {
-  return field === 'amount' || field === 'expectedAmount' || field === 'durationMinutes'
+  return field === 'amount' || field === 'expectedAmount' || field === 'durationMinutes' || field === 'targetAmount'
 }
 
 export default AssistantProposalCard

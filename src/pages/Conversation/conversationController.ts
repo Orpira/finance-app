@@ -8,6 +8,7 @@ import {
 import type { ChatMessage } from '../../intelligence/mock-conversational-renderer/mockConversationalRenderer'
 import type { CurrencyCode, UsageMode } from '../../types/settings'
 import type { FinancialCopilotQueryAnswer, FinancialCopilotSessionSnapshot } from '../../intelligence/deterministic-copilot'
+import type { CopilotActionPreparation } from '../../services/copilotActionProposalService'
 import {
   createInitialConversationUiState,
   type ConversationUiMessage,
@@ -41,6 +42,7 @@ export interface ConversationControllerDependencies {
   readonly clearLocalContext?: () => void
   readonly getLocalContext?: () => FinancialCopilotSessionSnapshot | null
   readonly removeLocalContextFilter?: (filter: 'period' | 'currency' | 'category') => void
+  readonly prepareContextualAction?: (message: string) => Promise<CopilotActionPreparation>
 }
 
 export interface ConversationController {
@@ -100,7 +102,10 @@ function createAssistantMessage(input: {
 function proposalKindLabel(kind: AssistantProposalRecord['kind']): string {
   if (kind === 'register_income') return 'ingreso'
   if (kind === 'register_expense') return 'gasto'
-  return 'cita'
+  if (kind === 'create_appointment') return 'cita'
+  if (kind === 'mark_income_reported') return 'actualización del ingreso'
+  if (kind === 'generate_report') return 'reporte'
+  return 'objetivo financiero'
 }
 
 function proposalSummaryText(proposal: AssistantProposalRecord): string {
@@ -121,13 +126,15 @@ function proposalSummaryText(proposal: AssistantProposalRecord): string {
 async function resolveInterpretation(
   dependencies: ConversationControllerDependencies,
   text: string,
-): Promise<ReturnType<typeof interpretAssistantMessage> | { readonly kind: 'no-action' }> {
+): Promise<ReturnType<typeof interpretAssistantMessage> | { readonly kind: 'no-action' } | { readonly kind: 'message'; readonly text: string }> {
   if (dependencies.getAssistantContext === undefined) {
     return { kind: 'no-action' }
   }
 
   try {
     const context = await dependencies.getAssistantContext()
+    const contextual = await dependencies.prepareContextualAction?.(text)
+    if (contextual?.kind === 'proposal' || contextual?.kind === 'message') return contextual
     return interpretAssistantMessage(text, context)
   } catch {
     return { kind: 'no-action' }
@@ -267,6 +274,20 @@ export function createConversationController(
         return
       }
 
+      if (interpretation.kind === 'message') {
+        emit({
+          status: 'ready',
+          messages: [...baseMessages, createAssistantMessage({
+            id: `conversation:assistant:contextual:${turn}`,
+            text: interpretation.text,
+            createdAt: now(),
+            responseType: 'local-calculation',
+          })],
+          errorMessage: null,
+        })
+        return
+      }
+
       if (dependencies.answerLocalQuery !== undefined) {
         let localAnswer: FinancialCopilotQueryAnswer | null
         try {
@@ -391,6 +412,7 @@ export function createConversationController(
           id: `conversation:assistant:confirmed:${input.messageId}`,
           text: `Listo, registré tu ${proposalKindLabel(completedProposal.kind)}.`,
           createdAt: now(),
+          responseType: 'executed-action',
         })
 
         emit({

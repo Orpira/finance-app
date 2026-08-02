@@ -27,6 +27,7 @@ import {
 } from '../../intelligence/ai-provider/aiProvider'
 import { getSettings } from '../../services/settingsService'
 import { createLocalFinancialCopilotQueryHandler } from '../../services/financialCopilotService'
+import { createCopilotActionProposalService } from '../../services/copilotActionProposalService'
 import {
   createPromptContextBuilder,
 } from '../../intelligence/prompt-context-builder'
@@ -301,10 +302,15 @@ export function createConversationControllerDependencies(
 
   const conversationService = createAIConversationService(conversationServiceDependencies)
   const localCopilot = createLocalFinancialCopilotQueryHandler()
+  const contextualActions = createCopilotActionProposalService()
 
   return {
     answerLocalQuery(message) {
       return localCopilot.answer(message)
+    },
+    async prepareContextualAction(message) {
+      const settings = await getSettings()
+      return contextualActions.prepare(message, { defaultCurrency: settings.defaultCurrency })
     },
     clearLocalContext() {
       localCopilot.clearMemory()
