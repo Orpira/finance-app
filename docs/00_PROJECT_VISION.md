@@ -85,3 +85,9 @@ Esto reordena las prioridades del resumen anterior sin invalidarlo:
 - Los cálculos financieros siguen siendo deterministas; la IA explica y propone, nunca calcula saldos oficiales ni actúa sin confirmación explícita del usuario.
 
 Ver [ADR-029](adr/ADR-029-Private-Balance-Core-Redesign.md) para el detalle de la decisión y su alcance.
+
+## Iteración 4 — Copiloto Financiero
+
+Private Balance ya no se limita a registrar actividad: Inicio interpreta el contexto local mediante reglas deterministas y muestra solo prioridades actuales, salud financiera comprensible, insights explicables, un resumen natural y siguientes pasos. El Asistente resuelve las consultas financieras frecuentes de forma local antes de considerar cualquier proveedor.
+
+Esta evolución mantiene intacta la promesa de producto: el usuario conserva el control, los cálculos oficiales proceden de los servicios financieros existentes y ninguna sugerencia ejecuta acciones por sí sola. Ver [Copiloto Financiero Determinista](architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md).

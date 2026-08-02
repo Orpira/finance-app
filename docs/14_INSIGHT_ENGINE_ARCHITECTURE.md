@@ -1,5 +1,7 @@
 # 14. Insight Engine Architecture
 
+> **Nota de integración 2026-08-02:** este documento conserva el diseño contractual del Insight Engine trazable. La Iteración 4 añadió un consumidor de producto complementario, el [Copiloto Financiero Determinista](architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md), que proyecta agregados de servicios existentes en Inicio y Asistente. No sustituye contratos, repositorio, runtime ni dashboard de Insights y no persiste nuevos insights.
+
 ## 1. Proposito
 
 Milestone 6A establece la base contractual del Insight Engine para Private Balance.

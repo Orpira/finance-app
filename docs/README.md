@@ -19,6 +19,7 @@ Este directorio contiene la documentación oficial del proyecto. La fuente canó
 - [04_N8N_WORKFLOWS.md](04_N8N_WORKFLOWS.md) - Inventario y riesgos de workflows n8n.
 - [05_EVOLUTION_API.md](05_EVOLUTION_API.md) - Integración con Evolution API (proveedor `evolution`; ver también `whatsapp/` para el proveedor alternativo `meta-cloud`).
 - [07_AI_ROADMAP.md](07_AI_ROADMAP.md) - Ruta futura de IA.
+- [architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md](architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md) - Arquitectura implementada del copiloto local, sus reglas, consultas, memoria y límites.
 - [08_DEPLOYMENT.md](08_DEPLOYMENT.md) - Despliegue y entornos.
 - [AUTOMATION_HUB.md](AUTOMATION_HUB.md) - Contrato de automatización entre app, Vercel y n8n.
 - [DOCUMENTACION_TECNICA.md](DOCUMENTACION_TECNICA.md) - Documento técnico histórico y detallado.

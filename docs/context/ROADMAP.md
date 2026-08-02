@@ -23,6 +23,12 @@ Objetivo: implementar el primer flujo completo Usuario → Interpretación → P
 
 Entregables: los tres flujos de acción funcionando end-to-end con tests; frontera 8A conectada para ese flujo (modo local); "Canales de comunicación" oculto de la experiencia de usuario (código conservado); corrección de un hallazgo de seguridad real (`VITE_OPENAI_API_KEY` sin bloquear en `vite.config.ts`, commit `bca00bb`).
 
+## Fase P3 - Primer Copiloto Financiero (completada)
+
+Objetivo: ayudar a decidir y actuar con los datos existentes, sin IA ni pantallas nuevas.
+
+Entregables: motor determinista compartido; prioridades de hoy; salud financiera por estados; insights y explicaciones; resumen natural; acciones sugeridas; seis consultas locales; memoria efímera de sesión. Arquitectura: [20_DETERMINISTIC_FINANCIAL_COPILOT.md](../architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md).
+
 ## Fase R1 - Robustez operativa (corto plazo)
 
 Objetivo: cerrar riesgos críticos de automatización y gobernanza.

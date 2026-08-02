@@ -2,6 +2,8 @@
 
 Ver [ADR-030](../adr/ADR-030-Intelligent-Assistant-Platform.md) y [17_INTELLIGENT_ASSISTANT_DEFINITIVE_ARCHITECTURE.md](../architecture/17_INTELLIGENT_ASSISTANT_DEFINITIVE_ARCHITECTURE.md). Cubre las entregas 3 (mapa conversacional), 6 (tipos de interacción / parser), 10 (flujos) y 11 (wireframes conceptuales).
 
+> **Estado vigente (Iteración 4, 2026-08-02):** las acciones de ingreso, gasto y cita ya están implementadas mediante parser determinista y confirmación obligatoria (ADR-031). Además, seis consultas financieras frecuentes se resuelven localmente mediante el [Copiloto Financiero Determinista](../architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md), antes del pipeline de proveedor. Las secciones históricas que describen acciones como no implementadas o recomiendan no usar parser quedan como contexto del diseño previo y no describen el runtime actual.
+
 ## 1. Catálogo de intenciones
 
 Dos familias, con tratamiento arquitectónico distinto (ver documento de arquitectura):
@@ -12,7 +14,7 @@ Dos familias, con tratamiento arquitectónico distinto (ver documento de arquite
 |---|---|---|
 | `query_balance` | "¿Cuánto gané esta semana?" / "¿Cuánto tengo disponible?" | `financial_balance` |
 | `query_transactions` | "Muéstrame este mes" / "¿Qué gasté en transporte?" | `financial_transactions` |
-| `query_unreported_income` | "¿Qué ingresos siguen sin reportarse?" | **no existe tool dedicada** — hoy solo vía `IncomePendingReportPage`/`getPendingIncomeSummary()`; se recomienda una tool nueva de solo lectura que envuelva ese servicio (ver arquitectura) |
+| `query_unreported_income` | "¿Qué ingresos siguen sin reportarse?" | Copiloto local sobre `getPendingIncomeSummary()`; no requiere tool ni proveedor |
 | `compare_periods` | "Compara este mes con el anterior" / "Compárame julio con agosto" | `financial_insights` (parcial, vía cutoffs/temporadas) — se recomienda una tool explícita `compare_periods` sobre `earningPeriodService`/`balanceReportService` |
 | `query_best_period` | "¿Cuál fue mi mejor semana?" | `getSeasonStatistics` (bestDay), sin tool expuesta directamente |
 | `query_budget` / `query_goals` | "¿Cómo voy con mi presupuesto?" | `financial_budget` / `financial_goals` (nota: son reconstrucciones sobre cutoffs/temporadas, no entidades reales — la respuesta del asistente debe ser honesta sobre esto, no inventar un "presupuesto" que el usuario nunca configuró) |

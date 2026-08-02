@@ -2,7 +2,7 @@
 
 **Estado:** Activo  
 **Versión:** 1.0  
-**Última actualización:** 2026-07-21  
+**Última actualización:** 2026-08-02
 **Ámbito:** Producto, arquitectura, gobierno técnico y roadmap  
 **Audiencia:** Desarrollo, arquitectura, QA, seguridad, operaciones y agentes de IA
 
@@ -111,15 +111,16 @@ Private Balance distingue siempre entre arquitectura **implementada**, **parcial
 | Financial Snapshot | Implementada como derivado controlado | `src/intelligence/financial-snapshot` |
 | Knowledge Layer | Implementada como derivado controlado | `src/intelligence/knowledge-layer` |
 | Insight Engine + dashboard | Implementada | `src/insight`, `src/pages/Insights` |
+| Copiloto financiero determinista | Implementado | `src/intelligence/deterministic-copilot`, `src/services/financialCopilotService.ts` |
 | AI Privacy Boundary | Implementada | `src/intelligence/ai-foundation` |
 | Authorized Context Builder | Implementada | `src/intelligence/ai-foundation` |
 | LLM adapter contracts | Implementada | `src/intelligence/ai-foundation` |
 | Provider capability registry | Implementada | `src/intelligence/ai-foundation` |
 | Adapter compliance suite | Implementada | `src/intelligence/ai-foundation` |
 | Mock LLM pipeline | Implementada | `src/intelligence/ai-foundation` |
-| Conversation domain | Siguiente fase | Fase 9A |
-| Conversation memory | Planificada | Fase 10 |
-| Proveedor LLM real | No implementado | Futuro ADR + adaptador |
+| Conversation domain | Implementado | `src/intelligence/ai-conversation`, `src/pages/Conversation` |
+| Memoria contextual efímera del copiloto | Implementada | `financialCopilotSessionMemory.ts` |
+| Proveedor LLM real | Implementado como integración opcional | adaptador provider-neutral + proxy serverless |
 | Sincronización multidispositivo | Planificada | Fase posterior |
 | Cifrado extremo a extremo para sync | Planificado | Precondición de sync |
 

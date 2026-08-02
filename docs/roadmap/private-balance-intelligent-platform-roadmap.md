@@ -35,17 +35,23 @@ Ver [ADR-031](../adr/ADR-031-Assistant-Action-Flow-Implementation.md) y [19_ASSI
 - `mark_income_reported`, `generate_report`, `create_season`/`close_season` **no** se implementaron — quedan en la Iteración 4.
 - Pendiente de esta iteración: botón visible de "Borrar conversación" en la UI (`clearMemory` ya existe en el backend, ADR-026).
 
-### Iteración 4 — Resto de acciones + tools de consulta faltantes
+### Iteración 4 — Primer Copiloto Financiero ✅ implementada (2026-08-02)
 
-- Acciones: `mark_income_reported`, `generate_report`, `create_season`/`close_season`, siguiendo el mismo patrón (parser determinista + Execution Guard + servicio real), salvo que se decida que alguna sí necesita interpretación por IA (frases más abiertas) — evaluar caso por caso.
-- Consultas: `financial_unreported_income`, `compare_periods`, `best_period`, `smart_insights` (puente al Insight Engine real) como tools `read-only` del pipeline conversacional existente (`ai-tools/financial/*`), envolviendo servicios ya probados.
-- Botón de "Borrar conversación" visible en la UI del Asistente.
+- Motor local de reglas para insights, prioridades del día, salud financiera sin puntuación, resumen natural y acciones sugeridas.
+- Snapshot común sobre servicios financieros existentes, sin nuevas tablas, fórmulas ni fuentes de verdad.
+- Seis consultas naturales resueltas localmente antes del proveedor, siempre con explicación.
+- Memoria efímera por sesión para periodo, moneda, última consulta y categoría; no persiste prompts ni respuestas.
+- Integración en Inicio y Asistente sin crear pantallas.
 
-### Iteración 5 — Conectar 8A al camino de consulta (requiere UI de consentimiento)
+Quedan para iteraciones posteriores las acciones `mark_income_reported`, `generate_report`, `create_season`/`close_season`, la entidad real de objetivos y la consolidación sobre read models trazables del Insight Engine.
 
-- Diseñar y construir la UI mínima de consentimiento para `EXTERNAL_PROVIDER` (la política ya exige `AIConsentRecord`; hoy no hay forma de otorgarlo).
-- Insertar `AIPrivacyBoundary.authorize()` en el camino real de consulta (`conversationComposition.ts` → `provider-orchestration`), no en `aiExecutionPipeline.ts`.
-- Resolver, como parte de este trabajo, cuál composition root (`conversationComposition.ts` vs. `aiConversationApplicationComposition.ts`) debería ser la fuente de verdad — hoy conviven dos, solo una está conectada a la UI real (ver ADR-031).
+### Iteración 5 — Continuidad contextual y acciones seguras
+
+- Añadir seguimientos deterministas que reutilicen periodo y categoría de sesión, por ejemplo "¿y el mes anterior?".
+- Implementar propuestas confirmables para marcar ingresos reportados y generar reportes.
+- Definir una entidad real de objetivo antes de mostrar progreso hacia metas.
+- Consolidar el Copiloto sobre read models del Insight Engine preservando evidencia y trazabilidad.
+- Diseñar consentimiento explícito antes de ampliar cualquier consulta a `EXTERNAL_PROVIDER`.
 
 ### Iteración 6 — Consolidación de Movimientos e Inicio
 

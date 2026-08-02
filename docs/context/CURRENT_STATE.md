@@ -36,6 +36,8 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 
 ### AI Foundation
 
+- Iteración 4: Copiloto Financiero Determinista integrado en Inicio y Asistente. Consume únicamente servicios locales de lectura, genera prioridades, salud, insights, resumen y acciones, responde seis consultas naturales antes del proveedor y conserva contexto solo en RAM durante la sesión.
+
 - Adapter financiero + shadow/promotion controlados.
 - Snapshot/Knowledge pipelines implementados como derivados.
 - Dashboard Insights (7F) integrado en modo profesional.
