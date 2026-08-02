@@ -3,6 +3,8 @@
 **Estado:** implementado en Iteración 4  
 **Fecha:** 2026-08-02
 
+> Este documento conserva la línea base de Iteración 4. Las ampliaciones de evidencia, memoria, objetivos y acciones confirmables están documentadas en [22_EXPLAINABLE_FINANCIAL_INTELLIGENCE.md](22_EXPLAINABLE_FINANCIAL_INTELLIGENCE.md) y [23_CONTEXTUAL_COPILOT_MEMORY.md](23_CONTEXTUAL_COPILOT_MEMORY.md).
+
 ## Objetivo
 
 El Copiloto Financiero convierte datos locales ya calculados en ayuda breve y accionable sin crear nuevas pantallas, llamar a un modelo de IA ni modificar registros. Sus consumidores actuales son Inicio y el Asistente licenciado.
@@ -40,7 +42,7 @@ financialCopilotEngine (reglas puras y deterministas)
 - Resumen natural con conteos, tendencia de ingresos y pendientes.
 - Acciones sugeridas como enlaces; ninguna acción se ejecuta automáticamente.
 
-No se evalúan objetivos mensuales porque Private Balance no tiene una entidad local de objetivo configurado. El motor no inventa uno a partir de temporadas o presupuestos reconstruidos.
+En Iteración 4 todavía no existían objetivos reales. Iteración 5 añadió `financialGoals` sin reutilizar ni presentar temporadas como objetivos.
 
 ## Consultas locales
 
@@ -60,7 +62,7 @@ El Insight Engine canónico (`src/insight`) conserva sus contratos, evidencia y 
 
 ## Límites
 
-- No escribe ingresos, gastos, citas ni estados de reporte.
+- La consulta sigue siendo de solo lectura. Desde Iteración 5, una capa separada puede preparar propuestas confirmables para estado de reporte, PDF y objetivos.
 - No cambia fórmulas ni recalcula registros históricos.
 - No persiste conversaciones ni añade migraciones Dexie.
 - No depende de red; funciona en web, PWA y APK con los mismos servicios locales.

@@ -46,18 +46,21 @@ Ver [ADR-031](../adr/ADR-031-Assistant-Action-Flow-Implementation.md) y [19_ASSI
 
 Quedan para iteraciones posteriores las acciones `mark_income_reported`, `generate_report`, `create_season`/`close_season`, la entidad real de objetivos y la consolidación sobre read models trazables del Insight Engine.
 
-### Iteración 5 — Continuidad contextual y acciones seguras
+### Iteración 5 — Inteligencia explicable y continuidad contextual ✅ implementada (2026-08-02)
 
-- Añadir seguimientos deterministas que reutilicen periodo y categoría de sesión, por ejemplo "¿y el mes anterior?".
-- Implementar propuestas confirmables para marcar ingresos reportados y generar reportes.
-- Definir una entidad real de objetivo antes de mostrar progreso hacia metas.
-- Consolidar el Copiloto sobre read models del Insight Engine preservando evidencia y trazabilidad.
-- Diseñar consentimiento explícito antes de ampliar cualquier consulta a `EXTERNAL_PROVIDER`.
+- Seguimientos deterministas con contexto eliminable en RAM.
+- Propuestas confirmables para un ingreso, PDF y objetivos.
+- Entidad `financialGoals` y progreso determinista.
+- Nueve read models con evidencia y trazabilidad común.
+- Home limitado y Movimientos con filtros compartidos/deep links.
 
-### Iteración 6 — Consolidación de Movimientos e Inicio
+### Iteración 6 — Robustez y cierre de deuda
 
-- Unificar de verdad `IncomeListPage`/`ExpenseListPage`/`MovementsPage` (hoy la segunda envuelve a las dos primeras) en una sola vista con filtros compartidos.
-- Migrar el "resumen inteligente" de `HomePage` al Insight Engine real, evaluando extender su disponibilidad más allá de licencias no-trial/modo profesional si el producto lo requiere para Básico.
+- Auditoría completa de accesibilidad (DT-003).
+- Optimización medida del bundle (DT-001).
+- Estrategia de Service Worker (DT-002).
+- Exportación CSV unificada para ingresos y gastos.
+- Validación visual ampliada en dispositivos Android.
 
 ### Iteración 7 — Limpieza de pantallas identificadas en la auditoría
 

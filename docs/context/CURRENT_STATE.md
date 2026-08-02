@@ -15,7 +15,7 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 
 ### Persistencia local
 
-- Dexie en versión 26.
+- Dexie en versión 30; `financialGoals` se añadió de forma aditiva y está incluido en backup/restauración.
 - Tablas financieras operativas estables.
 - Snapshots financieros y de conocimiento append-only.
 - Memoria conversacional local persistente por sesion con restauracion en reapertura.
@@ -37,7 +37,7 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 
 ### AI Foundation
 
-- Iteración 4: Copiloto Financiero Determinista integrado en Inicio y Asistente. Consume únicamente servicios locales de lectura, genera prioridades, salud, insights, resumen y acciones, responde seis consultas naturales antes del proveedor y conserva contexto solo en RAM durante la sesión.
+- Iteración 5: Copiloto explicable con nueve read models trazables, evidencia estructurada, salud con reglas públicas, seguimientos locales, contexto eliminable en RAM, propuestas confirmables de reporte/estado de ingreso/objetivo y objetivos financieros persistidos con progreso determinista.
 
 - Adapter financiero + shadow/promotion controlados.
 - Snapshot/Knowledge pipelines implementados como derivados.

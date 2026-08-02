@@ -10,7 +10,7 @@ Entregables de la primera iteración:
 - navegación consolidada Inicio/Movimientos/Agenda/Asistente/Más (hecho);
 - Inicio con ingresos sin reportar, acciones rápidas, agenda próxima, resumen inteligente (ad-hoc, ver corrección en P1) y actividad reciente (hecho);
 - Asistente promovido a experiencia principal, con la *nota* de propuesta→confirmación visible en la UI (hecho) — esa garantía ya es real desde la Fase P2 (el flujo de propuesta→confirmación no existía en la Fase P0, se implementó en P2);
-- pendiente: vista "Todos" de Movimientos con filtros avanzados equivalentes a Ingresos/Egresos;
+- vista "Todos" de Movimientos con filtros compartidos y deep links contextuales (hecho en Iteración 5);
 - pendiente: verificación visual en navegador (bloqueada en este entorno por el backend de licencias, ver informe de la iteración).
 
 ## Fase P1 - Intelligent Assistant Platform, diseño (completada, ver ADR-030)
@@ -32,6 +32,10 @@ Entregables: motor determinista compartido; prioridades de hoy; salud financiera
 ## Experiencia gratuita del Asistente (completada)
 
 El bloqueo total de `/conversation` para `trial` fue reemplazado por un sandbox guiado. Permite escribir frases y recibir propuestas o consultas simuladas con datos ficticios, sin IA, red, Dexie ni persistencia. Arquitectura: [21_FREE_ASSISTANT_GUIDED_SANDBOX.md](../architecture/21_FREE_ASSISTANT_GUIDED_SANDBOX.md).
+
+## Fase P4 - Inteligencia explicable y continuidad contextual (completada)
+
+Entregables: evidencia estructurada, nueve read models comunes, memoria RAM ampliada y eliminable, seguimientos locales, propuestas confirmables para un ingreso/reporte/objetivo, objetivos Dexie v30, salud explicable, Home limitado y Movimientos con filtros compartidos. No incluye acciones masivas, agentes autónomos ni predicción generativa.
 
 ## Fase R1 - Robustez operativa (corto plazo)
 
