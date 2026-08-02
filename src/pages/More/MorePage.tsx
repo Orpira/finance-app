@@ -37,7 +37,7 @@ const moreSections = [
     title: 'Copiloto',
     links: [
       {
-        description: 'Visualiza insights proyectados desde el motor con estado seguro.',
+        description: 'Revisa análisis y recomendaciones basados en tus datos locales.',
         href: '/dashboard',
         icon: Lightbulb,
         label: 'Análisis del Copiloto',

@@ -49,7 +49,7 @@ const FIELD_LABEL: Readonly<Record<string, string>> = {
   goalType: 'Tipo de objetivo',
   name: 'Nombre',
   targetAmount: 'Importe objetivo',
-  period: 'Periodo',
+  period: 'Período',
   startDate: 'Inicio',
   endDate: 'Fin',
   currentStatus: 'Estado actual',

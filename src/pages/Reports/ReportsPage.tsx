@@ -476,7 +476,7 @@ export function ReportsPage() {
       selectedCountry === 'ALL' ? 'Todos los países' : getCountryLabel(selectedCountry)
     const cityLabel = selectedCity === 'ALL' ? 'Todas las ciudades' : selectedCity
     const filters = [
-      `Periodo: ${dateFrom || '-'} - ${dateTo || '-'}`,
+      `Período: ${dateFrom || '-'} - ${dateTo || '-'}`,
       `País: ${countryLabel}`,
       `Ciudad: ${cityLabel}`,
       selectedPaymentType !== 'ALL'
@@ -503,7 +503,7 @@ export function ReportsPage() {
       selectedCountry === 'ALL' ? 'Todos los países' : getCountryLabel(selectedCountry)
     const cityLabel = selectedCity === 'ALL' ? 'Todas las ciudades' : selectedCity
     const filters = [
-      `Periodo: ${dateFrom || '-'} - ${dateTo || '-'}`,
+      `Período: ${dateFrom || '-'} - ${dateTo || '-'}`,
       `País: ${countryLabel}`,
       `Ciudad: ${cityLabel}`,
       selectedPaymentType !== 'ALL'
@@ -916,7 +916,7 @@ export function ReportsPage() {
     if (adjustments.length === 0) {
       return `
         <h2>Ajustes</h2>
-        <p class="empty">No hay ajustes en el periodo seleccionado.</p>
+        <p class="empty">No hay ajustes en el período seleccionado.</p>
       `
     }
 
@@ -979,7 +979,7 @@ export function ReportsPage() {
           .map((row) => `${row.label}: ${row.count} | ${formatCurrency(row.total, primaryCurrency)}`)
           .join('\n')
     const adjustmentsText = balanceReport.adjustments.length === 0
-      ? 'Sin ajustes en el periodo seleccionado.'
+      ? 'Sin ajustes en el período seleccionado.'
       : balanceReport.adjustments
           .map(
             (adjustment) =>
@@ -1221,7 +1221,7 @@ export function ReportsPage() {
       const cityLabel = selectedCity === 'ALL' ? 'Todas las ciudades' : selectedCity
       const extraFilters = [
         !isBasicUser ? `Temporada: ${seasonLabel}` : '',
-        `Periodo: ${dateFrom || '-'} - ${dateTo || '-'}`,
+        `Período: ${dateFrom || '-'} - ${dateTo || '-'}`,
         `País: ${countryLabel}`,
         `Ciudad: ${cityLabel}`,
       ]
@@ -1230,7 +1230,7 @@ export function ReportsPage() {
         .join(' · ')
       const textFilters = [
         !isBasicUser ? `Temporada: ${seasonLabel}` : '',
-        `Periodo: ${dateFrom || '-'} - ${dateTo || '-'}`,
+        `Período: ${dateFrom || '-'} - ${dateTo || '-'}`,
         `País: ${countryLabel}`,
         `Ciudad: ${cityLabel}`,
       ]
@@ -1337,7 +1337,7 @@ export function ReportsPage() {
     })
     if (!validation.valid) {
       setPendingGeneration(false)
-      await alert({ type: 'error', title: 'Configuración inválida', message: 'Revisa el periodo y el formato antes de generar el reporte.' })
+      await alert({ type: 'error', title: 'Configuración inválida', message: 'Revisa el período y el formato antes de generar el reporte.' })
       return
     }
     setPendingGeneration(false)

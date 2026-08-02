@@ -132,8 +132,8 @@ function AllMovementsTab() {
       </label>
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-6" aria-label="Filtros de movimientos">
-        <select aria-label="Periodo" className="h-11 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-800 dark:bg-slate-900" onChange={(event) => setFilter('period', event.target.value)} value={filters.period}>
-          <option value="all">Todo el periodo</option><option value="current_month">Mes actual</option>
+        <select aria-label="Período" className="h-11 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-800 dark:bg-slate-900" onChange={(event) => setFilter('period', event.target.value)} value={filters.period}>
+          <option value="all">Todo el período</option><option value="current_month">Mes actual</option>
         </select>
         <select aria-label="Tipo" className="h-11 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-800 dark:bg-slate-900" onChange={(event) => setFilter('type', event.target.value)} value={filters.type}>
           <option value="all">Todos los tipos</option><option value="income">Ingresos</option><option value="expense">Gastos</option>

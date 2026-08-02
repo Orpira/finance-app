@@ -78,7 +78,7 @@ function createExecutionPlan(input: {
 function timeoutError(): InsightDashboardUseCaseError {
   return {
     code: 'INSIGHT_DASHBOARD_TIMEOUT',
-    message: 'La carga del dashboard excedio el tiempo de espera local.',
+    message: 'El análisis tardó más de lo esperado. Inténtalo de nuevo.',
   }
 }
 
@@ -192,7 +192,7 @@ function normalizeUseCaseError(error: unknown): InsightDashboardUseCaseError {
 
   return {
     code: 'INSIGHT_DASHBOARD_READ_FAILED',
-    message: 'No fue posible leer los datos financieros del dashboard.',
+    message: 'No fue posible leer tus datos financieros para el análisis.',
   }
 }
 
@@ -247,7 +247,7 @@ export function createInsightDashboardUseCase(
           kind: 'error',
           error: {
             code: 'INSIGHT_DASHBOARD_INSIGHT_ENGINE_FAILED',
-            message: 'No fue posible ejecutar el motor de insights financieros.',
+            message: 'No fue posible generar el análisis financiero.',
           },
         }
       }
@@ -267,7 +267,7 @@ export function createInsightDashboardUseCase(
           })
         } catch {
           isPartial = true
-          warnings.push('No fue posible generar el plan de accion; se muestran insights parciales.')
+          warnings.push('No fue posible generar el plan de acción; se muestra un análisis parcial.')
         }
       }
 

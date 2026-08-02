@@ -341,7 +341,7 @@ export function createConversationController(
             response: localAnswer.text,
             explanation: localAnswer.explanation,
             evidence: [
-              `Periodo: ${queryPeriodLabel(localAnswer.period)}.`,
+              `Período: ${queryPeriodLabel(localAnswer.period)}.`,
               'Fuente: cálculos locales de Private Balance.',
             ],
             recommendedAction: localAnswer.intent === 'financial-goal-progress'

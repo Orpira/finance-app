@@ -26,7 +26,7 @@ export function validateInsightDashboardSnapshot(
   ) {
     return {
       code: 'INSIGHT_DASHBOARD_VIEWMODEL_INVALID',
-      message: 'El snapshot del dashboard no cumple el contrato esperado.',
+      message: 'No se pudo validar la información del análisis.',
     }
   }
 
@@ -45,7 +45,7 @@ export function validateInsightDashboardViewModel(
   ) {
     return {
       code: 'INSIGHT_DASHBOARD_VIEWMODEL_INVALID',
-      message: 'El ViewModel del dashboard no cumple el contrato esperado.',
+      message: 'No se pudo preparar la información del análisis.',
     }
   }
 

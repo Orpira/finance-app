@@ -103,7 +103,7 @@ export function createInsightDashboardController(
           status: 'error',
           error: {
             code: 'INSIGHT_DASHBOARD_READ_FAILED',
-            message: 'La carga del dashboard fallo por un error inesperado.',
+            message: 'No fue posible cargar el análisis. Inténtalo de nuevo.',
           },
         })
       }

@@ -24,7 +24,7 @@ export function InsightSummary({ viewModel }: InsightSummaryProps) {
         className="text-lg font-semibold text-slate-950"
         id="insights-summary-title"
       >
-        Resumen general de insights
+        Resumen del análisis
       </h2>
 
       <p className="mt-2 text-sm text-slate-600">{viewModel.subtitle}</p>
@@ -75,7 +75,7 @@ export function InsightSummary({ viewModel }: InsightSummaryProps) {
           </strong>
         </p>
         <p>
-          Insights priorizados:{' '}
+          Análisis priorizados:{' '}
           <strong className="text-slate-900">
             {viewModel.insights.length}
           </strong>
@@ -87,7 +87,7 @@ export function InsightSummary({ viewModel }: InsightSummaryProps) {
           </strong>
         </p>
         <p>
-          Ultima actualizacion:{' '}
+          Última actualización:{' '}
           <strong className="text-slate-900">
             {viewModel.generatedAtLabel}
           </strong>

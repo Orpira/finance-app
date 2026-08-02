@@ -14,8 +14,8 @@ export function InsightDashboardPage() {
       <PageHeader
         backLabel="Resumen completo"
         backTo="/resumen-completo"
-        eyebrow="Insight Engine"
-        title="Dashboard de insights"
+        eyebrow="Resumen completo"
+        title="Análisis financiero"
       />
 
       <InsightDashboard

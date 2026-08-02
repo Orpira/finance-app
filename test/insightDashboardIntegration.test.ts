@@ -33,7 +33,7 @@ function deferred<T>() {
 
 function createViewModel(overrides: Partial<InsightDashboardViewModel> = {}): InsightDashboardViewModel {
   return {
-    title: 'Dashboard de insights financieros',
+    title: 'Análisis financiero',
     subtitle: 'Proyeccion read-only sobre motores financieros certificados.',
     generatedAt: '2026-07-24T00:00:00.000Z',
     generatedAtLabel: '24 jul 2026, 00:00',

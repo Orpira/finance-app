@@ -33,7 +33,7 @@ export function InsightLoadingView() {
       className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm"
       role="status"
     >
-      Cargando insights del dashboard...
+      Cargando análisis financiero...
     </section>
   )
 }
@@ -45,9 +45,9 @@ export function InsightEmptyView({ onReload }: InsightStateViewProps) {
       className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm"
       role="status"
     >
-      <p className="font-semibold text-slate-900">Aun no hay suficientes datos financieros</p>
+      <p className="font-semibold text-slate-900">Aún no hay suficientes datos financieros</p>
       <p className="mt-1">
-        Registra ingresos o egresos para comenzar y generar insights del dashboard.
+        Registra ingresos o egresos para comenzar a generar tu análisis financiero.
       </p>
       <div className="mt-4">
         <ReloadButton onReload={onReload} />
@@ -68,7 +68,7 @@ export function InsightRejectedView({
     >
       <p className="font-semibold">Contenido parcial disponible</p>
       <p className="mt-1">
-        Se cargaron insights, pero una parte del procesamiento no pudo completarse.
+        Se cargó parte del análisis, pero el procesamiento no pudo completarse.
       </p>
       {warnings.length === 0 ? null : (
         <ul className="mt-2 list-disc pl-5 text-xs">
@@ -91,10 +91,10 @@ export function InsightErrorView({ error, onReload }: InsightErrorViewProps) {
       className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 shadow-sm"
       role="alert"
     >
-      <p className="font-semibold">Error al cargar insights</p>
+      <p className="font-semibold">Error al cargar el análisis</p>
       <p className="mt-1">{error.message}</p>
       <p className="mt-2 text-xs">
-        Codigo de error: <strong>{error.code}</strong>
+        Código de error: <strong>{error.code}</strong>
       </p>
       <div className="mt-4">
         <ReloadButton onReload={onReload} />

@@ -23,8 +23,8 @@ export function createInsightDashboardMapper(): InsightDashboardMapper {
       const recommendedActions = mapRecommendedActions(input.snapshot.actionPlan)
 
       return {
-        title: 'Dashboard de insights financieros',
-        subtitle: 'Proyeccion read-only sobre motores financieros certificados.',
+        title: 'Análisis financiero',
+        subtitle: 'Vista de solo lectura basada en cálculos financieros certificados.',
         generatedAt: input.snapshot.generatedAt,
         generatedAtLabel: toGeneratedAtLabel(input.snapshot.generatedAt),
         dataStatus: input.snapshot.isPartial ? 'partial' : 'complete',

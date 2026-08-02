@@ -11,12 +11,12 @@ const CATEGORY_LABELS: Readonly<Record<string, string>> = {
   goal: 'Meta',
   expense: 'Egreso',
   income: 'Ingreso',
-  subscription: 'Suscripcion',
+  subscription: 'Suscripción',
   health: 'Salud financiera',
 }
 
 const SEVERITY_LABELS: Readonly<Record<string, string>> = {
-  CRITICAL: 'Critica',
+  CRITICAL: 'Crítica',
   HIGH: 'Alta',
   MEDIUM: 'Media',
   LOW: 'Baja',
@@ -37,16 +37,16 @@ export function InsightList({ viewModel }: InsightListProps) {
       className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
     >
       <h2 className="text-lg font-semibold text-slate-950" id="insights-list-title">
-        Lista de insights
+        Análisis priorizados
       </h2>
 
-      <ul aria-label="Insights proyectados" className="mt-4 grid gap-3" role="list">
+      <ul aria-label="Análisis priorizados" className="mt-4 grid gap-3" role="list">
         {viewModel.insights.map((insight) => (
           <li key={insight.id}>
             <article className="rounded-lg border border-slate-200 p-4">
               <header className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                  Categoria: {labelFromMap(CATEGORY_LABELS, insight.category)}
+                  Categoría: {labelFromMap(CATEGORY_LABELS, insight.category)}
                 </span>
                 <span className="rounded-full border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700">
                   Severidad: {labelFromMap(SEVERITY_LABELS, insight.severity)}
@@ -58,13 +58,13 @@ export function InsightList({ viewModel }: InsightListProps) {
 
               <div className="mt-3 grid gap-1 text-sm text-slate-700">
                 <p>
-                  <strong>Titulo:</strong> {insight.title}
+                  <strong>Título:</strong> {insight.title}
                 </p>
                 <p>
-                  <strong>Descripcion:</strong> {insight.description}
+                  <strong>Descripción:</strong> {insight.description}
                 </p>
                 <p>
-                  <strong>Recomendacion:</strong> {insight.recommendation}
+                  <strong>Recomendación:</strong> {insight.recommendation}
                 </p>
               </div>
             </article>
@@ -74,7 +74,7 @@ export function InsightList({ viewModel }: InsightListProps) {
 
       {viewModel.actionPlan === null ? null : (
         <article className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-          <h3 className="text-base font-semibold">Financial Action Plan</h3>
+          <h3 className="text-base font-semibold">Plan de acción financiera</h3>
           <p className="mt-1 font-medium">{viewModel.actionPlan.title}</p>
           <p className="mt-2">{viewModel.actionPlan.summary}</p>
           <p className="mt-2">
@@ -99,7 +99,7 @@ export function InsightList({ viewModel }: InsightListProps) {
                     <strong>Tipo:</strong> {action.type}
                   </p>
                   <p>
-                    <strong>Descripcion:</strong> {action.description}
+                    <strong>Descripción:</strong> {action.description}
                   </p>
                   <p>
                     <strong>Beneficio esperado:</strong> {action.expectedBenefit}
