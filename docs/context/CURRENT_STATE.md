@@ -107,6 +107,7 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 - no alterar balances históricos;
 - no usar canal global sin contexto;
 - no confundir arquitectura objetivo con implementación actual.
+- hasta la versión 1.0, admitir nuevas funcionalidades solo cuando demuestren una mejora clara en comprensión, privacidad, velocidad o utilidad; la complejidad sin beneficio verificable queda fuera de alcance.
 
 ## 6) Veredicto de fase documental
 

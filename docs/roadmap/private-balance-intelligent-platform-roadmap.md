@@ -2,6 +2,19 @@
 
 Ver [ADR-030](../adr/ADR-030-Intelligent-Assistant-Platform.md). Cubre las entregas 12 (roadmap de evolución) y 13 (plan de implementación por iteraciones) de la segunda iteración del rediseño. Complementa, no reemplaza, `docs/context/ROADMAP.md` (fases R1-R4, deuda técnica de automatización).
 
+## 0. Criterio de entrada para nuevas funcionalidades
+
+Antes de incorporar una funcionalidad a una iteración previa a la versión 1.0, debe identificarse y poder validarse su beneficio para la comprensión, la privacidad, la velocidad o la utilidad de Private Balance. Si solo incrementa superficie funcional o complejidad técnica, debe aplazarse o descartarse.
+
+Cada propuesta de iteración debe indicar:
+
+- el problema concreto que resuelve;
+- el beneficio esperado y cómo se comprobará;
+- el coste de complejidad y mantenimiento;
+- por qué no puede alcanzarse el mismo beneficio simplificando una capacidad existente.
+
+La ausencia de una respuesta convincente deja la propuesta fuera del alcance de la versión 1.0. El criterio transversal y canónico de planificación se mantiene en [ROADMAP.md](../context/ROADMAP.md).
+
 ## 1. Evolución futura (arquitectura preparada, no implementada)
 
 ### IA local vs. IA cloud

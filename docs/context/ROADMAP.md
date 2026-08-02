@@ -1,5 +1,16 @@
 # Roadmap
 
+## Criterio de alcance hasta la versión 1.0
+
+Toda funcionalidad nueva debe demostrar un beneficio claro para el usuario o para la calidad del sistema. Para entrar en el alcance de la versión 1.0, una propuesta debe mejorar de forma verificable al menos uno de estos aspectos:
+
+- comprensión;
+- privacidad;
+- velocidad;
+- utilidad.
+
+Una idea que aumente la complejidad sin aportar una mejora clara en alguno de esos aspectos queda fuera de la versión 1.0. Este criterio debe aplicarse antes de planificar una iteración y durante su revisión de alcance, preservando la simplicidad como parte del valor diferencial de Private Balance.
+
 ## Fase P0 - Private Balance Core Redesign (completada para su alcance, ver ADR-029)
 
 Objetivo: núcleo (finanzas, agenda, reportes, asistente) operativo sin WhatsApp/Evolution/n8n, con esas integraciones conservadas pero opcionales.
