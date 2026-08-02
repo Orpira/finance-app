@@ -76,7 +76,7 @@ describe('AssistantInteractiveDemo para licencias gratuitas', () => {
     expect(source).toContain('¿Cuánto gané este mes?')
     expect(source).toContain('¿Qué ingresos siguen sin reportarse?')
     expect(source).toContain('resolveAssistantDemoResponse')
-    expect(source).toContain('El Asistente IA está listo para ayudarte.')
+    expect(source).toContain('El Copiloto está listo para ayudarte.')
     expect(source).toContain('to="/settings/license"')
 
     expect(source).not.toContain('conversationComposition')

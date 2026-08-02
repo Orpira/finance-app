@@ -23,7 +23,7 @@ function FreeAssistantExperience() {
         backLabel="Inicio"
         backTo="/"
         eyebrow="Private Balance"
-        title="Asistente"
+        title="Copiloto"
       >
         <Link
           className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -70,13 +70,13 @@ function LicensedConversationPage() {
         backLabel="Inicio"
         backTo="/"
         eyebrow="Private Balance"
-        title="Asistente"
+        title="Copiloto"
       />
 
       <ConversationHeader isSending={isSending} status={state.status} />
 
       {state.context?.lastQuery ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300" aria-label="Contexto activo del asistente">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300" aria-label="Contexto activo del Copiloto">
           {!state.context.hiddenFilters.includes('period') ? <button className="inline-flex min-h-9 items-center gap-1 rounded-md bg-slate-100 px-2 dark:bg-slate-800" aria-label="Quitar filtro de periodo" onClick={() => removeContextFilter('period')} type="button">Periodo: {state.context.period === 'previous_month' ? 'mes anterior' : state.context.period === 'previous_week' ? 'semana anterior' : state.context.period === 'yesterday' ? 'ayer' : 'actual'} <X className="size-3.5" aria-hidden="true" /></button> : null}
           {!state.context.hiddenFilters.includes('currency') ? <button className="inline-flex min-h-9 items-center gap-1 rounded-md bg-slate-100 px-2 dark:bg-slate-800" aria-label="Quitar filtro de moneda" onClick={() => removeContextFilter('currency')} type="button">Moneda: {state.context.currency} <X className="size-3.5" aria-hidden="true" /></button> : null}
           {state.context.lastCategory && !state.context.hiddenFilters.includes('category') ? <button className="inline-flex min-h-9 items-center gap-1 rounded-md bg-slate-100 px-2 dark:bg-slate-800" aria-label="Quitar filtro de categoría" onClick={() => removeContextFilter('category')} type="button">Categoría: {state.context.lastCategory} <X className="size-3.5" aria-hidden="true" /></button> : null}
@@ -141,7 +141,7 @@ export function ConversationPage() {
   if (licenseType === undefined) {
     return (
       <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">
-        Cargando asistente...
+        Cargando Copiloto...
       </section>
     )
   }

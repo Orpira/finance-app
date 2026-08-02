@@ -6,6 +6,7 @@ import {
   resolveAssistantDemoResponse,
   type AssistantDemoResponse,
 } from './assistantInteractiveDemoSandbox'
+import { CopilotResponseLayout } from './CopilotResponseLayout'
 
 type DemoPhase = 'intro' | 'sandbox' | 'complete'
 type DemoAction = 'edit' | 'cancel' | 'confirm'
@@ -84,10 +85,10 @@ export function AssistantInteractiveDemo() {
             <Sparkles className="size-5" aria-hidden="true" />
           </div>
           <h2 className="mt-4 text-2xl font-semibold text-slate-950 dark:text-white">
-            El Asistente IA está listo para ayudarte.
+            El Copiloto está listo para ayudarte.
           </h2>
           <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-            Con una licencia podrás utilizar el Asistente Inteligente con tus propios datos financieros, registrar movimientos mediante lenguaje natural, consultar balances, crear citas y recibir explicaciones inteligentes sobre tu información.
+            Con una licencia podrás utilizar el Copiloto con tus propios datos financieros, registrar movimientos mediante lenguaje natural, consultar balances, crear citas y recibir explicaciones sobre tu información.
           </p>
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
             <Link
@@ -120,7 +121,7 @@ export function AssistantInteractiveDemo() {
       {phase === 'intro' ? (
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <h2 className="text-xl font-semibold text-slate-950 dark:text-white">
-            Sandbox guiado del Asistente IA.
+            Sandbox guiado del Copiloto.
           </h2>
           <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
             Esta experiencia funciona en local, no usa proveedores externos, no consume IA y no consulta tu información financiera. Puedes escribir frases y recibir respuestas simuladas con datos ficticios.
@@ -174,18 +175,17 @@ export function AssistantInteractiveDemo() {
                 </div>
 
                 <article className="max-w-[92%] rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                  <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Asistente</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-900 dark:text-slate-100">{turn.response.assistant}</p>
-                  {turn.response.details.length > 0 ? (
-                    <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {turn.response.details.map((detail) => (
-                        <div className="rounded-md bg-slate-50 p-2 dark:bg-slate-800" key={`${turn.id}:${detail.label}:${detail.value}`}>
-                          <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{detail.label}</dt>
-                          <dd className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-white">{detail.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  ) : null}
+                  <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Copiloto</p>
+                  <CopilotResponseLayout
+                    evidence={turn.response.details.length > 0
+                      ? turn.response.details.map((detail) => `${detail.label}: ${detail.value}`)
+                      : ['Datos ficticios del sandbox local.']}
+                    explanation="La demostración aplica reglas locales sobre datos ficticios y no consulta información personal."
+                    recommendedAction={turn.response.kind === 'proposal'
+                      ? 'Revisa la propuesta simulada y elige editar, cancelar o confirmar.'
+                      : 'Prueba otra consulta sugerida para continuar la demostración.'}
+                    response={turn.response.assistant}
+                  />
 
                   {turn.response.kind === 'proposal' && turn.resultMessage === null ? (
                     <div className="mt-3 flex flex-wrap justify-end gap-2">

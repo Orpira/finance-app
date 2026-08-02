@@ -627,7 +627,7 @@ export function createAIConversationApplicationService(
           return failure('INVALID_CONVERSATION', 'La conversación activa es inválida.')
         }
 
-        return failure('SEND_MESSAGE_FAILED', 'No se pudo procesar la respuesta del asistente.', executionResult.retryable)
+        return failure('SEND_MESSAGE_FAILED', 'No se pudo procesar la respuesta del Copiloto.', executionResult.retryable)
       }
 
       debugConversationBoundary('application.updatedSession.returned', {

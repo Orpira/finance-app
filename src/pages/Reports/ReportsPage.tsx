@@ -1,4 +1,4 @@
-import { CalendarRange, Eye, FileSpreadsheet, Share2 } from 'lucide-react'
+import { CalendarRange, Download, Eye, FileSpreadsheet } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDialog } from '../../components/dialogs/useDialog'
@@ -36,6 +36,11 @@ import {
 } from '../../utils/incomeTypes'
 import { getIncomeDurationDisplay } from '../../utils/serviceDuration'
 import { canMarkAsReported, getRecordReportBadge } from '../../utils/reportStatus'
+import {
+  validateReportConfiguration,
+  type ConfigurableReportFormat,
+  type ConfigurableReportStatus,
+} from '../../services/reportConfiguration'
 
 type Period = 'week' | 'month' | 'year'
 type ReportKind = 'income' | 'expense' | 'paymentType' | 'balance'
@@ -202,6 +207,11 @@ export function ReportsPage() {
   const [selectedPaymentType, setSelectedPaymentType] =
     useState<string | 'ALL'>('ALL')
   const [selectedCategory, setSelectedCategory] = useState<string | 'ALL'>('ALL')
+  const [selectedReportKind, setSelectedReportKind] = useState<ReportKind>('balance')
+  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode | 'AUTO'>('AUTO')
+  const [selectedReportStatus, setSelectedReportStatus] = useState<ConfigurableReportStatus>('ALL')
+  const [selectedFormat, setSelectedFormat] = useState<ConfigurableReportFormat>('pdf')
+  const [pendingGeneration, setPendingGeneration] = useState(false)
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [periodIncomes, setPeriodIncomes] = useState<ServiceIncome[]>([])
   const [periodExpenses, setPeriodExpenses] = useState<Expense[]>([])
@@ -359,6 +369,7 @@ export function ReportsPage() {
   const primaryCurrencyFromSettings = settings?.defaultCurrency ?? 'EUR'
 
   const primaryCurrency = useMemo(() => {
+    if (selectedCurrency !== 'AUTO') return selectedCurrency
     if (selectedCountry === 'ALL') {
       return primaryCurrencyFromSettings
     }
@@ -367,7 +378,7 @@ export function ReportsPage() {
       getCountryCurrency(selectedCountry as CountryCode) ??
       primaryCurrencyFromSettings
     )
-  }, [primaryCurrencyFromSettings, selectedCountry])
+  }, [primaryCurrencyFromSettings, selectedCountry, selectedCurrency])
 
   const incomes = useMemo(
     () =>
@@ -380,9 +391,12 @@ export function ReportsPage() {
           income.paymentType === selectedPaymentType
 
         const matchesSeason = selectedSeason === 'ALL' || String(income.earningPeriodId) === selectedSeason
-        return matchesCountry && matchesCity && matchesPaymentType && matchesSeason
+        const badge = getRecordReportBadge(income)
+        const matchesStatus = selectedReportStatus === 'ALL' ||
+          (selectedReportStatus === 'reported' ? badge.isReported : !badge.isReported)
+        return matchesCountry && matchesCity && matchesPaymentType && matchesSeason && matchesStatus
       }),
-    [periodIncomes, selectedCity, selectedCountry, selectedPaymentType, selectedSeason],
+    [periodIncomes, selectedCity, selectedCountry, selectedPaymentType, selectedReportStatus, selectedSeason],
   )
 
   const expenses = useMemo(
@@ -395,9 +409,12 @@ export function ReportsPage() {
           selectedCategory === 'ALL' || expense.category === selectedCategory
 
         const matchesSeason = selectedSeason === 'ALL' || String(expense.earningPeriodId) === selectedSeason
-        return matchesCountry && matchesCity && matchesCategory && matchesSeason
+        const badge = getRecordReportBadge(expense)
+        const matchesStatus = selectedReportStatus === 'ALL' ||
+          (selectedReportStatus === 'reported' ? badge.isReported : !badge.isReported)
+        return matchesCountry && matchesCity && matchesCategory && matchesSeason && matchesStatus
       }),
-    [periodExpenses, selectedCategory, selectedCity, selectedCountry, selectedSeason],
+    [periodExpenses, selectedCategory, selectedCity, selectedCountry, selectedReportStatus, selectedSeason],
   )
 
   const balanceReport = useMemo(() => {
@@ -1308,6 +1325,33 @@ export function ReportsPage() {
     }
   }
 
+  async function handleConfirmGeneration() {
+    const validation = validateReportConfiguration({
+      dateFrom,
+      dateTo,
+      type: selectedReportKind,
+      category: selectedCategory,
+      currency: primaryCurrency,
+      status: selectedReportStatus,
+      format: selectedFormat,
+    })
+    if (!validation.valid) {
+      setPendingGeneration(false)
+      await alert({ type: 'error', title: 'Configuración inválida', message: 'Revisa el periodo y el formato antes de generar el reporte.' })
+      return
+    }
+    setPendingGeneration(false)
+    if (selectedFormat === 'csv' && selectedReportKind === 'income') {
+      await handleExportIncomeCsv()
+      return
+    }
+    if (selectedFormat === 'xlsx' && selectedReportKind === 'income') {
+      await handleExportIncomeExcel()
+      return
+    }
+    await handleShareReport(selectedReportKind)
+  }
+
   if (loadError) {
     return (
       <section className="flex min-h-[60dvh] items-center justify-center">
@@ -1336,7 +1380,7 @@ export function ReportsPage() {
         backLabel={isBasicUser ? 'Inicio' : 'Más'}
         backTo={isBasicUser ? '/' : '/more'}
         eyebrow="Reportes"
-        title="Generación de PDF"
+        title="Generar reportes"
       >
         <div className="grid grid-cols-3 w-fit rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
           {periods.map((periodOption) => (
@@ -1386,6 +1430,24 @@ export function ReportsPage() {
               type="date"
               value={dateFrom}
             />
+          </label>
+
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-slate-600">Moneda</span>
+            <select className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900" onChange={(event) => setSelectedCurrency(event.target.value as CurrencyCode | 'AUTO')} value={selectedCurrency}>
+              <option value="AUTO">Automática</option>
+              <option value={settings.defaultCurrency}>{settings.defaultCurrency}</option>
+              {settings.secondaryCurrency !== settings.defaultCurrency ? <option value={settings.secondaryCurrency}>{settings.secondaryCurrency}</option> : null}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-slate-600">Estado</span>
+            <select className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900" onChange={(event) => setSelectedReportStatus(event.target.value as ConfigurableReportStatus)} value={selectedReportStatus}>
+              <option value="ALL">Todos</option>
+              <option value="reported">Reportados</option>
+              <option value="unreported">Sin reportar</option>
+            </select>
           </label>
 
           <label className="flex flex-col gap-2">
@@ -1475,60 +1537,24 @@ export function ReportsPage() {
         </div>
       </CollapsibleFilters>
 
-      <section className="grid gap-3 lg:grid-cols-3">
-        {reportCards.map((reportCard) => (
-          <article
-            className="flex flex-col justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-            key={reportCard.kind}
-          >
-            <div>
-              <h2 className="text-lg font-semibold text-slate-950">
-                {reportCard.title}
-              </h2>
-              <p className="mt-2 text-sm text-slate-500">
-                {reportCard.description}
-              </p>
-            </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <button
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
-                onClick={() => handleOpenPreview(reportCard.kind)}
-                type="button"
-              >
-                <Eye className="size-4" aria-hidden="true" />
-                Vista previa
-              </button>
-              <button
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                onClick={() => handleShareReport(reportCard.kind)}
-                type="button"
-              >
-                <Share2 className="size-4" aria-hidden="true" />
-                Compartir PDF
-              </button>
-              {reportCard.kind === 'income' && (
-                <>
-                  <button
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                    onClick={handleExportIncomeCsv}
-                    type="button"
-                  >
-                    <FileSpreadsheet className="size-4" aria-hidden="true" />
-                    Exportar CSV
-                  </button>
-                  <button
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                    onClick={handleExportIncomeExcel}
-                    type="button"
-                  >
-                    <FileSpreadsheet className="size-4" aria-hidden="true" />
-                    Exportar Excel
-                  </button>
-                </>
-              )}
-            </div>
-          </article>
-        ))}
+      <section aria-labelledby="report-builder-title" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="text-lg font-semibold text-slate-950 dark:text-white" id="report-builder-title">Configurar reporte</h2>
+        <p className="mt-1 text-sm text-slate-500">Elige el contenido y revisa la vista previa antes de generar el archivo.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-2"><span className="text-sm font-medium text-slate-600 dark:text-slate-300">Tipo</span><select className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950" onChange={(event) => { const kind = event.target.value as ReportKind; setSelectedReportKind(kind); if (kind !== 'income' && selectedFormat === 'xlsx') setSelectedFormat('pdf'); setPendingGeneration(false) }} value={selectedReportKind}>{reportCards.map((card) => <option key={card.kind} value={card.kind}>{card.title}</option>)}</select></label>
+          <label className="flex flex-col gap-2"><span className="text-sm font-medium text-slate-600 dark:text-slate-300">Formato</span><select className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950" onChange={(event) => { setSelectedFormat(event.target.value as ConfigurableReportFormat); setPendingGeneration(false) }} value={selectedFormat}><option value="pdf">PDF</option>{selectedReportKind === 'income' ? <><option value="csv">CSV</option><option value="xlsx">Excel</option></> : null}</select></label>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" onClick={() => handleOpenPreview(selectedReportKind)} type="button"><Eye className="size-4" aria-hidden="true" />Vista previa</button>
+          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800" onClick={() => setPendingGeneration(true)} type="button">{selectedFormat === 'pdf' ? <Download className="size-4" aria-hidden="true" /> : <FileSpreadsheet className="size-4" aria-hidden="true" />}Preparar {selectedFormat.toUpperCase()}</button>
+        </div>
+        {pendingGeneration ? (
+          <div aria-live="polite" className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Confirma la generación</p>
+            <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">{reportCards.find((card) => card.kind === selectedReportKind)?.title} · {dateFrom} a {dateTo} · {primaryCurrency} · {selectedFormat.toUpperCase()}</p>
+            <div className="mt-3 flex justify-end gap-2"><button className="h-9 rounded-md px-3 text-sm font-semibold" onClick={() => setPendingGeneration(false)} type="button">Cancelar</button><button className="h-9 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" onClick={() => void handleConfirmGeneration()} type="button">Confirmar y generar</button></div>
+          </div>
+        ) : null}
       </section>
     </section>
   )

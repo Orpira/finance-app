@@ -60,9 +60,9 @@ const REPORTS_ITEM: NavItem = {
   icon: ChartNoAxesCombined,
   onboardingTarget: 'nav-reports',
 }
-/** Oculto para licencias `trial`: el Asistente no está disponible en esa modalidad (ver LicenseTypeGuard en routes/index.tsx). */
+/** La licencia gratuita conserva el acceso al sandbox local del Copiloto. */
 const ASSISTANT_ITEM: NavItem = {
-  label: 'Asistente',
+  label: 'Copiloto',
   path: '/conversation',
   icon: Sparkles,
   onboardingTarget: 'nav-asistente',
@@ -385,11 +385,22 @@ export function AppLayout() {
       >
         <div className="flex items-center justify-between gap-3 py-3 md:hidden">
           <p className="text-sm font-semibold text-slate-900 dark:text-white">Private Balance</p>
-          <UsageModeQuickToggle
-            disabled={isTogglingUsageMode}
-            onToggle={toggleUsageMode}
-            usageMode={usageMode}
-          />
+          <div className="flex items-center gap-2">
+            <UsageModeQuickToggle
+              disabled={isTogglingUsageMode}
+              onToggle={toggleUsageMode}
+              usageMode={usageMode}
+            />
+            <button
+              aria-label={themeLabel}
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              onClick={toggleTheme}
+              title={themeLabel}
+              type="button"
+            >
+              <ThemeIcon className="size-5" aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <Outlet key={usageMode} />
       </main>
@@ -397,17 +408,6 @@ export function AppLayout() {
       {usesProfessionalAgenda({ usageMode }) && <AppointmentReminderAlert />}
       {usesProfessionalAgenda({ usageMode }) && <ServiceTimeAlert />}
       <ServiceCompletionAlert />
-
-      <button
-        aria-label={themeLabel}
-        className="fixed right-4 z-50 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-white text-slate-700 shadow-lg shadow-slate-900/10 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-white dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-950 md:hidden"
-        onClick={toggleTheme}
-        style={{ bottom: 'calc(max(env(safe-area-inset-bottom), 0.5rem) + 5.25rem)' }}
-        title={themeLabel}
-        type="button"
-      >
-        <ThemeIcon className="size-5" aria-hidden="true" />
-      </button>
 
       <nav
         aria-label="Navegación principal"

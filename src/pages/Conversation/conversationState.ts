@@ -10,14 +10,22 @@ export type ConversationUiStatus =
 
 export type ConversationUiMessageRole = 'USER' | 'ASSISTANT'
 
+export interface CopilotResponseSections {
+  readonly response: string
+  readonly explanation: string
+  readonly evidence: readonly string[]
+  readonly recommendedAction: string
+}
+
 export interface ConversationUiMessage {
   readonly id: string
   readonly role: ConversationUiMessageRole
   readonly text: string
   readonly createdAt: string
-  /** Presente solo en mensajes del asistente que contienen una propuesta de acción pendiente de confirmar. */
+  /** Presente solo en mensajes del Copiloto que contienen una propuesta pendiente de confirmar. */
   readonly proposal?: AssistantProposalRecord
   readonly responseType?: 'local-calculation' | 'deterministic-explanation' | 'pending-proposal' | 'executed-action'
+  readonly sections?: CopilotResponseSections
 }
 
 export interface ConversationUiState {

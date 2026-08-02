@@ -46,6 +46,8 @@ import { getActiveEarningPeriod } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { FinancialGoal } from '../../types/financialGoal'
 import { financialGoalService } from '../../services/financialGoalService'
+import { buildFinancialGoalPresentation } from '../../services/financialGoalPresentation'
+import { HOME_SECTION_ORDER } from './homeSectionOrder'
 import type {
   CivilDate,
   IanaTimeZone,
@@ -470,7 +472,9 @@ export function HomePage() {
         </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <section className="order-2" aria-labelledby="financial-summary-title">
+        <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200" id="financial-summary-title">{HOME_SECTION_ORDER[1]}</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {cards.map(({ icon: Icon, label, previous, sensitive, tone, value }) => (
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900" key={label}>
             <div className="flex items-center justify-between gap-3">
@@ -483,9 +487,12 @@ export function HomePage() {
             </p>
           </article>
         ))}
-      </div>
+        </div>
+      </section>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="order-7" aria-labelledby="suggested-actions-title">
+        <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200" id="suggested-actions-title">{HOME_SECTION_ORDER[6]}</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Link className="flex h-14 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100" to="/income/nuevo">
           <PlusCircle className="size-5 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
           Registrar ingreso
@@ -502,18 +509,24 @@ export function HomePage() {
         )}
         <Link className="flex h-14 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-violet-200 hover:bg-violet-50/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100" to="/conversation">
           <MessageCircleMore className="size-5 text-violet-700 dark:text-violet-300" aria-hidden="true" />
-          Consultar al asistente
+          Consultar al Copiloto
         </Link>
-      </div>
+        {financialCopilot.suggestedActions.map((action) => (
+          <Link className="flex h-14 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100" key={action.id} to={action.to}>
+            <ArrowRight className="size-5 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+            {action.label}
+          </Link>
+        ))}
+        </div>
+      </section>
 
-      {financialCopilot.todayPriorities.length > 0 && (
-        <section aria-labelledby="today-priorities-title">
+      <section aria-labelledby="today-priorities-title" className="order-1">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200" id="today-priorities-title">
             <ListChecks className="size-5 text-amber-700 dark:text-amber-300" aria-hidden="true" />
-            Prioridades de hoy
+            {HOME_SECTION_ORDER[0]}
           </h2>
-          <ul className="mt-3 grid gap-3 sm:grid-cols-2">
-            {financialCopilot.todayPriorities.slice(0, 2).map((priority) => (
+          {financialCopilot.todayPriorities.length > 0 ? <ul className="mt-3 grid gap-3">
+            {financialCopilot.todayPriorities.slice(0, 1).map((priority) => (
               <li className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/40" key={priority.id}>
                 <span className="text-sm font-medium text-amber-950 dark:text-amber-100">{priority.message}</span>
                 <Link className="shrink-0 text-xs font-semibold text-amber-800 hover:text-amber-950 dark:text-amber-200" to={priority.action.to}>
@@ -521,17 +534,16 @@ export function HomePage() {
                 </Link>
               </li>
             ))}
-          </ul>
-        </section>
-      )}
+          </ul> : <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">No hay asuntos urgentes para hoy.</p>}
+      </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="contents">
         {!isBasicMode(settings) && (
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <article className="order-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
                 <CalendarClock className="size-5 text-sky-700 dark:text-sky-300" aria-hidden="true" />
-                Agenda próxima
+                {HOME_SECTION_ORDER[4]}
               </h2>
               <Link className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300" to="/agenda">
                 Ver agenda
@@ -561,10 +573,10 @@ export function HomePage() {
           </article>
         )}
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <article className="order-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             <HeartPulse className="size-5 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
-            Salud financiera
+            {HOME_SECTION_ORDER[2]}
           </h2>
           <p className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">{financialCopilot.financialHealth.label}</p>
           <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{financialCopilot.financialHealth.explanation}</p>
@@ -574,7 +586,7 @@ export function HomePage() {
           <div className="my-4 border-t border-slate-200 dark:border-slate-800" />
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             <Lightbulb className="size-5 text-amber-700 dark:text-amber-300" aria-hidden="true" />
-            Resumen inteligente
+            Resumen del Copiloto
           </h3>
           <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{financialCopilot.summary}</p>
           <ul className="mt-4 flex flex-col gap-2">
@@ -610,13 +622,6 @@ export function HomePage() {
               </li>
             ))}
           </ul>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {financialCopilot.suggestedActions.map((action) => (
-              <Link className="inline-flex h-9 items-center rounded-md border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" key={action.id} to={action.to}>
-                {action.label}
-              </Link>
-            ))}
-          </div>
           <Link className="mt-4 inline-flex text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300" to="/resumen-completo">
             Ver todo
           </Link>
@@ -624,23 +629,32 @@ export function HomePage() {
       </div>
 
       {financialGoals.filter((goal) => goal.status !== 'cancelled').length > 0 ? (
-        <section aria-labelledby="financial-goals-title" className="border-y border-slate-200 py-5 dark:border-slate-800">
+        <section aria-labelledby="financial-goals-title" className="order-4 border-y border-slate-200 py-5 dark:border-slate-800">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200" id="financial-goals-title">Objetivos financieros</h2>
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200" id="financial-goals-title">{HOME_SECTION_ORDER[3]}</h2>
             <Link className="text-xs font-semibold text-emerald-700 dark:text-emerald-300" to="/conversation?query=Quiero%20crear%20un%20objetivo%20de%20ahorro">Crear objetivo</Link>
           </div>
           <ul className="mt-3 divide-y divide-slate-200 dark:divide-slate-800">
             {financialGoals.filter((goal) => goal.status !== 'cancelled').map((goal) => {
               const progress = financialCopilot.readModels.goalProgress.metrics.find((item) => item.goalId === goal.id)
+              const presentation = progress
+                ? buildFinancialGoalPresentation(goal, progress, new Date().toLocaleDateString('en-CA'))
+                : null
               return (
                 <li className="grid gap-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center" key={goal.id}>
                   <div>
                     <p className="text-sm font-semibold text-slate-900 dark:text-white">{goal.name}</p>
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       {progress ? `${formatCurrency(progress.currentAmount, progress.currency)} de ${formatCurrency(progress.targetAmount, progress.currency)} · ${Math.min(progress.percentage, 100).toFixed(0)} %` : 'Progreso no disponible'}
-                      {goal.status === 'paused' ? ' · Pausado' : ''}
+                      {presentation ? ` · ${presentation.statusLabel}` : ''}
                     </p>
                     {progress ? <progress aria-label={`Progreso de ${goal.name}`} className="mt-2 h-2 w-full accent-emerald-700" max="100" value={Math.min(progress.percentage, 100)} /> : null}
+                    {presentation ? (
+                      <div className="mt-2 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                        <p>{presentation.daysRemaining} días restantes · Actualizado: {presentation.updatedAtLabel}</p>
+                        <p className="text-slate-700 dark:text-slate-200">{presentation.recommendation}</p>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-1">
                     <label className="sr-only" htmlFor={`goal-target-${goal.id}`}>Importe objetivo</label>
@@ -656,9 +670,9 @@ export function HomePage() {
         </section>
       ) : null}
 
-      <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <article className="order-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Actividad reciente</h2>
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{HOME_SECTION_ORDER[5]}</h2>
           <Link className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300" to="/movements">
             Ver todos
           </Link>
@@ -695,7 +709,7 @@ export function HomePage() {
       </article>
 
       {!isBasicMode(settings) && (
-        <Link className="inline-flex h-12 items-center justify-center gap-2 self-stretch rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:self-end" to="/resumen-completo">
+        <Link className="order-8 inline-flex h-12 items-center justify-center gap-2 self-stretch rounded-lg bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:self-end" to="/resumen-completo">
           Ver todo el resumen
           <ArrowRight className="size-4" aria-hidden="true" />
         </Link>

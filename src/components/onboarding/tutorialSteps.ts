@@ -20,7 +20,7 @@ export const TUTORIAL_STEPS: readonly TutorialStepConfig[] = [
   },
   {
     id: 'assistant',
-    title: 'Consulta al Asistente',
+    title: 'Consulta al Copiloto',
     description: 'Pregunta en lenguaje natural por tus ingresos, gastos o citas, sin salir de la app.',
     targetKeys: ['nav-asistente'],
   },

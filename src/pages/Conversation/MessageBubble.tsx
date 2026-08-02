@@ -1,5 +1,6 @@
 import { AssistantProposalCard } from './AssistantProposalCard'
 import type { ConversationUiMessage } from './conversationState'
+import { CopilotResponseLayout } from './CopilotResponseLayout'
 
 interface MessageBubbleProps {
   readonly message: ConversationUiMessage
@@ -26,7 +27,7 @@ function resolveRoleLabel(role: ConversationUiMessage['role']): string {
     return 'Usuario'
   }
   if (role === 'ASSISTANT') {
-    return 'Asistente'
+    return 'Copiloto'
   }
   return 'Sistema'
 }
@@ -45,6 +46,7 @@ export function MessageBubble({
   onConfirmProposal,
   onCancelProposal,
 }: MessageBubbleProps) {
+  const sections = message.sections
   return (
     <article
       aria-label={`Mensaje de ${resolveRoleLabel(message.role)}`}
@@ -61,7 +63,9 @@ export function MessageBubble({
           {responseTypeLabel(message.responseType)}
         </p>
       ) : null}
-      <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{message.text}</p>
+      {message.role === 'ASSISTANT' && sections ? (
+        <CopilotResponseLayout {...sections} />
+      ) : <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{message.text}</p>}
 
       {message.proposal ? (
         <AssistantProposalCard

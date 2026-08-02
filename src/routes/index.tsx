@@ -28,6 +28,7 @@ import SettingsBusinessPage from '../pages/Settings/SettingsBusinessPage'
 import SettingsPage from '../pages/Settings/SettingsPage'
 import SettingsSecurityPage from '../pages/Settings/SettingsSecurityPage'
 import SettingsLicensePage from '../pages/Settings/SettingsLicensePage'
+import SettingsDiagnosticsPage from '../pages/Settings/SettingsDiagnosticsPage'
 import CommunicationChannelsPage from '../pages/Settings/CommunicationChannelsPage'
 import AIExecutionInspectorPage from '../pages/Debug/AIExecutionInspectorPage'
 import AIDeveloperPlaygroundPage from '../pages/Debug/AIDeveloperPlaygroundPage'
@@ -90,6 +91,7 @@ export function RouterProvider() {
             <Route path="settings/business" element={<SettingsBusinessPage />} />
             <Route path="settings/security" element={<SettingsSecurityPage />} />
             <Route path="settings/license" element={<SettingsLicensePage />} />
+            <Route path="settings/diagnostics" element={<SettingsDiagnosticsPage />} />
             <Route path="settings/communication-channels" element={<DevOnlyGuard><CommunicationChannelsPage /></DevOnlyGuard>} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="more" element={<MorePage />} />

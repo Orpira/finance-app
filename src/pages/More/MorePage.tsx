@@ -34,13 +34,13 @@ const moreSections = [
     ],
   },
   {
-    title: 'Inteligencia',
+    title: 'Copiloto',
     links: [
       {
         description: 'Visualiza insights proyectados desde el motor con estado seguro.',
         href: '/dashboard',
         icon: Lightbulb,
-        label: 'Análisis inteligente',
+        label: 'Análisis del Copiloto',
       },
     ],
   },
@@ -84,8 +84,7 @@ export function MorePage() {
     }
   }, [])
 
-  // La prueba gratuita no incluye el módulo Inteligencia (Análisis
-  // inteligente / Asistente IA); las rutas quedan bloqueadas además por
+  // La prueba gratuita no incluye el análisis avanzado del Copiloto; las rutas quedan bloqueadas además por
   // LicenseTypeGuard (routes/index.tsx) como defensa en profundidad.
   const isTrialLicense = licenseType === 'trial'
 
@@ -98,7 +97,7 @@ export function MorePage() {
           : section.links,
     }))
     .filter((section) => section.links.length > 0)
-    .filter((section) => !(isTrialLicense && section.title === 'Inteligencia'))
+    .filter((section) => !(isTrialLicense && section.title === 'Copiloto'))
 
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">

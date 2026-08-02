@@ -12,9 +12,9 @@ describe('financial copilot UI integration', () => {
 
     expect(source).toContain('buildFinancialCopilotSnapshot')
     expect(source).toContain('buildFinancialCopilot')
-    expect(source).toContain('Prioridades de hoy')
-    expect(source).toContain('Salud financiera')
-    expect(source).toContain('Resumen inteligente')
+    expect(source).toContain('HOME_SECTION_ORDER')
+    expect(source).toContain('Resumen del Copiloto')
+    expect(source).toContain('financialHealth')
     expect(source).not.toContain('function buildSmartInsights')
   })
 

@@ -2,6 +2,7 @@ import {
   BadgeCheck,
   Building2,
   ChevronRight,
+  Stethoscope,
   LockKeyhole,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -30,6 +31,12 @@ const settingsLinks = [
     href: '/settings/security',
     icon: LockKeyhole,
     label: 'Seguridad',
+  },
+  {
+    description: 'Comprueba el estado local y genera un archivo seguro para soporte.',
+    href: '/settings/diagnostics',
+    icon: Stethoscope,
+    label: 'Diagnóstico local',
   },
 ]
 

@@ -88,7 +88,12 @@ function createAssistantMessage(input: {
   readonly createdAt: string
   readonly proposal?: AssistantProposalRecord
   readonly responseType?: ConversationUiMessage['responseType']
+  readonly explanation?: string
+  readonly evidence?: readonly string[]
+  readonly recommendedAction?: string
+  readonly response?: string
 }): ConversationUiMessage {
+  const responseType = input.responseType
   return {
     id: input.id,
     role: 'ASSISTANT',
@@ -96,6 +101,20 @@ function createAssistantMessage(input: {
     createdAt: input.createdAt,
     ...(input.proposal === undefined ? {} : { proposal: input.proposal }),
     ...(input.responseType === undefined ? {} : { responseType: input.responseType }),
+    sections: {
+      response: input.response ?? input.text,
+      explanation: input.explanation ?? (responseType === 'pending-proposal'
+        ? 'La propuesta no modificará datos hasta que la revises y confirmes.'
+        : responseType === 'executed-action'
+          ? 'La acción se ejecutó localmente después de tu confirmación.'
+          : 'El Copiloto ha preparado esta respuesta con el contexto disponible.'),
+      evidence: input.evidence ?? [responseType === 'local-calculation' || responseType === 'deterministic-explanation'
+        ? 'Fuente: cálculos locales de Private Balance.'
+        : 'No hay evidencia financiera adicional para esta respuesta.'],
+      recommendedAction: input.recommendedAction ?? (responseType === 'pending-proposal'
+        ? 'Revisa los datos y confirma solo si son correctos.'
+        : 'Puedes continuar con una pregunta relacionada.'),
+    },
   }
 }
 
@@ -116,8 +135,17 @@ function proposalSummaryText(proposal: AssistantProposalRecord): string {
   return `He preparado una propuesta de ${proposalKindLabel(proposal.kind)}. Revísala y confirma para guardarla.`
 }
 
+function queryPeriodLabel(period: FinancialCopilotQueryAnswer['period']): string {
+  if (period === 'current_month') return 'mes actual'
+  if (period === 'previous_month') return 'mes anterior'
+  if (period === 'current_week') return 'semana actual'
+  if (period === 'previous_week') return 'semana anterior'
+  if (period === 'yesterday') return 'ayer'
+  return 'contexto actual'
+}
+
 /**
- * El contexto del Asistente (moneda/modo de uso) es una capacidad
+ * El contexto del Copiloto (moneda/modo de uso) es una capacidad
  * complementaria, no crítica: si no está disponible (dependencia no
  * provista, o `getSettings()` falla por cualquier motivo) el turno
  * simplemente sigue el camino de consulta existente en vez de romper el
@@ -310,6 +338,15 @@ export function createConversationController(
           const assistantMessage = createAssistantMessage({
             id: `conversation:assistant:local:${turn}`,
             text: `${localAnswer.text}\n\n${localAnswer.explanation}`,
+            response: localAnswer.text,
+            explanation: localAnswer.explanation,
+            evidence: [
+              `Periodo: ${queryPeriodLabel(localAnswer.period)}.`,
+              'Fuente: cálculos locales de Private Balance.',
+            ],
+            recommendedAction: localAnswer.intent === 'financial-goal-progress'
+              ? 'Revisa el objetivo en Inicio o pide crear uno nuevo.'
+              : 'Puedes pedir una comparación o abrir los movimientos relacionados.',
             createdAt: now(),
             responseType: localAnswer.intent === 'context-explanation'
               ? 'deterministic-explanation'

@@ -26,6 +26,7 @@ import {
 } from './googleDriveBackupService'
 import { getSettings, updateSettings } from './settingsService'
 import { migrateLegacyRecordsToSeasons } from './earningPeriodService'
+import { recordDiagnosticActivity } from './localDiagnosticService'
 
 export interface BackupData {
   version: string
@@ -209,6 +210,7 @@ export async function exportEncryptedBackup(passwordOrKey: string) {
     encryptedBackup.filename,
     'application/octet-stream',
   )
+  recordDiagnosticActivity('backup', encryptedBackup.generatedAt)
 
   return encryptedBackup
 }
@@ -240,6 +242,7 @@ export async function decryptBackup(
 export async function restoreBackupData(backupData: BackupData) {
   await importDatabaseSnapshot(backupDataToSnapshot(backupData))
   await migrateLegacyRecordsToSeasons()
+  recordDiagnosticActivity('restore')
 }
 
 export async function importEncryptedBackup(file: File, passwordOrKey: string) {
@@ -300,6 +303,7 @@ export async function runDriveBackupNow() {
       `Backup subido a Drive: ${encryptedBackup.filename}`,
     ),
   })
+  recordDiagnosticActivity('backup', encryptedBackup.generatedAt)
 
   return encryptedBackup
 }
