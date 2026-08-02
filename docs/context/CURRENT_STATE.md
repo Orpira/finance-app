@@ -6,6 +6,8 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 
 La construcción funcional previa a 1.0 está cerrada y la **Fase Pre-Release 0.9** está activa. La planificación ya no usa nuevas iteraciones numeradas: los sprints A-G deben demostrar calidad, Android real, PWA, accesibilidad, rendimiento, privacidad y estabilidad antes de declarar `Private Balance 0.9 RC` y preparar `Private Balance 1.0`. Ver [roadmap de pre-release](../roadmap/PRODUCT_RELEASE_ROADMAP.md).
 
+El Sprint A está en progreso. Su primera ronda corrigió lenguaje visible, presentación de planes financieros y metadatos del manifest PWA con TDD; la validación técnica y el APK están en verde. No se considera cerrado hasta completar la matriz visual pendiente documentada en [Sprint A: Calidad](../product/PRE_RELEASE_0_9_SPRINT_A.md).
+
 ## 2) Estado por componente
 
 ### Cliente

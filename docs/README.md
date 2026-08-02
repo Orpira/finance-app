@@ -27,6 +27,7 @@ Este directorio contiene la documentación oficial del proyecto. La fuente canó
 - [product/financial-goals.md](product/financial-goals.md) - Entidad, progreso y ciclo de vida de objetivos financieros.
 - [product/explainable-financial-health.md](product/explainable-financial-health.md) - Reglas públicas de salud financiera.
 - [product/ITERATION_6_EXPERIENCE.md](product/ITERATION_6_EXPERIENCE.md) - Lenguaje, jerarquía y experiencia unificada de la Iteración 6.
+- [product/PRE_RELEASE_0_9_SPRINT_A.md](product/PRE_RELEASE_0_9_SPRINT_A.md) - Auditoría, correcciones TDD, validaciones y estado de cierre del Sprint A.
 - [product/configurable-reports.md](product/configurable-reports.md) - Flujo configurable de reportes y formatos soportados.
 - [architecture/24_LOCAL_DIAGNOSTICS.md](architecture/24_LOCAL_DIAGNOSTICS.md) - Diagnóstico local y exportación segura para soporte.
 - [context/TECHNICAL_BACKLOG.md](context/TECHNICAL_BACKLOG.md) - Deuda técnica identificada y criterios de cierre.

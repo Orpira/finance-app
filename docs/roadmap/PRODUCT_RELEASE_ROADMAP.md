@@ -29,6 +29,8 @@ El problema y el cumplimiento de las tres condiciones deben quedar documentados 
 
 **Objetivo:** eliminar defectos pequeños y fricciones del producto existente.
 
+**Estado:** en progreso desde el 2026-08-02. La primera ronda técnica está documentada en [Sprint A: Calidad](../product/PRE_RELEASE_0_9_SPRINT_A.md); falta completar la matriz visual antes de cerrarlo.
+
 Alcance:
 
 - corregir defectos funcionales menores;
