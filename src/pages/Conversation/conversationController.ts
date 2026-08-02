@@ -7,6 +7,7 @@ import {
 } from '../../intelligence/assistant'
 import type { ChatMessage } from '../../intelligence/mock-conversational-renderer/mockConversationalRenderer'
 import type { CurrencyCode, UsageMode } from '../../types/settings'
+import type { FinancialCopilotQueryAnswer } from '../../intelligence/deterministic-copilot'
 import {
   createInitialConversationUiState,
   type ConversationUiMessage,
@@ -35,6 +36,8 @@ export interface ConversationControllerDependencies {
     readonly defaultCurrency: CurrencyCode
     readonly usageMode: UsageMode
   }>
+  /** Consultas financieras deterministas, resueltas localmente antes de cualquier proveedor. */
+  readonly answerLocalQuery?: (message: string) => Promise<FinancialCopilotQueryAnswer | null>
 }
 
 export interface ConversationController {
@@ -251,6 +254,39 @@ export function createConversationController(
           errorMessage: null,
         })
         return
+      }
+
+      if (dependencies.answerLocalQuery !== undefined) {
+        let localAnswer: FinancialCopilotQueryAnswer | null
+        try {
+          localAnswer = await dependencies.answerLocalQuery(text)
+        } catch {
+          const assistantErrorMessage = createAssistantMessage({
+            id: `conversation:assistant:local-error:${turn}`,
+            text: 'No pude consultar tus datos locales en este momento.',
+            createdAt: now(),
+          })
+          emit({
+            status: 'error',
+            messages: [...baseMessages, assistantErrorMessage],
+            errorMessage: assistantErrorMessage.text,
+          })
+          return
+        }
+
+        if (localAnswer !== null) {
+          const assistantMessage = createAssistantMessage({
+            id: `conversation:assistant:local:${turn}`,
+            text: `${localAnswer.text}\n\n${localAnswer.explanation}`,
+            createdAt: now(),
+          })
+          emit({
+            status: 'ready',
+            messages: [...baseMessages, assistantMessage],
+            errorMessage: null,
+          })
+          return
+        }
       }
 
       let generated

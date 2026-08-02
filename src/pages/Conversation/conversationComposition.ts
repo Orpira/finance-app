@@ -26,6 +26,7 @@ import {
   validateAIProvider,
 } from '../../intelligence/ai-provider/aiProvider'
 import { getSettings } from '../../services/settingsService'
+import { createLocalFinancialCopilotQueryHandler } from '../../services/financialCopilotService'
 import {
   createPromptContextBuilder,
 } from '../../intelligence/prompt-context-builder'
@@ -299,8 +300,12 @@ export function createConversationControllerDependencies(
   }
 
   const conversationService = createAIConversationService(conversationServiceDependencies)
+  const localCopilot = createLocalFinancialCopilotQueryHandler()
 
   return {
+    answerLocalQuery(message) {
+      return localCopilot.answer(message)
+    },
     async getAssistantContext() {
       const settings = await getSettings()
       return { defaultCurrency: settings.defaultCurrency, usageMode: settings.usageMode }
