@@ -1,4 +1,5 @@
 import type { CurrencyCode } from '../../types/settings'
+import type { FinancialGoalProgress } from '../../types/financialGoal'
 
 export interface FinancialCopilotPeriodSummary {
   readonly income: number
@@ -27,6 +28,7 @@ export interface FinancialCopilotSnapshot {
     readonly previousIncome: readonly string[]
     readonly previousExpenses: readonly string[]
   }
+  readonly goalProgress: readonly FinancialGoalProgress[]
   readonly expenseCategories: readonly {
     readonly category: string
     readonly amount: number

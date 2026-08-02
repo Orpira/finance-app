@@ -12,6 +12,7 @@ import type { Expense } from '../types/expense'
 import type { IncomeAdditional } from '../types/incomeAdditional'
 import type { ServiceIncome } from '../types/service'
 import type { CommunicationChannel } from '../types/communicationChannel'
+import type { FinancialGoal } from '../types/financialGoal'
 import { downloadText } from '../utils/download'
 import {
   decryptJsonPayload,
@@ -39,6 +40,7 @@ export interface BackupData {
   earningPeriods?: EarningPeriod[]
   communicationChannels?: CommunicationChannel[]
   incomeAdditionals?: IncomeAdditional[]
+  financialGoals?: FinancialGoal[]
 }
 
 export interface EncryptedBackupFile {
@@ -137,6 +139,7 @@ export function backupDataToSnapshot(backupData: BackupData): DatabaseSnapshot {
     earningPeriods: backupData.earningPeriods ?? [],
     communicationChannels: backupData.communicationChannels ?? [],
     incomeAdditionals: backupData.incomeAdditionals ?? [],
+    financialGoals: backupData.financialGoals ?? [],
   }
 }
 
@@ -151,6 +154,7 @@ export async function generateBackupData(): Promise<BackupData> {
     earningPeriods,
     communicationChannels,
     incomeAdditionals,
+    financialGoals,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -162,6 +166,7 @@ export async function generateBackupData(): Promise<BackupData> {
       db.earningPeriods.toArray(),
       db.communicationChannels.toArray(),
       db.incomeAdditionals.toArray(),
+      db.financialGoals.toArray(),
     ])
 
   return {
@@ -177,6 +182,7 @@ export async function generateBackupData(): Promise<BackupData> {
     earningPeriods,
     communicationChannels,
     incomeAdditionals,
+    financialGoals,
   }
 }
 

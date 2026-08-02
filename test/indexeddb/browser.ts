@@ -285,7 +285,7 @@ async function run() {
 
   let database = new FinanceDB()
   await database.open()
-  assert(database.verno === 29, 'physical migration upgrades from v25 to v29')
+  assert(database.verno === 30, 'physical migration upgrades from v25 to v30')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration preserves v25 conversationMemories table')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v25 base')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v25 base')
@@ -344,7 +344,7 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 29, 'physical migration upgrades from v24 to v29')
+  assert(database.verno === 30, 'physical migration upgrades from v24 to v30')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration keeps conversationMemories from v24 base')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v24 base')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v24 base')
@@ -372,7 +372,7 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 29, 'physical migration opens schema v29')
+  assert(database.verno === 30, 'physical migration opens schema v30')
   assert(database.tables.some((table) => table.name === 'financialSnapshots'), 'migration creates financialSnapshots')
   assert(database.tables.some((table) => table.name === 'knowledgeSnapshots'), 'migration creates knowledgeSnapshots')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'migration creates conversationMemories')
@@ -389,6 +389,23 @@ async function run() {
   assert(migratedLegacySettings?.hourlyRate === 0, 'v29 migration backfills hourlyRate with 0 for pre-existing settings')
   assert(migratedLegacySettings?.workedTimeUnit === 'minutes', 'v29 migration backfills workedTimeUnit with minutes for pre-existing settings')
   assert(database.tables.some((table) => table.name === 'incomeAdditionals'), 'v29 migration creates the incomeAdditionals table')
+  assert(database.tables.some((table) => table.name === 'financialGoals'), 'v30 migration creates the financialGoals table')
+
+  const financialGoal = {
+    id: 'goal:migration:001',
+    type: 'saving' as const,
+    name: 'Ahorro migrado',
+    targetAmount: 300,
+    currency: 'EUR' as const,
+    period: 'monthly' as const,
+    startDate: '2026-01-01',
+    endDate: '2026-01-31',
+    status: 'active' as const,
+    createdAt: at,
+    updatedAt: at,
+  }
+  await database.financialGoals.add(financialGoal)
+  assert((await database.financialGoals.get(financialGoal.id))?.targetAmount === 300, 'v30 financialGoals supports persisted goals')
 
   const additionalId = await database.incomeAdditionals.add({
     incomeId: 7,
@@ -434,6 +451,7 @@ async function run() {
     ),
     'exportDatabaseSnapshot includes incomeAdditionals',
   )
+  assert(snapshotWithAdditionals.financialGoals.some((goal) => goal.id === financialGoal.id), 'exportDatabaseSnapshot includes financialGoals')
 
   await importDatabaseSnapshot(snapshotWithAdditionals)
   const additionalsAfterRoundtrip = await database.incomeAdditionals
@@ -444,6 +462,7 @@ async function run() {
     additionalsAfterRoundtrip.some((item) => item.amount === 15),
     'importDatabaseSnapshot restores incomeAdditionals',
   )
+  assert((await database.financialGoals.get(financialGoal.id))?.targetAmount === 300, 'importDatabaseSnapshot restores financialGoals')
 
   await expectReject(
     () =>
@@ -1024,12 +1043,18 @@ async function run() {
     amount: 5,
     createdAt: at,
   })
+  await resetDatabaseInstance.financialGoals.add({
+    id: 'goal:reset:001', type: 'saving', name: 'Reset', targetAmount: 100,
+    currency: 'EUR', period: 'monthly', startDate: '2026-02-01', status: 'active',
+    createdAt: at, updatedAt: at,
+  })
   await resetDatabase()
   assert((await resetDatabaseInstance.services.count()) === 0, 'resetDatabase clears services')
   assert(
     (await resetDatabaseInstance.incomeAdditionals.count()) === 0,
     'resetDatabase clears incomeAdditionals',
   )
+  assert((await resetDatabaseInstance.financialGoals.count()) === 0, 'resetDatabase clears financialGoals')
   const settingsAfterReset = await resetDatabaseInstance.settings.get('app')
   assert(
     settingsAfterReset?.incomeCalculationMethod === 'service_duration',

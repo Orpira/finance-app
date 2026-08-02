@@ -17,6 +17,7 @@ import type { PersistedKnowledgeChunk } from '../types/persistedKnowledgeChunk'
 import type { PersistedKnowledgeDocument } from '../types/persistedKnowledgeDocument'
 import type { PersistedFinancialSnapshot } from '../types/persistedFinancialSnapshot'
 import type { PersistedKnowledgeSnapshot } from '../types/persistedKnowledgeSnapshot'
+import type { FinancialGoal } from '../types/financialGoal'
 import {
   resolveRecordUsageMode,
   resolveUsageMode,
@@ -107,6 +108,7 @@ export class FinanceDB extends Dexie {
     PersistedKnowledgeSnapshot['knowledgeSnapshotId']
   >
   incomeAdditionals!: Table<IncomeAdditional, number>
+  financialGoals!: Table<FinancialGoal, FinancialGoal['id']>
 
   constructor() {
     super('finance-app')
@@ -813,6 +815,33 @@ export class FinanceDB extends Dexie {
           }),
       )
 
+    this.version(30).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt',
+      expenses:
+        '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods: '++id,status,startDate,endDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+      communicationChannels: 'id,type,provider,status,updatedAt',
+      deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+      conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+      knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+      knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+      financialSnapshots:
+        'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+      knowledgeSnapshots:
+        'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+      incomeAdditionals: '++id,incomeId,createdAt',
+      financialGoals: 'id,type,status,startDate,endDate,updatedAt',
+    })
+
     this.financialSnapshots.hook('updating', () => {
       throw new Error('SNAPSHOT_PERSISTENCE_APPEND_ONLY')
     })
@@ -853,6 +882,7 @@ export async function resetDatabase() {
       db.automationOutbox,
       db.communicationChannels,
       db.incomeAdditionals,
+      db.financialGoals,
     ],
     async () => {
       await Promise.all([
@@ -866,6 +896,7 @@ export async function resetDatabase() {
         db.automationOutbox.clear(),
         db.communicationChannels.clear(),
         db.incomeAdditionals.clear(),
+        db.financialGoals.clear(),
       ])
 
       await db.settings.put(createDefaultSettings())
@@ -884,6 +915,7 @@ export async function exportDatabaseSnapshot() {
     earningPeriods,
     communicationChannels,
     incomeAdditionals,
+    financialGoals,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -895,6 +927,7 @@ export async function exportDatabaseSnapshot() {
       db.earningPeriods.toArray(),
       db.communicationChannels.toArray(),
       db.incomeAdditionals.toArray(),
+      db.financialGoals.toArray(),
     ])
 
   return {
@@ -907,6 +940,7 @@ export async function exportDatabaseSnapshot() {
     earningPeriods,
     communicationChannels,
     incomeAdditionals,
+    financialGoals,
     exportedAt: new Date().toISOString(),
   }
 }
@@ -946,6 +980,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
       db.automationOutbox,
       db.communicationChannels,
       db.incomeAdditionals,
+      db.financialGoals,
     ],
     async () => {
       await Promise.all([
@@ -959,6 +994,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.automationOutbox.clear(),
         db.communicationChannels.clear(),
         db.incomeAdditionals.clear(),
+        db.financialGoals.clear(),
       ])
 
       await Promise.all([
@@ -983,6 +1019,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.earningPeriods.bulkPut(snapshot.earningPeriods ?? []),
         db.communicationChannels.bulkPut(snapshot.communicationChannels ?? []),
         db.incomeAdditionals.bulkPut(snapshot.incomeAdditionals ?? []),
+        db.financialGoals.bulkPut(snapshot.financialGoals ?? []),
       ])
 
       if (!snapshot.settings?.length) {

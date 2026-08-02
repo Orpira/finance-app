@@ -37,6 +37,7 @@ const SNAPSHOT: FinancialCopilotSnapshot = {
     previousIncome: ['2026-07-03'],
     previousExpenses: ['2026-07-04'],
   },
+  goalProgress: [],
   expenseCategories: [
     { category: 'Transporte', amount: 310, count: 8 },
     { category: 'Material', amount: 190, count: 5 },

@@ -114,6 +114,7 @@ describe('createLocalFinancialCopilotQueryHandler', () => {
       currentWeek: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },
       previousWeek: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },
       movementDates: { currentIncome: [], currentExpenses: [], previousIncome: [], previousExpenses: [] },
+      goalProgress: [],
       expenseCategories: [],
       pendingIncome: { count: 0, overdueCount: 0 },
       appointments: { todayPendingCount: 0, nextPendingDateTime: null, lastDateTime: null },
@@ -164,6 +165,7 @@ describe('createLocalFinancialCopilotQueryHandler', () => {
       currentWeek: { income: 100, expenses: 40, incomeCount: 1, expenseCount: 2 },
       previousWeek: { income: 60, expenses: 20, incomeCount: 1, expenseCount: 1 },
       movementDates: { currentIncome: ['2026-08-01'], currentExpenses: ['2026-08-01', '2026-08-02'], previousIncome: ['2026-07-05'], previousExpenses: ['2026-07-06'] },
+      goalProgress: [],
       expenseCategories: [{ category: 'Transporte', amount: 25, count: 1 }],
       pendingIncome: { count: 0, overdueCount: 0 },
       appointments: { todayPendingCount: 0, nextPendingDateTime: null, lastDateTime: null },
@@ -198,6 +200,7 @@ describe('createLocalFinancialCopilotQueryHandler', () => {
       previousMonth: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },
       currentWeek: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 }, previousWeek: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },
       movementDates: { currentIncome: [], currentExpenses: [], previousIncome: [], previousExpenses: [] },
+      goalProgress: [],
       expenseCategories: [], pendingIncome: { count: 0, overdueCount: 0 },
       appointments: { todayPendingCount: 0, nextPendingDateTime: null, lastDateTime: null }, yesterdayIncome: { amount: 0, count: 0 },
     })

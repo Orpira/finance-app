@@ -13,6 +13,7 @@ import type { Appointment } from '../types/appointment'
 import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
 import type { AppSettings } from '../types/settings'
+import type { FinancialGoal } from '../types/financialGoal'
 import {
   calculateFinancialTotals,
   getStoredExpenseValue,
@@ -25,6 +26,7 @@ import { listExpenses } from './expenseService'
 import { getPendingIncomeSummary } from './incomeReport.service'
 import { listServiceIncomes } from './incomeService'
 import { getSettings } from './settingsService'
+import { calculateFinancialGoalProgress, financialGoalService } from './financialGoalService'
 
 export interface BuildFinancialCopilotSnapshotInput {
   readonly asOfDate: string
@@ -39,6 +41,7 @@ export interface BuildFinancialCopilotSnapshotInput {
     readonly overdueCount: number
   }
   readonly appointments: readonly Appointment[]
+  readonly financialGoals?: readonly FinancialGoal[]
 }
 
 function previousCivilDate(value: string): string {
@@ -173,6 +176,15 @@ export function buildFinancialCopilotSnapshot(
       previousIncome: uniqueSortedDates(input.previousIncomes),
       previousExpenses: uniqueSortedDates(input.previousExpenses),
     },
+    goalProgress: (input.financialGoals ?? [])
+      .filter((goal) => goal.status === 'active' || goal.status === 'completed')
+      .map((goal) => calculateFinancialGoalProgress(
+        goal,
+        allIncomes,
+        allExpenses,
+        input.settings.secondaryCurrency,
+        input.calculatedAt ?? `${input.asOfDate}T00:00:00.000Z`,
+      )),
     expenseCategories: Array.from(categories, ([category, values]) => ({
       category,
       amount: values.amount,
@@ -202,6 +214,7 @@ interface FinancialCopilotServiceDependencies {
   readonly listExpenses?: typeof listExpenses
   readonly listAppointments?: typeof listAppointments
   readonly getPendingIncomeSummary?: typeof getPendingIncomeSummary
+  readonly listFinancialGoals?: typeof financialGoalService.list
 }
 
 function monthRange(reference: Date, offset: number) {
@@ -224,6 +237,7 @@ export function createFinancialCopilotService(
     listExpenses: input.listExpenses ?? listExpenses,
     listAppointments: input.listAppointments ?? listAppointments,
     getPendingIncomeSummary: input.getPendingIncomeSummary ?? getPendingIncomeSummary,
+    listFinancialGoals: input.listFinancialGoals ?? (() => financialGoalService.list()),
   }
 
   return {
@@ -231,7 +245,7 @@ export function createFinancialCopilotService(
       const now = dependencies.now()
       const currentRange = monthRange(now, 0)
       const previousRange = monthRange(now, -1)
-      const [settings, activePeriod, currentIncomes, previousIncomes, currentExpenses, previousExpenses, pendingIncome] = await Promise.all([
+      const [settings, activePeriod, currentIncomes, previousIncomes, currentExpenses, previousExpenses, pendingIncome, financialGoals] = await Promise.all([
         dependencies.getSettings(),
         dependencies.getActiveEarningPeriod(),
         dependencies.listServiceIncomes(currentRange),
@@ -239,6 +253,7 @@ export function createFinancialCopilotService(
         dependencies.listExpenses(currentRange),
         dependencies.listExpenses(previousRange),
         dependencies.getPendingIncomeSummary(),
+        dependencies.listFinancialGoals(),
       ])
       const periodId = isBasicMode(settings) ? undefined : activePeriod?.id
       const appointments = isBasicMode(settings)
@@ -263,6 +278,7 @@ export function createFinancialCopilotService(
         previousExpenses: filterMode(previousExpenses, false),
         pendingIncome,
         appointments,
+        financialGoals,
       })
     },
   }
