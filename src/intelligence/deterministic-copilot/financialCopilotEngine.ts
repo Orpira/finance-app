@@ -88,6 +88,32 @@ export interface FinancialCopilotPriority {
 
 export type FinancialHealthState = 'very_stable' | 'stable' | 'needs_attention'
 
+export interface TraceableFinancialReadModel<TMetrics> {
+  readonly period: string
+  readonly currency: CurrencyCode
+  readonly source: FinancialCopilotSnapshot['source']
+  readonly calculatedAt: string
+  readonly metrics: TMetrics
+  readonly limitations: readonly string[]
+}
+
+export interface FinancialCopilotReadModels {
+  readonly periodSummary: TraceableFinancialReadModel<FinancialCopilotPeriodSummary>
+  readonly periodComparison: TraceableFinancialReadModel<{
+    readonly current: FinancialCopilotPeriodSummary
+    readonly previous: FinancialCopilotPeriodSummary
+    readonly incomeDelta: number
+    readonly expenseDelta: number
+  }>
+  readonly categoryBreakdown: TraceableFinancialReadModel<FinancialCopilotSnapshot['expenseCategories']>
+  readonly pendingIncome: TraceableFinancialReadModel<FinancialCopilotSnapshot['pendingIncome']>
+  readonly upcomingAppointments: TraceableFinancialReadModel<FinancialCopilotSnapshot['appointments']>
+  readonly todayPriorities: TraceableFinancialReadModel<readonly FinancialCopilotPriority[]>
+  readonly financialHealth: TraceableFinancialReadModel<FinancialCopilotResult['financialHealth']>
+  readonly recentActivity: TraceableFinancialReadModel<FinancialCopilotSnapshot['movementDates']>
+  readonly goalProgress: TraceableFinancialReadModel<FinancialCopilotSnapshot['goalProgress']>
+}
+
 export interface FinancialCopilotResult {
   readonly insights: readonly FinancialCopilotInsight[]
   readonly todayPriorities: readonly FinancialCopilotPriority[]
@@ -95,6 +121,7 @@ export interface FinancialCopilotResult {
     readonly state: FinancialHealthState
     readonly label: 'Muy estable' | 'Estable' | 'Necesita atención'
     readonly explanation: string
+    readonly reasons: readonly string[]
     readonly activeRules: readonly string[]
     readonly evidence: readonly FinancialEvidence[]
     readonly limitations: readonly string[]
@@ -102,6 +129,7 @@ export interface FinancialCopilotResult {
   }
   readonly summary: string
   readonly suggestedActions: readonly FinancialCopilotAction[]
+  readonly readModels: FinancialCopilotReadModels
 }
 
 export type FinancialCopilotQueryIntent =
@@ -121,6 +149,7 @@ export type FinancialCopilotQueryIntent =
   | 'suggested-action-follow-up'
   | 'create-action-follow-up'
   | 'insufficient-context'
+  | 'financial-goal-progress'
 
 export interface FinancialCopilotQueryAnswer {
   readonly intent: FinancialCopilotQueryIntent
@@ -128,7 +157,7 @@ export interface FinancialCopilotQueryAnswer {
   readonly explanation: string
   readonly period: 'current_month' | 'previous_month' | 'current_week' | 'previous_week' | 'yesterday' | null
   readonly category: string | null
-  readonly metric?: 'income' | 'expenses' | 'balance' | 'movements' | 'pending_income' | 'appointments'
+  readonly metric?: 'income' | 'expenses' | 'balance' | 'movements' | 'pending_income' | 'appointments' | 'goals'
 }
 
 function normalizeText(value: string): string {
@@ -146,6 +175,7 @@ const LOCAL_QUERY_PATTERNS = [
   /cuant[oa]s?.*(ingreso|ingresos).*(reportar|pendiente)|ingreso.*(reportar|pendiente)/,
   /ultima cita|cita.*ultima/,
   /ingreso.*ayer|ayer.*ingreso/,
+  /como va.*objetivo|progreso.*objetivo|como voy.*meta/,
 ] as const
 
 export function canAnswerFinancialCopilotQuery(query: string): boolean {
@@ -350,6 +380,7 @@ function buildFinancialHealth(snapshot: FinancialCopilotSnapshot): FinancialCopi
       label: 'Necesita atención',
       explanation: `Los gastos del mes superan los ingresos en ${formatMoney(expenses - income, snapshot.currency)}.`,
       activeRules: ['expenses_exceed_income'],
+      reasons: ['Los gastos superan los ingresos del periodo.'],
       evidence: [balanceEvidence],
       limitations: snapshot.limitations,
       calculatedAt: snapshot.calculatedAt,
@@ -368,6 +399,12 @@ function buildFinancialHealth(snapshot: FinancialCopilotSnapshot): FinancialCopi
       label: 'Muy estable',
       explanation: 'El balance es positivo, los ingresos no bajaron, los gastos no subieron y no hay pendientes vencidos.',
       activeRules: ['balance_covers_expenses', 'income_not_decreasing', 'expenses_not_increasing', 'no_overdue_income'],
+      reasons: [
+        'Los ingresos cubren los gastos del periodo.',
+        'Los ingresos no bajaron frente al mes anterior.',
+        'Los gastos no aumentaron frente al mes anterior.',
+        'No hay ingresos vencidos sin reportar.',
+      ],
       evidence: [balanceEvidence, pendingEvidence],
       limitations: snapshot.limitations,
       calculatedAt: snapshot.calculatedAt,
@@ -383,6 +420,12 @@ function buildFinancialHealth(snapshot: FinancialCopilotSnapshot): FinancialCopi
     activeRules: income === 0 && expenses === 0
       ? ['insufficient_activity']
       : ['balance_covers_expenses'],
+    reasons: income === 0 && expenses === 0
+      ? ['No hay actividad suficiente para comparar el periodo.']
+      : [
+          'Los ingresos cubren los gastos del periodo.',
+          ...(snapshot.pendingIncome.overdueCount > 0 ? ['Hay ingresos vencidos sin reportar.'] : []),
+        ],
     evidence: [balanceEvidence, pendingEvidence],
     limitations: income === 0 && expenses === 0
       ? [...snapshot.limitations, 'No hay actividad suficiente en el periodo actual.']
@@ -430,12 +473,40 @@ export function buildFinancialCopilot(snapshot: FinancialCopilotSnapshot): Finan
     evidenceId: snapshot.currentMonth.expenses > 0 ? 'expense-change' : 'income-change',
   })
 
+  const insights = buildInsights(snapshot)
+  const todayPriorities = buildTodayPriorities(snapshot)
+  const financialHealth = buildFinancialHealth(snapshot)
+  const metadata = <T>(period: string, metrics: T, limitations = snapshot.limitations): TraceableFinancialReadModel<T> => ({
+    period,
+    currency: snapshot.currency,
+    source: snapshot.source,
+    calculatedAt: snapshot.calculatedAt,
+    metrics,
+    limitations,
+  })
+
   return {
-    insights: buildInsights(snapshot),
-    todayPriorities: buildTodayPriorities(snapshot),
-    financialHealth: buildFinancialHealth(snapshot),
+    insights,
+    todayPriorities,
+    financialHealth,
     summary: buildSummary(snapshot),
     suggestedActions: actions.slice(0, 3),
+    readModels: {
+      periodSummary: metadata(snapshot.period.current.label, snapshot.currentMonth),
+      periodComparison: metadata(`${snapshot.period.current.label} frente a ${snapshot.period.previous.label}`, {
+        current: snapshot.currentMonth,
+        previous: snapshot.previousMonth,
+        incomeDelta: snapshot.currentMonth.income - snapshot.previousMonth.income,
+        expenseDelta: snapshot.currentMonth.expenses - snapshot.previousMonth.expenses,
+      }),
+      categoryBreakdown: metadata(snapshot.period.current.label, snapshot.expenseCategories, snapshot.expenseCategories.length === 0 ? [...snapshot.limitations, 'No hay gastos clasificados en el periodo.'] : snapshot.limitations),
+      pendingIncome: metadata(snapshot.period.current.label, snapshot.pendingIncome),
+      upcomingAppointments: metadata(`desde ${snapshot.asOfDate}`, snapshot.appointments),
+      todayPriorities: metadata(snapshot.asOfDate, todayPriorities),
+      financialHealth: metadata(snapshot.period.current.label, financialHealth, financialHealth.limitations),
+      recentActivity: metadata(`${snapshot.period.previous.label} y ${snapshot.period.current.label}`, snapshot.movementDates),
+      goalProgress: metadata(snapshot.period.current.label, snapshot.goalProgress, snapshot.goalProgress.length === 0 ? [...snapshot.limitations, 'No hay objetivos activos para este periodo.'] : snapshot.limitations),
+    },
   }
 }
 
@@ -529,6 +600,39 @@ export function answerFinancialCopilotQuery(
       period: 'yesterday',
       category: null,
       metric: 'income',
+    }
+  }
+
+  if (/como va.*objetivo|progreso.*objetivo|como voy.*meta/.test(normalized)) {
+    const goals = snapshot.goalProgress.filter((goal) => goal.goalStatus !== 'cancelled')
+    if (goals.length === 0) {
+      return {
+        intent: 'financial-goal-progress',
+        text: 'No tienes objetivos financieros activos o pausados.',
+        explanation: 'Se consultaron los objetivos guardados localmente.',
+        period: 'current_month',
+        category: null,
+        metric: 'goals',
+      }
+    }
+    if (goals.length > 1) {
+      return {
+        intent: 'financial-goal-progress',
+        text: `Tienes ${goals.length} objetivos: ${goals.map((goal) => goal.goalName).join(', ')}. Indica cuál quieres consultar.`,
+        explanation: 'No elegí un objetivo automáticamente porque hay más de uno.',
+        period: 'current_month',
+        category: null,
+        metric: 'goals',
+      }
+    }
+    const goal = goals[0]
+    return {
+      intent: 'financial-goal-progress',
+      text: `${goal.goalName}: ${format(goal.currentAmount)} de ${format(goal.targetAmount)} (${Math.min(goal.percentage, 100).toFixed(0)} %).`,
+      explanation: 'El progreso se calculó con ingresos y gastos locales del periodo del objetivo.',
+      period: 'current_month',
+      category: null,
+      metric: 'goals',
     }
   }
 

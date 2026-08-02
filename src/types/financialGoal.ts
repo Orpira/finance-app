@@ -19,6 +19,9 @@ export interface FinancialGoal {
 
 export interface FinancialGoalProgress {
   readonly goalId: string
+  readonly goalName: string
+  readonly goalType: FinancialGoalType
+  readonly goalStatus: FinancialGoalStatus
   readonly currentAmount: number
   readonly targetAmount: number
   readonly remainingAmount: number

@@ -5,7 +5,7 @@ export interface FinancialCopilotSessionSnapshot {
   readonly period: 'current_month' | 'previous_month' | 'current_week' | 'previous_week' | 'yesterday'
   readonly lastQuery: string | null
   readonly lastCategory: string | null
-  readonly lastMetric: 'income' | 'expenses' | 'balance' | 'movements' | 'pending_income' | 'appointments' | null
+  readonly lastMetric: 'income' | 'expenses' | 'balance' | 'movements' | 'pending_income' | 'appointments' | 'goals' | null
   readonly lastResult: {
     readonly intent: string
     readonly text: string

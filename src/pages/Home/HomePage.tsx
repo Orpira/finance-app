@@ -12,6 +12,10 @@ import {
   MinusCircle,
   PlusCircle,
   ReceiptText,
+  Pause,
+  Play,
+  Save,
+  XCircle,
   Sparkles,
   TrendingUp,
 } from 'lucide-react'
@@ -40,6 +44,8 @@ import { getIncomeTypeLabel } from '../../utils/incomeTypes'
 import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
+import type { FinancialGoal } from '../../types/financialGoal'
+import { financialGoalService } from '../../services/financialGoalService'
 import type {
   CivilDate,
   IanaTimeZone,
@@ -156,6 +162,7 @@ export function HomePage() {
   } | null>(null)
   const [pendingIncomeSummary, setPendingIncomeSummary] = useState<PendingIncomeSummary | null>(null)
   const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([])
+  const [financialGoals, setFinancialGoals] = useState<FinancialGoal[]>([])
   const { hidden, toggle } = useSensitiveValues()
 
   useEffect(() => {
@@ -205,12 +212,13 @@ export function HomePage() {
 
     async function loadDashboard(nextSettings?: AppSettings) {
       const resolvedSettings = nextSettings ?? await getSettings()
-      const [period, incomes, expenses, oldIncomes, oldExpenses] = await Promise.all([
+      const [period, incomes, expenses, oldIncomes, oldExpenses, goals] = await Promise.all([
         getActiveEarningPeriod(),
         listServiceIncomes(current),
         listExpenses(current),
         listServiceIncomes(previous),
         listExpenses(previous),
+        financialGoalService.list(),
       ])
 
       if (!mounted) return
@@ -255,6 +263,7 @@ export function HomePage() {
       // De lo contrario, una temporada cerrada del mes anterior queda fuera y se muestra "sin datos".
       setPreviousIncomes(oldModeIncomes)
       setPreviousExpenses(oldModeExpenses)
+      setFinancialGoals(goals)
     }
 
     void loadDashboard()
@@ -370,8 +379,13 @@ export function HomePage() {
       previousExpenses,
       pendingIncome: pendingIncomeSummary ?? { count: 0, overdueCount: 0 },
       appointments: upcomingAppointments,
+      financialGoals,
     }))
-  }, [currentExpenses, currentIncomes, pendingIncomeSummary, previousExpenses, previousIncomes, settings, upcomingAppointments])
+  }, [currentExpenses, currentIncomes, financialGoals, pendingIncomeSummary, previousExpenses, previousIncomes, settings, upcomingAppointments])
+
+  async function refreshFinancialGoals() {
+    setFinancialGoals(await financialGoalService.list())
+  }
 
   const recentMovements = useMemo(
     () => buildRecentMovements(currentIncomes, currentExpenses),
@@ -554,6 +568,9 @@ export function HomePage() {
           </h2>
           <p className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">{financialCopilot.financialHealth.label}</p>
           <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{financialCopilot.financialHealth.explanation}</p>
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-xs leading-5 text-slate-600 dark:text-slate-300">
+            {financialCopilot.financialHealth.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+          </ul>
           <div className="my-4 border-t border-slate-200 dark:border-slate-800" />
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             <Lightbulb className="size-5 text-amber-700 dark:text-amber-300" aria-hidden="true" />
@@ -575,6 +592,16 @@ export function HomePage() {
               >
                 <p className="font-medium">{insight.message}</p>
                 <p className="mt-1 text-xs leading-5 opacity-80">{insight.explanation}</p>
+                <details className="mt-2 text-xs">
+                  <summary className="cursor-pointer font-semibold">Ver evidencia</summary>
+                  <ul className="mt-1 space-y-1">
+                    {insight.evidence.map((evidence) => (
+                      <li key={`${insight.id}-${evidence.metric}`}>
+                        {formatCurrency(evidence.currentValue, settings.defaultCurrency)} · {evidence.period}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
                 {insight.action && (
                   <Link className="mt-2 inline-flex text-xs font-semibold underline-offset-4 hover:underline" to={insight.action.to}>
                     {insight.action.label}
@@ -595,6 +622,39 @@ export function HomePage() {
           </Link>
         </article>
       </div>
+
+      {financialGoals.filter((goal) => goal.status !== 'cancelled').length > 0 ? (
+        <section aria-labelledby="financial-goals-title" className="border-y border-slate-200 py-5 dark:border-slate-800">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200" id="financial-goals-title">Objetivos financieros</h2>
+            <Link className="text-xs font-semibold text-emerald-700 dark:text-emerald-300" to="/conversation?query=Quiero%20crear%20un%20objetivo%20de%20ahorro">Crear objetivo</Link>
+          </div>
+          <ul className="mt-3 divide-y divide-slate-200 dark:divide-slate-800">
+            {financialGoals.filter((goal) => goal.status !== 'cancelled').map((goal) => {
+              const progress = financialCopilot.readModels.goalProgress.metrics.find((item) => item.goalId === goal.id)
+              return (
+                <li className="grid gap-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center" key={goal.id}>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{goal.name}</p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {progress ? `${formatCurrency(progress.currentAmount, progress.currency)} de ${formatCurrency(progress.targetAmount, progress.currency)} · ${Math.min(progress.percentage, 100).toFixed(0)} %` : 'Progreso no disponible'}
+                      {goal.status === 'paused' ? ' · Pausado' : ''}
+                    </p>
+                    {progress ? <progress aria-label={`Progreso de ${goal.name}`} className="mt-2 h-2 w-full accent-emerald-700" max="100" value={Math.min(progress.percentage, 100)} /> : null}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <label className="sr-only" htmlFor={`goal-target-${goal.id}`}>Importe objetivo</label>
+                    <input className="h-10 w-28 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900" defaultValue={goal.targetAmount} id={`goal-target-${goal.id}`} min="0.01" step="0.01" type="number" />
+                    <button aria-label="Guardar importe objetivo" className="flex size-10 items-center justify-center rounded-md hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:hover:bg-slate-800" onClick={() => { const input = document.getElementById(`goal-target-${goal.id}`) as HTMLInputElement | null; if (input) void financialGoalService.update(goal.id, { targetAmount: Number(input.value) }).then(refreshFinancialGoals) }} type="button"><Save className="size-4" aria-hidden="true" /></button>
+                    <button aria-label={goal.status === 'paused' ? 'Reanudar objetivo' : 'Pausar objetivo'} className="flex size-10 items-center justify-center rounded-md hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:hover:bg-slate-800" onClick={() => void financialGoalService.setStatus(goal.id, goal.status === 'paused' ? 'active' : 'paused').then(refreshFinancialGoals)} type="button">{goal.status === 'paused' ? <Play className="size-4" aria-hidden="true" /> : <Pause className="size-4" aria-hidden="true" />}</button>
+                    <button aria-label="Cancelar objetivo" className="flex size-10 items-center justify-center rounded-md text-rose-700 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-500 dark:hover:bg-rose-950" onClick={() => void financialGoalService.cancel(goal.id).then(refreshFinancialGoals)} type="button"><XCircle className="size-4" aria-hidden="true" /></button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between gap-3">

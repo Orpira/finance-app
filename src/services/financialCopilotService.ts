@@ -177,7 +177,7 @@ export function buildFinancialCopilotSnapshot(
       previousExpenses: uniqueSortedDates(input.previousExpenses),
     },
     goalProgress: (input.financialGoals ?? [])
-      .filter((goal) => goal.status === 'active' || goal.status === 'completed')
+      .filter((goal) => goal.status !== 'cancelled')
       .map((goal) => calculateFinancialGoalProgress(
         goal,
         allIncomes,

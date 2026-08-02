@@ -1,9 +1,9 @@
 import type { CurrencyCode } from '../types/settings'
-import { calculateFinancialTotals } from '../utils/financeStats'
 import { listExpenses } from './expenseService'
 import { listServiceIncomes } from './incomeService'
 import { shareReportPdf } from './reportShareService'
 import { getSettings } from './settingsService'
+import { buildFinancialCopilotSnapshot } from './financialCopilotService'
 
 function formatMoney(value: number, currency: CurrencyCode): string {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(value)
@@ -18,14 +18,23 @@ export async function exportCopilotPeriodReport(input: {
     listServiceIncomes({ from: input.periodStart, to: input.periodEnd }),
     listExpenses({ from: input.periodStart, to: input.periodEnd }),
   ])
-  const totals = calculateFinancialTotals(incomes, expenses, settings.defaultCurrency, settings.secondaryCurrency)
+  const readModel = buildFinancialCopilotSnapshot({
+    asOfDate: input.periodEnd,
+    settings,
+    currentIncomes: incomes,
+    previousIncomes: [],
+    currentExpenses: expenses,
+    previousExpenses: [],
+    pendingIncome: { count: 0, overdueCount: 0 },
+    appointments: [],
+  })
   const title = 'Reporte financiero'
   const text = [
     title,
     `Periodo: ${input.periodStart} a ${input.periodEnd}`,
-    `Ingresos: ${formatMoney(totals.primaryIncome, settings.defaultCurrency)} (${incomes.length})`,
-    `Gastos: ${formatMoney(totals.primaryExpenses, settings.defaultCurrency)} (${expenses.length})`,
-    `Balance: ${formatMoney(totals.primaryIncome - totals.primaryExpenses, settings.defaultCurrency)}`,
+    `Ingresos: ${formatMoney(readModel.currentMonth.income, settings.defaultCurrency)} (${readModel.currentMonth.incomeCount})`,
+    `Gastos: ${formatMoney(readModel.currentMonth.expenses, settings.defaultCurrency)} (${readModel.currentMonth.expenseCount})`,
+    `Balance: ${formatMoney(readModel.currentMonth.income - readModel.currentMonth.expenses, settings.defaultCurrency)}`,
   ].join('\n')
   const html = `<main><h1>${title}</h1><p>${text.split('\n').slice(1).join('</p><p>')}</p></main>`
   const fileName = `private-balance-${input.periodStart}-${input.periodEnd}`

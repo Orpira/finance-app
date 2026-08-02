@@ -65,6 +65,9 @@ export function calculateFinancialGoalProgress(
 
   return {
     goalId: goal.id,
+    goalName: goal.name,
+    goalType: goal.type,
+    goalStatus: goal.status,
     currentAmount,
     targetAmount: goal.targetAmount,
     remainingAmount: roundMoney(Math.max(goal.targetAmount - currentAmount, 0)),

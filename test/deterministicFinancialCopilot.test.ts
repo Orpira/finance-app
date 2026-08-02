@@ -37,7 +37,12 @@ const SNAPSHOT: FinancialCopilotSnapshot = {
     previousIncome: ['2026-07-03'],
     previousExpenses: ['2026-07-04'],
   },
-  goalProgress: [],
+  goalProgress: [{
+    goalId: 'goal-1', goalName: 'Ahorro mensual', goalType: 'saving', goalStatus: 'active',
+    currentAmount: 200, targetAmount: 300, remainingAmount: 100, percentage: 66.67,
+    state: 'on_track', period: { start: '2026-08-01', end: '2026-08-31' },
+    currency: 'EUR', source: 'local-financial-domain', calculatedAt: '2026-08-02T10:00:00.000Z', limitations: [],
+  }],
   expenseCategories: [
     { category: 'Transporte', amount: 310, count: 8 },
     { category: 'Material', amount: 190, count: 5 },
@@ -92,6 +97,7 @@ describe('buildFinancialCopilot', () => {
       label: 'Estable',
       calculatedAt: SNAPSHOT.calculatedAt,
       activeRules: expect.arrayContaining(['balance_covers_expenses']),
+      reasons: expect.arrayContaining(['Los ingresos cubren los gastos del periodo.']),
       evidence: expect.arrayContaining([
         expect.objectContaining({ metric: 'balance', currentValue: 1220 }),
       ]),
@@ -116,6 +122,20 @@ describe('buildFinancialCopilot', () => {
     expect(result.summary).toContain('2 ingresos sin reportar')
   })
 
+  it('proyecta todos los read models con metadatos trazables comunes', () => {
+    const readModels = buildFinancialCopilot(SNAPSHOT).readModels
+    expect(Object.keys(readModels)).toEqual([
+      'periodSummary', 'periodComparison', 'categoryBreakdown', 'pendingIncome',
+      'upcomingAppointments', 'todayPriorities', 'financialHealth', 'recentActivity', 'goalProgress',
+    ])
+    for (const model of Object.values(readModels)) {
+      expect(model).toEqual(expect.objectContaining({
+        period: expect.any(String), currency: 'EUR', source: 'local-financial-domain',
+        calculatedAt: SNAPSHOT.calculatedAt, metrics: expect.anything(), limitations: expect.any(Array),
+      }))
+    }
+  })
+
   it('sugiere acciones relevantes sin duplicar prioridades', () => {
     const result = buildFinancialCopilot(SNAPSHOT)
 
@@ -136,6 +156,7 @@ describe('answerFinancialCopilotQuery', () => {
     ['¿Cuántos ingresos faltan por reportar?', '2 ingresos', 'pending-income-count'],
     ['¿Cuándo fue mi última cita?', '1 ago 2026', 'last-appointment'],
     ['¿Qué ingresos registré ayer?', '120,00', 'yesterday-income'],
+    ['¿Cómo va mi objetivo?', 'Ahorro mensual', 'financial-goal-progress'],
   ])('responde localmente a %s', (query, expectedText, intent) => {
     const result = answerFinancialCopilotQuery(query, SNAPSHOT)
 

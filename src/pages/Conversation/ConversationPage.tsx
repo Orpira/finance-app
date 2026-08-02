@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { KeyRound, X } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import { getCurrentLicense } from '../../services/licenseService'
@@ -45,6 +45,18 @@ function LicensedConversationPage() {
     [],
   )
   const { state, sendMessage, confirmProposal, cancelProposal, clearContext, removeContextFilter } = useConversation(dependencies)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const consumedQuery = useRef(false)
+
+  useEffect(() => {
+    const query = searchParams.get('query')?.trim()
+    if (state.status !== 'ready' || consumedQuery.current || !query) return
+    consumedQuery.current = true
+    const next = new URLSearchParams(searchParams)
+    next.delete('query')
+    setSearchParams(next, { replace: true })
+    void sendMessage(query)
+  }, [searchParams, sendMessage, setSearchParams, state.status])
 
   const isLoadingConversation =
     state.status === 'idle' ||
