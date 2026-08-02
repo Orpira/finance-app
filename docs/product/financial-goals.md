@@ -18,7 +18,8 @@ Los objetivos de ingreso/ahorro limitan la visualización al 100 % una vez alcan
 
 `financialGoalService` valida y permite crear, editar, pausar, reanudar, completar y cancelar. Inicio permite consultar progreso y gestionar importe/estado. El Copiloto crea mediante propuesta editable y confirmación obligatoria.
 
+Desde la Iteración 6, Inicio presenta además días restantes, estado legible, última actualización y una recomendación determinista. No se añadieron tipos de objetivo ni fórmulas nuevas: la presentación deriva exclusivamente del objetivo y de `FinancialGoalProgress`.
+
 ## Migración y rollback
 
 La v30 crea una tabla vacía y participa en backup, restauración y reset. Las migraciones físicas descendentes no son seguras en IndexedDB. Un rollback de aplicación debe conservar la declaración v30, ocultar/desactivar la función y mantener los datos; solo una acción explícita posterior puede exportarlos o borrarlos.
-

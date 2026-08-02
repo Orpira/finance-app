@@ -1,4 +1,4 @@
-# Asistente — modelo conversacional, flujos y wireframes conceptuales
+# Copiloto — modelo conversacional, flujos y wireframes conceptuales
 
 Ver [ADR-030](../adr/ADR-030-Intelligent-Assistant-Platform.md) y [17_INTELLIGENT_ASSISTANT_DEFINITIVE_ARCHITECTURE.md](../architecture/17_INTELLIGENT_ASSISTANT_DEFINITIVE_ARCHITECTURE.md). Cubre las entregas 3 (mapa conversacional), 6 (tipos de interacción / parser), 10 (flujos) y 11 (wireframes conceptuales).
 
@@ -108,11 +108,11 @@ Si falta un dato imprescindible (p. ej. el usuario no dio moneda y hay más de u
 
 ## 5. Wireframes conceptuales (baja fidelidad, texto)
 
-### Pantalla Asistente (estado con historial)
+### Pantalla Copiloto (estado con historial)
 
 ```
 ┌─────────────────────────────────────────┐
-│ ← Inicio        Asistente                │
+│ ← Inicio        Copiloto                 │
 ├─────────────────────────────────────────┤
 │  Puedes escribir en lenguaje natural:    │
 │  ingresos, gastos, citas o consultas.    │
@@ -123,7 +123,7 @@ Si falta un dato imprescindible (p. ej. el usuario no dio moneda y hay más de u
 │  └───────────────────────────────────┘  │
 │                                           │
 │  ┌───────────────────────────────────┐  │
-│  │ Asistente:                         │  │
+│  │ Copiloto:                          │  │
 │  │ [ tarjeta de propuesta, §4 ]        │  │
 │  └───────────────────────────────────┘  │
 │                                           │
@@ -156,7 +156,7 @@ Si falta un dato imprescindible (p. ej. el usuario no dio moneda y hay más de u
 │ • Tus gastos en transporte crecieron 22% │
 │ • Tienes 3 ingresos sin reportar         │
 ├─────────────────────────────────────────┤
-│ [+ Ingreso] [+ Gasto] [+ Cita] [Asistente]│
+│ [+ Ingreso] [+ Gasto] [+ Cita] [Copiloto] │
 ├─────────────────────────────────────────┤
 │ Agenda próxima          Actividad reciente│
 │ · Mañana 18:30 — €80    · Servicio €120  │
@@ -165,5 +165,5 @@ Si falta un dato imprescindible (p. ej. el usuario no dio moneda y hay más de u
 
 ## 6. Historial y control del usuario sobre la conversación
 
-- El historial se persiste localmente (ya implementado, ADR-026) y es editable/borrable desde la propia pantalla del Asistente (acción "Borrar conversación", pendiente de implementar — ver roadmap).
+- El historial se persiste localmente (ya implementado, ADR-026) y es editable/borrable desde la propia pantalla del Copiloto (acción "Borrar conversación", pendiente de implementar — ver roadmap).
 - Cada mensaje del asistente que involucre datos financieros reales debe indicar de dónde salió el número (servicio/tool), nunca presentarlo como una afirmación sin fuente — esto ya es coherente con el diseño del Insight Engine (evidencia trazable) y debe extenderse a las respuestas conversacionales.

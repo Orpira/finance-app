@@ -11,7 +11,10 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 - React + TypeScript + Vite activos.
 - Guardias de licencia, PIN y modo de uso operativos.
 - Rutas principales activas para Home, Income, Expenses, Agenda, Reports, Settings e Insights.
-- `/conversation` diferencia por licencia: `trial`/`demo` reciben un sandbox local con datos ficticios; licencias completas reciben el Asistente real.
+- `/conversation` diferencia por licencia: `trial`/`demo` reciben un sandbox local con datos ficticios; licencias completas reciben el Copiloto.
+- El nombre visible unificado es `Copiloto`; conversación real y sandbox comparten Respuesta, Explicación, Evidencias y Acción recomendada.
+- Inicio sigue un orden contractual de siete secciones; Reportes usa un único flujo de configuración, vista previa, confirmación y generación.
+- `/settings/diagnostics` muestra integridad, esquema, almacenamiento y conteos locales, y exporta metadatos sanitizados sin contenido financiero.
 
 ### Persistencia local
 

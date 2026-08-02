@@ -20,11 +20,14 @@ Este directorio contiene la documentación oficial del proyecto. La fuente canó
 - [05_EVOLUTION_API.md](05_EVOLUTION_API.md) - Integración con Evolution API (proveedor `evolution`; ver también `whatsapp/` para el proveedor alternativo `meta-cloud`).
 - [07_AI_ROADMAP.md](07_AI_ROADMAP.md) - Ruta futura de IA.
 - [architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md](architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md) - Arquitectura implementada del copiloto local, sus reglas, consultas, memoria y límites.
-- [architecture/21_FREE_ASSISTANT_GUIDED_SANDBOX.md](architecture/21_FREE_ASSISTANT_GUIDED_SANDBOX.md) - Demostración local del Asistente para licencias gratuitas, escenarios, privacidad y límites.
+- [architecture/21_FREE_ASSISTANT_GUIDED_SANDBOX.md](architecture/21_FREE_ASSISTANT_GUIDED_SANDBOX.md) - Demostración local del Copiloto para licencias gratuitas, escenarios, privacidad y límites.
 - [architecture/22_EXPLAINABLE_FINANCIAL_INTELLIGENCE.md](architecture/22_EXPLAINABLE_FINANCIAL_INTELLIGENCE.md) - Read models, evidencia y explicaciones deterministas de Iteración 5.
 - [architecture/23_CONTEXTUAL_COPILOT_MEMORY.md](architecture/23_CONTEXTUAL_COPILOT_MEMORY.md) - Continuidad contextual efímera y limpieza manual.
 - [product/financial-goals.md](product/financial-goals.md) - Entidad, progreso y ciclo de vida de objetivos financieros.
 - [product/explainable-financial-health.md](product/explainable-financial-health.md) - Reglas públicas de salud financiera.
+- [product/ITERATION_6_EXPERIENCE.md](product/ITERATION_6_EXPERIENCE.md) - Lenguaje, jerarquía y experiencia unificada de la Iteración 6.
+- [product/configurable-reports.md](product/configurable-reports.md) - Flujo configurable de reportes y formatos soportados.
+- [architecture/24_LOCAL_DIAGNOSTICS.md](architecture/24_LOCAL_DIAGNOSTICS.md) - Diagnóstico local y exportación segura para soporte.
 - [context/TECHNICAL_BACKLOG.md](context/TECHNICAL_BACKLOG.md) - Deuda técnica identificada y criterios de cierre.
 - [08_DEPLOYMENT.md](08_DEPLOYMENT.md) - Despliegue y entornos.
 - [AUTOMATION_HUB.md](AUTOMATION_HUB.md) - Contrato de automatización entre app, Vercel y n8n.

@@ -12,7 +12,7 @@ Se revisó cada pantalla bajo `src/pages/**` respondiendo cuatro preguntas: ¿po
 
 1. **Apertura** → `LicenseGuard` (comprobación/activación de licencia) → `OnboardingGate` (tutorial la primera vez) → `PinGate` (bloqueo local) → `HomePage`.
 2. **Inicio** → resumen del mes, ingresos sin reportar, acciones rápidas, agenda próxima, resumen inteligente (ad-hoc, ver hallazgo en ADR-030 §2), actividad reciente.
-3. **Movimientos** (o Agenda, o Asistente, o Más) según la necesidad puntual.
+3. **Movimientos** (o Agenda, o Copiloto, o Más) según la necesidad puntual.
 4. **Cierre**: no hay una acción explícita de "salir"; la app se bloquea sola por PIN tras inactividad.
 
 Este flujo ya es razonablemente corto. El problema no es la profundidad de navegación — es que **registrar información sigue requiriendo abrir un formulario específico** (Ingreso, Gasto, Cita) incluso cuando el usuario ya sabe exactamente qué quiere decir en una frase.
@@ -57,7 +57,7 @@ Private Balance
 │
 ├── Agenda                     — citas, recordatorios, cierre de cita → ingreso
 │
-├── Asistente                  — centro de interacción en lenguaje natural
+├── Copiloto                   — centro de interacción en lenguaje natural
 │   ├── Consulta (ya implementado): balance, transacciones, presupuesto
 │   │   reconstruido, metas reconstruidas, reportes, insights, RAG documental
 │   └── Acción (propuesto, no implementado): registrar ingreso/gasto/cita,
@@ -71,4 +71,4 @@ Private Balance
     └── Ayuda
 ```
 
-Cambios respecto al mapa de la iteración 1 (`docs/architecture/16_CORE_AND_INTEGRATIONS.md`): el Asistente dejó de ser solo un ítem de navegación — pasa a tener dos modos funcionales explícitos (Consulta y Acción), y Movimientos se reafirma como destino único de fusión (en la iteración 1 se creó la pestaña, pero `IncomeListPage`/`ExpenseListPage` siguen siendo rutas propias independientes; unificarlas de verdad es trabajo de implementación futura, no de esta iteración de diseño).
+Cambios respecto al mapa de la iteración 1 (`docs/architecture/16_CORE_AND_INTEGRATIONS.md`): el Copiloto dejó de ser solo un ítem de navegación — pasa a tener dos modos funcionales explícitos (Consulta y Acción), y Movimientos se reafirma como destino único de fusión (en la iteración 1 se creó la pestaña, pero `IncomeListPage`/`ExpenseListPage` siguen siendo rutas propias independientes; unificarlas de verdad es trabajo de implementación futura, no de esta iteración de diseño).

@@ -15,7 +15,7 @@ Reconoce mes anterior, explicación, categoría principal, conteo, fechas, pendi
 
 ## Control del usuario
 
-El Asistente muestra chips de periodo, moneda y categoría. Cada chip puede retirarse; `Limpiar contexto` restablece toda la memoria efímera. Una nueva respuesta local reactiva únicamente los filtros que realmente utilizó.
+El Copiloto muestra chips de periodo, moneda y categoría. Cada chip puede retirarse; `Limpiar contexto` restablece toda la memoria efímera. Una nueva respuesta local reactiva únicamente los filtros que realmente utilizó.
 
 ## Limitaciones
 
@@ -23,4 +23,3 @@ El Asistente muestra chips de periodo, moneda y categoría. Cada chip puede reti
 - no se resuelve una referencia ambigua por aproximación;
 - retirar moneda mantiene la moneda predeterminada para cálculos, pero deja de tratarla como filtro contextual visible;
 - esta memoria no modifica la infraestructura conversacional histórica del proyecto.
-

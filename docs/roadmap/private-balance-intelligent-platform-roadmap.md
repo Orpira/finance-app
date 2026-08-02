@@ -67,13 +67,16 @@ Quedan para iteraciones posteriores las acciones `mark_income_reported`, `genera
 - Nueve read models con evidencia y trazabilidad común.
 - Home limitado y Movimientos con filtros compartidos/deep links.
 
-### Iteración 6 — Robustez y cierre de deuda
+### Iteración 6 — Experiencia unificada ✅ implementada (2026-08-02)
 
-- Auditoría completa de accesibilidad (DT-003).
-- Optimización medida del bundle (DT-001).
-- Estrategia de Service Worker (DT-002).
-- Exportación CSV unificada para ingresos y gastos.
-- Validación visual ampliada en dispositivos Android.
+- `Copiloto` como lenguaje visible único y estructura estable de respuestas.
+- Inicio consolidado como centro de control sin nuevos indicadores.
+- Reportes configurables con vista previa, confirmación y formatos ya soportados.
+- Objetivos existentes con tiempo, estado, actualización y recomendación determinista.
+- Diagnóstico local y exportación sanitizada para soporte.
+- Foco visible, reducción de movimiento y validación responsive de los flujos modificados.
+
+No se ejecutaron DT-001, DT-002 ni la certificación completa de DT-003; corresponden a estabilización previa a 1.0.
 
 ### Iteración 7 — Limpieza de pantallas identificadas en la auditoría
 

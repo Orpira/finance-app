@@ -18,9 +18,9 @@ Objetivo: núcleo (finanzas, agenda, reportes, asistente) operativo sin WhatsApp
 Entregables de la primera iteración:
 
 - n8n desactivable sin errores para eventos financieros/agenda (hecho);
-- navegación consolidada Inicio/Movimientos/Agenda/Asistente/Más (hecho);
+- navegación consolidada Inicio/Movimientos/Agenda/Copiloto/Más (hecho);
 - Inicio con ingresos sin reportar, acciones rápidas, agenda próxima, resumen inteligente (ad-hoc, ver corrección en P1) y actividad reciente (hecho);
-- Asistente promovido a experiencia principal, con la *nota* de propuesta→confirmación visible en la UI (hecho) — esa garantía ya es real desde la Fase P2 (el flujo de propuesta→confirmación no existía en la Fase P0, se implementó en P2);
+- Copiloto promovido a experiencia principal, con la *nota* de propuesta→confirmación visible en la UI (hecho) — esa garantía ya es real desde la Fase P2 (el flujo de propuesta→confirmación no existía en la Fase P0, se implementó en P2);
 - vista "Todos" de Movimientos con filtros compartidos y deep links contextuales (hecho en Iteración 5);
 - pendiente: verificación visual en navegador (bloqueada en este entorno por el backend de licencias, ver informe de la iteración).
 
@@ -40,13 +40,19 @@ Objetivo: ayudar a decidir y actuar con los datos existentes, sin IA ni pantalla
 
 Entregables: motor determinista compartido; prioridades de hoy; salud financiera por estados; insights y explicaciones; resumen natural; acciones sugeridas; seis consultas locales; memoria efímera de sesión. Arquitectura: [20_DETERMINISTIC_FINANCIAL_COPILOT.md](../architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md).
 
-## Experiencia gratuita del Asistente (completada)
+## Experiencia gratuita del Copiloto (completada)
 
 El bloqueo total de `/conversation` para `trial` fue reemplazado por un sandbox guiado. Permite escribir frases y recibir propuestas o consultas simuladas con datos ficticios, sin IA, red, Dexie ni persistencia. Arquitectura: [21_FREE_ASSISTANT_GUIDED_SANDBOX.md](../architecture/21_FREE_ASSISTANT_GUIDED_SANDBOX.md).
 
 ## Fase P4 - Inteligencia explicable y continuidad contextual (completada)
 
 Entregables: evidencia estructurada, nueve read models comunes, memoria RAM ampliada y eliminable, seguimientos locales, propuestas confirmables para un ingreso/reporte/objetivo, objetivos Dexie v30, salud explicable, Home limitado y Movimientos con filtros compartidos. No incluye acciones masivas, agentes autónomos ni predicción generativa.
+
+## Fase P5 - Experiencia unificada y soporte local (completada)
+
+Objetivo: hacer natural y coherente la inteligencia ya implementada, sin ampliar su alcance.
+
+Entregables: lenguaje visible unificado bajo `Copiloto`; respuestas y sandbox con jerarquía común; Inicio ordenado como centro de control; reportes configurables con vista previa y confirmación; objetivos con tiempo, estado y recomendación; diagnóstico local exportable sin datos personales; foco visible y reducción de movimiento. DT-001, Service Worker y certificación completa de DT-003 permanecen fuera de esta fase.
 
 ## Fase R1 - Robustez operativa (corto plazo)
 

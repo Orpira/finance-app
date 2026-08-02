@@ -19,7 +19,7 @@ Todos contienen:
 - métricas;
 - limitaciones explícitas.
 
-Inicio y Asistente consumen el mismo snapshot. La exportación confirmable de PDF reutiliza `buildFinancialCopilotSnapshot` y `reportShareService`; no introduce fórmulas financieras alternativas.
+Inicio y Copiloto consumen el mismo snapshot. La exportación confirmable de PDF reutiliza `buildFinancialCopilotSnapshot` y `reportShareService`; no introduce fórmulas financieras alternativas.
 
 ## Explicaciones y evidencia
 
@@ -38,4 +38,3 @@ Los estados siguen siendo `Muy estable`, `Estable` y `Necesita atención`; no ex
 - sin prompts, respuestas completas o read models en logs;
 - ninguna escritura sin propuesta y confirmación;
 - sin predicciones, fiscalidad personalizada ni recomendaciones de inversión.
-

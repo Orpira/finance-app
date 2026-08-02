@@ -1,11 +1,11 @@
-# Sandbox Guiado del Asistente para Licencias Gratuitas
+# Sandbox Guiado del Copiloto para Licencias Gratuitas
 
 **Estado:** implementado  
 **Fecha:** 2026-08-02
 
 ## Objetivo
 
-El Asistente permanece visible para usuarios con licencia gratuita activa (`trial` o `demo`), pero sus capacidades reales quedan bloqueadas. En su lugar, la pantalla ofrece un sandbox guiado que comunica el valor del producto mediante una conversación simulada, local y segura.
+El Copiloto permanece visible para usuarios con licencia gratuita activa (`trial` o `demo`), pero sus capacidades reales quedan bloqueadas. En su lugar, la pantalla ofrece un sandbox guiado que comunica el valor del producto mediante una conversación simulada, local y segura.
 
 La demostración no es un recorrido fijo de botones "Siguiente": permite escribir frases o elegir ejemplos y devuelve respuestas predefinidas mediante reglas deterministas.
 
@@ -62,7 +62,7 @@ Cuando una frase no coincide con una regla, se muestra una respuesta guiada que 
 
 La introducción explica claramente el carácter local y ficticio de la experiencia. El usuario puede probar frases sugeridas o escribir una variante propia. Al finalizar se muestra:
 
-> El Asistente IA está listo para ayudarte.
+> El Copiloto está listo para ayudarte.
 
 Las acciones finales son `Activar licencia`, que reutiliza `/settings/license`, y `Volver`, que regresa a Inicio.
 

@@ -7,7 +7,7 @@
 
 ## Objetivo
 
-El Copiloto Financiero convierte datos locales ya calculados en ayuda breve y accionable sin crear nuevas pantallas, llamar a un modelo de IA ni modificar registros. Sus consumidores actuales son Inicio y el Asistente licenciado.
+El Copiloto Financiero convierte datos locales ya calculados en ayuda breve y accionable sin crear nuevas pantallas, llamar a un modelo de IA ni modificar registros. Sus consumidores actuales son Inicio y la conversación licenciada del Copiloto.
 
 ## Arquitectura
 
@@ -22,7 +22,7 @@ financialCopilotService -> FinancialCopilotSnapshot
 financialCopilotEngine (reglas puras y deterministas)
              |                                  |
              v                                  v
- Inicio: prioridades, salud,             Asistente: consultas
+ Inicio: prioridades, salud,             Copiloto: consultas
  insights, resumen, acciones             naturales y explicación
 ```
 
@@ -46,7 +46,7 @@ En Iteración 4 todavía no existían objetivos reales. Iteración 5 añadió `f
 
 ## Consultas locales
 
-El Asistente reconoce cuánto se ingresó este mes, cuánto se gastó, la categoría con más gastos, ingresos sin reportar, última cita e ingresos de ayer. Cada respuesta incluye una explicación basada en conteos, periodo o agrupación. Si una consulta no coincide con una regla, devuelve `null`; no fabrica una respuesta.
+El Copiloto reconoce cuánto se ingresó este mes, cuánto se gastó, la categoría con más gastos, ingresos sin reportar, última cita e ingresos de ayer. Cada respuesta incluye una explicación basada en conteos, periodo o agrupación. Si una consulta no coincide con una regla, devuelve `null`; no fabrica una respuesta.
 
 ## Privacidad y memoria
 
