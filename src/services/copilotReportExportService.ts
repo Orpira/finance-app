@@ -1,7 +1,6 @@
 import type { CurrencyCode } from '../types/settings'
 import { listExpenses } from './expenseService'
 import { listServiceIncomes } from './incomeService'
-import { shareReportPdf } from './reportShareService'
 import { getSettings } from './settingsService'
 import { buildFinancialCopilotSnapshot } from './financialCopilotService'
 
@@ -38,6 +37,7 @@ export async function exportCopilotPeriodReport(input: {
   ].join('\n')
   const html = `<main><h1>${title}</h1><p>${text.split('\n').slice(1).join('</p><p>')}</p></main>`
   const fileName = `private-balance-${input.periodStart}-${input.periodEnd}`
+  const { shareReportPdf } = await import('./reportShareService')
   await shareReportPdf({ fileName, html, text, title })
   return `${fileName}.pdf`
 }
