@@ -4,6 +4,8 @@
 
 Private Balance se encuentra en estado operativo con arquitectura local-first estable y una capa de automatización remota funcional.
 
+El alcance funcional de `v0.9 - Experiencia unificada` está completado. La planificación previa a 1.0 ya no usa nuevas iteraciones numeradas: continúa con `v0.95 - Rendimiento y calidad` y, tras su certificación, `v1.0 - Lanzamiento oficial`. Ver [roadmap de versiones](../roadmap/PRODUCT_RELEASE_ROADMAP.md).
+
 ## 2) Estado por componente
 
 ### Cliente

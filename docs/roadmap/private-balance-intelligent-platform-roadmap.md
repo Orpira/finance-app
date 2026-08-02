@@ -76,13 +76,15 @@ Quedan para iteraciones posteriores las acciones `mark_income_reported`, `genera
 - Diagnóstico local y exportación sanitizada para soporte.
 - Foco visible, reducción de movimiento y validación responsive de los flujos modificados.
 
-No se ejecutaron DT-001, DT-002 ni la certificación completa de DT-003; corresponden a estabilización previa a 1.0.
+No se ejecutaron DT-001, DT-002 ni la certificación completa de DT-003; corresponden a `v0.95`.
 
-### Iteración 7 — Limpieza de pantallas identificadas en la auditoría
+### Transición al roadmap de versiones
 
-- `IncomeDetailPage`, `IncomePendingReportPage`, `ReportPreviewPage`, flujo de 3 pantallas de Temporadas, `BestDaysHistoryPage` — evaluar cada una individualmente contra el principio rector antes de tocarla (algunas pueden justificar quedarse igual).
+La Iteración 6 cierra el modelo de iteraciones funcionales anterior a 1.0. La antigua propuesta de una Iteración 7 queda retirada: la posible simplificación de pantallas solo podrá abordarse en `v0.95` cuando una auditoría demuestre un defecto de comprensión, accesibilidad, rendimiento o mantenimiento, y sin crear flujos nuevos.
 
-## 3. Riesgos a vigilar en todas las iteraciones futuras
+La planificación vigente es `v0.9 - Experiencia unificada`, `v0.95 - Rendimiento y calidad` y `v1.0 - Lanzamiento oficial`. Alcance y criterios de salida: [Roadmap de versiones hacia Private Balance 1.0](PRODUCT_RELEASE_ROADMAP.md).
+
+## 3. Riesgos a vigilar en todas las versiones futuras
 
 - Cualquier tool de escritura que se registre debe tener tests que prueben explícitamente que **no** se ejecuta sin confirmación — no basta con probar el camino feliz confirmado.
 - El "presupuesto"/"metas" reconstruidos (ver `17_*.md` §2) no deben presentarse al usuario como si fueran entidades reales hasta que el producto decida si vale la pena modelarlas de verdad — es un riesgo de sobre-prometer.

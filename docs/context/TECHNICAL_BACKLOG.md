@@ -9,13 +9,15 @@
 
 Iteración 6 añade foco global visible, reducción de movimiento, regiones vivas y una revisión de los flujos modificados. No se declara DT-003 cerrada: falta certificar lectores de pantalla, contraste completo y dispositivos físicos.
 
+DT-001, DT-002 y DT-003 forman el alcance obligatorio de `v0.95 - Rendimiento y calidad`, según el [roadmap de versiones](../roadmap/PRODUCT_RELEASE_ROADMAP.md). No deben mezclarse con nuevas funciones.
+
 ## DT-001 - Optimización de rendimiento y tamaño del bundle
 
 **Estado:** Pendiente  
 **Prioridad:** Alta, antes de v1.0  
 **Origen:** advertencia de Vite/Rollup porque el chunk principal supera 500 kB.
 
-No es un error funcional y no debe abordarse durante iteraciones funcionales. Se planifica como sprint exclusivo inmediatamente antes de preparar v1.0.
+No es un error funcional y no debe abordarse durante trabajo funcional. Se ejecutará dentro de `v0.95` como un frente exclusivo y medible antes de preparar v1.0.
 
 ### Objetivos
 
@@ -24,7 +26,7 @@ No es un error funcional y no debe abordarse durante iteraciones funcionales. Se
 - mantener comportamiento, compatibilidad offline y cálculos sin cambios;
 - cargar inicialmente solo Inicio, Movimientos y Agenda siempre que la arquitectura lo permita.
 
-### Alcance del sprint futuro
+### Alcance en v0.95
 
 - auditar lazy loading, code splitting, `React.lazy`, `Suspense`, tree shaking, imports, código muerto, iconografía y dependencias duplicadas;
 - separar módulos pesados y revisar específicamente jsPDF, XLSX, html2canvas, Recharts, Chart.js y OpenAI;

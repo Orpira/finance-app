@@ -9,7 +9,19 @@ Toda funcionalidad nueva debe demostrar un beneficio claro para el usuario o par
 - velocidad;
 - utilidad.
 
-Una idea que aumente la complejidad sin aportar una mejora clara en alguno de esos aspectos queda fuera de la versión 1.0. Este criterio debe aplicarse antes de planificar una iteración y durante su revisión de alcance, preservando la simplicidad como parte del valor diferencial de Private Balance.
+Una idea que aumente la complejidad sin aportar una mejora clara en alguno de esos aspectos queda fuera de la versión 1.0. Este criterio debe aplicarse antes de admitir trabajo en una versión y durante su revisión de alcance, preservando la simplicidad como parte del valor diferencial de Private Balance.
+
+## Planificación vigente por versiones
+
+La Iteración 6 cierra el modelo de grandes iteraciones funcionales previo a 1.0. La planificación vigente se organiza en:
+
+- `v0.9 - Experiencia unificada`: alcance funcional completado;
+- `v0.95 - Rendimiento y calidad`: estabilización, DT-001, DT-002, DT-003 y auditorías;
+- `v1.0 - Lanzamiento oficial`: certificación, documentación y publicación.
+
+No se planifican nuevas iteraciones numeradas antes del lanzamiento. El alcance, los criterios de salida y la política de congelación funcional se definen en [Roadmap de versiones hacia Private Balance 1.0](../roadmap/PRODUCT_RELEASE_ROADMAP.md).
+
+Las fases siguientes conservan el historial y la dirección arquitectónica. No sustituyen el plan de releases ni autorizan nuevas funciones antes de 1.0.
 
 ## Fase P0 - Private Balance Core Redesign (completada para su alcance, ver ADR-029)
 
@@ -30,7 +42,7 @@ Objetivo: diseñar cómo el asistente pasa de solo-consulta a poder proponer acc
 
 ## Fase P2 - Intelligent Assistant Platform, implementación (completada para su alcance, ver ADR-031)
 
-Objetivo: implementar el primer flujo completo Usuario → Interpretación → Propuesta → Edición → Confirmación → Validación → Persistencia → Resultado, para registrar ingreso/gasto y crear cita. Ver `docs/architecture/19_ASSISTANT_ACTION_FLOW.md` para la arquitectura tal como quedó construida (distinta a la planeada en P1 — ver ADR-031) y `docs/roadmap/private-balance-intelligent-platform-roadmap.md` §2 para lo pendiente (iteraciones 4 a 7): resto de acciones, conectar 8A al camino de consulta, consolidar Movimientos, limpieza de pantallas.
+Objetivo: implementar el primer flujo completo Usuario → Interpretación → Propuesta → Edición → Confirmación → Validación → Persistencia → Resultado, para registrar ingreso/gasto y crear cita. Ver `docs/architecture/19_ASSISTANT_ACTION_FLOW.md` para la arquitectura tal como quedó construida (distinta a la planeada en P1 — ver ADR-031) y `docs/roadmap/private-balance-intelligent-platform-roadmap.md` §2 para la evolución funcional que finalmente se completó hasta la Iteración 6. La antigua Iteración 7 fue retirada al adoptar el roadmap de versiones.
 
 Entregables: los tres flujos de acción funcionando end-to-end con tests; frontera 8A conectada para ese flujo (modo local); "Canales de comunicación" oculto de la experiencia de usuario (código conservado); corrección de un hallazgo de seguridad real (`VITE_OPENAI_API_KEY` sin bloquear en `vite.config.ts`, commit `bca00bb`).
 
