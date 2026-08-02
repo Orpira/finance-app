@@ -26,6 +26,7 @@ import { getSettings } from './settingsService'
 
 export interface BuildFinancialCopilotSnapshotInput {
   readonly asOfDate: string
+  readonly calculatedAt?: string
   readonly settings: AppSettings
   readonly currentIncomes: readonly ServiceIncome[]
   readonly previousIncomes: readonly ServiceIncome[]
@@ -43,6 +44,21 @@ function previousCivilDate(value: string): string {
   const date = new Date(Date.UTC(year, month - 1, day))
   date.setUTCDate(date.getUTCDate() - 1)
   return date.toISOString().slice(0, 10)
+}
+
+function getMonthMetadata(asOfDate: string, offset: number) {
+  const [year, month] = asOfDate.split('-').map(Number)
+  const start = new Date(Date.UTC(year, month - 1 + offset, 1))
+  const end = new Date(Date.UTC(year, month + offset, 0))
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+    label: new Intl.DateTimeFormat('es-ES', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(start),
+  }
 }
 
 export function buildFinancialCopilotSnapshot(
@@ -82,6 +98,13 @@ export function buildFinancialCopilotSnapshot(
 
   return {
     asOfDate: input.asOfDate,
+    calculatedAt: input.calculatedAt ?? `${input.asOfDate}T00:00:00.000Z`,
+    source: 'local-financial-domain',
+    period: {
+      current: getMonthMetadata(input.asOfDate, 0),
+      previous: getMonthMetadata(input.asOfDate, -1),
+    },
+    limitations: [],
     currency,
     currentMonth: {
       income: currentTotals.primaryIncome,
@@ -177,6 +200,7 @@ export function createFinancialCopilotService(
 
       return buildFinancialCopilotSnapshot({
         asOfDate: now.toLocaleDateString('en-CA'),
+        calculatedAt: now.toISOString(),
         settings,
         currentIncomes: filterMode(currentIncomes, true),
         previousIncomes: filterMode(previousIncomes, false),

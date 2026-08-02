@@ -9,6 +9,13 @@ export interface FinancialCopilotPeriodSummary {
 
 export interface FinancialCopilotSnapshot {
   readonly asOfDate: string
+  readonly calculatedAt: string
+  readonly source: 'local-financial-domain'
+  readonly period: {
+    readonly current: FinancialCopilotPeriod
+    readonly previous: FinancialCopilotPeriod
+  }
+  readonly limitations: readonly string[]
   readonly currency: CurrencyCode
   readonly currentMonth: FinancialCopilotPeriodSummary
   readonly previousMonth: FinancialCopilotPeriodSummary
@@ -32,6 +39,21 @@ export interface FinancialCopilotSnapshot {
   }
 }
 
+export interface FinancialCopilotPeriod {
+  readonly start: string
+  readonly end: string
+  readonly label: string
+}
+
+export interface FinancialEvidence {
+  readonly metric: string
+  readonly currentValue: number
+  readonly previousValue?: number
+  readonly delta?: number
+  readonly period: string
+  readonly source: FinancialCopilotSnapshot['source']
+}
+
 export interface FinancialCopilotAction {
   readonly id: string
   readonly label: string
@@ -43,6 +65,7 @@ export interface FinancialCopilotInsight {
   readonly message: string
   readonly explanation: string
   readonly tone: 'positive' | 'attention' | 'neutral'
+  readonly evidence: readonly FinancialEvidence[]
   readonly action?: Omit<FinancialCopilotAction, 'id'>
 }
 
@@ -61,6 +84,10 @@ export interface FinancialCopilotResult {
     readonly state: FinancialHealthState
     readonly label: 'Muy estable' | 'Estable' | 'Necesita atención'
     readonly explanation: string
+    readonly activeRules: readonly string[]
+    readonly evidence: readonly FinancialEvidence[]
+    readonly limitations: readonly string[]
+    readonly calculatedAt: string
   }
   readonly summary: string
   readonly suggestedActions: readonly FinancialCopilotAction[]
@@ -140,6 +167,14 @@ function buildInsights(snapshot: FinancialCopilotSnapshot): FinancialCopilotInsi
       message: `Tus ingresos ${incomeChange > 0 ? 'crecieron' : 'bajaron'} un ${formatPercentage(incomeChange)} % este mes.`,
       explanation: `Se compararon ${formatMoney(snapshot.currentMonth.income, snapshot.currency)} de este mes con ${formatMoney(snapshot.previousMonth.income, snapshot.currency)} del anterior.`,
       tone: incomeChange > 0 ? 'positive' : 'attention',
+      evidence: [{
+        metric: 'income',
+        currentValue: snapshot.currentMonth.income,
+        previousValue: snapshot.previousMonth.income,
+        delta: snapshot.currentMonth.income - snapshot.previousMonth.income,
+        period: snapshot.period.current.label,
+        source: snapshot.source,
+      }],
     })
   }
 
@@ -149,6 +184,14 @@ function buildInsights(snapshot: FinancialCopilotSnapshot): FinancialCopilotInsi
       message: `Tus gastos ${expenseChange < 0 ? 'bajaron' : 'subieron'} un ${formatPercentage(expenseChange)} % este mes.`,
       explanation: `Se compararon ${formatMoney(snapshot.currentMonth.expenses, snapshot.currency)} de este mes con ${formatMoney(snapshot.previousMonth.expenses, snapshot.currency)} del anterior.`,
       tone: expenseChange < 0 ? 'positive' : 'attention',
+      evidence: [{
+        metric: 'expenses',
+        currentValue: snapshot.currentMonth.expenses,
+        previousValue: snapshot.previousMonth.expenses,
+        delta: snapshot.currentMonth.expenses - snapshot.previousMonth.expenses,
+        period: snapshot.period.current.label,
+        source: snapshot.source,
+      }],
     })
   }
 
@@ -164,6 +207,12 @@ function buildInsights(snapshot: FinancialCopilotSnapshot): FinancialCopilotInsi
       message: `${topCategory.category} concentra la mayor parte de tus gastos.`,
       explanation: `${topCategory.count} gastos suman ${formatMoney(topCategory.amount, snapshot.currency)}, al menos el 40 % del total mensual.`,
       tone: 'neutral',
+      evidence: [{
+        metric: `expense_category:${topCategory.category}`,
+        currentValue: topCategory.amount,
+        period: snapshot.period.current.label,
+        source: snapshot.source,
+      }],
     })
   }
 
@@ -175,6 +224,17 @@ function buildInsights(snapshot: FinancialCopilotSnapshot): FinancialCopilotInsi
         ? `${snapshot.pendingIncome.overdueCount} ${plural(snapshot.pendingIncome.overdueCount, 'lleva', 'llevan')} más de 7 días pendiente.`
         : 'Todos los pendientes tienen menos de 8 días.',
       tone: snapshot.pendingIncome.overdueCount > 0 ? 'attention' : 'neutral',
+      evidence: [{
+        metric: 'pending_income_count',
+        currentValue: snapshot.pendingIncome.count,
+        period: snapshot.period.current.label,
+        source: snapshot.source,
+      }, {
+        metric: 'overdue_pending_income_count',
+        currentValue: snapshot.pendingIncome.overdueCount,
+        period: snapshot.period.current.label,
+        source: snapshot.source,
+      }],
       action: { label: 'Revisar ingresos', to: '/income/pendientes' },
     })
   }
@@ -185,6 +245,12 @@ function buildInsights(snapshot: FinancialCopilotSnapshot): FinancialCopilotInsi
       message: 'No hay cambios importantes que requieran tu atención.',
       explanation: 'Las reglas locales no detectaron variaciones relevantes ni ingresos pendientes.',
       tone: 'neutral',
+      evidence: [{
+        metric: 'material_change_count',
+        currentValue: 0,
+        period: snapshot.period.current.label,
+        source: snapshot.source,
+      }],
     })
   }
 
@@ -215,12 +281,28 @@ function buildTodayPriorities(snapshot: FinancialCopilotSnapshot): FinancialCopi
 
 function buildFinancialHealth(snapshot: FinancialCopilotSnapshot): FinancialCopilotResult['financialHealth'] {
   const { income, expenses } = snapshot.currentMonth
+  const balanceEvidence: FinancialEvidence = {
+    metric: 'balance',
+    currentValue: income - expenses,
+    period: snapshot.period.current.label,
+    source: snapshot.source,
+  }
+  const pendingEvidence: FinancialEvidence = {
+    metric: 'overdue_pending_income_count',
+    currentValue: snapshot.pendingIncome.overdueCount,
+    period: snapshot.period.current.label,
+    source: snapshot.source,
+  }
 
   if ((income > 0 || expenses > 0) && expenses > income) {
     return {
       state: 'needs_attention',
       label: 'Necesita atención',
       explanation: `Los gastos del mes superan los ingresos en ${formatMoney(expenses - income, snapshot.currency)}.`,
+      activeRules: ['expenses_exceed_income'],
+      evidence: [balanceEvidence],
+      limitations: snapshot.limitations,
+      calculatedAt: snapshot.calculatedAt,
     }
   }
 
@@ -235,6 +317,10 @@ function buildFinancialHealth(snapshot: FinancialCopilotSnapshot): FinancialCopi
       state: 'very_stable',
       label: 'Muy estable',
       explanation: 'El balance es positivo, los ingresos no bajaron, los gastos no subieron y no hay pendientes vencidos.',
+      activeRules: ['balance_covers_expenses', 'income_not_decreasing', 'expenses_not_increasing', 'no_overdue_income'],
+      evidence: [balanceEvidence, pendingEvidence],
+      limitations: snapshot.limitations,
+      calculatedAt: snapshot.calculatedAt,
     }
   }
 
@@ -244,6 +330,14 @@ function buildFinancialHealth(snapshot: FinancialCopilotSnapshot): FinancialCopi
     explanation: income === 0 && expenses === 0
       ? 'Aún no hay actividad suficiente para detectar una situación que requiera atención.'
       : 'El balance mensual es positivo, aunque todavía hay algún indicador por revisar.',
+    activeRules: income === 0 && expenses === 0
+      ? ['insufficient_activity']
+      : ['balance_covers_expenses'],
+    evidence: [balanceEvidence, pendingEvidence],
+    limitations: income === 0 && expenses === 0
+      ? [...snapshot.limitations, 'No hay actividad suficiente en el periodo actual.']
+      : snapshot.limitations,
+    calculatedAt: snapshot.calculatedAt,
   }
 }
 

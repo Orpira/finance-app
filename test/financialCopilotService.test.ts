@@ -83,6 +83,15 @@ describe('buildFinancialCopilotSnapshot', () => {
       lastDateTime: '2026-07-31T10:00:00.000Z',
     })
     expect(snapshot.yesterdayIncome).toEqual({ amount: 120, count: 1 })
+    expect(snapshot).toEqual(expect.objectContaining({
+      source: 'local-financial-domain',
+      calculatedAt: expect.stringMatching(/^2026-08-02T/),
+      period: {
+        current: { start: '2026-08-01', end: '2026-08-31', label: 'agosto de 2026' },
+        previous: { start: '2026-07-01', end: '2026-07-31', label: 'julio de 2026' },
+      },
+      limitations: [],
+    }))
   })
 })
 
@@ -90,6 +99,13 @@ describe('createLocalFinancialCopilotQueryHandler', () => {
   it('responde con datos locales y mantiene memoria solo en la instancia', async () => {
     const loadSnapshot = vi.fn().mockResolvedValue({
       asOfDate: '2026-08-02',
+      calculatedAt: '2026-08-02T10:00:00.000Z',
+      source: 'local-financial-domain',
+      period: {
+        current: { start: '2026-08-01', end: '2026-08-31', label: 'agosto de 2026' },
+        previous: { start: '2026-07-01', end: '2026-07-31', label: 'julio de 2026' },
+      },
+      limitations: [],
       currency: 'EUR',
       currentMonth: { income: 100, expenses: 0, incomeCount: 1, expenseCount: 0 },
       previousMonth: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },

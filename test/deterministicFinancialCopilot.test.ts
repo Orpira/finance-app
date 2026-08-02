@@ -9,6 +9,13 @@ import { createFinancialCopilotSessionMemory } from '../src/intelligence/determi
 
 const SNAPSHOT: FinancialCopilotSnapshot = {
   asOfDate: '2026-08-02',
+  calculatedAt: '2026-08-02T10:00:00.000Z',
+  source: 'local-financial-domain',
+  period: {
+    current: { start: '2026-08-01', end: '2026-08-31', label: 'agosto de 2026' },
+    previous: { start: '2026-07-01', end: '2026-07-31', label: 'julio de 2026' },
+  },
+  limitations: [],
   currency: 'EUR',
   currentMonth: {
     income: 1840,
@@ -47,6 +54,18 @@ describe('buildFinancialCopilot', () => {
       expect.objectContaining({ id: 'top-expense-category', explanation: expect.stringContaining('310') }),
     ]))
     expect(result.insights.every((insight) => insight.message.length <= 120)).toBe(true)
+    expect(result.insights.every((insight) => insight.evidence.length > 0)).toBe(true)
+    expect(result.insights.find((insight) => insight.id === 'income-growth')?.evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metric: 'income',
+          currentValue: 1840,
+          previousValue: 1640,
+          period: 'agosto de 2026',
+          source: 'local-financial-domain',
+        }),
+      ]),
+    )
   })
 
   it('muestra solo prioridades actuales y ordena primero la cita de hoy', () => {
@@ -62,6 +81,11 @@ describe('buildFinancialCopilot', () => {
     expect(buildFinancialCopilot(SNAPSHOT).financialHealth).toEqual(expect.objectContaining({
       state: 'stable',
       label: 'Estable',
+      calculatedAt: SNAPSHOT.calculatedAt,
+      activeRules: expect.arrayContaining(['balance_covers_expenses']),
+      evidence: expect.arrayContaining([
+        expect.objectContaining({ metric: 'balance', currentValue: 1220 }),
+      ]),
     }))
 
     expect(buildFinancialCopilot({
