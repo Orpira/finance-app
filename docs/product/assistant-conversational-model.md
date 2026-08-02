@@ -4,6 +4,8 @@ Ver [ADR-030](../adr/ADR-030-Intelligent-Assistant-Platform.md) y [17_INTELLIGEN
 
 > **Estado vigente (Iteración 4, 2026-08-02):** las acciones de ingreso, gasto y cita ya están implementadas mediante parser determinista y confirmación obligatoria (ADR-031). Además, seis consultas financieras frecuentes se resuelven localmente mediante el [Copiloto Financiero Determinista](../architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md), antes del pipeline de proveedor. Las secciones históricas que describen acciones como no implementadas o recomiendan no usar parser quedan como contexto del diseño previo y no describen el runtime actual.
 
+> **Licencias gratuitas:** `trial` y `demo` acceden a la misma ruta, pero reciben el [Sandbox Guiado](../architecture/21_FREE_ASSISTANT_GUIDED_SANDBOX.md), con datos ficticios y reglas locales. No se monta el controlador de conversación real ni se consultan servicios financieros.
+
 ## 1. Catálogo de intenciones
 
 Dos familias, con tratamiento arquitectónico distinto (ver documento de arquitectura):

@@ -91,3 +91,7 @@ Ver [ADR-029](adr/ADR-029-Private-Balance-Core-Redesign.md) para el detalle de l
 Private Balance ya no se limita a registrar actividad: Inicio interpreta el contexto local mediante reglas deterministas y muestra solo prioridades actuales, salud financiera comprensible, insights explicables, un resumen natural y siguientes pasos. El Asistente resuelve las consultas financieras frecuentes de forma local antes de considerar cualquier proveedor.
 
 Esta evolución mantiene intacta la promesa de producto: el usuario conserva el control, los cálculos oficiales proceden de los servicios financieros existentes y ninguna sugerencia ejecuta acciones por sí sola. Ver [Copiloto Financiero Determinista](architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md).
+
+### Experiencia gratuita del Asistente
+
+El Asistente es visible también durante una licencia `trial` o `demo`, pero sin exponer capacidades reales ni datos financieros. Un [sandbox guiado local](architecture/21_FREE_ASSISTANT_GUIDED_SANDBOX.md) permite probar frases y acciones simuladas con información ficticia, sin IA, red, tokens ni persistencia. La experiencia completa continúa reservada a licencias habilitadas.

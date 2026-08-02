@@ -112,6 +112,7 @@ Private Balance distingue siempre entre arquitectura **implementada**, **parcial
 | Knowledge Layer | Implementada como derivado controlado | `src/intelligence/knowledge-layer` |
 | Insight Engine + dashboard | Implementada | `src/insight`, `src/pages/Insights` |
 | Copiloto financiero determinista | Implementado | `src/intelligence/deterministic-copilot`, `src/services/financialCopilotService.ts` |
+| Sandbox guiado del Asistente para licencias gratuitas | Implementado | `AssistantInteractiveDemo.tsx`, `assistantInteractiveDemoSandbox.ts` |
 | AI Privacy Boundary | Implementada | `src/intelligence/ai-foundation` |
 | Authorized Context Builder | Implementada | `src/intelligence/ai-foundation` |
 | LLM adapter contracts | Implementada | `src/intelligence/ai-foundation` |

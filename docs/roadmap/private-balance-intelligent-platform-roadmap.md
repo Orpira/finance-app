@@ -42,6 +42,7 @@ Ver [ADR-031](../adr/ADR-031-Assistant-Action-Flow-Implementation.md) y [19_ASSI
 - Seis consultas naturales resueltas localmente antes del proveedor, siempre con explicación.
 - Memoria efímera por sesión para periodo, moneda, última consulta y categoría; no persiste prompts ni respuestas.
 - Integración en Inicio y Asistente sin crear pantallas.
+- Experiencia diferenciada por licencia: sandbox guiado, local y ficticio para `trial`/`demo`; conversación real para licencias completas.
 
 Quedan para iteraciones posteriores las acciones `mark_income_reported`, `generate_report`, `create_season`/`close_season`, la entidad real de objetivos y la consolidación sobre read models trazables del Insight Engine.
 

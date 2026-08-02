@@ -29,6 +29,10 @@ Objetivo: ayudar a decidir y actuar con los datos existentes, sin IA ni pantalla
 
 Entregables: motor determinista compartido; prioridades de hoy; salud financiera por estados; insights y explicaciones; resumen natural; acciones sugeridas; seis consultas locales; memoria efímera de sesión. Arquitectura: [20_DETERMINISTIC_FINANCIAL_COPILOT.md](../architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md).
 
+## Experiencia gratuita del Asistente (completada)
+
+El bloqueo total de `/conversation` para `trial` fue reemplazado por un sandbox guiado. Permite escribir frases y recibir propuestas o consultas simuladas con datos ficticios, sin IA, red, Dexie ni persistencia. Arquitectura: [21_FREE_ASSISTANT_GUIDED_SANDBOX.md](../architecture/21_FREE_ASSISTANT_GUIDED_SANDBOX.md).
+
 ## Fase R1 - Robustez operativa (corto plazo)
 
 Objetivo: cerrar riesgos críticos de automatización y gobernanza.

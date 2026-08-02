@@ -11,6 +11,7 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 - React + TypeScript + Vite activos.
 - Guardias de licencia, PIN y modo de uso operativos.
 - Rutas principales activas para Home, Income, Expenses, Agenda, Reports, Settings e Insights.
+- `/conversation` diferencia por licencia: `trial`/`demo` reciben un sandbox local con datos ficticios; licencias completas reciben el Asistente real.
 
 ### Persistencia local
 
