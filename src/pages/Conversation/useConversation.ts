@@ -17,6 +17,8 @@ export interface ConversationHookResult {
     readonly edits?: Readonly<Record<string, string | number | null>>
   }) => Promise<void>
   readonly cancelProposal: (input: { readonly messageId: string }) => void
+  readonly clearContext: () => void
+  readonly removeContextFilter: (filter: 'period' | 'currency' | 'category') => void
 }
 
 export function useConversation(
@@ -49,5 +51,7 @@ export function useConversation(
     sendMessage: (message) => controller.sendMessage(message),
     confirmProposal: (input) => controller.confirmProposal(input),
     cancelProposal: (input) => controller.cancelProposal(input),
+    clearContext: () => controller.clearContext(),
+    removeContextFilter: (filter) => controller.removeContextFilter(filter),
   }
 }

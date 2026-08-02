@@ -83,6 +83,8 @@ describe('buildFinancialCopilotSnapshot', () => {
       lastDateTime: '2026-07-31T10:00:00.000Z',
     })
     expect(snapshot.yesterdayIncome).toEqual({ amount: 120, count: 1 })
+    expect(snapshot.currentWeek).toEqual({ income: 120, expenses: 30, incomeCount: 1, expenseCount: 1 })
+    expect(snapshot.movementDates.currentIncome).toEqual(['2026-08-01'])
     expect(snapshot).toEqual(expect.objectContaining({
       source: 'local-financial-domain',
       calculatedAt: expect.stringMatching(/^2026-08-02T/),
@@ -109,6 +111,9 @@ describe('createLocalFinancialCopilotQueryHandler', () => {
       currency: 'EUR',
       currentMonth: { income: 100, expenses: 0, incomeCount: 1, expenseCount: 0 },
       previousMonth: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },
+      currentWeek: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },
+      previousWeek: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },
+      movementDates: { currentIncome: [], currentExpenses: [], previousIncome: [], previousExpenses: [] },
       expenseCategories: [],
       pendingIncome: { count: 0, overdueCount: 0 },
       appointments: { todayPendingCount: 0, nextPendingDateTime: null, lastDateTime: null },
@@ -124,6 +129,13 @@ describe('createLocalFinancialCopilotQueryHandler', () => {
       period: 'current_month',
       lastQuery: '¿Cuánto gané este mes?',
       lastCategory: null,
+      lastMetric: 'income',
+      lastResult: expect.objectContaining({ intent: 'monthly-income' }),
+      lastFilter: { type: 'income' },
+      lastEntity: null,
+      pendingProposal: null,
+      lastReport: null,
+      hiddenFilters: [],
     })
     expect(typeof localStorage === 'undefined' || localStorage.getItem('financial-copilot-memory') === null).toBe(true)
   })
@@ -134,5 +146,66 @@ describe('createLocalFinancialCopilotQueryHandler', () => {
 
     await expect(handler.answer('Dame mis transacciones')).resolves.toBeNull()
     expect(loadSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('resuelve seguimientos con la métrica previa y permite limpiar el contexto', async () => {
+    const loadSnapshot = vi.fn().mockResolvedValue({
+      asOfDate: '2026-08-02',
+      calculatedAt: '2026-08-02T10:00:00.000Z',
+      source: 'local-financial-domain',
+      period: {
+        current: { start: '2026-08-01', end: '2026-08-31', label: 'agosto de 2026' },
+        previous: { start: '2026-07-01', end: '2026-07-31', label: 'julio de 2026' },
+      },
+      limitations: [],
+      currency: 'EUR',
+      currentMonth: { income: 100, expenses: 40, incomeCount: 1, expenseCount: 2 },
+      previousMonth: { income: 80, expenses: 30, incomeCount: 1, expenseCount: 1 },
+      currentWeek: { income: 100, expenses: 40, incomeCount: 1, expenseCount: 2 },
+      previousWeek: { income: 60, expenses: 20, incomeCount: 1, expenseCount: 1 },
+      movementDates: { currentIncome: ['2026-08-01'], currentExpenses: ['2026-08-01', '2026-08-02'], previousIncome: ['2026-07-05'], previousExpenses: ['2026-07-06'] },
+      expenseCategories: [{ category: 'Transporte', amount: 25, count: 1 }],
+      pendingIncome: { count: 0, overdueCount: 0 },
+      appointments: { todayPendingCount: 0, nextPendingDateTime: null, lastDateTime: null },
+      yesterdayIncome: { amount: 0, count: 0 },
+    })
+    const handler = createLocalFinancialCopilotQueryHandler({ loadSnapshot })
+
+    await handler.answer('¿Cuánto gasté este mes?')
+    const previous = await handler.answer('¿Y el mes anterior?')
+    expect(previous).toEqual(expect.objectContaining({
+      intent: 'previous-period',
+      text: expect.stringContaining('30,00'),
+      period: 'previous_month',
+    }))
+    const dates = await handler.answer('¿Qué fechas?')
+    expect(dates?.text).toContain('6 jul 2026')
+    const week = await handler.answer('Compáralo con la semana anterior')
+    expect(week).toEqual(expect.objectContaining({ intent: 'previous-week-comparison' }))
+
+    handler.clearMemory()
+    expect(handler.getMemory()).toEqual(expect.objectContaining({ lastMetric: null, lastResult: null }))
+    const missing = await handler.answer('¿Y el mes anterior?')
+    expect(missing?.text).toBe('No tengo suficiente contexto para responder. Indica el periodo o la métrica que deseas consultar.')
+  })
+
+  it('retiene seguimientos reconocidos en local y nunca invoca una red o pipeline', async () => {
+    const loadSnapshot = vi.fn().mockResolvedValue({
+      asOfDate: '2026-08-02', calculatedAt: '2026-08-02T10:00:00.000Z', source: 'local-financial-domain',
+      period: { current: { start: '2026-08-01', end: '2026-08-31', label: 'agosto de 2026' }, previous: { start: '2026-07-01', end: '2026-07-31', label: 'julio de 2026' } },
+      limitations: [], currency: 'EUR',
+      currentMonth: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },
+      previousMonth: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },
+      currentWeek: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 }, previousWeek: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },
+      movementDates: { currentIncome: [], currentExpenses: [], previousIncome: [], previousExpenses: [] },
+      expenseCategories: [], pendingIncome: { count: 0, overdueCount: 0 },
+      appointments: { todayPendingCount: 0, nextPendingDateTime: null, lastDateTime: null }, yesterdayIncome: { amount: 0, count: 0 },
+    })
+    const handler = createLocalFinancialCopilotQueryHandler({ loadSnapshot })
+
+    for (const query of ['¿Por qué?', '¿Cuántos movimientos fueron?', '¿Qué fechas?', '¿Qué puedo hacer?', 'Crear una acción a partir de esto']) {
+      await expect(handler.answer(query)).resolves.toEqual(expect.objectContaining({ intent: 'insufficient-context' }))
+    }
+    expect(loadSnapshot).toHaveBeenCalledTimes(5)
   })
 })

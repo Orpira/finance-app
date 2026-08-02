@@ -27,4 +27,28 @@ describe('conversationController local financial copilot', () => {
       'Este mes registraste 120,00 € en ingresos.\n\nEl total corresponde a un ingreso del mes actual.',
     )
   })
+
+  it('expone y limpia manualmente el contexto RAM del copiloto', async () => {
+    const clearLocalContext = vi.fn()
+    const getLocalContext = vi.fn()
+      .mockReturnValueOnce({ currency: 'EUR', period: 'current_month', lastCategory: 'Transporte' })
+      .mockReturnValue(null)
+    const controller = createConversationController({
+      pipeline: { generateAssistantMessage: vi.fn() },
+      answerLocalQuery: vi.fn().mockResolvedValue({
+        intent: 'monthly-expenses', text: '40 €', explanation: 'Suma local.',
+        period: 'current_month', category: 'Transporte', metric: 'expenses',
+      }),
+      clearLocalContext,
+      getLocalContext,
+    })
+
+    await controller.initialize()
+    await controller.sendMessage('¿Cuánto gasté?')
+    expect(controller.getState().context).toEqual(expect.objectContaining({ period: 'current_month' }))
+
+    controller.clearContext()
+    expect(clearLocalContext).toHaveBeenCalledOnce()
+    expect(controller.getState().context).toBeNull()
+  })
 })

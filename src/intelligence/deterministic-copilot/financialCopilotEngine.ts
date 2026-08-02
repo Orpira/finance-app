@@ -19,6 +19,14 @@ export interface FinancialCopilotSnapshot {
   readonly currency: CurrencyCode
   readonly currentMonth: FinancialCopilotPeriodSummary
   readonly previousMonth: FinancialCopilotPeriodSummary
+  readonly currentWeek: FinancialCopilotPeriodSummary
+  readonly previousWeek: FinancialCopilotPeriodSummary
+  readonly movementDates: {
+    readonly currentIncome: readonly string[]
+    readonly currentExpenses: readonly string[]
+    readonly previousIncome: readonly string[]
+    readonly previousExpenses: readonly string[]
+  }
   readonly expenseCategories: readonly {
     readonly category: string
     readonly amount: number
@@ -100,13 +108,24 @@ export type FinancialCopilotQueryIntent =
   | 'pending-income-count'
   | 'last-appointment'
   | 'yesterday-income'
+  | 'previous-period'
+  | 'context-explanation'
+  | 'top-category-follow-up'
+  | 'movement-count-follow-up'
+  | 'movement-dates-follow-up'
+  | 'pending-only-follow-up'
+  | 'previous-week-comparison'
+  | 'suggested-action-follow-up'
+  | 'create-action-follow-up'
+  | 'insufficient-context'
 
 export interface FinancialCopilotQueryAnswer {
   readonly intent: FinancialCopilotQueryIntent
   readonly text: string
   readonly explanation: string
-  readonly period: 'current_month' | 'yesterday' | null
+  readonly period: 'current_month' | 'previous_month' | 'current_week' | 'previous_week' | 'yesterday' | null
   readonly category: string | null
+  readonly metric?: 'income' | 'expenses' | 'balance' | 'movements' | 'pending_income' | 'appointments'
 }
 
 function normalizeText(value: string): string {
@@ -129,6 +148,34 @@ const LOCAL_QUERY_PATTERNS = [
 export function canAnswerFinancialCopilotQuery(query: string): boolean {
   const normalized = normalizeText(query)
   return LOCAL_QUERY_PATTERNS.some((pattern) => pattern.test(normalized))
+}
+
+const LOCAL_FOLLOW_UP_PATTERNS = [
+  /y el mes anterior|mes anterior\?*$/,
+  /por que|explicame (ese|el) cambio/,
+  /cual fue la categoria principal|que categoria fue la (mayor|principal)/,
+  /cuantos movimientos fueron/,
+  /que fechas/,
+  /solo (los )?pendientes|muestrame.*pendientes/,
+  /comparalo con la semana anterior|semana anterior/,
+  /que puedo hacer/,
+  /crear una accion.*(esto|partir)/,
+  /muestrame solo [a-z0-9 ]+|solo la categoria [a-z0-9 ]+/,
+] as const
+
+export function canAnswerFinancialCopilotFollowUp(query: string): boolean {
+  const normalized = normalizeText(query)
+  return LOCAL_FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(normalized))
+}
+
+export function createInsufficientContextAnswer(): FinancialCopilotQueryAnswer {
+  return {
+    intent: 'insufficient-context',
+    text: 'No tengo suficiente contexto para responder. Indica el periodo o la métrica que deseas consultar.',
+    explanation: 'El contexto temporal de esta sesión no contiene una consulta financiera anterior compatible.',
+    period: null,
+    category: null,
+  }
 }
 
 function formatMoney(value: number, currency: CurrencyCode): string {
@@ -390,6 +437,7 @@ export function answerFinancialCopilotQuery(
       explanation: `El total corresponde a ${snapshot.currentMonth.incomeCount} ${plural(snapshot.currentMonth.incomeCount, 'ingreso', 'ingresos')} del mes actual.`,
       period: 'current_month',
       category: null,
+      metric: 'income',
     }
   }
 
@@ -400,6 +448,7 @@ export function answerFinancialCopilotQuery(
       explanation: `El total corresponde a ${snapshot.currentMonth.expenseCount} ${plural(snapshot.currentMonth.expenseCount, 'gasto', 'gastos')} del mes actual.`,
       period: 'current_month',
       category: null,
+      metric: 'expenses',
     }
   }
 
@@ -415,6 +464,7 @@ export function answerFinancialCopilotQuery(
         : `Se agruparon los gastos almacenados por categoría; ${topCategory.category} reúne ${topCategory.count}.`,
       period: 'current_month',
       category: topCategory?.category ?? null,
+      metric: 'expenses',
     }
   }
 
@@ -427,6 +477,7 @@ export function answerFinancialCopilotQuery(
         : 'Ninguno supera los 7 días pendiente.',
       period: null,
       category: null,
+      metric: 'pending_income',
     }
   }
 
@@ -439,6 +490,7 @@ export function answerFinancialCopilotQuery(
       explanation: 'Se consultó la cita más reciente anterior a hoy en la agenda local.',
       period: null,
       category: null,
+      metric: 'appointments',
     }
   }
 
@@ -451,6 +503,7 @@ export function answerFinancialCopilotQuery(
       explanation: 'Se sumaron únicamente los ingresos cuya fecha corresponde a ayer.',
       period: 'yesterday',
       category: null,
+      metric: 'income',
     }
   }
 

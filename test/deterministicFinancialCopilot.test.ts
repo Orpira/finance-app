@@ -29,6 +29,14 @@ const SNAPSHOT: FinancialCopilotSnapshot = {
     incomeCount: 16,
     expenseCount: 38,
   },
+  currentWeek: { income: 320, expenses: 90, incomeCount: 3, expenseCount: 4 },
+  previousWeek: { income: 280, expenses: 120, incomeCount: 2, expenseCount: 5 },
+  movementDates: {
+    currentIncome: ['2026-08-01', '2026-08-02'],
+    currentExpenses: ['2026-08-01', '2026-08-02'],
+    previousIncome: ['2026-07-03'],
+    previousExpenses: ['2026-07-04'],
+  },
   expenseCategories: [
     { category: 'Transporte', amount: 310, count: 8 },
     { category: 'Material', amount: 190, count: 5 },
@@ -146,6 +154,17 @@ describe('financialCopilotSessionMemory', () => {
       period: 'current_month',
       lastQuery: '¿Cuánto gasté?',
       lastCategory: 'Transporte',
+      lastMetric: 'expenses',
+      lastResult: {
+        intent: 'monthly-expenses',
+        text: 'Gastaste 620 €.',
+        explanation: 'Suma local.',
+      },
+      lastFilter: { type: 'expense', category: 'Transporte' },
+      lastEntity: { type: 'expense-category', label: 'Transporte' },
+      pendingProposal: 'proposal:1',
+      lastReport: { period: 'current_month', format: 'pdf' },
+      hiddenFilters: [],
     })
 
     expect(memory.getSnapshot()).toEqual({
@@ -153,6 +172,17 @@ describe('financialCopilotSessionMemory', () => {
       period: 'current_month',
       lastQuery: '¿Cuánto gasté?',
       lastCategory: 'Transporte',
+      lastMetric: 'expenses',
+      lastResult: {
+        intent: 'monthly-expenses',
+        text: 'Gastaste 620 €.',
+        explanation: 'Suma local.',
+      },
+      lastFilter: { type: 'expense', category: 'Transporte' },
+      lastEntity: { type: 'expense-category', label: 'Transporte' },
+      pendingProposal: 'proposal:1',
+      lastReport: { period: 'current_month', format: 'pdf' },
+      hiddenFilters: [],
     })
 
     memory.clear()
@@ -161,6 +191,20 @@ describe('financialCopilotSessionMemory', () => {
       period: 'current_month',
       lastQuery: null,
       lastCategory: null,
+      lastMetric: null,
+      lastResult: null,
+      lastFilter: null,
+      lastEntity: null,
+      pendingProposal: null,
+      lastReport: null,
+      hiddenFilters: [],
     })
+
+    memory.remember({ lastCategory: 'Transporte' })
+    memory.removeFilter('category')
+    expect(memory.getSnapshot()).toEqual(expect.objectContaining({
+      lastCategory: null,
+      hiddenFilters: ['category'],
+    }))
   })
 })

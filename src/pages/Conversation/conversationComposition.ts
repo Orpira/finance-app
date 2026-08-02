@@ -306,6 +306,15 @@ export function createConversationControllerDependencies(
     answerLocalQuery(message) {
       return localCopilot.answer(message)
     },
+    clearLocalContext() {
+      localCopilot.clearMemory()
+    },
+    getLocalContext() {
+      return localCopilot.getMemory()
+    },
+    removeLocalContextFilter(filter) {
+      localCopilot.removeMemoryFilter(filter)
+    },
     async getAssistantContext() {
       const settings = await getSettings()
       return { defaultCurrency: settings.defaultCurrency, usageMode: settings.usageMode }

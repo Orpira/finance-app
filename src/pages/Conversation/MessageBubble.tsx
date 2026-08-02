@@ -31,6 +31,14 @@ function resolveRoleLabel(role: ConversationUiMessage['role']): string {
   return 'Sistema'
 }
 
+function responseTypeLabel(type: ConversationUiMessage['responseType']): string | null {
+  if (type === 'local-calculation') return 'Cálculo local'
+  if (type === 'deterministic-explanation') return 'Explicación determinista'
+  if (type === 'pending-proposal') return 'Propuesta pendiente'
+  if (type === 'executed-action') return 'Acción ejecutada'
+  return null
+}
+
 export function MessageBubble({
   message,
   proposalActionsDisabled = false,
@@ -48,6 +56,11 @@ export function MessageBubble({
       <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
         {resolveRoleLabel(message.role)}
       </p>
+      {responseTypeLabel(message.responseType) ? (
+        <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+          {responseTypeLabel(message.responseType)}
+        </p>
+      ) : null}
       <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{message.text}</p>
 
       {message.proposal ? (

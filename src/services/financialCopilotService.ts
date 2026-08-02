@@ -1,6 +1,8 @@
 import {
   answerFinancialCopilotQuery,
   canAnswerFinancialCopilotQuery,
+  canAnswerFinancialCopilotFollowUp,
+  createInsufficientContextAnswer,
   createFinancialCopilotSessionMemory,
   type FinancialCopilotQueryAnswer,
   type FinancialCopilotSessionMemory,
@@ -61,6 +63,19 @@ function getMonthMetadata(asOfDate: string, offset: number) {
   }
 }
 
+function weekRange(asOfDate: string, offset: number) {
+  const date = new Date(`${asOfDate}T00:00:00.000Z`)
+  const mondayOffset = (date.getUTCDay() + 6) % 7
+  date.setUTCDate(date.getUTCDate() - mondayOffset + offset * 7)
+  const start = date.toISOString().slice(0, 10)
+  date.setUTCDate(date.getUTCDate() + 6)
+  return { start, end: date.toISOString().slice(0, 10) }
+}
+
+function uniqueSortedDates(records: readonly { readonly date: string }[]): string[] {
+  return [...new Set(records.map((record) => record.date))].sort()
+}
+
 export function buildFinancialCopilotSnapshot(
   input: BuildFinancialCopilotSnapshotInput,
 ): FinancialCopilotSnapshot {
@@ -74,6 +89,28 @@ export function buildFinancialCopilotSnapshot(
   const previousTotals = calculateFinancialTotals(
     [...input.previousIncomes],
     [...input.previousExpenses],
+    currency,
+    input.settings.secondaryCurrency,
+  )
+  const allIncomes = [...input.currentIncomes, ...input.previousIncomes]
+  const allExpenses = [...input.currentExpenses, ...input.previousExpenses]
+  const selectRange = <T extends { readonly date: string }>(records: readonly T[], range: { start: string; end: string }) =>
+    records.filter((record) => record.date >= range.start && record.date <= range.end)
+  const currentWeekRange = weekRange(input.asOfDate, 0)
+  const previousWeekRange = weekRange(input.asOfDate, -1)
+  const currentWeekIncomes = selectRange(allIncomes, currentWeekRange)
+  const currentWeekExpenses = selectRange(allExpenses, currentWeekRange)
+  const previousWeekIncomes = selectRange(allIncomes, previousWeekRange)
+  const previousWeekExpenses = selectRange(allExpenses, previousWeekRange)
+  const currentWeekTotals = calculateFinancialTotals(
+    currentWeekIncomes,
+    currentWeekExpenses,
+    currency,
+    input.settings.secondaryCurrency,
+  )
+  const previousWeekTotals = calculateFinancialTotals(
+    previousWeekIncomes,
+    previousWeekExpenses,
     currency,
     input.settings.secondaryCurrency,
   )
@@ -117,6 +154,24 @@ export function buildFinancialCopilotSnapshot(
       expenses: previousTotals.primaryExpenses,
       incomeCount: input.previousIncomes.length,
       expenseCount: input.previousExpenses.length,
+    },
+    currentWeek: {
+      income: currentWeekTotals.primaryIncome,
+      expenses: currentWeekTotals.primaryExpenses,
+      incomeCount: currentWeekIncomes.length,
+      expenseCount: currentWeekExpenses.length,
+    },
+    previousWeek: {
+      income: previousWeekTotals.primaryIncome,
+      expenses: previousWeekTotals.primaryExpenses,
+      incomeCount: previousWeekIncomes.length,
+      expenseCount: previousWeekExpenses.length,
+    },
+    movementDates: {
+      currentIncome: uniqueSortedDates(input.currentIncomes),
+      currentExpenses: uniqueSortedDates(input.currentExpenses),
+      previousIncome: uniqueSortedDates(input.previousIncomes),
+      previousExpenses: uniqueSortedDates(input.previousExpenses),
     },
     expenseCategories: Array.from(categories, ([category, values]) => ({
       category,
@@ -217,6 +272,7 @@ export interface LocalFinancialCopilotQueryHandler {
   answer(query: string): Promise<FinancialCopilotQueryAnswer | null>
   clearMemory(): void
   getMemory(): FinancialCopilotSessionSnapshot | null
+  removeMemoryFilter(filter: 'period' | 'currency' | 'category'): void
 }
 
 export function createLocalFinancialCopilotQueryHandler(input: {
@@ -228,16 +284,184 @@ export function createLocalFinancialCopilotQueryHandler(input: {
 
   return {
     async answer(query) {
-      if (!canAnswerFinancialCopilotQuery(query)) return null
+      const isDirectQuery = canAnswerFinancialCopilotQuery(query)
+      const isFollowUp = canAnswerFinancialCopilotFollowUp(query)
+      if (!isDirectQuery && !isFollowUp) return null
       const snapshot = await loadSnapshot()
       memory ??= createFinancialCopilotSessionMemory({ currency: snapshot.currency })
-      const answer = answerFinancialCopilotQuery(query, snapshot)
+      const currentMemory = memory.getSnapshot()
+      let answer = isDirectQuery ? answerFinancialCopilotQuery(query, snapshot) : null
+
+      if (answer === null && isFollowUp) {
+        const normalized = query.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        if (/y el mes anterior|mes anterior\?*$/.test(normalized)) {
+          if (currentMemory.lastMetric === 'income' || currentMemory.lastMetric === 'expenses') {
+            const isIncome = currentMemory.lastMetric === 'income'
+            const value = isIncome ? snapshot.previousMonth.income : snapshot.previousMonth.expenses
+            const count = isIncome ? snapshot.previousMonth.incomeCount : snapshot.previousMonth.expenseCount
+            const formatted = new Intl.NumberFormat('es-ES', { style: 'currency', currency: snapshot.currency }).format(value)
+            answer = {
+              intent: 'previous-period',
+              text: `En ${snapshot.period.previous.label} registraste ${formatted} en ${isIncome ? 'ingresos' : 'gastos'}.`,
+              explanation: `El total corresponde a ${count} movimientos del mes anterior.`,
+              period: 'previous_month',
+              category: null,
+              metric: currentMemory.lastMetric,
+            }
+          }
+        } else if (/por que|explicame (ese|el) cambio/.test(normalized)) {
+          if (currentMemory.lastResult !== null) {
+            answer = {
+              intent: 'context-explanation',
+              text: currentMemory.lastResult.explanation,
+              explanation: `Esta explicación se refiere a: ${currentMemory.lastResult.text}`,
+              period: currentMemory.period,
+              category: currentMemory.lastCategory,
+              ...(currentMemory.lastMetric === null ? {} : { metric: currentMemory.lastMetric }),
+            }
+          }
+        } else if (/categoria principal|categoria fue la (mayor|principal)/.test(normalized)) {
+          if (currentMemory.lastMetric === 'expenses') {
+            const topCategory = snapshot.expenseCategories[0]
+            answer = {
+              intent: 'top-category-follow-up',
+              text: topCategory === undefined
+                ? 'No hay gastos por categoría en el periodo activo.'
+                : `${topCategory.category} fue la categoría principal con ${new Intl.NumberFormat('es-ES', { style: 'currency', currency: snapshot.currency }).format(topCategory.amount)}.`,
+              explanation: topCategory === undefined ? 'No existen movimientos comparables.' : `Agrupa ${topCategory.count} gastos del periodo.`,
+              period: currentMemory.period,
+              category: topCategory?.category ?? null,
+              metric: 'expenses',
+            }
+          }
+        } else if (/cuantos movimientos fueron/.test(normalized)) {
+          if (currentMemory.lastMetric !== null) {
+            const previous = currentMemory.period === 'previous_month'
+            const period = previous ? snapshot.previousMonth : snapshot.currentMonth
+            const count = currentMemory.lastMetric === 'income'
+              ? period.incomeCount
+              : currentMemory.lastMetric === 'expenses'
+                ? period.expenseCount
+                : period.incomeCount + period.expenseCount
+            answer = {
+              intent: 'movement-count-follow-up',
+              text: `Fueron ${count} movimientos en el periodo consultado.`,
+              explanation: 'El conteo usa los movimientos locales incluidos en el mismo periodo y filtro.',
+              period: currentMemory.period,
+              category: currentMemory.lastCategory,
+              metric: currentMemory.lastMetric,
+            }
+          }
+        } else if (/que fechas/.test(normalized)) {
+          if (currentMemory.lastMetric === 'income' || currentMemory.lastMetric === 'expenses') {
+            const previous = currentMemory.period === 'previous_month'
+            const dates = currentMemory.lastMetric === 'income'
+              ? (previous ? snapshot.movementDates.previousIncome : snapshot.movementDates.currentIncome)
+              : (previous ? snapshot.movementDates.previousExpenses : snapshot.movementDates.currentExpenses)
+            const formattedDates = dates.map((date) => new Intl.DateTimeFormat('es-ES', {
+              day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
+            }).format(new Date(`${date}T00:00:00.000Z`)))
+            answer = {
+              intent: 'movement-dates-follow-up',
+              text: formattedDates.length === 0 ? 'No hay fechas para el resultado consultado.' : `Fechas: ${formattedDates.join(', ')}.`,
+              explanation: 'Son las fechas únicas de los movimientos incluidos en el último periodo y métrica.',
+              period: currentMemory.period,
+              category: currentMemory.lastCategory,
+              metric: currentMemory.lastMetric,
+            }
+          }
+        } else if (/solo (los )?pendientes|muestrame.*pendientes/.test(normalized)) {
+          answer = {
+            intent: 'pending-only-follow-up',
+            text: `Tienes ${snapshot.pendingIncome.count} ingresos sin reportar.`,
+            explanation: `${snapshot.pendingIncome.overdueCount} superan los 7 días pendientes.`,
+            period: currentMemory.period,
+            category: null,
+            metric: 'pending_income',
+          }
+        } else if (/comparalo con la semana anterior|semana anterior/.test(normalized)) {
+          if (currentMemory.lastMetric === 'income' || currentMemory.lastMetric === 'expenses') {
+            const metric = currentMemory.lastMetric
+            const current = metric === 'income' ? snapshot.currentWeek.income : snapshot.currentWeek.expenses
+            const previous = metric === 'income' ? snapshot.previousWeek.income : snapshot.previousWeek.expenses
+            const money = (value: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: snapshot.currency }).format(value)
+            answer = {
+              intent: 'previous-week-comparison',
+              text: `Esta semana: ${money(current)}. Semana anterior: ${money(previous)}.`,
+              explanation: `La diferencia es ${money(current - previous)} usando la misma métrica en semanas completas de lunes a domingo.`,
+              period: 'previous_week',
+              category: currentMemory.lastCategory,
+              metric,
+            }
+          }
+        } else if (/que puedo hacer/.test(normalized)) {
+          if (currentMemory.lastMetric !== null) {
+            const label = currentMemory.lastMetric === 'pending_income'
+              ? 'Revisar los ingresos pendientes y marcar uno tras confirmarlo.'
+              : currentMemory.lastCategory
+                ? `Abrir los movimientos filtrados por ${currentMemory.lastCategory}.`
+                : 'Comparar el periodo o abrir los movimientos que forman el resultado.'
+            answer = {
+              intent: 'suggested-action-follow-up',
+              text: label,
+              explanation: 'La acción sugerida está vinculada al último resultado calculado en esta sesión.',
+              period: currentMemory.period,
+              category: currentMemory.lastCategory,
+              metric: currentMemory.lastMetric,
+            }
+          }
+        } else if (/crear una accion.*(esto|partir)/.test(normalized)) {
+          if (currentMemory.lastMetric !== null) {
+            answer = {
+              intent: 'create-action-follow-up',
+              text: 'Puedo preparar una acción relacionada, pero no ejecutaré ningún cambio sin mostrarte una propuesta y pedir confirmación.',
+              explanation: 'La acción se basará únicamente en el último resultado local de esta sesión.',
+              period: currentMemory.period,
+              category: currentMemory.lastCategory,
+              metric: currentMemory.lastMetric,
+            }
+          }
+        } else if (/muestrame solo |solo la categoria /.test(normalized)) {
+          if (currentMemory.lastMetric === 'expenses') {
+            const category = snapshot.expenseCategories.find((item) => normalized.includes(item.category.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '')))
+            if (category !== undefined) {
+              answer = {
+                intent: 'top-category-follow-up',
+                text: `${category.category}: ${new Intl.NumberFormat('es-ES', { style: 'currency', currency: snapshot.currency }).format(category.amount)} en ${category.count} gastos.`,
+                explanation: 'Se mantuvo el periodo activo y se aplicó únicamente el filtro de categoría solicitado.',
+                period: currentMemory.period,
+                category: category.category,
+                metric: 'expenses',
+              }
+            }
+          }
+        }
+
+        answer ??= createInsufficientContextAnswer()
+      }
       if (answer !== null) {
         memory.remember({
           currency: snapshot.currency,
           ...(answer.period === null ? {} : { period: answer.period }),
           lastQuery: query.trim(),
           lastCategory: answer.category,
+          lastMetric: answer.metric ?? currentMemory.lastMetric,
+          lastResult: {
+            intent: answer.intent,
+            text: answer.text,
+            explanation: answer.explanation,
+          },
+          lastFilter: answer.metric === 'income'
+            ? { type: 'income' }
+            : answer.metric === 'expenses'
+              ? { type: 'expense', ...(answer.category === null ? {} : { category: answer.category }) }
+              : answer.metric === 'pending_income'
+                ? { type: 'income', reported: false }
+                : currentMemory.lastFilter,
+          lastEntity: answer.category === null
+            ? currentMemory.lastEntity
+            : { type: 'expense-category', label: answer.category },
+          hiddenFilters: [],
         })
       }
       return answer
@@ -247,6 +471,9 @@ export function createLocalFinancialCopilotQueryHandler(input: {
     },
     getMemory() {
       return memory?.getSnapshot() ?? null
+    },
+    removeMemoryFilter(filter) {
+      memory?.removeFilter(filter)
     },
   }
 }

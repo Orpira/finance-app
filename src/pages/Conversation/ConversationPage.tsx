@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { KeyRound } from 'lucide-react'
+import { KeyRound, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -44,7 +44,7 @@ function LicensedConversationPage() {
     () => createConversationControllerDependencies(),
     [],
   )
-  const { state, sendMessage, confirmProposal, cancelProposal } = useConversation(dependencies)
+  const { state, sendMessage, confirmProposal, cancelProposal, clearContext, removeContextFilter } = useConversation(dependencies)
 
   const isLoadingConversation =
     state.status === 'idle' ||
@@ -62,6 +62,18 @@ function LicensedConversationPage() {
       />
 
       <ConversationHeader isSending={isSending} status={state.status} />
+
+      {state.context?.lastQuery ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300" aria-label="Contexto activo del asistente">
+          {!state.context.hiddenFilters.includes('period') ? <button className="inline-flex min-h-9 items-center gap-1 rounded-md bg-slate-100 px-2 dark:bg-slate-800" aria-label="Quitar filtro de periodo" onClick={() => removeContextFilter('period')} type="button">Periodo: {state.context.period === 'previous_month' ? 'mes anterior' : state.context.period === 'previous_week' ? 'semana anterior' : state.context.period === 'yesterday' ? 'ayer' : 'actual'} <X className="size-3.5" aria-hidden="true" /></button> : null}
+          {!state.context.hiddenFilters.includes('currency') ? <button className="inline-flex min-h-9 items-center gap-1 rounded-md bg-slate-100 px-2 dark:bg-slate-800" aria-label="Quitar filtro de moneda" onClick={() => removeContextFilter('currency')} type="button">Moneda: {state.context.currency} <X className="size-3.5" aria-hidden="true" /></button> : null}
+          {state.context.lastCategory && !state.context.hiddenFilters.includes('category') ? <button className="inline-flex min-h-9 items-center gap-1 rounded-md bg-slate-100 px-2 dark:bg-slate-800" aria-label="Quitar filtro de categoría" onClick={() => removeContextFilter('category')} type="button">Categoría: {state.context.lastCategory} <X className="size-3.5" aria-hidden="true" /></button> : null}
+          <button className="ml-auto inline-flex min-h-9 items-center gap-1 rounded-md px-2 font-semibold text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-slate-200 dark:hover:bg-slate-800" onClick={clearContext} type="button">
+            <X className="size-4" aria-hidden="true" />
+            Limpiar contexto
+          </button>
+        </div>
+      ) : null}
 
       {state.errorMessage ? (
         <div

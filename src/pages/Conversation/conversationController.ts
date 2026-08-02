@@ -7,7 +7,7 @@ import {
 } from '../../intelligence/assistant'
 import type { ChatMessage } from '../../intelligence/mock-conversational-renderer/mockConversationalRenderer'
 import type { CurrencyCode, UsageMode } from '../../types/settings'
-import type { FinancialCopilotQueryAnswer } from '../../intelligence/deterministic-copilot'
+import type { FinancialCopilotQueryAnswer, FinancialCopilotSessionSnapshot } from '../../intelligence/deterministic-copilot'
 import {
   createInitialConversationUiState,
   type ConversationUiMessage,
@@ -38,6 +38,9 @@ export interface ConversationControllerDependencies {
   }>
   /** Consultas financieras deterministas, resueltas localmente antes de cualquier proveedor. */
   readonly answerLocalQuery?: (message: string) => Promise<FinancialCopilotQueryAnswer | null>
+  readonly clearLocalContext?: () => void
+  readonly getLocalContext?: () => FinancialCopilotSessionSnapshot | null
+  readonly removeLocalContextFilter?: (filter: 'period' | 'currency' | 'category') => void
 }
 
 export interface ConversationController {
@@ -50,6 +53,8 @@ export interface ConversationController {
     readonly edits?: Readonly<Record<string, string | number | null>>
   }): Promise<void>
   cancelProposal(input: { readonly messageId: string }): void
+  clearContext(): void
+  removeContextFilter(filter: 'period' | 'currency' | 'category'): void
   dispose(): void
 }
 
@@ -80,6 +85,7 @@ function createAssistantMessage(input: {
   readonly text: string
   readonly createdAt: string
   readonly proposal?: AssistantProposalRecord
+  readonly responseType?: ConversationUiMessage['responseType']
 }): ConversationUiMessage {
   return {
     id: input.id,
@@ -87,6 +93,7 @@ function createAssistantMessage(input: {
     text: input.text,
     createdAt: input.createdAt,
     ...(input.proposal === undefined ? {} : { proposal: input.proposal }),
+    ...(input.responseType === undefined ? {} : { responseType: input.responseType }),
   }
 }
 
@@ -148,12 +155,15 @@ export function createConversationController(
   let disposed = false
   const listeners = new Set<(state: ConversationUiState) => void>()
 
-  function emit(nextState: ConversationUiState): void {
+  function emit(nextState: Omit<ConversationUiState, 'context'> & { readonly context?: ConversationUiState['context'] }): void {
     if (disposed) {
       return
     }
 
-    state = nextState
+    state = {
+      ...nextState,
+      context: nextState.context === undefined ? state.context : nextState.context,
+    }
     for (const listener of listeners) {
       listener(state)
     }
@@ -246,6 +256,7 @@ export function createConversationController(
           text: proposalSummaryText(interpretation.proposal),
           createdAt: now(),
           proposal: interpretation.proposal,
+          responseType: 'pending-proposal',
         })
 
         emit({
@@ -279,11 +290,15 @@ export function createConversationController(
             id: `conversation:assistant:local:${turn}`,
             text: `${localAnswer.text}\n\n${localAnswer.explanation}`,
             createdAt: now(),
+            responseType: localAnswer.intent === 'context-explanation'
+              ? 'deterministic-explanation'
+              : 'local-calculation',
           })
           emit({
             status: 'ready',
             messages: [...baseMessages, assistantMessage],
             errorMessage: null,
+            context: dependencies.getLocalContext?.() ?? null,
           })
           return
         }
@@ -438,6 +453,16 @@ export function createConversationController(
           cancellationMessage,
         ],
       })
+    },
+
+    clearContext() {
+      dependencies.clearLocalContext?.()
+      emit({ ...state, context: dependencies.getLocalContext?.() ?? null })
+    },
+
+    removeContextFilter(filter) {
+      dependencies.removeLocalContextFilter?.(filter)
+      emit({ ...state, context: dependencies.getLocalContext?.() ?? null })
     },
 
     dispose() {
