@@ -30,6 +30,23 @@ function currentMonthRange(now: Date) {
   }
 }
 
+function resolveReportRange(text: string, now: Date) {
+  if (/esta semana|semana actual/.test(text)) {
+    const start = new Date(now)
+    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7))
+    return { start: dateKey(start), end: dateKey(now) }
+  }
+  const mentionedMonth = Object.entries(MONTHS).find(([name]) => new RegExp(`\\b${name}\\b`).test(text))?.[1]
+  if (mentionedMonth !== undefined) {
+    const year = mentionedMonth > now.getUTCMonth() ? now.getUTCFullYear() - 1 : now.getUTCFullYear()
+    return {
+      start: dateKey(new Date(Date.UTC(year, mentionedMonth, 1))),
+      end: dateKey(new Date(Date.UTC(year, mentionedMonth + 1, 0))),
+    }
+  }
+  return currentMonthRange(now)
+}
+
 function resolveMentionedDate(text: string, now: Date): string | null {
   const iso = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/)?.[1]
   if (iso !== undefined) return iso
@@ -117,8 +134,8 @@ export function createCopilotActionProposalService(input: {
         }
       }
 
-      if (/(genera|prepara|exporta).*(reporte|pdf)|(reporte|pdf).*(este mes|mes actual)|resumen.*antes.*exportar/.test(text)) {
-        const range = currentMonthRange(now)
+      if (/(genera|prepara|exporta).*(reporte|pdf|movimientos)|(reporte|pdf).*(este mes|mes actual|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)|resumen.*antes.*exportar/.test(text)) {
+        const range = resolveReportRange(text, now)
         const snapshot = await dependencies.loadSnapshot()
         const money = (value: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: snapshot.currency }).format(value)
         return {

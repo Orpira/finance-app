@@ -49,4 +49,17 @@ describe('copilotActionProposalService', () => {
     expect(report.proposal.fields.includedData).toContain('500,00')
     expect(goal).toEqual(expect.objectContaining({ kind: 'proposal', proposal: expect.objectContaining({ kind: 'create_financial_goal', fields: expect.objectContaining({ goalType: 'saving', targetAmount: 300 }) }) }))
   })
+
+  it('interpreta un mes nombrado y la semana actual en propuestas de reporte', async () => {
+    const service = createCopilotActionProposalService({
+      now: () => new Date('2026-08-05T10:00:00.000Z'),
+      loadSnapshot: vi.fn().mockResolvedValue({ currency: 'EUR', currentMonth: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 } }),
+    })
+    const july = await service.prepare('Prepara un PDF de julio', { defaultCurrency: 'EUR' })
+    const week = await service.prepare('Exporta mis movimientos de esta semana', { defaultCurrency: 'EUR' })
+    if (july.kind !== 'proposal' || july.proposal.kind !== 'generate_report') throw new Error('expected july report')
+    if (week.kind !== 'proposal' || week.proposal.kind !== 'generate_report') throw new Error('expected week report')
+    expect(july.proposal.fields).toEqual(expect.objectContaining({ periodStart: '2026-07-01', periodEnd: '2026-07-31' }))
+    expect(week.proposal.fields).toEqual(expect.objectContaining({ periodStart: '2026-08-03', periodEnd: '2026-08-05' }))
+  })
 })
