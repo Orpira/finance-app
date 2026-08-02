@@ -16,6 +16,7 @@ import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 import { getRecordReportBadge } from '../../utils/reportStatus'
 import ExpenseListPage from '../Expenses/ExpenseListPage'
 import IncomeListPage from '../Income/IncomeListPage'
+import { applyMovementFilters, readMovementFilters } from './movementFilters'
 
 type MovementTab = 'todos' | 'ingresos' | 'egresos'
 
@@ -29,40 +30,46 @@ const RECENT_LIMIT = 40
 
 interface UnifiedMovement {
   key: string
-  kind: 'ingreso' | 'gasto'
+  kind: 'income' | 'expense'
   date: string
   label: string
   amount: number
   currency: string
   href: string
   reportBadge?: { label: string; isReported: boolean; isUnreviewed: boolean }
+  category: string
+  reported?: boolean
+  searchText: string
 }
 
 function toUnifiedMovements(incomes: ServiceIncome[], expenses: Expense[]): UnifiedMovement[] {
   const incomeMovements: UnifiedMovement[] = incomes.map((income) => ({
     key: `income-${income.id}`,
-    kind: 'ingreso',
+    kind: 'income',
     date: income.date,
     label: `${getIncomeTypeLabel(income)} · ${getPaymentTypeLabel(income.paymentType)}`,
     amount: income.totalAmount,
     currency: income.currency,
     href: `/income/${income.id}`,
     reportBadge: getRecordReportBadge(income),
+    category: getIncomeTypeLabel(income),
+    reported: getRecordReportBadge(income).isReported,
+    searchText: `${getIncomeTypeLabel(income)} ${getPaymentTypeLabel(income.paymentType)}`,
   }))
 
   const expenseMovements: UnifiedMovement[] = expenses.map((expense) => ({
     key: `expense-${expense.id}`,
-    kind: 'gasto',
+    kind: 'expense',
     date: expense.date,
     label: expense.category,
     amount: expense.amount,
     currency: expense.currency,
     href: `/expenses/${expense.id}/editar`,
+    category: expense.category,
+    searchText: expense.category,
   }))
 
   return [...incomeMovements, ...expenseMovements]
-    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
-    .slice(0, RECENT_LIMIT)
 }
 
 function formatDate(value: string) {
@@ -72,7 +79,8 @@ function formatDate(value: string) {
 function AllMovementsTab() {
   const { hidden } = useSensitiveValues()
   const [movements, setMovements] = useState<UnifiedMovement[] | null>(null)
-  const [query, setQuery] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filters = useMemo(() => readMovementFilters(searchParams), [searchParams])
 
   useEffect(() => {
     let cancelled = false
@@ -93,10 +101,18 @@ function AllMovementsTab() {
 
   const filtered = useMemo(() => {
     if (!movements) return null
-    const normalizedQuery = query.trim().toLowerCase()
-    if (!normalizedQuery) return movements
-    return movements.filter((movement) => movement.label.toLowerCase().includes(normalizedQuery))
-  }, [movements, query])
+    return applyMovementFilters(movements, filters).slice(0, RECENT_LIMIT)
+  }, [filters, movements])
+
+  const categories = useMemo(() => [...new Set((movements ?? []).map((movement) => movement.category))].sort((a, b) => a.localeCompare(b, 'es')), [movements])
+  const currencies = useMemo(() => [...new Set((movements ?? []).map((movement) => movement.currency))].sort(), [movements])
+
+  function setFilter(key: string, value: string) {
+    const next = new URLSearchParams(searchParams)
+    if (!value || value === 'all' || (key === 'order' && value === 'newest')) next.delete(key)
+    else next.set(key, value)
+    setSearchParams(next, { replace: true })
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -108,18 +124,39 @@ function AllMovementsTab() {
         <input
           aria-label="Buscar en movimientos recientes"
           className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => setFilter('q', event.target.value)}
           placeholder="Buscar por categoría o tipo de pago"
           type="search"
-          value={query}
+          value={filters.query}
         />
       </label>
+
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-6" aria-label="Filtros de movimientos">
+        <select aria-label="Periodo" className="h-11 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-800 dark:bg-slate-900" onChange={(event) => setFilter('period', event.target.value)} value={filters.period}>
+          <option value="all">Todo el periodo</option><option value="current_month">Mes actual</option>
+        </select>
+        <select aria-label="Tipo" className="h-11 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-800 dark:bg-slate-900" onChange={(event) => setFilter('type', event.target.value)} value={filters.type}>
+          <option value="all">Todos los tipos</option><option value="income">Ingresos</option><option value="expense">Gastos</option>
+        </select>
+        <select aria-label="Categoría" className="h-11 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-800 dark:bg-slate-900" onChange={(event) => setFilter('category', event.target.value)} value={filters.category}>
+          <option value="">Todas las categorías</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}
+        </select>
+        <select aria-label="Moneda" className="h-11 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-800 dark:bg-slate-900" onChange={(event) => setFilter('currency', event.target.value)} value={filters.currency}>
+          <option value="">Todas las monedas</option>{currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+        </select>
+        <select aria-label="Estado de reporte" className="h-11 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-800 dark:bg-slate-900" onChange={(event) => setFilter('reported', event.target.value)} value={filters.reported}>
+          <option value="all">Cualquier estado</option><option value="reported">Reportados</option><option value="unreported">Sin reportar</option>
+        </select>
+        <select aria-label="Orden" className="h-11 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-800 dark:bg-slate-900" onChange={(event) => setFilter('order', event.target.value)} value={filters.order}>
+          <option value="newest">Más recientes</option><option value="oldest">Más antiguos</option><option value="amount_desc">Mayor importe</option><option value="amount_asc">Menor importe</option>
+        </select>
+      </div>
 
       {filtered === null ? (
         <p className="py-10 text-center text-sm text-slate-500">Cargando movimientos…</p>
       ) : filtered.length === 0 ? (
         <p className="py-10 text-center text-sm text-slate-500">
-          {query ? 'No hay movimientos que coincidan con la búsqueda.' : 'Todavía no hay movimientos registrados.'}
+          {filters.query ? 'No hay movimientos que coincidan con la búsqueda.' : 'Todavía no hay movimientos con estos filtros.'}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
@@ -133,12 +170,12 @@ function AllMovementsTab() {
                   <span
                     className={[
                       'flex size-10 shrink-0 items-center justify-center rounded-full',
-                      movement.kind === 'ingreso'
+                      movement.kind === 'income'
                         ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                         : 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
                     ].join(' ')}
                   >
-                    {movement.kind === 'ingreso' ? (
+                    {movement.kind === 'income' ? (
                       <ArrowUpRight className="size-5" aria-hidden="true" />
                     ) : (
                       <ArrowDownLeft className="size-5" aria-hidden="true" />
@@ -157,12 +194,12 @@ function AllMovementsTab() {
                 <span
                   className={[
                     'shrink-0 text-sm font-semibold',
-                    movement.kind === 'ingreso'
+                    movement.kind === 'income'
                       ? 'text-emerald-700 dark:text-emerald-300'
                       : 'text-rose-700 dark:text-rose-300',
                   ].join(' ')}
                 >
-                  {movement.kind === 'ingreso' ? '+' : '-'}
+                  {movement.kind === 'income' ? '+' : '-'}
                   <SensitiveAmount hidden={hidden} value={formatCurrency(movement.amount, movement.currency as CurrencyCode)} />
                 </span>
               </Link>
@@ -181,7 +218,10 @@ export function MovementsPage() {
     requestedTab === 'ingresos' || requestedTab === 'egresos' ? requestedTab : 'todos'
 
   function selectTab(tab: MovementTab) {
-    setSearchParams(tab === 'todos' ? {} : { tab }, { replace: true })
+    const next = new URLSearchParams(searchParams)
+    if (tab === 'todos') next.delete('tab')
+    else next.set('tab', tab)
+    setSearchParams(next, { replace: true })
   }
 
   return (

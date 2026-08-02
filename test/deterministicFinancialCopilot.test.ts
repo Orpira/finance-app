@@ -120,9 +120,10 @@ describe('buildFinancialCopilot', () => {
     const result = buildFinancialCopilot(SNAPSHOT)
 
     expect(result.suggestedActions).toEqual(expect.arrayContaining([
-      { id: 'weekly-summary', label: 'Consultar resumen mensual', to: '/resumen-completo' },
-      { id: 'ask-assistant', label: 'Consultar al asistente', to: '/conversation' },
+      expect.objectContaining({ id: 'review-pending-income', evidenceId: 'pending-income', to: expect.stringContaining('reported=unreported') }),
+      expect.objectContaining({ id: 'review-top-category', evidenceId: 'top-expense-category', to: expect.stringContaining('category=Transporte') }),
     ]))
+    expect(result.suggestedActions).toHaveLength(3)
     expect(new Set(result.suggestedActions.map((action) => action.id)).size).toBe(result.suggestedActions.length)
   })
 })

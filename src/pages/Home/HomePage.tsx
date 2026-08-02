@@ -499,7 +499,7 @@ export function HomePage() {
             Prioridades de hoy
           </h2>
           <ul className="mt-3 grid gap-3 sm:grid-cols-2">
-            {financialCopilot.todayPriorities.map((priority) => (
+            {financialCopilot.todayPriorities.slice(0, 2).map((priority) => (
               <li className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/40" key={priority.id}>
                 <span className="text-sm font-medium text-amber-950 dark:text-amber-100">{priority.message}</span>
                 <Link className="shrink-0 text-xs font-semibold text-amber-800 hover:text-amber-950 dark:text-amber-200" to={priority.action.to}>
@@ -561,7 +561,7 @@ export function HomePage() {
           </h3>
           <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{financialCopilot.summary}</p>
           <ul className="mt-4 flex flex-col gap-2">
-            {financialCopilot.insights.map((insight) => (
+            {financialCopilot.insights.slice(0, 2).map((insight) => (
               <li
                 className={[
                   'rounded-lg border px-3 py-2 text-sm',
@@ -590,6 +590,9 @@ export function HomePage() {
               </Link>
             ))}
           </div>
+          <Link className="mt-4 inline-flex text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300" to="/resumen-completo">
+            Ver todo
+          </Link>
         </article>
       </div>
 

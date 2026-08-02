@@ -68,6 +68,7 @@ export interface FinancialCopilotAction {
   readonly id: string
   readonly label: string
   readonly to: string
+  readonly evidenceId?: string
 }
 
 export interface FinancialCopilotInsight {
@@ -404,15 +405,37 @@ function buildSummary(snapshot: FinancialCopilotSnapshot): string {
 }
 
 export function buildFinancialCopilot(snapshot: FinancialCopilotSnapshot): FinancialCopilotResult {
+  const actions: FinancialCopilotAction[] = []
+  if (snapshot.pendingIncome.count > 0) {
+    actions.push({
+      id: 'review-pending-income',
+      label: 'Revisar ingresos pendientes',
+      to: '/movements?tab=todos&type=income&reported=unreported&period=current_month',
+      evidenceId: 'pending-income',
+    })
+  }
+  const topCategory = snapshot.expenseCategories[0]
+  if (topCategory !== undefined) {
+    actions.push({
+      id: 'review-top-category',
+      label: `Ver gastos de ${topCategory.category}`,
+      to: `/movements?tab=todos&type=expense&category=${encodeURIComponent(topCategory.category)}&period=current_month`,
+      evidenceId: 'top-expense-category',
+    })
+  }
+  actions.push({
+    id: 'compare-period',
+    label: 'Comparar con el mes anterior',
+    to: '/conversation?query=Compáralo%20con%20el%20mes%20anterior',
+    evidenceId: snapshot.currentMonth.expenses > 0 ? 'expense-change' : 'income-change',
+  })
+
   return {
     insights: buildInsights(snapshot),
     todayPriorities: buildTodayPriorities(snapshot),
     financialHealth: buildFinancialHealth(snapshot),
     summary: buildSummary(snapshot),
-    suggestedActions: [
-      { id: 'weekly-summary', label: 'Consultar resumen mensual', to: '/resumen-completo' },
-      { id: 'ask-assistant', label: 'Consultar al asistente', to: '/conversation' },
-    ],
+    suggestedActions: actions.slice(0, 3),
   }
 }
 
