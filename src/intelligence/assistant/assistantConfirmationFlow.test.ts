@@ -30,7 +30,8 @@ describe('interpretAssistantMessage', () => {
     expect(trail[0].decision).toBe('authorized')
     expect(trail[0].processingMode).toBe('LOCAL_ONLY')
     expect(trail[0].categoriesIncluded).toEqual(['APP_METADATA'])
-    expect(JSON.stringify(trail[0])).not.toMatch(/\b35\b/)
+    expect(trail[0].categoriesExcluded).toContain('USER_PROVIDED_TEXT')
+    expect(trail[0]).not.toHaveProperty('userMessage')
   })
 
   it('no autoriza (ni registra) nada para mensajes que no son de acción', () => {
