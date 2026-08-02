@@ -33,7 +33,7 @@ export function createGoalRecoveryStrategy(): FinancialPlanningStrategy {
       return {
         planId: `plan:goal-recovery:${input.sessionId}:${input.requestedAt}`,
         createdAt: input.requestedAt,
-        title: 'Plan de recuperacion de metas',
+        title: 'Plan de recuperación de metas',
         summary: 'Estrategia para recuperar metas financieras detectadas con riesgo.',
         objective: 'Recuperar ritmo de cumplimiento de la meta prioritaria.',
         priority: 'HIGH',
@@ -41,7 +41,7 @@ export function createGoalRecoveryStrategy(): FinancialPlanningStrategy {
         recommendedActions: [buildAction(input)],
         relatedInsights: input.insights.filter((insight) => insight.category === 'goal').map((insight) => insight.insightId),
         assumptions: ['La meta puede ajustarse por fases sin perder su objetivo final.'],
-        warnings: ['Cambios en metas requieren confirmacion explicita del usuario.'],
+        warnings: ['Cambios en metas requieren confirmación explícita del usuario.'],
       }
     },
   }

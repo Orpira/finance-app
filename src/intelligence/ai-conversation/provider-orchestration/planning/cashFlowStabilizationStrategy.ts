@@ -33,7 +33,7 @@ export function createCashFlowStabilizationStrategy(): FinancialPlanningStrategy
       return {
         planId: `plan:cash-flow-stabilization:${input.sessionId}:${input.requestedAt}`,
         createdAt: input.requestedAt,
-        title: 'Plan de estabilizacion de flujo de caja',
+        title: 'Plan de estabilización de flujo de caja',
         summary: 'Acciones para fortalecer liquidez y reducir desbalances de flujo.',
         objective: 'Estabilizar flujo de caja de corto plazo.',
         priority: 'CRITICAL',
@@ -42,8 +42,8 @@ export function createCashFlowStabilizationStrategy(): FinancialPlanningStrategy
         relatedInsights: input.insights
           .filter((insight) => insight.category === 'income' || insight.category === 'budget')
           .map((insight) => insight.insightId),
-        assumptions: ['La programacion de pagos y cobros puede reordenarse.'],
-        warnings: ['No ejecutar reprogramaciones sin confirmacion del usuario.'],
+        assumptions: ['La programación de pagos y cobros puede reordenarse.'],
+        warnings: ['No ejecutar reprogramaciones sin confirmación del usuario.'],
       }
     },
   }

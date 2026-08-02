@@ -33,15 +33,15 @@ export function createBudgetOptimizationStrategy(): FinancialPlanningStrategy {
       return {
         planId: `plan:budget-optimization:${input.sessionId}:${input.requestedAt}`,
         createdAt: input.requestedAt,
-        title: 'Plan de optimizacion de presupuesto',
-        summary: 'Estrategia para reducir sobrecostos detectados por el analisis proactivo.',
+        title: 'Plan de optimización de presupuesto',
+        summary: 'Estrategia para reducir sobrecostos detectados por el análisis proactivo.',
         objective: 'Recuperar control del presupuesto mensual.',
         priority: 'HIGH',
         estimatedImpact: 'HIGH',
         recommendedActions: [buildAction(input)],
         relatedInsights: input.insights.filter((insight) => insight.category === 'budget').map((insight) => insight.insightId),
-        assumptions: ['Las categorias de gasto son ajustables en el siguiente ciclo.'],
-        warnings: ['Requiere validacion del usuario antes de aplicar cambios operativos.'],
+        assumptions: ['Las categorías de gasto son ajustables en el siguiente ciclo.'],
+        warnings: ['Requiere validación del usuario antes de aplicar cambios operativos.'],
       }
     },
   }

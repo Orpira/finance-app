@@ -23,6 +23,27 @@ const SEVERITY_LABELS: Readonly<Record<string, string>> = {
   INFO: 'Informativa',
 }
 
+const ACTION_TYPE_LABELS: Readonly<Record<string, string>> = {
+  'budget-optimization': 'Optimización del presupuesto',
+  'cashflow-stabilization': 'Estabilización del flujo de caja',
+  'expense-reduction': 'Reducción de gastos',
+  'financial-health-improvement': 'Mejora de la salud financiera',
+  'goal-recovery': 'Recuperación de objetivos',
+  'savings-improvement': 'Mejora del ahorro',
+}
+
+const EFFORT_LABELS: Readonly<Record<string, string>> = {
+  HIGH: 'Alto',
+  MEDIUM: 'Medio',
+  LOW: 'Bajo',
+}
+
+const IMPACT_LABELS: Readonly<Record<string, string>> = {
+  HIGH: 'Alto',
+  MEDIUM: 'Medio',
+  LOW: 'Bajo',
+}
+
 function labelFromMap(
   map: Readonly<Record<string, string>>,
   value: string,
@@ -81,7 +102,8 @@ export function InsightList({ viewModel }: InsightListProps) {
             <strong>Objetivo:</strong> {viewModel.actionPlan.objective}
           </p>
           <p className="mt-1">
-            <strong>Impacto estimado:</strong> {viewModel.actionPlan.estimatedImpact}
+            <strong>Impacto estimado:</strong>{' '}
+            {labelFromMap(IMPACT_LABELS, viewModel.actionPlan.estimatedImpact)}
           </p>
         </article>
       )}
@@ -96,7 +118,7 @@ export function InsightList({ viewModel }: InsightListProps) {
               <li key={action.id}>
                 <article className="rounded-lg border border-slate-200 p-4 text-sm text-slate-700">
                   <p>
-                    <strong>Tipo:</strong> {action.type}
+                    <strong>Tipo:</strong> {labelFromMap(ACTION_TYPE_LABELS, action.type)}
                   </p>
                   <p>
                     <strong>Descripción:</strong> {action.description}
@@ -105,10 +127,10 @@ export function InsightList({ viewModel }: InsightListProps) {
                     <strong>Beneficio esperado:</strong> {action.expectedBenefit}
                   </p>
                   <p>
-                    <strong>Prioridad:</strong> {action.priority}
+                    <strong>Prioridad:</strong> {labelFromMap(SEVERITY_LABELS, action.priority)}
                   </p>
                   <p>
-                    <strong>Esfuerzo:</strong> {action.effort}
+                    <strong>Esfuerzo:</strong> {labelFromMap(EFFORT_LABELS, action.effort)}
                   </p>
                 </article>
               </li>

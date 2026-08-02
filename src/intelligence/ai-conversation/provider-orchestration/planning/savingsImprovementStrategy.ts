@@ -9,8 +9,8 @@ function buildAction(input: FinancialPlanningStrategyInput): FinancialRecommende
   return {
     actionId: `action:savings-improvement:${input.sessionId}:${input.requestedAt}`,
     type: 'savings-improvement',
-    description: 'Incrementar ahorro recurrente mediante reasignacion de excedentes.',
-    expectedBenefit: 'Mayor capacidad de acumulacion y resiliencia ante imprevistos.',
+    description: 'Incrementar ahorro recurrente mediante reasignación de excedentes.',
+    expectedBenefit: 'Mayor capacidad de acumulación y resiliencia ante imprevistos.',
     effort: 'LOW',
     priority: 'MEDIUM',
     affectedCategory: 'savings',

@@ -9,7 +9,7 @@ function buildAction(input: FinancialPlanningStrategyInput): FinancialRecommende
   return {
     actionId: `action:financial-health-improvement:${input.sessionId}:${input.requestedAt}`,
     type: 'financial-health-improvement',
-    description: 'Consolidar una revision semanal de margen, ahorro y cumplimiento de metas.',
+    description: 'Consolidar una revisión semanal de margen, ahorro y cumplimiento de metas.',
     expectedBenefit: 'Mejor visibilidad de salud financiera y decisiones preventivas.',
     effort: 'LOW',
     priority: 'MEDIUM',

@@ -65,4 +65,46 @@ describe('pre-release Sprint A product language', () => {
     expect(sources).not.toContain('Periodo:')
     expect(sources).toContain('Período')
   })
+
+  it('keeps generated financial plans correctly written in Spanish', () => {
+    const sources = [
+      '../src/intelligence/ai-conversation/provider-orchestration/planning/budgetOptimizationStrategy.ts',
+      '../src/intelligence/ai-conversation/provider-orchestration/planning/cashFlowStabilizationStrategy.ts',
+      '../src/intelligence/ai-conversation/provider-orchestration/planning/expenseReductionStrategy.ts',
+      '../src/intelligence/ai-conversation/provider-orchestration/planning/financialHealthImprovementStrategy.ts',
+      '../src/intelligence/ai-conversation/provider-orchestration/planning/goalRecoveryStrategy.ts',
+      '../src/intelligence/ai-conversation/provider-orchestration/planning/savingsImprovementStrategy.ts',
+    ].map(read).join('\n')
+
+    for (const misspelling of [
+      'optimizacion',
+      'analisis',
+      'categorias',
+      'validacion',
+      'estabilizacion',
+      'programacion',
+      'confirmacion',
+      'contribucion',
+      'reduccion',
+      'revision',
+      'recuperacion',
+      'explicita',
+      'reasignacion',
+      'acumulacion',
+    ]) {
+      expect(sources).not.toMatch(new RegExp(`\\b${misspelling}\\b`))
+    }
+  })
+
+  it('translates internal action values before showing them to the user', () => {
+    const source = read('../src/pages/Insights/InsightList.tsx')
+
+    expect(source).toContain('ACTION_TYPE_LABELS')
+    expect(source).toContain('EFFORT_LABELS')
+    expect(source).toContain('IMPACT_LABELS')
+    expect(source).not.toContain('</strong> {action.type}')
+    expect(source).not.toContain('</strong> {action.effort}')
+    expect(source).not.toContain('</strong> {action.priority}')
+    expect(source).not.toContain('</strong> {viewModel.actionPlan.estimatedImpact}')
+  })
 })

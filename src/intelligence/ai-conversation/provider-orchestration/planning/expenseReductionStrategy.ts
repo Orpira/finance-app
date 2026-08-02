@@ -9,7 +9,7 @@ function buildAction(input: FinancialPlanningStrategyInput): FinancialRecommende
   return {
     actionId: `action:expense-reduction:${input.sessionId}:${input.requestedAt}`,
     type: 'expense-reduction',
-    description: 'Reducir gastos de alta recurrencia y baja contribucion de valor.',
+    description: 'Reducir gastos de alta recurrencia y baja contribución de valor.',
     expectedBenefit: 'Disminuir egresos mensuales y mejorar margen operativo.',
     effort: 'LOW',
     priority: 'HIGH',
@@ -33,7 +33,7 @@ export function createExpenseReductionStrategy(): FinancialPlanningStrategy {
       return {
         planId: `plan:expense-reduction:${input.sessionId}:${input.requestedAt}`,
         createdAt: input.requestedAt,
-        title: 'Plan de reduccion de gastos',
+        title: 'Plan de reducción de gastos',
         summary: 'Acciones para desacelerar la tendencia de gasto y proteger liquidez.',
         objective: 'Reducir gastos no prioritarios de forma sostenible.',
         priority: 'HIGH',
@@ -42,7 +42,7 @@ export function createExpenseReductionStrategy(): FinancialPlanningStrategy {
         relatedInsights: input.insights
           .filter((insight) => insight.category === 'expense' || insight.category === 'subscription')
           .map((insight) => insight.insightId),
-        assumptions: ['Existen partidas con margen de optimizacion.'],
+        assumptions: ['Existen partidas con margen de optimización.'],
         warnings: ['Evitar reducciones que afecten compromisos esenciales.'],
       }
     },
