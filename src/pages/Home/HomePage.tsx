@@ -5,7 +5,9 @@ import {
   CalendarRange,
   Eye,
   EyeOff,
+  HeartPulse,
   Lightbulb,
+  ListChecks,
   MessageCircleMore,
   MinusCircle,
   PlusCircle,
@@ -23,7 +25,9 @@ import { listAppointments } from '../../services/appointmentService'
 import { listExpenses } from '../../services/expenseService'
 import { getPendingIncomeSummary, type PendingIncomeSummary } from '../../services/incomeReport.service'
 import { listServiceIncomes } from '../../services/incomeService'
+import { buildFinancialCopilotSnapshot } from '../../services/financialCopilotService'
 import { buildHomeBalanceSummary, resolveHomeBalanceSummaryPromotion } from '../../services/homeBalanceSummaryService'
+import { buildFinancialCopilot } from '../../intelligence/deterministic-copilot'
 import type { BalanceReportResult } from '../../services/balanceReportService'
 import { getSettings } from '../../services/settingsService'
 import type { Appointment } from '../../types/appointment'
@@ -55,70 +59,6 @@ function formatShortDateTime(value: string) {
 
 function formatShortDate(value: string) {
   return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${value}T00:00`))
-}
-
-interface SmartInsight {
-  id: string
-  text: string
-  tone: 'positive' | 'warning' | 'neutral'
-}
-
-/**
- * Reglas deterministas (sin IA): comparan totales ya calculados por el motor
- * financiero. El asistente solo podrá explicar estos resultados, nunca
- * recalcularlos (ver docs/architecture/16_CORE_AND_INTEGRATIONS.md).
- */
-function buildSmartInsights(input: {
-  currentExpenses: number
-  previousExpenses: number
-  currentIncome: number
-  previousIncome: number
-  pendingIncomeSummary: PendingIncomeSummary | null
-}): SmartInsight[] {
-  const insights: SmartInsight[] = []
-
-  if (input.previousExpenses > 0) {
-    const change = ((input.currentExpenses - input.previousExpenses) / input.previousExpenses) * 100
-    if (Math.abs(change) >= 15) {
-      insights.push({
-        id: 'expense-trend',
-        text: `Tus gastos ${change >= 0 ? 'subieron' : 'bajaron'} un ${Math.abs(change).toFixed(0)}% respecto al mes anterior.`,
-        tone: change >= 0 ? 'warning' : 'positive',
-      })
-    }
-  }
-
-  if (input.previousIncome > 0) {
-    const change = ((input.currentIncome - input.previousIncome) / input.previousIncome) * 100
-    if (Math.abs(change) >= 15) {
-      insights.push({
-        id: 'income-trend',
-        text: `Tus ingresos ${change >= 0 ? 'subieron' : 'bajaron'} un ${Math.abs(change).toFixed(0)}% respecto al mes anterior.`,
-        tone: change >= 0 ? 'positive' : 'warning',
-      })
-    }
-  }
-
-  if (input.pendingIncomeSummary && input.pendingIncomeSummary.count > 0) {
-    insights.push({
-      id: 'pending-income',
-      text:
-        input.pendingIncomeSummary.overdueCount > 0
-          ? `Tienes ${input.pendingIncomeSummary.count} ingresos sin reportar, ${input.pendingIncomeSummary.overdueCount} de ellos con más de 7 días.`
-          : `Tienes ${input.pendingIncomeSummary.count} ingresos sin reportar todavía.`,
-      tone: input.pendingIncomeSummary.overdueCount > 0 ? 'warning' : 'neutral',
-    })
-  }
-
-  if (insights.length === 0) {
-    insights.push({
-      id: 'stable',
-      text: 'Tu actividad financiera se mantiene estable respecto al mes anterior.',
-      tone: 'neutral',
-    })
-  }
-
-  return insights
 }
 
 interface RecentMovement {
@@ -418,24 +358,27 @@ export function HomePage() {
     return () => { active = false }
   }, [activePeriod?.id, currentExpenses, currentIncomes, settings, snapshotTime])
 
-  const smartInsights = useMemo(
-    () =>
-      buildSmartInsights({
-        currentExpenses: totals?.current.primaryExpenses ?? 0,
-        previousExpenses: totals?.previous.primaryExpenses ?? 0,
-        currentIncome: totals?.current.primaryIncome ?? 0,
-        previousIncome: totals?.previous.primaryIncome ?? 0,
-        pendingIncomeSummary,
-      }),
-    [totals, pendingIncomeSummary],
-  )
+  const financialCopilot = useMemo(() => {
+    if (!settings) return null
+
+    return buildFinancialCopilot(buildFinancialCopilotSnapshot({
+      asOfDate: new Date().toLocaleDateString('en-CA'),
+      settings,
+      currentIncomes,
+      previousIncomes,
+      currentExpenses,
+      previousExpenses,
+      pendingIncome: pendingIncomeSummary ?? { count: 0, overdueCount: 0 },
+      appointments: upcomingAppointments,
+    }))
+  }, [currentExpenses, currentIncomes, pendingIncomeSummary, previousExpenses, previousIncomes, settings, upcomingAppointments])
 
   const recentMovements = useMemo(
     () => buildRecentMovements(currentIncomes, currentExpenses),
     [currentIncomes, currentExpenses],
   )
 
-  if (!settings || !totals || !balanceSummary) {
+  if (!settings || !totals || !balanceSummary || !financialCopilot) {
     return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando...</section>
   }
 
@@ -549,49 +492,24 @@ export function HomePage() {
         </Link>
       </div>
 
-      {/* {pendingIncomeSummary && (
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex size-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-              <CalendarRange className="size-5" aria-hidden="true" />
-            </span>
-            {pendingIncomeSummary.overdueCount > 0 && (
-              <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-300">
-                {pendingIncomeSummary.overdueCount} con más de 7 días
-              </span>
-            )}
-          </div>
-          <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">Ingresos sin reportar</p>
-
-          {pendingIncomeSummary.count === 0 ? (
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              No hay ingresos pendientes de reportar.
-            </p>
-          ) : (
-            <>
-              <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
-                <SensitiveAmount
-                  hidden={hidden}
-                  value={formatCurrency(pendingIncomeSummary.totalBaseCurrency, pendingIncomeSummary.baseCurrency)}
-                />
-              </p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                {pendingIncomeSummary.count} {pendingIncomeSummary.count === 1 ? 'ingreso' : 'ingresos'}
-                {pendingIncomeSummary.oldestPendingDate
-                  ? ` · el más antiguo del ${formatShortDate(pendingIncomeSummary.oldestPendingDate)}`
-                  : ''}
-              </p>
-              <Link
-                className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                to="/income/pendientes"
-              >
-                Ver detalle por fechas
-                <ArrowRight className="size-4" aria-hidden="true" />
-              </Link>
-            </>
-          )}
-        </article>
-      )} */}
+      {financialCopilot.todayPriorities.length > 0 && (
+        <section aria-labelledby="today-priorities-title">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200" id="today-priorities-title">
+            <ListChecks className="size-5 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+            Prioridades de hoy
+          </h2>
+          <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+            {financialCopilot.todayPriorities.map((priority) => (
+              <li className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/40" key={priority.id}>
+                <span className="text-sm font-medium text-amber-950 dark:text-amber-100">{priority.message}</span>
+                <Link className="shrink-0 text-xs font-semibold text-amber-800 hover:text-amber-950 dark:text-amber-200" to={priority.action.to}>
+                  {priority.action.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {!isBasicMode(settings) && (
@@ -631,15 +549,23 @@ export function HomePage() {
 
         <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <HeartPulse className="size-5 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+            Salud financiera
+          </h2>
+          <p className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">{financialCopilot.financialHealth.label}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{financialCopilot.financialHealth.explanation}</p>
+          <div className="my-4 border-t border-slate-200 dark:border-slate-800" />
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             <Lightbulb className="size-5 text-amber-700 dark:text-amber-300" aria-hidden="true" />
             Resumen inteligente
-          </h2>
+          </h3>
+          <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{financialCopilot.summary}</p>
           <ul className="mt-4 flex flex-col gap-2">
-            {smartInsights.map((insight) => (
+            {financialCopilot.insights.map((insight) => (
               <li
                 className={[
                   'rounded-lg border px-3 py-2 text-sm',
-                  insight.tone === 'warning'
+                  insight.tone === 'attention'
                     ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200'
                     : insight.tone === 'positive'
                       ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
@@ -647,10 +573,23 @@ export function HomePage() {
                 ].join(' ')}
                 key={insight.id}
               >
-                {insight.text}
+                <p className="font-medium">{insight.message}</p>
+                <p className="mt-1 text-xs leading-5 opacity-80">{insight.explanation}</p>
+                {insight.action && (
+                  <Link className="mt-2 inline-flex text-xs font-semibold underline-offset-4 hover:underline" to={insight.action.to}>
+                    {insight.action.label}
+                  </Link>
+                )}
               </li>
             ))}
           </ul>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {financialCopilot.suggestedActions.map((action) => (
+              <Link className="inline-flex h-9 items-center rounded-md border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" key={action.id} to={action.to}>
+                {action.label}
+              </Link>
+            ))}
+          </div>
         </article>
       </div>
 
