@@ -110,6 +110,7 @@ describe('ConversationController initialize/send (PB-IS-013.8)', () => {
       status: 'ready',
       messages: [],
       errorMessage: null,
+      context: null,
     })
   })
 
