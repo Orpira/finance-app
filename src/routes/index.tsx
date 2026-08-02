@@ -93,7 +93,7 @@ export function RouterProvider() {
             <Route path="settings/communication-channels" element={<DevOnlyGuard><CommunicationChannelsPage /></DevOnlyGuard>} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="more" element={<MorePage />} />
-            <Route path="conversation" element={<LicenseTypeGuard blocked={['trial']}><ConversationPage /></LicenseTypeGuard>} />
+            <Route path="conversation" element={<ConversationPage />} />
             <Route path="debug" element={<DevOnlyGuard><DebugPage /></DevOnlyGuard>} />
             <Route path="debug/ai-execution-inspector" element={<DevOnlyGuard><AIExecutionInspectorPage /></DevOnlyGuard>} />
             <Route path="debug/ai-developer-playground" element={<DevOnlyGuard><AIDeveloperPlaygroundPage /></DevOnlyGuard>} />
