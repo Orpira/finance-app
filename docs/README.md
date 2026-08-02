@@ -19,7 +19,7 @@ Este directorio contiene la documentación oficial del proyecto. La fuente canó
 - [04_N8N_WORKFLOWS.md](04_N8N_WORKFLOWS.md) - Inventario y riesgos de workflows n8n.
 - [05_EVOLUTION_API.md](05_EVOLUTION_API.md) - Integración con Evolution API (proveedor `evolution`; ver también `whatsapp/` para el proveedor alternativo `meta-cloud`).
 - [07_AI_ROADMAP.md](07_AI_ROADMAP.md) - Ruta futura de IA.
-- [roadmap/PRODUCT_RELEASE_ROADMAP.md](roadmap/PRODUCT_RELEASE_ROADMAP.md) - Plan canónico de cierre por versiones `v0.9`, `v0.95` y `v1.0`.
+- [roadmap/PRODUCT_RELEASE_ROADMAP.md](roadmap/PRODUCT_RELEASE_ROADMAP.md) - Plan canónico de la Fase Pre-Release 0.9, sus sprints A-G, la RC y el lanzamiento 1.0.
 - [architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md](architecture/20_DETERMINISTIC_FINANCIAL_COPILOT.md) - Arquitectura implementada del copiloto local, sus reglas, consultas, memoria y límites.
 - [architecture/21_FREE_ASSISTANT_GUIDED_SANDBOX.md](architecture/21_FREE_ASSISTANT_GUIDED_SANDBOX.md) - Demostración local del Copiloto para licencias gratuitas, escenarios, privacidad y límites.
 - [architecture/22_EXPLAINABLE_FINANCIAL_INTELLIGENCE.md](architecture/22_EXPLAINABLE_FINANCIAL_INTELLIGENCE.md) - Read models, evidencia y explicaciones deterministas de Iteración 5.

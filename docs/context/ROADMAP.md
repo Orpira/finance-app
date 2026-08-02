@@ -1,27 +1,32 @@
 # Roadmap
 
-## Criterio de alcance hasta la versión 1.0
+## Congelación funcional hasta la versión 1.0
 
-Toda funcionalidad nueva debe demostrar un beneficio claro para el usuario o para la calidad del sistema. Para entrar en el alcance de la versión 1.0, una propuesta debe mejorar de forma verificable al menos uno de estos aspectos:
+No se admiten nuevas funciones durante la Fase Pre-Release 0.9 ni durante la candidata de lanzamiento. Una excepción debe cumplir simultáneamente estas tres condiciones:
 
-- comprensión;
-- privacidad;
-- velocidad;
-- utilidad.
+1. resolver un problema real detectado durante las pruebas;
+2. no aumentar la complejidad del producto;
+3. no retrasar el lanzamiento de la versión 1.0.
 
-Una idea que aumente la complejidad sin aportar una mejora clara en alguno de esos aspectos queda fuera de la versión 1.0. Este criterio debe aplicarse antes de admitir trabajo en una versión y durante su revisión de alcance, preservando la simplicidad como parte del valor diferencial de Private Balance.
+El problema y las tres condiciones deben quedar demostrados antes de implementar la excepción. Cualquier otra idea se aplaza hasta después de 1.0, preservando la simplicidad como parte del valor diferencial de Private Balance.
 
-## Planificación vigente por versiones
+## Planificación vigente de pre-release
 
-La Iteración 6 cierra el modelo de grandes iteraciones funcionales previo a 1.0. La planificación vigente se organiza en:
+La Iteración 6 cierra el modelo de grandes iteraciones funcionales previo a 1.0. La planificación vigente es la **Fase Pre-Release 0.9**, organizada para demostrar el producto existente:
 
-- `v0.9 - Experiencia unificada`: alcance funcional completado;
-- `v0.95 - Rendimiento y calidad`: estabilización, DT-001, DT-002, DT-003 y auditorías;
-- `v1.0 - Lanzamiento oficial`: certificación, documentación y publicación.
+- Sprint A: calidad, UX y consistencia;
+- Sprint B: Android en dispositivos físicos;
+- Sprint C: PWA y cierre de DT-002;
+- Sprint D: accesibilidad y cierre de DT-003;
+- Sprint E: rendimiento y cierre de DT-001;
+- Sprint F: auditoría completa de privacidad;
+- Sprint G: estabilidad mediante uso real prolongado.
 
-No se planifican nuevas iteraciones numeradas antes del lanzamiento. El alcance, los criterios de salida y la política de congelación funcional se definen en [Roadmap de versiones hacia Private Balance 1.0](../roadmap/PRODUCT_RELEASE_ROADMAP.md).
+No se planifican nuevas iteraciones numeradas antes del lanzamiento. Los siete sprints deben producir evidencia antes de declarar `Private Balance 0.9 RC`; después solo se admiten defectos pequeños, textos, traducciones, iconos y publicación hasta `Private Balance 1.0`.
 
-Las fases siguientes conservan el historial y la dirección arquitectónica. No sustituyen el plan de releases ni autorizan nuevas funciones antes de 1.0.
+El alcance, los criterios de salida y la política de congelación funcional se definen en [Fase Pre-Release 0.9](../roadmap/PRODUCT_RELEASE_ROADMAP.md).
+
+Las fases siguientes conservan el historial y la dirección arquitectónica. No sustituyen el plan de pre-release ni autorizan nuevas funciones antes de 1.0.
 
 ## Fase P0 - Private Balance Core Redesign (completada para su alcance, ver ADR-029)
 
@@ -42,7 +47,7 @@ Objetivo: diseñar cómo el asistente pasa de solo-consulta a poder proponer acc
 
 ## Fase P2 - Intelligent Assistant Platform, implementación (completada para su alcance, ver ADR-031)
 
-Objetivo: implementar el primer flujo completo Usuario → Interpretación → Propuesta → Edición → Confirmación → Validación → Persistencia → Resultado, para registrar ingreso/gasto y crear cita. Ver `docs/architecture/19_ASSISTANT_ACTION_FLOW.md` para la arquitectura tal como quedó construida (distinta a la planeada en P1 — ver ADR-031) y `docs/roadmap/private-balance-intelligent-platform-roadmap.md` §2 para la evolución funcional que finalmente se completó hasta la Iteración 6. La antigua Iteración 7 fue retirada al adoptar el roadmap de versiones.
+Objetivo: implementar el primer flujo completo Usuario → Interpretación → Propuesta → Edición → Confirmación → Validación → Persistencia → Resultado, para registrar ingreso/gasto y crear cita. Ver `docs/architecture/19_ASSISTANT_ACTION_FLOW.md` para la arquitectura tal como quedó construida (distinta a la planeada en P1 — ver ADR-031) y `docs/roadmap/private-balance-intelligent-platform-roadmap.md` §2 para la evolución funcional que finalmente se completó hasta la Iteración 6. La antigua Iteración 7 fue retirada al abrir la Fase Pre-Release 0.9.
 
 Entregables: los tres flujos de acción funcionando end-to-end con tests; frontera 8A conectada para ese flujo (modo local); "Canales de comunicación" oculto de la experiencia de usuario (código conservado); corrección de un hallazgo de seguridad real (`VITE_OPENAI_API_KEY` sin bloquear en `vite.config.ts`, commit `bca00bb`).
 

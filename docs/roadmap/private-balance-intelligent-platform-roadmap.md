@@ -76,13 +76,13 @@ Quedan para iteraciones posteriores las acciones `mark_income_reported`, `genera
 - Diagnóstico local y exportación sanitizada para soporte.
 - Foco visible, reducción de movimiento y validación responsive de los flujos modificados.
 
-No se ejecutaron DT-001, DT-002 ni la certificación completa de DT-003; corresponden a `v0.95`.
+No se ejecutaron DT-001, DT-002 ni la certificación completa de DT-003; corresponden, respectivamente, a los sprints E, C y D de la Fase Pre-Release 0.9.
 
-### Transición al roadmap de versiones
+### Transición a la Fase Pre-Release 0.9
 
-La Iteración 6 cierra el modelo de iteraciones funcionales anterior a 1.0. La antigua propuesta de una Iteración 7 queda retirada: la posible simplificación de pantallas solo podrá abordarse en `v0.95` cuando una auditoría demuestre un defecto de comprensión, accesibilidad, rendimiento o mantenimiento, y sin crear flujos nuevos.
+La Iteración 6 cierra el modelo de iteraciones funcionales anterior a 1.0. La antigua propuesta de una Iteración 7 queda retirada: la posible simplificación de pantallas solo podrá abordarse durante la Fase Pre-Release 0.9 cuando una auditoría demuestre un defecto real de comprensión, accesibilidad, rendimiento o mantenimiento, y sin crear flujos nuevos.
 
-La planificación vigente es `v0.9 - Experiencia unificada`, `v0.95 - Rendimiento y calidad` y `v1.0 - Lanzamiento oficial`. Alcance y criterios de salida: [Roadmap de versiones hacia Private Balance 1.0](PRODUCT_RELEASE_ROADMAP.md).
+La planificación vigente es la Fase Pre-Release 0.9, sus sprints A-G, `Private Balance 0.9 RC` y finalmente `Private Balance 1.0`. Alcance y criterios de salida: [Fase Pre-Release 0.9](PRODUCT_RELEASE_ROADMAP.md).
 
 ## 3. Riesgos a vigilar en todas las versiones futuras
 

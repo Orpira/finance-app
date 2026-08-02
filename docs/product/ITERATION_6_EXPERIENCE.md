@@ -29,6 +29,6 @@ Se añadió foco visible global, soporte de `prefers-reduced-motion`, regiones v
 
 ## Cierre del modelo de iteraciones
 
-La Iteración 6 es la última gran iteración funcional previa a 1.0. El trabajo siguiente se organiza por versiones: `v0.9` consolida esta experiencia, `v0.95` certifica rendimiento y calidad, y `v1.0` prepara y ejecuta el lanzamiento oficial. No se abrirá una Iteración 7 antes de 1.0.
+La Iteración 6 es la última gran iteración funcional previa a 1.0. El trabajo siguiente es la Fase Pre-Release 0.9: siete sprints de calidad, Android real, PWA, accesibilidad, rendimiento, privacidad y estabilidad deben demostrar el producto existente antes de declarar `Private Balance 0.9 RC`. No se abrirá una Iteración 7 antes de 1.0.
 
-El alcance y los criterios de salida se mantienen en el [roadmap de versiones](../roadmap/PRODUCT_RELEASE_ROADMAP.md).
+El alcance y los criterios de salida se mantienen en el [roadmap de pre-release](../roadmap/PRODUCT_RELEASE_ROADMAP.md).
