@@ -211,4 +211,30 @@ describe('createLocalFinancialCopilotQueryHandler', () => {
     }
     expect(loadSnapshot).toHaveBeenCalledTimes(5)
   })
+
+  it('mantiene directas y seguimientos completamente offline', async () => {
+    const network = vi.fn()
+    const originalFetch = globalThis.fetch
+    vi.stubGlobal('fetch', network)
+    const snapshot = {
+      asOfDate: '2026-08-02', calculatedAt: '2026-08-02T10:00:00.000Z', source: 'local-financial-domain' as const,
+      period: { current: { start: '2026-08-01', end: '2026-08-31', label: 'agosto de 2026' }, previous: { start: '2026-07-01', end: '2026-07-31', label: 'julio de 2026' } },
+      limitations: [], currency: 'EUR' as const,
+      currentMonth: { income: 100, expenses: 40, incomeCount: 1, expenseCount: 2 },
+      previousMonth: { income: 80, expenses: 30, incomeCount: 1, expenseCount: 1 },
+      currentWeek: { income: 100, expenses: 40, incomeCount: 1, expenseCount: 2 },
+      previousWeek: { income: 60, expenses: 20, incomeCount: 1, expenseCount: 1 },
+      movementDates: { currentIncome: ['2026-08-01'], currentExpenses: ['2026-08-01'], previousIncome: ['2026-07-05'], previousExpenses: ['2026-07-06'] },
+      goalProgress: [], expenseCategories: [{ category: 'Transporte', amount: 25, count: 1 }],
+      pendingIncome: { count: 1, overdueCount: 0 }, appointments: { todayPendingCount: 0, nextPendingDateTime: null, lastDateTime: null }, yesterdayIncome: { amount: 0, count: 0 },
+    }
+    const handler = createLocalFinancialCopilotQueryHandler({ loadSnapshot: async () => snapshot })
+
+    await expect(handler.answer('¿Cuánto gasté este mes?')).resolves.toEqual(expect.objectContaining({ intent: 'monthly-expenses' }))
+    await expect(handler.answer('¿Por qué?')).resolves.toEqual(expect.objectContaining({ intent: 'context-explanation' }))
+    await expect(handler.answer('¿Cuál fue la categoría principal?')).resolves.toEqual(expect.objectContaining({ category: 'Transporte' }))
+    await expect(handler.answer('¿Qué puedo hacer?')).resolves.toEqual(expect.objectContaining({ intent: 'suggested-action-follow-up' }))
+    expect(network).not.toHaveBeenCalled()
+    vi.stubGlobal('fetch', originalFetch)
+  })
 })
