@@ -1,8 +1,10 @@
 # Fase Pre-Release 0.9 - Sprint A: Calidad
 
-**Estado:** En progreso
+**Estado:** COMPLETADO
 
 **Fecha de inicio:** 2026-08-02
+
+**Fecha de cierre:** 2026-08-04
 
 **Alcance funcional:** Congelado
 
@@ -192,3 +194,61 @@ La segunda ronda cubrió con navegación real y capturas las 16 pantallas del al
 - sandbox: se confirmó visualmente la entrada; falta recorrer la demostración completa y la salida.
 
 Hasta cubrir esos puntos con evidencia de interacción real, Sprint A permanece **En progreso**.
+
+## Fase 2 - Validación funcional interactiva (resultados)
+
+**Método:** mismo patrón de Chrome headless vía CDP que la ronda visual, pero accionando la aplicación como lo haría una persona: clics reales (`Input.dispatchMouseEvent`, no `element.click()`, porque este último no mueve el foco como un clic real y hubiese dado un falso positivo de restauración de foco), inputs React-safe mediante el setter nativo + evento `input`/`change`, teclas reales (`Escape`, `Tab`, `Enter`) y subida de archivos reales vía `DOM.setFileInputFiles`. Arnés y páginas de siembra, de nuevo, temporales y eliminados al cerrar la fase.
+
+**Recorrido ejecutado con interacción real, no solo lectura de código o captura estática:**
+
+- **Formularios**: `/income/nuevo` con datos vacíos (botón deshabilitado por validación nativa `required` en el `<select>` de duración, sin guardado ni navegación), con datos válidos (guardado real, redirección a `/income`, el registro aparece en la lista con los valores correctos).
+- **Diálogos**: confirmación de eliminación de un ingreso — apertura con datos reales del registro, cierre con `Escape` sin borrar, `Cancelar` sin borrar, `Eliminar` borra el registro exacto; foco devuelto al botón que abrió el diálogo tras cerrar (verificado con clic real, no `.click()`).
+- **Backup/Restauración**: exportación sin cifrar (mensaje de éxito, sin errores de consola); importación de un archivo `.txt` no-JSON (mensaje "No se pudo importar el backup."); importación de un JSON corrupto/truncado (mismo mensaje); importación cifrada sin clave configurada ("Configura una clave de cifrado antes de continuar.").
+- **Licencia**: activación con código que no respeta el prefijo `PB-LIC-V2.` ("Introduce una licencia firmada que comience por PB-LIC-V2."); activación con código bien formado pero firma inválida ("La firma digital de la licencia no es válida.").
+- **Sandbox**: entrada a la demostración guiada, envío de un mensaje de ejemplo (respuesta simulada con Respuesta/Explicación/Evidencias/Acción recomendada y opciones Editar/Cancelar/Confirmar), salida con "Finalizar" (pantalla de cierre con CTA a activar licencia).
+- **Exportaciones**: generación de PDF de reporte desde la vista previa real con datos seedeados.
+- **Navegación por teclado**: `Tab` avanza correctamente por el formulario; el doble `Tab` observado al salir de un `<select>` es comportamiento nativo del control (no del código de la app) y no se reproduce en el resto de campos.
+- **Estados vacíos**: recorrido con un perfil real sin ninguna temporada/ingreso/gasto — Inicio, Ingresos, Vista previa de reporte y Resumen completo muestran mensajes claros con una acción sugerida ("Ir a Temporadas"), nunca una pantalla en blanco.
+
+**Un hallazgo evaluado y descartado como falso positivo del entorno:** al generar el PDF, la app usa `window.open('', '_blank', ...)` para la vista de impresión; en Chrome headless esa llamada devuelve `null` (no hay pantalla real), y la app responde exactamente como lo haría ante un bloqueador de ventanas emergentes real: diálogo "No se pudo abrir la impresión" con botón "Aceptar". Confirma que el manejo de ese caso ya es correcto; no es reproducible en un navegador con interfaz real.
+
+**Resultado: cero hallazgos nuevos.** Ningún flujo probado con interacción real requirió corrección; no se abrió ningún identificador SA-008 en esta fase porque no hubo defectos que corregir.
+
+**Explícitamente fuera de esta fase:** instalación PWA, actualización PWA y funcionamiento offline. El propio roadmap de pre-release (`docs/roadmap/PRODUCT_RELEASE_ROADMAP.md`) asigna el Service Worker y la certificación offline al Sprint C (cierre de DT-002), no al Sprint A; el manifest ya se corrigió en la primera ronda (SA-003) y no se ha vuelto a tocar. Tratar esto como pendiente de Sprint A duplicaría trabajo ya planificado para su propio sprint.
+
+## Validación técnica (Fase 2)
+
+Sin cambios de código fuente en esta fase (cero hallazgos que corregir), por lo que se revalidó únicamente lo afectado por la ejecución interactiva:
+
+- `npm run typecheck`: correcto;
+- `npm run lint`: correcto;
+- `npm test`: 180 archivos, 2095 pruebas superadas y 1 `todo` preexistente.
+
+## Estado de cierre tras la Fase 2
+
+Con la Fase 2 completa, el checklist de esta ronda queda cubierto así:
+
+- ✅ formularios, validaciones, campos obligatorios, mensajes de error, guardar, cancelar, confirmaciones — interacción real, sin hallazgos;
+- ✅ backup (exportar), restauración (importar), archivos inválidos, archivos corruptos — interacción real, sin hallazgos;
+- ✅ licencia gratuita, activación de licencia, sandbox — interacción real, sin hallazgos;
+- ✅ navegación completa, focus, navegación por teclado, estados vacíos, estados de error, exportaciones — interacción real, sin hallazgos;
+- ⚪ instalación PWA, actualización PWA, funcionamiento offline — fuera de alcance del Sprint A, asignado al Sprint C por el propio roadmap (DT-002).
+
+No existen defectos bloqueantes abiertos. El único punto no cubierto en esta fase (PWA/offline) corresponde a un sprint distinto por decisión de producto ya documentada antes de este ciclo, no a una validación pendiente de Sprint A.
+
+## Cierre del Sprint A
+
+**Estado: COMPLETADO** (confirmado por el responsable de producto el 2026-08-04). Esta sección es el estado vigente y prevalece sobre cualquier nota anterior en este documento que aún diga "En progreso" — esas notas se conservan como registro histórico de cada ronda, no como estado actual.
+
+Resumen de cierre:
+
+- la auditoría visual cubrió 208 combinaciones de ruta, viewport, tema y perfil, con navegación real y capturas, sin dejar ninguna en estado `[BLOCKER]`;
+- no se encontraron defectos bloqueantes en ningún momento del sprint;
+- SA-004 (overflow horizontal en `AppLayout`), SA-005 (recorte del rótulo "Configuración"), SA-006 (pantalla en blanco ante rutas desconocidas) y SA-007 (tilde faltante en el Copiloto) fueron corregidos mediante TDD y quedaron commiteados;
+- la validación funcional interactiva (Fase 2) se completó con acciones reales sobre la aplicación: formularios, diálogos, backup/restauración con archivo inválido y corrupto, activación de licencia y sandbox del Copiloto;
+- no fue necesario abrir el identificador SA-008: la Fase 2 no encontró ningún defecto nuevo;
+- instalación, actualización y funcionamiento offline de la PWA quedan expresamente asignados al Sprint C, conforme a [PRODUCT_RELEASE_ROADMAP.md](../roadmap/PRODUCT_RELEASE_ROADMAP.md) y al cierre de DT-002 — no bloquean este cierre;
+- suite técnica en verde (typecheck, lint, 180 archivos / 2095 tests, build web, build APK);
+- alcance funcional del pre-release se mantiene congelado.
+
+Con este cierre queda habilitado el inicio formal del **Sprint B — Validación Android en hardware físico**.
