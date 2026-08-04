@@ -7,6 +7,7 @@ import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
+import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { CurrencyCode } from '../../types/settings'
@@ -16,7 +17,7 @@ import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 import { getRecordReportBadge } from '../../utils/reportStatus'
 import ExpenseListPage from '../Expenses/ExpenseListPage'
 import IncomeListPage from '../Income/IncomeListPage'
-import { applyMovementFilters, readMovementFilters } from './movementFilters'
+import { applyMovementFilters, readMovementFilters, scopeRecordsByUsageMode } from './movementFilters'
 
 type MovementTab = 'todos' | 'ingresos' | 'egresos'
 
@@ -85,9 +86,16 @@ function AllMovementsTab() {
   useEffect(() => {
     let cancelled = false
 
-    Promise.all([listServiceIncomes({ newestFirst: true }), listExpenses({ newestFirst: true })])
-      .then(([incomes, expenses]) => {
-        if (!cancelled) setMovements(toUnifiedMovements(incomes, expenses))
+    Promise.all([
+      listServiceIncomes({ newestFirst: true }),
+      listExpenses({ newestFirst: true }),
+      getSettings(),
+    ])
+      .then(([incomes, expenses, settings]) => {
+        if (cancelled) return
+        const scopedIncomes = scopeRecordsByUsageMode(incomes, settings.usageMode)
+        const scopedExpenses = scopeRecordsByUsageMode(expenses, settings.usageMode)
+        setMovements(toUnifiedMovements(scopedIncomes, scopedExpenses))
       })
       .catch((error) => {
         console.warn('No se pudieron cargar los movimientos.', error)

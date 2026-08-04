@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyMovementFilters, readMovementFilters } from '../src/pages/Movements/movementFilters'
+import {
+  applyMovementFilters,
+  readMovementFilters,
+  scopeRecordsByUsageMode,
+} from '../src/pages/Movements/movementFilters'
 
 const movements = [
   { key: 'income-1', kind: 'income' as const, date: '2026-08-02', category: 'Servicio', amount: 120, currency: 'EUR', reported: false, searchText: 'servicio efectivo' },
@@ -20,5 +24,16 @@ describe('movement filters', () => {
       reported: 'all', query: 'trans', order: 'amount_desc',
     }, new Date('2026-08-02T10:00:00.000Z'))
     expect(result.map((item) => item.key)).toEqual(['expense-1'])
+  })
+
+  it('excluye registros de un tipo de uso distinto al actual (SA-008)', () => {
+    const records = [
+      { id: 1, usageMode: 'professional' as const },
+      { id: 2, usageMode: 'basic' as const },
+      { id: 3, earningPeriodId: 7 }, // legado sin usageMode explícito, ligado a temporada -> profesional
+      { id: 4 }, // legado sin usageMode explícito ni temporada -> básico
+    ]
+    expect(scopeRecordsByUsageMode(records, 'professional').map((r) => r.id)).toEqual([1, 3])
+    expect(scopeRecordsByUsageMode(records, 'basic').map((r) => r.id)).toEqual([2, 4])
   })
 })

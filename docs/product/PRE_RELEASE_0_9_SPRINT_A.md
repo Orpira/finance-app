@@ -1,10 +1,10 @@
 # Fase Pre-Release 0.9 - Sprint A: Calidad
 
-**Estado:** COMPLETADO
+**Estado:** En progreso (reabierto)
 
 **Fecha de inicio:** 2026-08-02
 
-**Fecha de cierre:** 2026-08-04
+**Cierre 2026-08-04, reabierto el mismo día:** ver [Reapertura del Sprint A](#reapertura-del-sprint-a) al final de este documento.
 
 **Alcance funcional:** Congelado
 
@@ -238,17 +238,41 @@ No existen defectos bloqueantes abiertos. El único punto no cubierto en esta fa
 
 ## Cierre del Sprint A
 
-**Estado: COMPLETADO** (confirmado por el responsable de producto el 2026-08-04). Esta sección es el estado vigente y prevalece sobre cualquier nota anterior en este documento que aún diga "En progreso" — esas notas se conservan como registro histórico de cada ronda, no como estado actual.
+**Estado histórico: COMPLETADO el 2026-08-04** (confirmado por el responsable de producto). Este cierre fue real y válido con el alcance conocido hasta ese momento. Quedó **reabierto el mismo día** al identificarse un documento de ampliación pendiente de resolver — ver [Reapertura del Sprint A](#reapertura-del-sprint-a) para el estado vigente.
 
-Resumen de cierre:
+Resumen de cierre (histórico):
 
 - la auditoría visual cubrió 208 combinaciones de ruta, viewport, tema y perfil, con navegación real y capturas, sin dejar ninguna en estado `[BLOCKER]`;
 - no se encontraron defectos bloqueantes en ningún momento del sprint;
 - SA-004 (overflow horizontal en `AppLayout`), SA-005 (recorte del rótulo "Configuración"), SA-006 (pantalla en blanco ante rutas desconocidas) y SA-007 (tilde faltante en el Copiloto) fueron corregidos mediante TDD y quedaron commiteados;
 - la validación funcional interactiva (Fase 2) se completó con acciones reales sobre la aplicación: formularios, diálogos, backup/restauración con archivo inválido y corrupto, activación de licencia y sandbox del Copiloto;
-- no fue necesario abrir el identificador SA-008: la Fase 2 no encontró ningún defecto nuevo;
+- la Fase 2 en sí no encontró ningún defecto propio que requiriera abrir un identificador nuevo (el identificador `SA-008` se abrió después, por un motivo distinto — ver [Reapertura del Sprint A](#reapertura-del-sprint-a));
 - instalación, actualización y funcionamiento offline de la PWA quedan expresamente asignados al Sprint C, conforme a [PRODUCT_RELEASE_ROADMAP.md](../roadmap/PRODUCT_RELEASE_ROADMAP.md) y al cierre de DT-002 — no bloquean este cierre;
 - suite técnica en verde (typecheck, lint, 180 archivos / 2095 tests, build web, build APK);
 - alcance funcional del pre-release se mantiene congelado.
 
-Con este cierre queda habilitado el inicio formal del **Sprint B — Validación Android en hardware físico**.
+## Reapertura del Sprint A
+
+**Estado: En progreso (reabierto el 2026-08-04).** Al confirmar el cierre anterior, quedó pendiente de resolución un documento de implementación ("Sprint A – Calidad (Ampliación UX)") entregado por el responsable de producto antes del cierre, con cinco ítems que en su numeración original colisionaban con identificadores ya usados (`SA-003` a `SA-007`). Se decidió renumerarlos a **SA-008–SA-012** y ejecutarlos después de la Fase 2 — pero el cierre del sprint se confirmó sin retomarlos. El responsable de producto solicitó la reapertura al advertir la omisión.
+
+Ítems renumerados:
+
+- **SA-008** (antes SA-003) — Corrección del listado de movimientos "Todos". **Corregido**, ver detalle abajo.
+- **SA-009** (antes SA-004) — Estado inteligente de temporadas cuando no hay temporada activa (mostrar temporadas recientes si existen cerradas). Pendiente.
+- **SA-010** (antes SA-005) — Acción contextual "Nueva temporada" cuando solo existen temporadas cerradas. Pendiente.
+- **SA-011** (antes SA-006) — Diferenciación visual permanente de temporadas cerradas (badge, estilo atenuado, solo lectura). Pendiente.
+- **SA-012** (antes SA-007) — Auditoría de estados vacíos en Inicio, Movimientos, Agenda, Temporadas, Reportes, Coach, Copiloto y Más, sustituyendo mensajes poco informativos por patrones con valor accionable. Pendiente.
+
+**SA-009 a SA-011 leen como funcionalidad nueva de UX** (nuevos estados, nuevo botón contextual, nuevos indicadores visuales), no como corrección de un defecto observado. El propio [PRODUCT_RELEASE_ROADMAP.md](../roadmap/PRODUCT_RELEASE_ROADMAP.md) exige que toda función nueva durante la congelación funcional se documente como excepción justificada (resuelve un problema real, no aumenta la complejidad, no retrasa 1.0) **antes** de implementarla. Esa documentación de excepción se registrará en este documento antes de tocar código para SA-009–SA-011, conforme a lo acordado.
+
+### SA-008 - Movimientos "Todos" mezclaba registros de otro modo de uso
+
+**Problema:** `MovementsPage.tsx` construía la pestaña "Todos" llamando a `listServiceIncomes`/`listExpenses` sin ningún filtro de modo de uso, mientras que `IncomeListPage` (`/income`) y `ExpenseListPage` (`/expenses`) sí filtran cada una con `recordBelongsToUsageMode(record, settings.usageMode)` antes de mostrar sus listas. Resultado: un ingreso o gasto creado en modo Básico permanecía visible en "Todos" incluso después de cambiar a modo Profesional (y viceversa), aunque nunca aparece en las pestañas Ingresos/Egresos por separado. Reproducido en vivo (Chrome real, no solo test unitario): con un ingreso profesional de 999 € y un ingreso básico "legado" de 111 € en la misma base, "Todos" mostraba ambos; tras el fix, solo el que coincide con el modo activo.
+
+**Nota sobre el reporte original:** el defecto no era una fusión/deduplicación por fecha o importe — cada movimiento seguía usando su `id` real como clave (`income-${id}` / `expense-${id}`), sin colisión posible entre ingresos y gastos. El problema real era la ausencia total de filtrado por modo de uso, que sí calza con "movimientos perteneciendo a un tipo de uso distinto" que reportaba el documento original.
+
+**Corrección:** nueva función `scopeRecordsByUsageMode` en `movementFilters.ts` (reutiliza `recordBelongsToUsageMode`, el mismo mecanismo ya usado en `IncomeListPage`/`ExpenseListPage`, sin duplicar lógica de dominio), aplicada a ingresos y gastos antes de unificarlos en `AllMovementsTab`.
+
+**TDD:** `test/movementFilters.test.ts` — caso nuevo que reproduce registros con `usageMode` explícito y registros legado inferidos por temporada, rojo antes del fix y verde después; confirmado además en vivo (rojo y verde) con un arnés temporal de Chrome real, eliminado tras la verificación.
+
+Con este sprint reabierto, **el Sprint B no ha iniciado.** Su documento operativo ya existe en [Sprint B: Android real](./PRE_RELEASE_0_9_SPRINT_B.md) — preparado documentalmente, no ejecutado — y permanece bloqueado hasta que Sprint A vuelva a cerrarse con SA-009 a SA-012 resueltos.

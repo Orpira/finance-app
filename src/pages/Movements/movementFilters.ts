@@ -1,3 +1,6 @@
+import { recordBelongsToUsageMode, type UsageModeRecord } from '../../utils/usageMode'
+import type { UsageMode } from '../../types/settings'
+
 export type MovementFilterType = 'all' | 'income' | 'expense'
 export type MovementReportFilter = 'all' | 'reported' | 'unreported'
 export type MovementOrder = 'newest' | 'oldest' | 'amount_desc' | 'amount_asc'
@@ -25,6 +28,21 @@ export interface FilterableMovement {
 
 const valid = <T extends string>(value: string | null, values: readonly T[], fallback: T): T =>
   value !== null && values.includes(value as T) ? value as T : fallback
+
+/**
+ * "Movimientos → Todos" debe mostrar exactamente la unión de lo que ya
+ * muestran las pestañas Ingresos y Egresos por separado, y ambas filtran por
+ * `recordBelongsToUsageMode` (ver IncomeListPage/ExpenseListPage). Sin este
+ * filtro, ingresos y gastos creados bajo un modo de uso distinto al actual
+ * (p. ej. registros de Básico visibles estando en Profesional) aparecían
+ * mezclados en Todos aunque nunca aparecen en Ingresos/Egresos.
+ */
+export function scopeRecordsByUsageMode<T extends UsageModeRecord>(
+  records: readonly T[],
+  usageMode: UsageMode,
+): T[] {
+  return records.filter((record) => recordBelongsToUsageMode(record, usageMode))
+}
 
 export function readMovementFilters(params: URLSearchParams): MovementFilters {
   const rawType = params.get('type')

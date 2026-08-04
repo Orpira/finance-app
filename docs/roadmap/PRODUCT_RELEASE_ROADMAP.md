@@ -29,7 +29,7 @@ El problema y el cumplimiento de las tres condiciones deben quedar documentados 
 
 **Objetivo:** eliminar defectos pequeños y fricciones del producto existente.
 
-**Estado:** en progreso desde el 2026-08-02. La primera ronda técnica está documentada en [Sprint A: Calidad](../product/PRE_RELEASE_0_9_SPRINT_A.md); falta completar la matriz visual antes de cerrarlo.
+**Estado:** en progreso, reabierto el 2026-08-04 tras un cierre breve el mismo día. SA-008 (Movimientos "Todos" sin filtro de modo de uso) ya está corregido y verificado. Pendiente: SA-009–SA-012 (ampliación UX en Temporadas y estados vacíos, sujeta a excepción de congelación funcional documentada antes de implementarse — sin cambios de código todavía). Detalle completo en [Sprint A: Calidad](../product/PRE_RELEASE_0_9_SPRINT_A.md).
 
 Alcance:
 
@@ -41,6 +41,8 @@ Alcance:
 Criterio de salida: incidencias clasificadas, correcciones cubiertas por regresión cuando afecten comportamiento y revisión visual de los flujos modificados completada.
 
 ## Sprint B - Android real
+
+**Estado:** documento operativo preparado ([Sprint B: Android real](../product/PRE_RELEASE_0_9_SPRINT_B.md)), pero la ejecución en hardware físico espera al recierre del Sprint A (reabierto el 2026-08-04).
 
 **Objetivo:** validar el APK en hardware físico, sin usar emuladores como evidencia de aceptación.
 
