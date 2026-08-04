@@ -1,20 +1,18 @@
 import { type ReactNode, useEffect, useState } from 'react'
 
 import { getOnboardingState } from '../../services/onboardingService'
-import { ONBOARDING_STEP_ORDER, type OnboardingState } from '../../types/onboarding'
-import { createCompletedOnboardingState } from '../../utils/onboarding'
+import type { OnboardingState } from '../../types/onboarding'
 import { OnboardingNavigator } from './OnboardingNavigator'
-import { TutorialOverlay } from './TutorialOverlay'
 
 interface OnboardingGateProps { children: ReactNode }
 
 export function OnboardingGate({ children }: OnboardingGateProps) {
-  const [state, setState] = useState<OnboardingState | 'loading'>('loading')
+  const [state, setState] = useState<OnboardingState | 'error' | 'loading'>('loading')
 
   function refresh() {
     return getOnboardingState()
       .then(setState)
-      .catch(() => setState(createCompletedOnboardingState(new Date().toISOString())))
+      .catch(() => setState('error'))
   }
 
   useEffect(() => {
@@ -29,19 +27,28 @@ export function OnboardingGate({ children }: OnboardingGateProps) {
     )
   }
 
-  if (state.completed) {
-    return children
+  if (state === 'error') {
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-slate-50 px-4 text-center dark:bg-slate-950">
+        <p className="text-sm font-medium text-red-700 dark:text-red-300">
+          No se pudo cargar la configuración inicial.
+        </p>
+        <button
+          className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white"
+          onClick={() => {
+            setState('loading')
+            void refresh()
+          }}
+          type="button"
+        >
+          Reintentar
+        </button>
+      </main>
+    )
   }
 
-  const stepId = ONBOARDING_STEP_ORDER[state.currentStep] ?? 'welcome'
-
-  if (stepId === 'tutorial') {
-    return (
-      <>
-        {children}
-        <TutorialOverlay onDone={refresh} />
-      </>
-    )
+  if (state.completed) {
+    return children
   }
 
   return <OnboardingNavigator currentStep={state.currentStep} onAdvance={refresh} />

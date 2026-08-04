@@ -8,6 +8,8 @@ import {
   pickFirstAvailableTutorialTarget,
   resolveInitialScreen,
   validateOnboardingPreferences,
+  getOnboardingWorkModeSettings,
+  resolveOnboardingEarningPercentage,
 } from '../src/utils/onboarding'
 
 describe('createDefaultOnboardingState', () => {
@@ -150,5 +152,26 @@ describe('pickFirstAvailableTutorialTarget', () => {
     expect(
       pickFirstAvailableTutorialTarget(['pending-income-card'], new Set(['nav-income'])),
     ).toBeUndefined()
+  })
+})
+
+describe('getOnboardingWorkModeSettings', () => {
+  it.each(['minutes', 'hours'] as const)(
+    'configura la unidad %s sin cambiar el método de cálculo financiero',
+    (workedTimeUnit) => {
+      expect(getOnboardingWorkModeSettings(workedTimeUnit)).toEqual({
+        workedTimeUnit,
+      })
+    },
+  )
+})
+
+describe('resolveOnboardingEarningPercentage', () => {
+  it('conserva el porcentaje indicado cuando sí aplica', () => {
+    expect(resolveOnboardingEarningPercentage(65, false)).toBe(65)
+  })
+
+  it('usa 100 % cuando el usuario indica que no aplica porcentaje', () => {
+    expect(resolveOnboardingEarningPercentage(65, true)).toBe(100)
   })
 })

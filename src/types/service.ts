@@ -101,7 +101,7 @@ export interface ServiceIncome {
   /** Solo 'hourly_workday': tiempo trabajado tal cual lo tecleó la usuaria, en workedTimeUnit. */
   workedTime?: number;
 
-  /** Snapshot de la unidad usada para workedTime en este ingreso. */
+  /** Snapshot de la unidad elegida para registrar y presentar la duración. */
   workedTimeUnit?: WorkedTimeUnit;
 
   /** workedTime ya convertido a horas (snapshot). */

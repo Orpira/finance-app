@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
-import { getEarningPeriodById, getSeasonStatistics, listSeasonRecords, updateActiveEarningPeriod, type SeasonStatistics } from '../../services/earningPeriodService'
+import { SeasonGoalCard } from '../../components/seasons/SeasonGoalCard'
+import { getEarningPeriodById, getSeasonGoalProgress, getSeasonStatistics, listSeasonRecords, updateActiveEarningPeriod, type SeasonStatistics } from '../../services/earningPeriodService'
 import { listCityOptions } from '../../services/locationService'
 import type { Appointment } from '../../types/appointment'
 import type { EarningPeriod } from '../../types/earningPeriod'
@@ -47,6 +48,7 @@ export function SeasonDetailPage() {
     ['Ingresos brutos', stats.grossIncome], ['Ganancia real', stats.realGain], ['Egresos', stats.expenses],
     ['Ajustes', stats.adjustments], ['Ganancia neta', stats.netGain], ['Mejor día', stats.bestDay?.amount ?? 0],
   ]
+  const goalProgress = getSeasonGoalProgress(period, stats.realGain)
 
   function openDayDetail(day: { date: string; count: number; amount: number }) {
     if (!records) return
@@ -109,6 +111,28 @@ export function SeasonDetailPage() {
       })
       return
     }
+    const nextPlannedEndDate = await prompt({
+      title: 'Finalización prevista',
+      initialValue: period.plannedEndDate?.slice(0, 10) ?? '',
+      placeholder: 'AAAA-MM-DD',
+    })
+    if (nextPlannedEndDate === null) return
+    const nextGoalValue = await prompt({
+      title: 'Meta económica',
+      initialValue: period.economicGoal ? String(period.economicGoal) : '',
+      placeholder: '0,00',
+      inputMode: 'decimal',
+    })
+    if (nextGoalValue === null) return
+    const nextGoal = Number(nextGoalValue)
+    if (!Number.isFinite(nextGoal) || nextGoal <= 0) {
+      await alert({
+        type: 'warning',
+        title: 'Meta no válida',
+        message: 'La meta económica debe ser mayor a cero.',
+      })
+      return
+    }
     try {
       const cityOptions = await listCityOptions()
       const selectedCity = getCityOption(nextCity.trim(), cityOptions)
@@ -121,6 +145,8 @@ export function SeasonDetailPage() {
         country: nextCountry,
         countryCode: nextCountry,
         baseCurrency: getCountryCurrency(nextCountry) ?? period.baseCurrency,
+        plannedEndDate: `${nextPlannedEndDate}T23:59:59.999Z`,
+        economicGoal: nextGoal,
       })
       if (updated) setPeriod(updated)
     } catch (reason) {
@@ -138,8 +164,9 @@ export function SeasonDetailPage() {
     </PageHeader>
     <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-wrap items-center gap-2"><span className={period.status === 'closed' ? 'rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:!text-slate-100' : 'rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900 dark:!text-emerald-100'}>{period.status === 'closed' ? 'Temporada cerrada' : 'Activa'}</span>{period.status === 'closed' && <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:!text-slate-300"><LockKeyhole className="size-3" /> Registros bloqueados</span>}</div>
-      <p className="mt-3 text-sm text-slate-600 dark:!text-slate-300">{period.city}, {country} · {formatDate(period.startDate)} – {formatDate(period.endDate)} · {period.percentage}%</p>
+      <p className="mt-3 text-sm text-slate-600 dark:!text-slate-300">{period.city || 'Sin ciudad'}, {country} · Inicio {formatDate(period.startDate)} · {period.status === 'closed' ? `Cierre ${formatDate(period.endDate)}` : `Finalización prevista ${formatDate(period.plannedEndDate)}`} · {period.percentage}%</p>
     </div>
+    {goalProgress && <SeasonGoalCard currency={currency} plannedEndDate={period.plannedEndDate} progress={goalProgress} />}
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">{cards.map(([label, amount]) => <article className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900" key={String(label)}><p className="text-xs text-slate-500">{label}</p><p className="mt-1 font-semibold">{formatCurrency(Number(amount), currency)}</p></article>)}</div>
     <div className="grid gap-4 lg:grid-cols-2">
       <details className="group rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">

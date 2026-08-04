@@ -1,10 +1,19 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
-import { completeOnboarding, setOnboardingStep } from '../../services/onboardingService'
+import {
+  completeOnboarding,
+  setOnboardingBackupRequested,
+  setOnboardingStep,
+} from '../../services/onboardingService'
 import { ONBOARDING_STEP_ORDER } from '../../types/onboarding'
-import { PreferencesStep } from './steps/PreferencesStep'
+import { CurrencyStep } from './steps/CurrencyStep'
+import { FinishStep } from './steps/FinishStep'
 import { SecurityStep } from './steps/SecurityStep'
+import { SeasonStep } from './steps/SeasonStep'
+import { UsageStep } from './steps/UsageStep'
 import { WelcomeStep } from './steps/WelcomeStep'
+import { WorkModeStep } from './steps/WorkModeStep'
 
 interface OnboardingNavigatorProps {
   currentStep: number
@@ -12,6 +21,7 @@ interface OnboardingNavigatorProps {
 }
 
 export function OnboardingNavigator({ currentStep, onAdvance }: OnboardingNavigatorProps) {
+  const navigate = useNavigate()
   const [isBusy, setIsBusy] = useState(false)
 
   async function goToStep(step: number) {
@@ -24,10 +34,11 @@ export function OnboardingNavigator({ currentStep, onAdvance }: OnboardingNaviga
     }
   }
 
-  async function skipToEnd() {
+  async function finish(openBackup: boolean) {
     setIsBusy(true)
     try {
       await completeOnboarding()
+      if (openBackup) navigate('/settings/backup', { replace: true })
       onAdvance()
     } finally {
       setIsBusy(false)
@@ -36,19 +47,48 @@ export function OnboardingNavigator({ currentStep, onAdvance }: OnboardingNaviga
 
   const stepId = ONBOARDING_STEP_ORDER[currentStep] ?? 'welcome'
 
-  if (stepId === 'preferences') {
-    return <PreferencesStep currentStep={currentStep} onNext={() => goToStep(2)} />
+  if (stepId === 'usage') {
+    return <UsageStep currentStep={currentStep} onNext={(step) => goToStep(step)} />
+  }
+
+  if (stepId === 'work-mode') {
+    return <WorkModeStep currentStep={currentStep} onNext={() => goToStep(3)} />
+  }
+
+  if (stepId === 'season') {
+    return <SeasonStep currentStep={currentStep} onNext={() => goToStep(4)} />
+  }
+
+  if (stepId === 'currency') {
+    return <CurrencyStep currentStep={currentStep} onNext={() => goToStep(5)} />
   }
 
   if (stepId === 'security') {
-    return <SecurityStep currentStep={currentStep} onNext={() => goToStep(3)} />
+    return (
+      <SecurityStep
+        currentStep={currentStep}
+        onNext={async (backupRequested) => {
+          await setOnboardingBackupRequested(backupRequested)
+          await goToStep(6)
+        }}
+      />
+    )
+  }
+
+  if (stepId === 'finish') {
+    return (
+      <FinishStep
+        currentStep={currentStep}
+        isBusy={isBusy}
+        onFinish={finish}
+      />
+    )
   }
 
   return (
     <WelcomeStep
       currentStep={currentStep}
       isBusy={isBusy}
-      onSkip={skipToEnd}
       onStart={() => goToStep(1)}
     />
   )

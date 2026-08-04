@@ -35,6 +35,7 @@ import {
   DEFAULT_LANGUAGE,
   detectTimeZone,
 } from '../utils/onboarding'
+import { migrateSeasonPlanningV31 } from './migrations/v31SeasonPlanning'
 
 export const DEFAULT_SETTINGS_ID = 'app'
 
@@ -841,6 +842,36 @@ export class FinanceDB extends Dexie {
       incomeAdditionals: '++id,incomeId,createdAt',
       financialGoals: 'id,type,status,startDate,endDate,updatedAt',
     })
+
+    this.version(31)
+      .stores({
+        services:
+          '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt',
+        expenses:
+          '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+        appointments:
+          '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+        cutoffReports:
+          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+        earningPeriods:
+          '++id,status,startDate,endDate,plannedEndDate,countryCode,city',
+        licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+        automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+        communicationChannels: 'id,type,provider,status,updatedAt',
+        deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+        conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+        knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+        knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+        financialSnapshots:
+          'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+        knowledgeSnapshots:
+          'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+        incomeAdditionals: '++id,incomeId,createdAt',
+        financialGoals: 'id,type,status,startDate,endDate,updatedAt',
+      })
+      .upgrade(migrateSeasonPlanningV31)
 
     this.financialSnapshots.hook('updating', () => {
       throw new Error('SNAPSHOT_PERSISTENCE_APPEND_ONLY')

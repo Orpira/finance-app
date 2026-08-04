@@ -99,7 +99,7 @@ export function SeasonsPage() {
             <div>
               <span className="rounded-full bg-emerald-700 px-2.5 py-1 text-xs font-semibold text-white">Activa</span>
               <h2 className="mt-3 text-2xl font-semibold">{active.name}</h2>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{active.city || 'Sin ciudad'}, {countryLabel(active.countryCode ?? active.country)} · desde {formatDate(active.startDate)} · {active.percentage}%</p>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{active.city || 'Sin ciudad'}, {countryLabel(active.countryCode ?? active.country)} · desde {formatDate(active.startDate)} · prevista hasta {formatDate(active.plannedEndDate)} · {active.percentage}%</p>
             </div>
             <Link className="inline-flex h-10 items-center gap-2 rounded-md border border-emerald-300 bg-white px-3 text-sm font-semibold text-emerald-800" to={`/temporadas/${active.id}`}>Ver detalle <ChevronRight className="size-4" /></Link>
           </div>

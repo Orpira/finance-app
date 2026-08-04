@@ -8,7 +8,7 @@ import { OnboardingLayout } from '../OnboardingLayout'
 
 interface SecurityStepProps {
   currentStep: number
-  onNext: () => void
+  onNext: (backupRequested: boolean) => void | Promise<void>
 }
 
 export function SecurityStep({ currentStep, onNext }: SecurityStepProps) {
@@ -17,6 +17,7 @@ export function SecurityStep({ currentStep, onNext }: SecurityStepProps) {
   const [confirmPin, setConfirmPin] = useState('')
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [backupRequested, setBackupRequested] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -47,7 +48,7 @@ export function SecurityStep({ currentStep, onNext }: SecurityStepProps) {
     setIsSaving(true)
     try {
       await setPin(pin)
-      onNext()
+      await onNext(backupRequested)
     } catch {
       setError('No se pudo guardar el PIN. Inténtalo de nuevo.')
     } finally {
@@ -71,7 +72,7 @@ export function SecurityStep({ currentStep, onNext }: SecurityStepProps) {
         footer={
           <button
             className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white"
-            onClick={onNext}
+            onClick={() => onNext(backupRequested)}
             type="button"
           >
             Continuar
@@ -105,7 +106,7 @@ export function SecurityStep({ currentStep, onNext }: SecurityStepProps) {
           <button
             className="h-11 rounded-md text-sm font-semibold text-emerald-700 disabled:text-slate-300 dark:text-emerald-300"
             disabled={isSaving}
-            onClick={onNext}
+            onClick={() => onNext(backupRequested)}
             type="button"
           >
             Configurar más tarde
@@ -148,6 +149,22 @@ export function SecurityStep({ currentStep, onNext }: SecurityStepProps) {
         </label>
         <p aria-live="polite" className="min-h-5 text-center text-sm font-medium text-red-600">{error}</p>
       </form>
+      <label className="flex items-start gap-3 rounded-md border border-slate-200 p-3 text-left dark:border-slate-700">
+        <input
+          checked={backupRequested}
+          className="mt-0.5 size-5 accent-emerald-700"
+          onChange={(event) => setBackupRequested(event.target.checked)}
+          type="checkbox"
+        />
+        <span>
+          <span className="block text-sm font-semibold text-slate-800 dark:text-slate-200">
+            Configurar copia de seguridad
+          </span>
+          <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+            Al finalizar podrás conectar Google Drive y definir una clave de cifrado.
+          </span>
+        </span>
+      </label>
     </OnboardingLayout>
   )
 }

@@ -5,10 +5,11 @@ import { useDialog } from '../../components/dialogs/useDialog'
 
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
+import { SeasonGoalCard } from '../../components/seasons/SeasonGoalCard'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
-import { listEarningPeriods } from '../../services/earningPeriodService'
+import { getSeasonGoalProgress, listEarningPeriods } from '../../services/earningPeriodService'
 import { buildBalanceReport } from '../../services/balanceReportService'
 import { runFinancialEngineShadowMode } from '../../services/financialEngineShadowMode'
 import type { EarningPeriod } from '../../types/earningPeriod'
@@ -125,6 +126,11 @@ function formatExportDateTime(value?: string) {
   }
 
   return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
+}
+
+function formatSeasonDate(value?: string) {
+  if (!value) return 'Sin definir'
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(value))
 }
 
 function getExpenseValue(expense: Expense, currency: CurrencyCode) {
@@ -435,6 +441,24 @@ export function ReportsPage() {
       scope: 'reports.balance',
     })
   }, [activeUsageMode, expenses, incomes, primaryCurrency, selectedSeason])
+
+  const selectedSeasonRecord = useMemo(
+    () => seasons.find((season) => String(season.id) === selectedSeason),
+    [seasons, selectedSeason],
+  )
+  const selectedSeasonGoalProgress = useMemo(() => {
+    if (!selectedSeasonRecord?.id) return null
+
+    const achieved = traceIncomes
+      .filter(
+        (income) =>
+          income.earningPeriodId === selectedSeasonRecord.id ||
+          income.seasonPeriodId === selectedSeasonRecord.id,
+      )
+      .reduce((total, income) => total + income.realGain, 0)
+
+    return getSeasonGoalProgress(selectedSeasonRecord, achieved)
+  }, [selectedSeasonRecord, traceIncomes])
 
   const incomesById = useMemo(
     () => new Map(traceIncomes.flatMap((income) => income.id ? [[income.id, income] as const] : [])),
@@ -1236,6 +1260,31 @@ export function ReportsPage() {
       ]
         .filter(Boolean)
         .join(' · ')
+      const goalSummaryHtml =
+        selectedSeasonRecord && selectedSeasonGoalProgress
+          ? `
+            <h2>Meta de la temporada</h2>
+            <div class="meta">Finalización prevista: ${escapeHtml(formatSeasonDate(selectedSeasonRecord.plannedEndDate))}</div>
+            <div class="summary">
+              <div><span>Meta</span><strong>${escapeHtml(formatCurrency(selectedSeasonGoalProgress.goal, selectedSeasonRecord.baseCurrency ?? primaryCurrency))}</strong></div>
+              <div><span>Valor alcanzado</span><strong>${escapeHtml(formatCurrency(selectedSeasonGoalProgress.achieved, selectedSeasonRecord.baseCurrency ?? primaryCurrency))}</strong></div>
+              <div><span>Valor restante</span><strong>${escapeHtml(formatCurrency(selectedSeasonGoalProgress.remaining, selectedSeasonRecord.baseCurrency ?? primaryCurrency))}</strong></div>
+              <div><span>Porcentaje alcanzado</span><strong>${selectedSeasonGoalProgress.percentage.toFixed(1)} %</strong></div>
+            </div>
+          `
+          : ''
+      const goalSummaryText =
+        selectedSeasonRecord && selectedSeasonGoalProgress
+          ? [
+              'Meta de la temporada',
+              `Finalización prevista: ${formatSeasonDate(selectedSeasonRecord.plannedEndDate)}`,
+              `Meta: ${formatCurrency(selectedSeasonGoalProgress.goal, selectedSeasonRecord.baseCurrency ?? primaryCurrency)}`,
+              `Valor alcanzado: ${formatCurrency(selectedSeasonGoalProgress.achieved, selectedSeasonRecord.baseCurrency ?? primaryCurrency)}`,
+              `Valor restante: ${formatCurrency(selectedSeasonGoalProgress.remaining, selectedSeasonRecord.baseCurrency ?? primaryCurrency)}`,
+              `Porcentaje alcanzado: ${selectedSeasonGoalProgress.percentage.toFixed(1)} %`,
+              '',
+            ]
+          : []
 
       reportHtml = `
         <h1>${escapeHtml(title)}</h1>
@@ -1244,6 +1293,7 @@ export function ReportsPage() {
           <div><span>Registros</span><strong>${totalRecords}</strong></div>
           <div><span>Balance general</span><strong>${escapeHtml(formatCurrency(balanceReport.generalBalance, primaryCurrency))}</strong></div>
         </div>
+        ${goalSummaryHtml}
         ${
           balanceReport.hasData
             ? buildBalanceSectionsHtml()
@@ -1256,6 +1306,7 @@ export function ReportsPage() {
         `Registros: ${totalRecords}`,
         `Balance general: ${formatCurrency(balanceReport.generalBalance, primaryCurrency)}`,
         '',
+        ...goalSummaryText,
         balanceReport.hasData
           ? buildBalanceSectionsText()
           : 'No hay datos para construir el balance con los filtros seleccionados.',
@@ -1536,6 +1587,14 @@ export function ReportsPage() {
           </label>
         </div>
       </CollapsibleFilters>
+
+      {selectedSeasonRecord && selectedSeasonGoalProgress && (
+        <SeasonGoalCard
+          currency={(selectedSeasonRecord.baseCurrency ?? primaryCurrency) as CurrencyCode}
+          plannedEndDate={selectedSeasonRecord.plannedEndDate}
+          progress={selectedSeasonGoalProgress}
+        />
+      )}
 
       <section aria-labelledby="report-builder-title" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-lg font-semibold text-slate-950 dark:text-white" id="report-builder-title">Configurar reporte</h2>

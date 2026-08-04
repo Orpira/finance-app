@@ -8,6 +8,8 @@ export interface EarningPeriod {
   percentage: number
   startDate: string
   endDate?: string
+  plannedEndDate?: string
+  economicGoal?: number
   status: EarningPeriodStatus
   country?: string
   countryCode?: CountryCode

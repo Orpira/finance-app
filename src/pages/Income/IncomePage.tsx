@@ -549,7 +549,8 @@ export function IncomePage() {
         additionalsTotal,
         totalIncome: principalAmount,
         workedTime: usesHourlyWorkday ? workedTime : undefined,
-        workedTimeUnit: usesHourlyWorkday ? workedTimeUnit : undefined,
+        workedTimeUnit:
+          !isBasicUser && isServiceType ? workedTimeUnit : undefined,
         hourlyRateApplied: usesHourlyWorkday ? hourlyRateApplied : undefined,
         currency,
         earningPeriodId: editingIncome?.earningPeriodId ?? activePeriod?.id,
@@ -743,6 +744,7 @@ export function IncomePage() {
         {usesServiceDuration && (
           <ServiceDurationSelect
             onChange={handleDurationChange}
+            unit={workedTimeUnit}
             value={durationLabel}
           />
         )}

@@ -3,6 +3,7 @@ import {
   LAST_ONBOARDING_STEP_INDEX,
   type OnboardingState,
 } from '../types/onboarding'
+import type { WorkedTimeUnit } from '../catalogs/incomeCalculationMethods'
 
 export const DEFAULT_LANGUAGE = 'es'
 export const DEFAULT_TIME_ZONE = 'Europe/Madrid'
@@ -23,6 +24,19 @@ export function createCompletedOnboardingState(completedAt: string): OnboardingS
     currentStep: LAST_ONBOARDING_STEP_INDEX,
     version: CURRENT_ONBOARDING_VERSION,
   }
+}
+
+export function getOnboardingWorkModeSettings(workedTimeUnit: WorkedTimeUnit) {
+  return {
+    workedTimeUnit,
+  }
+}
+
+export function resolveOnboardingEarningPercentage(
+  earningPercentage: number,
+  percentageNotApplicable: boolean,
+) {
+  return percentageNotApplicable ? 100 : earningPercentage
 }
 
 export function detectTimeZone(): string {

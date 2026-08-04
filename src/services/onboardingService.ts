@@ -1,7 +1,13 @@
 import { db } from '../database/db'
+import { createEarningPeriod, getActiveEarningPeriod } from './earningPeriodService'
 import { getSettings, updateSettings } from './settingsService'
-import type { OnboardingState } from '../types/onboarding'
-import { createCompletedOnboardingState } from '../utils/onboarding'
+import type { InitialSeasonDraft, OnboardingState } from '../types/onboarding'
+import type { CurrencyCode, UsageMode } from '../types/settings'
+import type { WorkedTimeUnit } from '../catalogs/incomeCalculationMethods'
+import {
+  createCompletedOnboardingState,
+  getOnboardingWorkModeSettings,
+} from '../utils/onboarding'
 
 /**
  * Detecta usuarios con datos previos que nunca pasaron por el onboarding
@@ -60,6 +66,117 @@ export function setOnboardingStep(currentStep: number) {
       onboarding: { ...settings.onboarding, currentStep },
     }),
   )
+}
+
+export async function configureOnboardingUsageMode(usageMode: UsageMode) {
+  const settings = await getSettings()
+
+  return updateSettings(
+    {
+      onboarding: {
+        ...settings.onboarding,
+        initialSeason:
+          usageMode === 'professional'
+            ? settings.onboarding.initialSeason
+            : undefined,
+      },
+      usageMode,
+    },
+    { allowUsageModeChange: true },
+  )
+}
+
+export function configureOnboardingWorkMode(workedTimeUnit: WorkedTimeUnit) {
+  return updateSettings(
+    getOnboardingWorkModeSettings(workedTimeUnit),
+    { allowWorkModeChange: true },
+  )
+}
+
+export async function saveInitialSeasonDraft(initialSeason: InitialSeasonDraft) {
+  const name = initialSeason.name.trim()
+
+  if (!name) throw new Error('Indica un nombre para la temporada.')
+  if (!initialSeason.startDate) throw new Error('Indica la fecha de inicio.')
+  if (!initialSeason.plannedEndDate) {
+    throw new Error('Indica la finalización prevista.')
+  }
+  if (initialSeason.plannedEndDate < initialSeason.startDate) {
+    throw new Error('La finalización prevista no puede ser anterior al inicio.')
+  }
+  if (
+    initialSeason.economicGoal === undefined ||
+    !Number.isFinite(initialSeason.economicGoal) ||
+    initialSeason.economicGoal <= 0
+  ) {
+    throw new Error('La meta económica debe ser mayor a cero.')
+  }
+  if (
+    !Number.isFinite(initialSeason.earningPercentage) ||
+    initialSeason.earningPercentage < 0 ||
+    initialSeason.earningPercentage > 100
+  ) {
+    throw new Error('El porcentaje de ganancia debe estar entre 0 y 100.')
+  }
+
+  const settings = await getSettings()
+  return updateSettings({
+    onboarding: {
+      ...settings.onboarding,
+      initialSeason: { ...initialSeason, name },
+    },
+  })
+}
+
+function activeSeasonMatchesDraft(
+  active: NonNullable<Awaited<ReturnType<typeof getActiveEarningPeriod>>>,
+  draft: InitialSeasonDraft,
+) {
+  return (
+    active.name === draft.name &&
+    active.startDate.slice(0, 10) === draft.startDate &&
+    active.plannedEndDate?.slice(0, 10) === draft.plannedEndDate &&
+    active.economicGoal === draft.economicGoal
+  )
+}
+
+export async function configureOnboardingCurrency(currency: CurrencyCode) {
+  const settings = await getSettings()
+
+  if (settings.usageMode === 'basic') {
+    return updateSettings({ defaultCurrency: currency })
+  }
+
+  const draft = settings.onboarding.initialSeason
+  if (!draft) throw new Error('Completa primero los datos de la temporada.')
+
+  const active = await getActiveEarningPeriod()
+  if (active && !activeSeasonMatchesDraft(active, draft)) {
+    throw new Error('Ya existe una temporada activa diferente.')
+  }
+
+  if (!active) {
+    await createEarningPeriod({
+      name: draft.name,
+      city: settings.city,
+      country: settings.country,
+      countryCode: settings.country,
+      baseCurrency: currency,
+      earningPercentage: draft.earningPercentage,
+      startDate: draft.startDate,
+      plannedEndDate: draft.plannedEndDate,
+      economicGoal: draft.economicGoal,
+    })
+  }
+
+  return updateSettings({ defaultCurrency: currency })
+}
+
+export async function setOnboardingBackupRequested(backupRequested: boolean) {
+  const settings = await getSettings()
+  return updateSettings({
+    onboarding: { ...settings.onboarding, backupRequested },
+  })
 }
 
 export async function completeOnboarding() {

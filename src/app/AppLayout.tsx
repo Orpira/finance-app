@@ -1,6 +1,5 @@
 import {
   ArrowLeftRight,
-  BriefcaseBusiness,
   CalendarDays,
   ChartNoAxesCombined,
   House,
@@ -11,12 +10,11 @@ import {
   Sun,
 } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert'
 import { ServiceCompletionAlert } from '../components/ServiceCompletionAlert'
-import { UsageModeBadge } from '../components/UsageModeBadge'
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
 import {
   getDelayUntilNextDailyBackupCheck,
@@ -99,49 +97,11 @@ function scheduleNextAutomaticBackupCheck() {
   }, getDelayUntilNextDailyBackupCheck())
 }
 
-interface UsageModeQuickToggleProps {
-  usageMode: UsageMode
-  disabled?: boolean
-  onToggle: () => void
-}
-
-function UsageModeQuickToggle({ usageMode, disabled = false, onToggle }: UsageModeQuickToggleProps) {
-  const isProfessional = usageMode === 'professional'
-  const Icon = isProfessional ? BriefcaseBusiness : House
-  const nextLabel = isProfessional ? 'Básico' : 'Profesional'
-  const currentLabel = isProfessional ? 'Profesional' : 'Básico'
-
-  return (
-    <button
-      aria-label={`Cambiar modo de uso a ${nextLabel}`}
-      className={[
-        'inline-flex min-h-11 min-w-11 items-center gap-2 rounded-full border px-3 text-sm font-semibold',
-        'transition-all duration-300 ease-out',
-        'focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2',
-        'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100',
-        'dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200 dark:hover:bg-emerald-900',
-        'focus:ring-offset-white dark:focus:ring-offset-slate-950',
-        disabled ? 'cursor-not-allowed opacity-60' : '',
-      ].join(' ')}
-      disabled={disabled}
-      onClick={onToggle}
-      title={`Modo ${currentLabel}. Tocar para cambiar a ${nextLabel}`}
-      type="button"
-    >
-      <Icon className="size-4" aria-hidden="true" />
-      <span className="leading-none">{currentLabel}</span>
-    </button>
-  )
-}
-
 export function AppLayout() {
   const location = useLocation()
   const [theme, setTheme] = useState<ThemeMode>('system')
   const [usageMode, setUsageMode] = useState<UsageMode>('professional')
   const [licenseType, setLicenseType] = useState<LicenseType | null>(null)
-  const [isTogglingUsageMode, setIsTogglingUsageMode] = useState(false)
-  const [isUsageModeTransitioning, setIsUsageModeTransitioning] = useState(false)
-  const usageModeTransitionTimeoutRef = useRef<number | null>(null)
   const [isDarkTheme, setIsDarkTheme] = useState(() =>
     document.documentElement.classList.contains('dark'),
   )
@@ -150,30 +110,12 @@ export function AppLayout() {
       location.pathname === path || location.pathname.startsWith(`${path}/`),
   )
 
-  function startUsageModeTransition() {
-    if (usageModeTransitionTimeoutRef.current !== null) {
-      window.clearTimeout(usageModeTransitionTimeoutRef.current)
-      usageModeTransitionTimeoutRef.current = null
-    }
-
-    setIsUsageModeTransitioning(true)
-    usageModeTransitionTimeoutRef.current = window.setTimeout(() => {
-      usageModeTransitionTimeoutRef.current = null
-      setIsUsageModeTransitioning(false)
-    }, 260)
-  }
-
   useEffect(() => {
     let startedAutomaticBackupOnThisMount = false
 
     function syncLayoutSettings(settings: { theme: ThemeMode; usageMode: UsageMode }) {
       setTheme(settings.theme)
-      setUsageMode((currentMode) => {
-        if (currentMode !== settings.usageMode) {
-          startUsageModeTransition()
-        }
-        return settings.usageMode
-      })
+      setUsageMode(settings.usageMode)
       setIsDarkTheme(document.documentElement.classList.contains('dark'))
     }
 
@@ -268,10 +210,6 @@ export function AppLayout() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
 
-      if (usageModeTransitionTimeoutRef.current !== null) {
-        window.clearTimeout(usageModeTransitionTimeoutRef.current)
-        usageModeTransitionTimeoutRef.current = null
-      }
     }
   }, [])
 
@@ -295,31 +233,6 @@ export function AppLayout() {
     }
   }
 
-  async function toggleUsageMode() {
-    if (isTogglingUsageMode) {
-      return
-    }
-
-    const previousUsageMode = usageMode
-    const nextUsageMode: UsageMode = usageMode === 'professional' ? 'basic' : 'professional'
-
-    setIsTogglingUsageMode(true)
-    startUsageModeTransition()
-    setUsageMode(nextUsageMode)
-
-    try {
-      const updatedSettings = await updateSettings({ usageMode: nextUsageMode })
-      startUsageModeTransition()
-      setUsageMode(updatedSettings.usageMode)
-    } catch (error) {
-      startUsageModeTransition()
-      setUsageMode(previousUsageMode)
-      console.warn('No se pudo cambiar el modo de uso.', error)
-    } finally {
-      setIsTogglingUsageMode(false)
-    }
-  }
-
   const ThemeIcon = isDarkTheme ? Sun : Moon
   const themeLabel = isDarkTheme ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'
   const visibleNavItems = (usageMode === 'basic' ? basicNavItems : navItems).filter(
@@ -330,7 +243,7 @@ export function AppLayout() {
     <div className="min-h-dvh bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950 md:block">
         <p className="px-3 text-lg font-semibold text-slate-950 dark:text-white">Private Balance</p>
-        <div className="mb-6 mt-2 px-3"><UsageModeBadge usageMode={usageMode} /></div>
+        <div className="mb-6" />
         <nav aria-label="Navegación principal de escritorio">
           <ul className="grid gap-1">
             {visibleNavItems.map(({ label, path, icon: Icon, onboardingTarget }) => (
@@ -358,11 +271,6 @@ export function AppLayout() {
             {Capacitor.isNativePlatform() ? 'Aplicación Android' : 'Web / PWA'}
           </p>
           <div className="flex items-center gap-2">
-            <UsageModeQuickToggle
-              disabled={isTogglingUsageMode}
-              onToggle={toggleUsageMode}
-              usageMode={usageMode}
-            />
             <button
               aria-label={themeLabel}
               className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-950"
@@ -379,18 +287,11 @@ export function AppLayout() {
       <main
         className={[
           'mx-auto min-h-dvh w-full max-w-5xl px-4 pb-24 md:ml-64 md:w-[calc(100%-16rem)] md:pb-8',
-          'transition-all duration-300 ease-out',
-          isUsageModeTransitioning ? 'opacity-95' : 'opacity-100',
         ].join(' ')}
       >
         <div className="flex items-center justify-between gap-3 py-3 md:hidden">
           <p className="text-sm font-semibold text-slate-900 dark:text-white">Private Balance</p>
           <div className="flex items-center gap-2">
-            <UsageModeQuickToggle
-              disabled={isTogglingUsageMode}
-              onToggle={toggleUsageMode}
-              usageMode={usageMode}
-            />
             <button
               aria-label={themeLabel}
               className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"

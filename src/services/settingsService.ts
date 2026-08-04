@@ -15,6 +15,8 @@ export type UpdateSettingsInput = Partial<
 export interface UpdateSettingsOptions {
   nextEarningPeriodName?: string
   allowSeasonPercentageChange?: boolean
+  allowUsageModeChange?: boolean
+  allowWorkModeChange?: boolean
 }
 
 function syncSettingsToLocalStorage(settings: AppSettings) {
@@ -107,6 +109,29 @@ export async function updateSettings(
   const usageMode = modeWasUpdated
     ? requestedUsageMode
     : currentSettings.usageMode
+
+  if (
+    modeWasUpdated &&
+    usageMode !== currentSettings.usageMode &&
+    currentSettings.onboarding.completed &&
+    !options.allowUsageModeChange
+  ) {
+    throw new Error(
+      'El tipo de uso solo puede configurarse durante el primer inicio.',
+    )
+  }
+
+  if (
+    updates.workedTimeUnit !== undefined &&
+    updates.workedTimeUnit !== currentSettings.workedTimeUnit &&
+    currentSettings.onboarding.completed &&
+    !options.allowWorkModeChange
+  ) {
+    throw new Error(
+      'La modalidad de trabajo solo puede configurarse durante el primer inicio.',
+    )
+  }
+
   const nextSettings: AppSettings = {
     ...currentSettings,
     ...updates,

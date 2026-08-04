@@ -9,13 +9,12 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
-import { UsageModeBadge } from '../../components/UsageModeBadge'
 import { getSettings } from '../../services/settingsService'
 import type { UsageMode } from '../../types/settings'
 
 const settingsLinks = [
   {
-    description: 'Modo de uso, nombre, ubicación, monedas, porcentaje y tasas.',
+    description: 'Nombre, ubicación, monedas, porcentaje y tasas.',
     href: '/settings/business',
     icon: Building2,
     label: 'Datos generales',
@@ -62,9 +61,7 @@ export function SettingsPage() {
         backTo={usageMode === 'basic' ? '/' : '/more'}
         eyebrow="Configuración"
         title="Opciones de la aplicación"
-      >
-        <UsageModeBadge usageMode={usageMode} />
-      </PageHeader>
+      />
 
       <div className="grid gap-3">
         {settingsLinks.map((settingsLink) => {

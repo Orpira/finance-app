@@ -11,6 +11,12 @@ import { countries, fallbackCityOptions, getCityOption, getCountryCurrency, type
 import { getTodayInputDate } from '../../utils/currency'
 import { useDialog } from '../../components/dialogs/useDialog'
 
+function defaultPlannedEndDate() {
+  const date = new Date()
+  date.setMonth(date.getMonth() + 3)
+  return date.toLocaleDateString('en-CA')
+}
+
 export function SeasonFormPage() {
   const { confirm } = useDialog()
   const navigate = useNavigate()
@@ -23,6 +29,8 @@ export function SeasonFormPage() {
   const [currency, setCurrency] = useState<CurrencyCode>('EUR')
   const [percentage, setPercentage] = useState(50)
   const [startDate, setStartDate] = useState(getTodayInputDate())
+  const [plannedEndDate, setPlannedEndDate] = useState(defaultPlannedEndDate)
+  const [economicGoal, setEconomicGoal] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -34,7 +42,11 @@ export function SeasonFormPage() {
       setCountry((base?.countryCode ?? settings.country) as CountryCode)
       setCurrency(base?.baseCurrency ?? getCountryCurrency((base?.countryCode ?? settings.country) as CountryCode) ?? settings.defaultCurrency)
       setPercentage(base?.percentage ?? settings.incomePercentage)
-      if (base) setName(`Nueva ${base.name}`)
+      if (base) {
+        setName(`Nueva ${base.name}`)
+        setPlannedEndDate(base.plannedEndDate?.slice(0, 10) ?? defaultPlannedEndDate())
+        setEconomicGoal(base.economicGoal ? String(base.economicGoal) : '')
+      }
     })
   }, [basedOn])
 
@@ -63,7 +75,7 @@ export function SeasonFormPage() {
         if (!confirmed) { setSaving(false); return }
         await closeActiveEarningPeriod()
       }
-      const period = await createEarningPeriod({ name, city, country, countryCode: country, baseCurrency: currency, earningPercentage: percentage, startDate, notes })
+      const period = await createEarningPeriod({ name, city, country, countryCode: country, baseCurrency: currency, earningPercentage: percentage, startDate, plannedEndDate, economicGoal: Number(economicGoal), notes })
       navigate(`/temporadas/${period.id}`, { replace: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'No se pudo crear la temporada.')
@@ -80,8 +92,11 @@ export function SeasonFormPage() {
         <label className="grid gap-2"><span className="text-sm font-medium">País</span><select className="h-11 rounded-md border border-slate-300 px-3" onChange={(e) => { const code = e.target.value as CountryCode; setCountry(code); setCurrency(getCountryCurrency(code) ?? currency) }} value={country}>{countries.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         <label className="grid gap-2"><span className="text-sm font-medium">Moneda base</span><input className="h-11 rounded-md border border-slate-300 bg-slate-50 px-3" readOnly value={currency} /></label>
         <label className="grid gap-2"><span className="text-sm font-medium">Porcentaje de ganancia</span><input className="h-11 rounded-md border border-slate-300 px-3" max={100} min={0} onChange={(e) => setPercentage(Number(e.target.value))} required type="number" value={percentage} /></label>
-        <label className="grid gap-2"><span className="text-sm font-medium">Fecha de inicio</span><input className="h-11 rounded-md border border-slate-300 px-3" onChange={(e) => setStartDate(e.target.value)} required type="date" value={startDate} /></label>
+        <label className="grid gap-2"><span className="text-sm font-medium">Inicio de temporada</span><input className="h-11 rounded-md border border-slate-300 px-3" onChange={(e) => setStartDate(e.target.value)} required type="date" value={startDate} /></label>
+        <label className="grid gap-2"><span className="text-sm font-medium">Finalización prevista</span><input className="h-11 rounded-md border border-slate-300 px-3" min={startDate} onChange={(e) => setPlannedEndDate(e.target.value)} required type="date" value={plannedEndDate} /></label>
+        <label className="grid gap-2"><span className="text-sm font-medium">Meta económica</span><input className="h-11 rounded-md border border-slate-300 px-3" min="0.01" onChange={(e) => setEconomicGoal(e.target.value)} required step="0.01" type="number" value={economicGoal} /></label>
       </div>
+      <p className="text-sm text-slate-500">La fecha prevista no cierra la temporada automáticamente.</p>
       <label className="grid gap-2"><span className="text-sm font-medium">Observaciones</span><textarea className="min-h-24 rounded-md border border-slate-300 p-3" onChange={(e) => setNotes(e.target.value)} value={notes} /></label>
       {error && <p className="rounded-md bg-red-50 p-3 text-sm font-medium text-red-700">{error}</p>}
       <button className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white disabled:opacity-60" disabled={saving} type="submit"><Save className="size-4" /> {saving ? 'Creando...' : 'Crear temporada'}</button>

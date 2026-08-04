@@ -20,7 +20,17 @@ export interface CreateSeasonInput {
   baseCurrency: CurrencyCode
   earningPercentage: number
   startDate: string
+  plannedEndDate?: string
+  economicGoal?: number
   notes?: string
+}
+
+export interface SeasonGoalProgress {
+  achieved: number
+  completed: boolean
+  goal: number
+  percentage: number
+  remaining: number
 }
 
 export interface SeasonStatistics {
@@ -49,6 +59,28 @@ async function getSettingsForPeriod(settings?: AppSettings) {
 
 function recordPeriodId(record: { earningPeriodId?: number; seasonPeriodId?: number }) {
   return record.earningPeriodId ?? record.seasonPeriodId
+}
+
+export function getSeasonGoalProgress(
+  period: Pick<EarningPeriod, 'economicGoal'>,
+  achieved: number,
+): SeasonGoalProgress | null {
+  const goal = period.economicGoal
+
+  if (goal === undefined || !Number.isFinite(goal) || goal <= 0) {
+    return null
+  }
+
+  const normalizedAchieved = Math.max(0, achieved)
+  const percentage = (normalizedAchieved / goal) * 100
+
+  return {
+    achieved: normalizedAchieved,
+    completed: normalizedAchieved >= goal,
+    goal,
+    percentage,
+    remaining: Math.max(goal - normalizedAchieved, 0),
+  }
 }
 
 export async function listEarningPeriods() {
@@ -110,9 +142,21 @@ export async function createEarningPeriod(input: CreateSeasonInput) {
     throw new Error('Ya existe una temporada activa. Debes finalizarla antes de crear una nueva.')
   }
   if (!input.name.trim()) throw new Error('Indica un nombre para la temporada.')
-  if (!input.city.trim()) throw new Error('Indica la ciudad de la temporada.')
   if (input.earningPercentage < 0 || input.earningPercentage > 100) {
     throw new Error('El porcentaje debe estar entre 0 y 100.')
+  }
+  if (
+    input.plannedEndDate &&
+    (Number.isNaN(Date.parse(input.plannedEndDate)) ||
+      input.plannedEndDate < input.startDate)
+  ) {
+    throw new Error('La finalización prevista no puede ser anterior al inicio.')
+  }
+  if (
+    input.economicGoal !== undefined &&
+    (!Number.isFinite(input.economicGoal) || input.economicGoal <= 0)
+  ) {
+    throw new Error('La meta económica debe ser mayor a cero.')
   }
 
   const now = new Date().toISOString()
@@ -120,6 +164,10 @@ export async function createEarningPeriod(input: CreateSeasonInput) {
     name: input.name.trim(),
     percentage: input.earningPercentage,
     startDate: `${input.startDate}T00:00:00.000Z`,
+    plannedEndDate: input.plannedEndDate
+      ? `${input.plannedEndDate}T23:59:59.999Z`
+      : undefined,
+    economicGoal: input.economicGoal,
     status: 'active',
     city: input.city.trim(),
     country: input.country,
@@ -148,10 +196,33 @@ export async function createEarningPeriod(input: CreateSeasonInput) {
 export async function updateActiveEarningPeriod(
   id: number,
   updates: Pick<EarningPeriod, 'name' | 'notes' | 'percentage'> &
-    Partial<Pick<EarningPeriod, 'city' | 'country' | 'countryCode' | 'baseCurrency'>>,
+    Partial<
+      Pick<
+        EarningPeriod,
+        | 'city'
+        | 'country'
+        | 'countryCode'
+        | 'baseCurrency'
+        | 'plannedEndDate'
+        | 'economicGoal'
+      >
+    >,
 ) {
   const period = await db.earningPeriods.get(id)
   if (!period || period.status !== 'active') throw new Error(CLOSED_SEASON_MESSAGE)
+  if (
+    updates.plannedEndDate &&
+    (Number.isNaN(Date.parse(updates.plannedEndDate)) ||
+      updates.plannedEndDate.slice(0, 10) < period.startDate.slice(0, 10))
+  ) {
+    throw new Error('La finalización prevista no puede ser anterior al inicio.')
+  }
+  if (
+    updates.economicGoal !== undefined &&
+    (!Number.isFinite(updates.economicGoal) || updates.economicGoal <= 0)
+  ) {
+    throw new Error('La meta económica debe ser mayor a cero.')
+  }
   if (updates.percentage !== period.percentage && (await seasonHasActivity(id))) {
     throw new Error('Para cambiar el porcentaje debes cerrar la temporada actual y crear una nueva.')
   }

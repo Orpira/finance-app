@@ -3,10 +3,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
-import {
-  INCOME_CALCULATION_METHODS,
-  WORKED_TIME_UNITS,
-} from '../../catalogs/incomeCalculationMethods'
+import { INCOME_CALCULATION_METHODS } from '../../catalogs/incomeCalculationMethods'
 import {
   getSettings,
   updateSettings,
@@ -17,7 +14,6 @@ import type {
   CountryCode,
   CurrencyCode,
   RateMode,
-  UsageMode,
 } from '../../types/settings'
 import {
   type CityOption,
@@ -31,26 +27,6 @@ import {
 const rateModes: Array<{ value: RateMode; label: string }> = [
   { value: 'automatic', label: 'Automático' },
   { value: 'manual', label: 'Manual' },
-]
-
-const usageModes: Array<{
-  value: UsageMode
-  label: string
-  summary: string
-  description: string
-}> = [
-  {
-    value: 'professional',
-    label: 'Profesional',
-    summary: 'Control completo para actividad independiente.',
-    description: 'Temporadas, porcentajes, agenda, reportes y automatizaciones.',
-  },
-  {
-    value: 'basic',
-    label: 'Básico',
-    summary: 'Control simple de ingresos y egresos personales.',
-    description: 'Sin temporadas ni porcentajes.',
-  },
 ]
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -105,9 +81,7 @@ export function SettingsBusinessPage() {
           incomePercentage: settings.incomePercentage,
           incomeCalculationMethod: settings.incomeCalculationMethod,
           hourlyRate: settings.hourlyRate,
-          workedTimeUnit: settings.workedTimeUnit,
           rateMode: settings.rateMode,
-          usageMode: settings.usageMode,
         },
       )
 
@@ -179,44 +153,6 @@ export function SettingsBusinessPage() {
         onSubmit={handleSubmit}
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <fieldset className="flex flex-col gap-3 sm:col-span-2">
-            <legend className="text-sm font-medium text-slate-700">
-              Modo de uso
-            </legend>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {usageModes.map((usageMode) => (
-                <label
-                  className={[
-                    'flex min-h-32 cursor-pointer flex-col justify-center gap-1 rounded-lg border p-4 text-sm transition',
-                    settings.usageMode === usageMode.value
-                      ? 'border-emerald-600 bg-emerald-50 text-emerald-900'
-                      : 'border-slate-200 text-slate-700 hover:bg-slate-50',
-                  ].join(' ')}
-                  key={usageMode.value}
-                >
-                  <span className="flex items-center gap-2 font-semibold">
-                    <input
-                      checked={settings.usageMode === usageMode.value}
-                      className="size-4 accent-emerald-700"
-                      name="usageMode"
-                      onChange={() =>
-                        updateLocalSettings({ usageMode: usageMode.value })
-                      }
-                      type="radio"
-                    />
-                    {usageMode.label}
-                  </span>
-                  <span className="pl-6 font-medium text-slate-700">
-                    {usageMode.summary}
-                  </span>
-                  <span className="pl-6 text-xs leading-5 text-slate-500">
-                    {usageMode.description}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
               {settings.usageMode === 'professional'
@@ -377,30 +313,6 @@ export function SettingsBusinessPage() {
                   </div>
                 </label>
 
-                <fieldset className="flex flex-col gap-3">
-                  <legend className="text-sm font-medium text-slate-700">
-                    Unidad de tiempo
-                  </legend>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {WORKED_TIME_UNITS.map((unit) => (
-                      <label
-                        className="flex min-h-11 items-center gap-3 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700"
-                        key={unit.code}
-                      >
-                        <input
-                          checked={settings.workedTimeUnit === unit.code}
-                          className="size-4 accent-emerald-700"
-                          name="workedTimeUnit"
-                          onChange={() =>
-                            updateLocalSettings({ workedTimeUnit: unit.code })
-                          }
-                          type="radio"
-                        />
-                        {unit.label}
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
               </div>
             )}
           </fieldset>

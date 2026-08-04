@@ -80,13 +80,41 @@ export function getNumericDurationLabel(
 export function getDurationDisplay(
   durationMinutes: number,
   durationLabel?: string,
+  workedTimeUnit: WorkedTimeUnit = 'minutes',
 ) {
   if (durationLabel === 'Salida') {
     return 'Salida'
   }
 
   const displayMinutes = durationLabel?.trim() || String(durationMinutes)
+
+  if (workedTimeUnit === 'hours') {
+    const labeledDurationMinutes = Number(displayMinutes)
+    return formatServiceDuration(
+      Number.isFinite(labeledDurationMinutes)
+        ? labeledDurationMinutes
+        : durationMinutes,
+      workedTimeUnit,
+    )
+  }
+
   return `${displayMinutes} minutos`
+}
+
+export function formatServiceDuration(
+  durationMinutes: number,
+  workedTimeUnit: WorkedTimeUnit,
+) {
+  if (workedTimeUnit === 'minutes') {
+    return `${durationMinutes} ${durationMinutes === 1 ? 'minuto' : 'minutos'}`
+  }
+
+  const durationHours = durationMinutes / 60
+  const formattedHours = new Intl.NumberFormat('es-ES', {
+    maximumFractionDigits: 2,
+  }).format(durationHours)
+
+  return `${formattedHours} ${durationHours === 1 ? 'hora' : 'horas'}`
 }
 
 export function getIncomeDurationDisplay(
@@ -108,5 +136,6 @@ export function getIncomeDurationDisplay(
   return getDurationDisplay(
     getEffectiveFinancialDuration(income) ?? 0,
     income.durationLabel,
+    income.workedTimeUnit,
   )
 }

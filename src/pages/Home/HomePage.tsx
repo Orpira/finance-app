@@ -23,7 +23,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { SensitiveAmount } from '../../components/SensitiveAmount'
-import { UsageModeBadge } from '../../components/UsageModeBadge'
+import { SeasonGoalCard } from '../../components/seasons/SeasonGoalCard'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { listAppointments } from '../../services/appointmentService'
 import { listExpenses } from '../../services/expenseService'
@@ -42,7 +42,7 @@ import { formatCurrency, roundMoney } from '../../utils/currency'
 import { calculateFinancialTotals, sumIncomeAdditionalsValue } from '../../utils/financeStats'
 import { getIncomeTypeLabel } from '../../utils/incomeTypes'
 import { getPaymentTypeLabel } from '../../utils/paymentTypes'
-import { getActiveEarningPeriod } from '../../services/earningPeriodService'
+import { getActiveEarningPeriod, getSeasonGoalProgress, getSeasonStatistics, type SeasonStatistics } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { FinancialGoal } from '../../types/financialGoal'
 import { financialGoalService } from '../../services/financialGoalService'
@@ -152,6 +152,7 @@ export function HomePage() {
   const [previousIncomes, setPreviousIncomes] = useState<ServiceIncome[]>([])
   const [previousExpenses, setPreviousExpenses] = useState<Expense[]>([])
   const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
+  const [activePeriodStats, setActivePeriodStats] = useState<SeasonStatistics | null>(null)
   const [promotedCurrentSummary, setPromotedCurrentSummary] = useState<{
     readonly requestId: UtcInstant
     readonly summary: BalanceReportResult
@@ -222,6 +223,7 @@ export function HomePage() {
         listExpenses(previous),
         financialGoalService.list(),
       ])
+      const periodStats = period?.id ? await getSeasonStatistics(period.id) : null
 
       if (!mounted) return
 
@@ -259,6 +261,7 @@ export function HomePage() {
         periodEndExclusive: current.endExclusive as CivilDate,
       })
       setActivePeriod(period ?? null)
+      setActivePeriodStats(periodStats)
       setCurrentIncomes(contextualIncomes)
       setCurrentExpenses(contextualExpenses)
       // Para variación mensual, el mes anterior no debe limitarse a la temporada activa actual.
@@ -450,6 +453,10 @@ export function HomePage() {
       tone: 'text-sky-700 bg-sky-100 dark:bg-sky-950 dark:text-sky-300',
     },
   ]
+  const seasonGoalProgress =
+    activePeriod && activePeriodStats
+      ? getSeasonGoalProgress(activePeriod, activePeriodStats.realGain)
+      : null
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6 py-6 md:py-10">
@@ -457,7 +464,6 @@ export function HomePage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-emerald-300">{settings.businessName || 'Private Balance'}</p>
-            <div className="mt-2"><UsageModeBadge usageMode={settings.usageMode} /></div>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">Inicio</h1>
             <p className="mt-2 text-sm text-slate-300">Resumen financiero del mes actual</p>
           </div>
@@ -489,6 +495,17 @@ export function HomePage() {
         ))}
         </div>
       </section>
+
+      {seasonGoalProgress && activePeriod && (
+        <div className="order-3">
+          <SeasonGoalCard
+            currency={(activePeriod.baseCurrency ?? settings.defaultCurrency) as CurrencyCode}
+            hidden={hidden}
+            plannedEndDate={activePeriod.plannedEndDate}
+            progress={seasonGoalProgress}
+          />
+        </div>
+      )}
 
       <section className="order-7" aria-labelledby="suggested-actions-title">
         <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200" id="suggested-actions-title">{HOME_SECTION_ORDER[6]}</h2>

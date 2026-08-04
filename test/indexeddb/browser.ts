@@ -285,7 +285,7 @@ async function run() {
 
   let database = new FinanceDB()
   await database.open()
-  assert(database.verno === 30, 'physical migration upgrades from v25 to v30')
+  assert(database.verno === 31, 'physical migration upgrades from v25 to v31')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration preserves v25 conversationMemories table')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v25 base')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v25 base')
@@ -338,13 +338,23 @@ async function run() {
     id: 'app',
     businessName: 'Immediate previous migration sentinel',
   }
+  const v24Season = {
+    id: 24,
+    name: 'Temporada histórica',
+    percentage: 50,
+    startDate: '2026-01-01T00:00:00.000Z',
+    status: 'closed',
+    endDate: '2026-01-31T23:59:59.999Z',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  }
   await legacyV24.table('services').add(v24Service)
   await legacyV24.table('settings').add(v24Settings)
+  await legacyV24.table('earningPeriods').add(v24Season)
   legacyV24.close()
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 30, 'physical migration upgrades from v24 to v30')
+  assert(database.verno === 31, 'physical migration upgrades from v24 to v31')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration keeps conversationMemories from v24 base')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v24 base')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v24 base')
@@ -354,6 +364,10 @@ async function run() {
   const migratedV24Settings = await database.settings.get('app')
   assert(migratedV24Settings?.businessName === v24Settings.businessName, 'v28 migration preserves legacy settings businessName (v24 origin)')
   assertOnboardingBackfilledForExistingUser(migratedV24Settings, 'v24')
+  const migratedV24Season = await database.earningPeriods.get(24)
+  assert(migratedV24Season?.name === v24Season.name, 'v31 migration preserves historical seasons')
+  assert(migratedV24Season?.plannedEndDate === undefined, 'v31 migration does not invent planned dates for historical seasons')
+  assert(migratedV24Season?.economicGoal === undefined, 'v31 migration does not invent economic goals for historical seasons')
   database.close()
 
   await Dexie.delete(databaseName)
@@ -372,7 +386,7 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 30, 'physical migration opens schema v30')
+  assert(database.verno === 31, 'physical migration opens schema v31')
   assert(database.tables.some((table) => table.name === 'financialSnapshots'), 'migration creates financialSnapshots')
   assert(database.tables.some((table) => table.name === 'knowledgeSnapshots'), 'migration creates knowledgeSnapshots')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'migration creates conversationMemories')
@@ -390,6 +404,7 @@ async function run() {
   assert(migratedLegacySettings?.workedTimeUnit === 'minutes', 'v29 migration backfills workedTimeUnit with minutes for pre-existing settings')
   assert(database.tables.some((table) => table.name === 'incomeAdditionals'), 'v29 migration creates the incomeAdditionals table')
   assert(database.tables.some((table) => table.name === 'financialGoals'), 'v30 migration creates the financialGoals table')
+  assert(database.earningPeriods.schema.idxByName.plannedEndDate !== undefined, 'v31 migration adds the plannedEndDate index')
 
   const financialGoal = {
     id: 'goal:migration:001',

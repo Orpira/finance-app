@@ -5,10 +5,9 @@ interface WelcomeStepProps {
   currentStep: number
   isBusy: boolean
   onStart: () => void
-  onSkip: () => void
 }
 
-export function WelcomeStep({ currentStep, isBusy, onStart, onSkip }: WelcomeStepProps) {
+export function WelcomeStep({ currentStep, isBusy, onStart }: WelcomeStepProps) {
   return (
     <OnboardingLayout
       currentStep={currentStep}
@@ -22,14 +21,6 @@ export function WelcomeStep({ currentStep, isBusy, onStart, onSkip }: WelcomeSte
             type="button"
           >
             Comenzar
-          </button>
-          <button
-            className="h-11 rounded-md text-sm font-semibold text-emerald-700 disabled:text-slate-300 dark:text-emerald-300"
-            disabled={isBusy}
-            onClick={onSkip}
-            type="button"
-          >
-            Ya he usado Private Balance
           </button>
         </>
       }
