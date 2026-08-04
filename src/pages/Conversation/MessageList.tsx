@@ -25,7 +25,7 @@ export function MessageList({
         aria-live="polite"
         className="flex min-h-56 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
       >
-        Cargando conversacion...
+        Cargando conversación...
       </section>
     )
   }
@@ -37,7 +37,7 @@ export function MessageList({
     >
       {messages.length === 0 ? (
         <p className="text-sm text-slate-500 dark:text-slate-300">
-          Escribe tu primer mensaje para iniciar la conversacion.
+          Escribe tu primer mensaje para iniciar la conversación.
         </p>
       ) : (
         messages.map((message) => (

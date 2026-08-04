@@ -42,7 +42,7 @@ describe('AI Conversation main integration (PB-IS-013.8)', () => {
     )
 
     expect(html).toContain('Copiloto')
-    expect(html).toContain('Cargando conversacion...')
+    expect(html).toContain('Cargando conversación...')
     expect(html).toContain('Enviar')
   })
 

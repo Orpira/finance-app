@@ -96,6 +96,14 @@ describe('pre-release Sprint A product language', () => {
     }
   })
 
+  it('accents "conversación" correctly in the Copilot message list', () => {
+    const source = read('../src/pages/Conversation/MessageList.tsx')
+
+    expect(source).not.toContain('conversacion')
+    expect(source).toContain('Cargando conversación')
+    expect(source).toContain('iniciar la conversación')
+  })
+
   it('translates internal action values before showing them to the user', () => {
     const source = read('../src/pages/Insights/InsightList.tsx')
 

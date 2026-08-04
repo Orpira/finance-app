@@ -98,3 +98,97 @@ La ejecución inicial mediante `history.pushState` dejó una vista anterior mont
 - registrar evidencia final y confirmar cero defectos bloqueantes.
 
 Hasta completar esa matriz, Sprint A permanece **En progreso** y no habilita el inicio formal del Sprint B.
+
+## Segunda ronda - Auditoría visual final (alcance)
+
+Dieciséis pantallas de producto, cada una recorrida en escritorio, tablet, móvil vertical y móvil horizontal, en tema claro y oscuro. Mapeo de cada ítem a su ruta real:
+
+1. Inicio → `/`
+2. Movimientos → `/movements` (Todos), `/income` (Ingresos), `/expenses` (Gastos), `/income/:incomeId` (Detalle)
+3. Agenda → `/agenda`
+4. Reportes → `/reports`
+5. Análisis Financiero → `/resumen-completo` y `/dashboard`
+6. Copiloto IA → `/conversation` (licencia completa)
+7. Coach Financiero → `/conversation` con objetivo financiero activo y consulta asesora
+8. Más (`/more`) → pantalla "Otras opciones" y todos los flujos de usuario accesibles desde ella. No incluye pantallas protegidas por `DevOnlyGuard` ni herramientas exclusivas de desarrollo.
+9. Configuración → `/settings/business`, `/settings/security`, `/settings/license`, `/settings/diagnostics`
+10. Perfil → `/settings` (pantalla general)
+11. Licencia Gratuita → `/settings/license` y pantalla de activación en estado de prueba/demo
+12. Sandbox → `/conversation` con licencia `trial`/`demo`
+13. Backup → `/settings/backup` (exportar)
+14. Restauración → `/settings/backup` (importar, mismo flujo que Backup)
+15. Pantallas de Error → licencia expirada/no verificable, ruta desconocida, validación de formularios, archivo de backup inválido
+16. Onboarding → los cuatro pasos (bienvenida, preferencias, seguridad, tutorial)
+
+## Segunda ronda - Resultados
+
+**Método:** arnés propio de Chrome headless vía CDP (mismo patrón que `test/indexeddb/run-browser-tests.mjs`), levantando el servidor Vite real con su configuración real (incluyendo el plugin de Tailwind), sembrando licencia, datos financieros y objetivo mediante los servicios de dominio reales (no mocks), y navegando cada ruta con recarga completa (`Page.navigate`, no `history.pushState`, conforme a lo aprendido en la primera ronda). El arnés y las páginas de siembra eran herramientas temporales, eliminadas al cerrar esta ronda.
+
+**Matriz ejecutada con evidencia real (capturas + comprobaciones automáticas de overflow, ids duplicados, controles sin nombre accesible, texto recortado y foco):**
+
+- Perfil principal (licencia vitalicia, modo Profesional, datos reales): 17 rutas × 4 formatos × 2 temas = 136 combinaciones. Cubre Inicio, Movimientos (Todos/Ingresos/Gastos/Detalle), Agenda, Reportes, Análisis Financiero (ambas pantallas), Copiloto, Más, Configuración (las cuatro subpáginas), Perfil y Backup.
+- Perfil de licencia gratuita (`trial`, modo Básico): 2 rutas × 4 × 2 = 16 combinaciones. Cubre Licencia Gratuita y Sandbox.
+- Perfil de onboarding (licencia activa, sin datos previos): 4 pasos × 4 × 2 = 32 combinaciones.
+- Perfil de errores: ruta desconocida, licencia vencida y licencia no verificable, recorridos en la matriz completa de formatos y temas.
+
+Total: 208 combinaciones formato×tema con navegación real y comprobación automática; ninguna quedó en estado `[BLOCKER]` al cierre de la ronda.
+
+## Problemas corregidos (segunda ronda)
+
+### SA-004 - Overflow horizontal en tablet y móvil horizontal
+
+**Problema:** en `AppLayout.tsx`, el contenido principal usaba `width: 100%` y además `margin-left: 16rem` para compensar el sidebar fijo de escritorio, sumando ambos en vez de restar. Cualquier ruta entre 768px y ~1280px de ancho (tablet 834px, móvil horizontal 844px) desbordaba horizontalmente en exactamente el ancho del sidebar (256px), confirmado en las 17 rutas del perfil principal.
+
+**Corrección:** `md:w-[calc(100%-16rem)]` junto al `md:ml-64` existente, sin tocar el sidebar fijo ni el resto del layout.
+
+**TDD:** `test/preReleaseSprintAAppLayoutOverflow.test.ts`.
+
+### SA-005 - Recorte del rótulo "Configuración" en la navegación inferior
+
+**Problema:** en modo Básico, a 390px de ancho el rótulo "Configuración" de la barra inferior necesitaba 69px sobre una columna de 72px con solo 64px disponibles tras el padding y los espacios de la cuadrícula; se mostraba "Configurac…" mientras el resto de rótulos se veían completos.
+
+**Corrección:** se retiró el padding horizontal propio de cada ítem y se ajustó el espacio entre columnas (`gap-0.5`), recuperando exactamente el ancho faltante sin tocar textos, iconos ni la cuadrícula de cinco columnas.
+
+**TDD:** `test/preReleaseSprintABottomNavLabel.test.ts`.
+
+### SA-006 - Pantalla en blanco ante una ruta desconocida
+
+**Problema:** el árbol de rutas no tenía una ruta comodín. Cualquier URL no reconocida (marcador desactualizado, error de tipeo, enlace externo roto) renderizaba una página completamente en blanco, sin cabecera, sin navegación y sin ningún elemento enfocable — confirmado en vivo (captura y cero elementos alcanzables con Tab).
+
+**Corrección:** `NotFoundPage` nueva, montada mediante `<Route path="*">` dentro del mismo layout, con mensaje claro y enlace de regreso a Inicio.
+
+**TDD:** `test/preReleaseSprintANotFoundRoute.test.ts`.
+
+### SA-007 - Tilde faltante en "conversación" del Copiloto
+
+**Problema:** `MessageList.tsx` mostraba "Cargando conversacion..." y "iniciar la conversacion" sin tilde, visible en el estado de carga y en el estado vacío del Copiloto.
+
+**Corrección:** corrección ortográfica directa; sin cambios de contrato ni de comportamiento.
+
+**TDD:** ampliación de `test/preReleaseSprintAProductLanguage.test.ts`; actualizado también el fixture desactualizado en `test/aiConversationVerticalSlice.test.ts` que fijaba el texto incorrecto como esperado.
+
+## Hallazgos descartados (segunda ronda)
+
+- etiqueta `sr-only` "Importe objetivo" en el formulario de objetivo financiero: recorte intencional para lectores de pantalla (1px de caja visible), no es un defecto;
+- `truncate` con puntos suspensivos en filas de movimientos ("Servicio · Sin tipo de pago...") en móvil vertical: patrón de diseño deliberado para listas angostas, el detalle completo está disponible al abrir el registro;
+- diálogos (`DialogFrame.tsx`): revisados por código, no por interacción en vivo — implementan `Escape`, trampa de foco con `Tab`/`Shift+Tab`, `aria-modal`, `aria-labelledby/describedby` y restauración del foco previo al cerrar. Sin hallazgos.
+
+## Validación técnica (segunda ronda)
+
+- `npm run typecheck`: correcto;
+- `npm run lint`: correcto, cero advertencias tras eliminar el arnés temporal;
+- `npm test`: 180 archivos, 2095 pruebas superadas y 1 `todo` preexistente;
+- `npm run build`: correcto, misma advertencia DT-001 ya reservada para Sprint E;
+- `bash scripts/build-apk.sh`: correcto, `BUILD SUCCESSFUL`.
+
+## Pendiente para cerrar Sprint A (actualizado)
+
+La segunda ronda cubrió con navegación real y capturas las 16 pantallas del alcance, corrigió cuatro defectos con TDD y no encontró bloqueantes. Aun así, no se declara **COMPLETADO** porque los siguientes puntos del checklist se revisaron por código o de forma visual, no mediante interacción real en el navegador:
+
+- formularios: solo se revisó estáticamente el mensaje de error de guardado y el uso de `required` nativo; falta intentar guardar con datos inválidos/incompletos en cada formulario y confirmar el mensaje mostrado;
+- backup/restauración: solo se verificó la pantalla `/settings/backup` en reposo; falta ejercitar exportar, importar, cancelar y archivo inválido/corrupto de punta a punta;
+- PWA: no se repitió instalación, splash, modo standalone ni recarga en esta ronda (el manifest ya quedó corregido en la primera ronda; el Service Worker sigue excluido por DT-002);
+- licencia: se cubrieron visualmente los estados activa, vencida y no verificable; falta ejercitar la activación y renovación reales desde la UI;
+- sandbox: se confirmó visualmente la entrada; falta recorrer la demostración completa y la salida.
+
+Hasta cubrir esos puntos con evidencia de interacción real, Sprint A permanece **En progreso**.

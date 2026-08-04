@@ -378,7 +378,7 @@ export function AppLayout() {
 
       <main
         className={[
-          'mx-auto min-h-dvh w-full max-w-5xl px-4 pb-24 md:ml-64 md:pb-8',
+          'mx-auto min-h-dvh w-full max-w-5xl px-4 pb-24 md:ml-64 md:w-[calc(100%-16rem)] md:pb-8',
           'transition-all duration-300 ease-out',
           isUsageModeTransitioning ? 'opacity-95' : 'opacity-100',
         ].join(' ')}
@@ -413,7 +413,7 @@ export function AppLayout() {
         aria-label="Navegación principal"
         className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 md:hidden"
       >
-        <ul className="mx-auto grid max-w-5xl grid-cols-5 gap-1">
+        <ul className="mx-auto grid max-w-5xl grid-cols-5 gap-0.5">
           {visibleNavItems.map(({ label, path, icon: Icon, onboardingTarget }) => (
             <li key={path}>
               <NavLink
@@ -422,7 +422,7 @@ export function AppLayout() {
                 data-onboarding-target={onboardingTarget}
                 className={({ isActive }) =>
                   [
-                    'flex min-h-14 flex-col items-center justify-center rounded-md px-1 text-[0.65rem] font-medium leading-tight transition-colors',
+                    'flex min-h-14 flex-col items-center justify-center rounded-md px-0 text-[0.65rem] font-medium leading-tight transition-colors',
                     isActive || (path === '/more' && isMoreSection)
                       ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                       : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100',

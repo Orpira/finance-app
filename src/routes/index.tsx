@@ -37,6 +37,7 @@ import SeasonsPage from '../pages/Seasons/SeasonsPage'
 import SeasonFormPage from '../pages/Seasons/SeasonFormPage'
 import SeasonDetailPage from '../pages/Seasons/SeasonDetailPage'
 import ConversationPage from '../pages/Conversation/ConversationPage'
+import NotFoundPage from '../pages/NotFound/NotFoundPage'
 
 /** Alias de compatibilidad: /incomes?reportStatus=pending redirige a /income preservando el query string. */
 function IncomesRouteAlias() {
@@ -99,6 +100,7 @@ export function RouterProvider() {
             <Route path="debug" element={<DevOnlyGuard><DebugPage /></DevOnlyGuard>} />
             <Route path="debug/ai-execution-inspector" element={<DevOnlyGuard><AIExecutionInspectorPage /></DevOnlyGuard>} />
             <Route path="debug/ai-developer-playground" element={<DevOnlyGuard><AIDeveloperPlaygroundPage /></DevOnlyGuard>} />
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
           </Routes>
         </PinGate>
