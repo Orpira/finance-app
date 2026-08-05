@@ -6,7 +6,7 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 
 La construcción funcional previa a 1.0 está cerrada y la **Fase Pre-Release 0.9** está activa. La planificación ya no usa nuevas iteraciones numeradas: los sprints A-G deben demostrar calidad, Android real, PWA, accesibilidad, rendimiento, privacidad y estabilidad antes de declarar `Private Balance 0.9 RC` y preparar `Private Balance 1.0`. Ver [roadmap de pre-release](../roadmap/PRODUCT_RELEASE_ROADMAP.md).
 
-El **Sprint A (Calidad) está en progreso, reabierto el 2026-08-04** tras haberse cerrado brevemente ese mismo día. El cierre cubrió, con TDD y evidencia real de navegación e interacción: lenguaje visible, presentación de planes financieros y metadatos del manifest PWA (primera ronda); una matriz visual de 208 combinaciones de ruta, viewport, tema y perfil que corrigió un overflow horizontal en `AppLayout`, un recorte del rótulo "Configuración" en la navegación inferior, una pantalla en blanco ante rutas desconocidas y una tilde faltante en el Copiloto (SA-004–SA-007); y una validación funcional interactiva completa (formularios, diálogos, backup/restauración, licencia, sandbox) sin defectos nuevos. La reapertura responde a un documento de ampliación UX pendiente de resolver (renombrado SA-008–SA-012). **SA-008 ya está corregido y verificado (código y en vivo):** `Movimientos → Todos` no filtraba por modo de uso (`usageMode`) mientras que Ingresos y Gastos sí lo hacían — no era una fusión de movimientos, sino una ausencia de filtro; ahora reutiliza el mismo mecanismo (`recordBelongsToUsageMode`) que ya usan esas dos pantallas. Quedan pendientes **SA-009 a SA-012** (mejoras de UX en Temporadas y auditoría de estados vacíos), que requieren documentar una excepción de congelación funcional antes de implementarse — sin cambios de código todavía. No existen defectos bloqueantes conocidos. Instalación, actualización y funcionamiento offline de la PWA siguen asignados al Sprint C (DT-002). El alcance funcional del pre-release se mantiene congelado. **El Sprint B no ha iniciado:** su documento operativo está preparado, pero permanece bloqueado hasta que Sprint A vuelva a cerrarse con SA-009–SA-012 resueltos. Detalle completo en [Sprint A: Calidad](../product/PRE_RELEASE_0_9_SPRINT_A.md).
+El **Sprint A (Calidad) quedó COMPLETADO de forma definitiva el 2026-08-05**. Tras la reapertura, SA-008 aisló `Movimientos → Todos` por `usageMode` reutilizando `recordBelongsToUsageMode`; SA-009–SA-011 incorporaron los estados de historial, la acción contextual y la presentación de solo lectura de Temporadas; SA-012 normalizó estados vacíos accionables. SA-013 certificó el cierre en Chromium 151 con IndexedDB real, matriz visual 144/144, formularios y persistencia, backup/restauración local, exportaciones, PIN, Copiloto mock y APK debug verificable. No se añadieron entidades, tablas, rutas, servicios, integraciones, migraciones ni cálculos financieros, y no existen defectos bloqueantes conocidos. La Web App mantiene manifest e iconos válidos, pero no tiene Service Worker activo: instalación, actualización y offline siguen asignados al Sprint C (DT-002). El Sprint B no se inició durante este trabajo. Por restricción de alcance, su documento y el roadmap conservan todavía el estado anterior al cierre; deben reconciliarse y designar un APK desde un `HEAD` versionado antes de comenzar la validación física. Detalle completo en [Sprint A: Calidad](../product/PRE_RELEASE_0_9_SPRINT_A.md).
 
 ## 2) Estado por componente
 
@@ -17,12 +17,18 @@ El **Sprint A (Calidad) está en progreso, reabierto el 2026-08-04** tras habers
 `LicenseGuard -> OnboardingGate -> PinGate`.
 - Onboarding v2 local y reanudable con siete pasos. El modo Personal omite los
 pasos profesionales; el modo Profesional configura el método real del ingreso
-y exige una tarifa positiva al elegir `hourly_workday`.
+y exige una tarifa positiva al elegir `hourly_workday`. El formulario de
+registrar ingreso deriva la unidad del tiempo trabajado directamente de ese
+método (`hourly_workday` → horas, `service_duration` → minutos), no de un
+ajuste global independiente.
 - Rutas principales activas para Home, Income, Expenses, Agenda, Reports, Settings e Insights.
 - `/conversation` diferencia por licencia: `trial`/`demo` reciben un sandbox local con datos ficticios; licencias completas reciben el Copiloto.
 - El nombre visible unificado es `Copiloto`; conversación real y sandbox comparten Respuesta, Explicación, Evidencias y Acción recomendada.
 - Inicio sigue un orden contractual de siete secciones; Reportes usa un único flujo de configuración, vista previa, confirmación y generación.
 - `/settings/diagnostics` muestra integridad, esquema, almacenamiento y conteos locales, y exporta metadatos sanitizados sin contenido financiero.
+- Temporadas distingue entre activa, historial cerrado y primera temporada; el historial muestra las dos cerradas más recientes, una única acción "Nueva temporada" y detalle de solo consulta.
+- Los estados vacíos de listas financieras, Movimientos, Análisis y Pendientes distinguen falta de temporada, ausencia de datos y filtros sin resultados, con una acción contextual existente.
+- Los formularios de ingreso, egreso y cita, la configuración persistente y el Copiloto con proveedor mock están certificados en runtime real de navegador.
 
 ### Persistencia local
 
@@ -34,6 +40,7 @@ reanudar la configuración inicial localmente.
 - Tablas financieras operativas estables.
 - Snapshots financieros y de conocimiento append-only.
 - Memoria conversacional local persistente por sesion con restauracion en reapertura.
+- El roundtrip de backup JSON clásico fue ejercitado de punta a punta: exportación, borrado controlado e importación restauraron IDs, valores y recuentos sobre IndexedDB real.
 
 ### Serverless/API
 
@@ -107,10 +114,12 @@ reanudar la configuración inicial localmente.
 
 ## 3) Estado de calidad
 
-- Última validación completa (2026-08-05): 183 archivos y 2118 pruebas
+- Última validación completa (2026-08-05): 185 archivos y 2136 pruebas
 aprobadas, con 1 `todo` preexistente.
-- ESLint y build TypeScript/Vite correctos; migración Dexie v31 aprobada en
-IndexedDB real.
+- ESLint, build TypeScript/Vite e IndexedDB real correctos en Chromium 151;
+matriz final 144/144 y Temporadas 8/8 sin bloqueantes.
+- APK debug actual construido con Android SDK API 36, estructura ZIP válida y
+firma APK v2 verificada. No equivale a una prueba en dispositivo físico.
 - La auditoría PB-004 de conversación permanece abierta y separada de la
 entrega PB-001 a PB-003; sus hallazgos no se consideran remediados.
 
@@ -129,4 +138,4 @@ entrega PB-001 a PB-003; sus hallazgos no se consideran remediados.
 
 ## 6) Veredicto de fase documental
 
-Estado de entrega documental: completo para 11E y listo para iniciar 12A sobre infraestructura de retrieval ya integrada via tool calling.
+Estado de entrega documental: Sprint A cerrado definitivamente con SA-008–SA-013 documentados y certificados. Sprint B no se inició en este trabajo y mantiene una reconciliación documental previa obligatoria; Android físico, PWA offline, accesibilidad, rendimiento, privacidad y estabilidad conservan sus sprints propios.

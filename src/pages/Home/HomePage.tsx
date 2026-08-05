@@ -56,6 +56,7 @@ import type {
   UtcInstant,
 } from '../../types/financialSnapshot'
 import {
+  hasRecordsForUsageMode,
   isBasicMode,
   recordBelongsToUsageMode,
   requiresSeason,
@@ -166,6 +167,7 @@ export function HomePage() {
   const [pendingIncomeSummary, setPendingIncomeSummary] = useState<PendingIncomeSummary | null>(null)
   const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([])
   const [financialGoals, setFinancialGoals] = useState<FinancialGoal[]>([])
+  const [hasMovementHistory, setHasMovementHistory] = useState(false)
   const { hidden, toggle } = useSensitiveValues()
 
   useEffect(() => {
@@ -215,12 +217,23 @@ export function HomePage() {
 
     async function loadDashboard(nextSettings?: AppSettings) {
       const resolvedSettings = nextSettings ?? await getSettings()
-      const [period, incomes, expenses, oldIncomes, oldExpenses, goals] = await Promise.all([
+      const [
+        period,
+        incomes,
+        expenses,
+        oldIncomes,
+        oldExpenses,
+        allIncomes,
+        allExpenses,
+        goals,
+      ] = await Promise.all([
         getActiveEarningPeriod(),
         listServiceIncomes(current),
         listExpenses(current),
         listServiceIncomes(previous),
         listExpenses(previous),
+        listServiceIncomes(),
+        listExpenses(),
         financialGoalService.list(),
       ])
       const periodStats = period?.id ? await getSeasonStatistics(period.id) : null
@@ -268,6 +281,10 @@ export function HomePage() {
       // De lo contrario, una temporada cerrada del mes anterior queda fuera y se muestra "sin datos".
       setPreviousIncomes(oldModeIncomes)
       setPreviousExpenses(oldModeExpenses)
+      setHasMovementHistory(
+        hasRecordsForUsageMode(allIncomes, resolvedSettings.usageMode) ||
+          hasRecordsForUsageMode(allExpenses, resolvedSettings.usageMode),
+      )
       setFinancialGoals(goals)
     }
 
@@ -690,12 +707,19 @@ export function HomePage() {
       <article className="order-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{HOME_SECTION_ORDER[5]}</h2>
-          <Link className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300" to="/movements">
-            Ver todos
-          </Link>
+          {recentMovements.length > 0 || hasMovementHistory ? (
+            <Link className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300" to="/movements">
+              Ver todos
+            </Link>
+          ) : null}
         </div>
         {recentMovements.length === 0 ? (
-          <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">Todavía no hay movimientos este mes.</p>
+          <div className="mt-4">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Aún no hay movimientos este mes</p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Usa Registrar ingreso o Registrar gasto en Acciones sugeridas para comenzar.
+            </p>
+          </div>
         ) : (
           <ul className="mt-4 flex flex-col gap-2">
             {recentMovements.map((movement) => (

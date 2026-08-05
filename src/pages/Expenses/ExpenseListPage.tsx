@@ -8,6 +8,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { ActionableEmptyState } from '../../components/ActionableEmptyState'
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { SensitiveAmount } from '../../components/SensitiveAmount'
@@ -22,6 +23,7 @@ import type { AppSettings, CountryCode, CurrencyCode } from '../../types/setting
 import { getExpenseDisplayName } from '../../utils/activityLabels'
 import { countries } from '../../utils/countries'
 import { formatCurrency } from '../../utils/currency'
+import { getFinancialListEmptyReason } from '../../utils/financialListEmptyState'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 import {
   isBasicMode,
@@ -338,6 +340,16 @@ export function ExpenseListPage() {
     setExpensePage(1)
   }
 
+  function clearFilters() {
+    setDateFrom('')
+    setDateTo('')
+    setSelectedCountry('ALL')
+    setSelectedCity('ALL')
+    setSelectedCategory('ALL')
+    setSelectedReportStatus('ALL')
+    setExpensePage(1)
+  }
+
   if (isLoading) {
     return (
       <section className="flex min-h-[60dvh] items-center justify-center">
@@ -345,6 +357,12 @@ export function ExpenseListPage() {
       </section>
     )
   }
+
+  const emptyReason = getFinancialListEmptyReason({
+    totalRecords: expenses.length,
+    requiresActiveSeason: Boolean(settings && requiresSeason(settings)),
+    hasActiveSeason: activePeriodId !== undefined,
+  })
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -472,13 +490,25 @@ export function ExpenseListPage() {
 
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           {filteredExpenses.length === 0 ? (
-            <p className="p-4 text-sm text-slate-500">
-              {settings && isBasicMode(settings)
-                ? 'No hay egresos con los filtros seleccionados.'
-                : !activePeriodId
-                  ? 'No hay egresos recientes porque no existe una temporada activa.'
-                  : 'No hay egresos de la temporada activa con los filtros seleccionados.'}
-            </p>
+            emptyReason === 'no-active-season' ? (
+              <ActionableEmptyState
+                action={{ label: 'Ir a Temporadas', to: '/temporadas' }}
+                description="Inicia una temporada para poder registrar y consultar egresos profesionales."
+                title="No hay una temporada activa"
+              />
+            ) : emptyReason === 'no-records' ? (
+              <ActionableEmptyState
+                action={{ label: 'Registrar egreso', to: '/expenses/nuevo' }}
+                description="Añade tu primer egreso para comenzar a construir el historial financiero."
+                title="Aún no hay egresos"
+              />
+            ) : (
+              <ActionableEmptyState
+                action={{ label: 'Limpiar filtros', onClick: clearFilters }}
+                description="Restablece las fechas, ubicaciones, categorías y estados para volver a ver tus egresos."
+                title="Ningún egreso coincide con los filtros"
+              />
+            )
           ) : (
             <ul className="divide-y divide-slate-200">
               {paginatedExpenses.map((expense) => {

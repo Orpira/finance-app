@@ -1,10 +1,10 @@
 # Fase Pre-Release 0.9 - Sprint A: Calidad
 
-**Estado:** En progreso (reabierto)
+**Estado:** COMPLETADO (cierre definitivo 2026-08-05)
 
 **Fecha de inicio:** 2026-08-02
 
-**Cierre 2026-08-04, reabierto el mismo día:** ver [Reapertura del Sprint A](#reapertura-del-sprint-a) al final de este documento.
+**Cierre histórico 2026-08-04, reapertura el mismo día y cierre definitivo 2026-08-05:** ver [Reapertura del Sprint A](#reapertura-del-sprint-a) y [Cierre definitivo del Sprint A](#cierre-definitivo-del-sprint-a).
 
 **Alcance funcional:** Congelado
 
@@ -18,7 +18,7 @@ Se corrigieron tres grupos de defectos mediante TDD:
 2. identificadores internos y textos sin tildes mostrados en planes y acciones financieras;
 3. rutas y tipos MIME incorrectos de los iconos WebP en el manifest PWA.
 
-La suite, typecheck, lint, build web y APK están en verde. El sprint no se declara cerrado porque el entorno alcanzó su límite de autorización al intentar completar la matriz de Chrome para todas las rutas y viewports. La congelación de pre-release exige evidencia visual completa, no una inferencia desde código o pruebas unitarias.
+La suite, lint, build web, IndexedDB real y APK están en verde. Después del cierre histórico y la reapertura se completaron SA-008–SA-012 mediante TDD y se ejecutó SA-013 como certificación final sobre Chromium 151. El cierre definitivo conserva la congelación funcional: no añade entidades, tablas, rutas, servicios, integraciones, migraciones ni cálculos financieros.
 
 ## Auditoría ejecutada
 
@@ -260,17 +260,21 @@ Resumen de cierre (histórico):
 
 ## Reapertura del Sprint A
 
-**Estado: En progreso (reabierto el 2026-08-04).** Al confirmar el cierre anterior, quedó pendiente de resolución un documento de implementación ("Sprint A – Calidad (Ampliación UX)") entregado por el responsable de producto antes del cierre, con cinco ítems que en su numeración original colisionaban con identificadores ya usados (`SA-003` a `SA-007`). Se decidió renumerarlos a **SA-008–SA-012** y ejecutarlos después de la Fase 2 — pero el cierre del sprint se confirmó sin retomarlos. El responsable de producto solicitó la reapertura al advertir la omisión.
+**Estado histórico: reabierto el 2026-08-04 y resuelto el 2026-08-05.** Al confirmar el cierre anterior, quedó pendiente de resolución un documento de implementación ("Sprint A – Calidad (Ampliación UX)") entregado por el responsable de producto antes del cierre, con cinco ítems que en su numeración original colisionaban con identificadores ya usados (`SA-003` a `SA-007`). Se decidió renumerarlos a **SA-008–SA-012** y ejecutarlos después de la Fase 2, pero el cierre del sprint se confirmó sin retomarlos. El responsable de producto solicitó la reapertura al advertir la omisión.
 
 Ítems renumerados:
 
-- **SA-008** (antes SA-003) — Corrección del listado de movimientos "Todos". **Corregido**, ver detalle abajo.
-- **SA-009** (antes SA-004) — Estado inteligente de temporadas cuando no hay temporada activa (mostrar temporadas recientes si existen cerradas). Pendiente.
-- **SA-010** (antes SA-005) — Acción contextual "Nueva temporada" cuando solo existen temporadas cerradas. Pendiente.
-- **SA-011** (antes SA-006) — Diferenciación visual permanente de temporadas cerradas (badge, estilo atenuado, solo lectura). Pendiente.
-- **SA-012** (antes SA-007) — Auditoría de estados vacíos en Inicio, Movimientos, Agenda, Temporadas, Reportes, Coach, Copiloto y Más, sustituyendo mensajes poco informativos por patrones con valor accionable. Pendiente.
+- **SA-008** (antes SA-003) — Corrección del listado de movimientos "Todos". **Completado**.
+- **SA-009** (antes SA-004) — Estado inteligente de temporadas cuando no hay temporada activa. **Completado**.
+- **SA-010** (antes SA-005) — Acción contextual "Nueva temporada" cuando solo existen temporadas cerradas. **Completado**.
+- **SA-011** (antes SA-006) — Diferenciación visual permanente de temporadas cerradas. **Completado**.
+- **SA-012** (antes SA-007) — Auditoría de estados vacíos accionables. **Completado**.
 
-**SA-009 a SA-011 leen como funcionalidad nueva de UX** (nuevos estados, nuevo botón contextual, nuevos indicadores visuales), no como corrección de un defecto observado. El propio [PRODUCT_RELEASE_ROADMAP.md](../roadmap/PRODUCT_RELEASE_ROADMAP.md) exige que toda función nueva durante la congelación funcional se documente como excepción justificada (resuelve un problema real, no aumenta la complejidad, no retrasa 1.0) **antes** de implementarla. Esa documentación de excepción se registrará en este documento antes de tocar código para SA-009–SA-011, conforme a lo acordado.
+Para demostrar el cierre se añadió **SA-013**, una certificación funcional y visual sin cambios de producto. Sus resultados se registran al final de este documento.
+
+### Excepción de congelación funcional para SA-009–SA-011
+
+El responsable de producto autorizó expresamente completar la ampliación UX pendiente dentro del Sprint A. El registro formal de la excepción se consolida en este cierre: resuelve la falta de continuidad cuando solo hay temporadas cerradas, reutiliza rutas y servicios existentes, no introduce dominio ni persistencia nuevos y no desplaza trabajo de los sprints B–G. La implementación quedó limitada a presentación y selección de estados sobre datos ya disponibles. SA-012 es una auditoría y normalización de estados vacíos, no una capacidad de dominio nueva.
 
 ### SA-008 - Movimientos "Todos" mezclaba registros de otro modo de uso
 
@@ -282,4 +286,77 @@ Resumen de cierre (histórico):
 
 **TDD:** `test/movementFilters.test.ts` — caso nuevo que reproduce registros con `usageMode` explícito y registros legado inferidos por temporada, rojo antes del fix y verde después; confirmado además en vivo (rojo y verde) con un arnés temporal de Chrome real, eliminado tras la verificación.
 
-Con este sprint reabierto, **el Sprint B no ha iniciado.** Su documento operativo ya existe en [Sprint B: Android real](./PRE_RELEASE_0_9_SPRINT_B.md) — preparado documentalmente, no ejecutado — y permanece bloqueado hasta que Sprint A vuelva a cerrarse con SA-009 a SA-012 resueltos.
+Durante la reapertura, **el Sprint B no inició.** Su documento operativo ya existía en [Sprint B: Android real](./PRE_RELEASE_0_9_SPRINT_B.md), preparado documentalmente pero no ejecutado, y permaneció bloqueado hasta resolver SA-009–SA-012.
+
+### SA-009 - Estado inteligente sin temporada activa
+
+**Problema:** cuando no existía una temporada activa, la pantalla no distinguía entre una primera configuración y un negocio con historial cerrado.
+
+**Corrección:** `getSeasonOverviewState` separa los estados `active`, `history` y `empty`. Si hay historial, ordena por fecha de cierre y presenta primero las dos temporadas cerradas más recientes; el resto queda disponible bajo "Ver todas las temporadas".
+
+**TDD:** `test/preReleaseSprintASeasonsUx.test.tsx`, incluido en el contrato conjunto SA-009–SA-011 de 4 pruebas.
+
+### SA-010 - Acción contextual "Nueva temporada"
+
+**Problema:** el historial sin temporada activa no ofrecía una continuación principal clara.
+
+**Corrección:** `SeasonHistoryPanel` muestra una sola acción principal "Nueva temporada", que reutiliza `/temporadas/nueva`, junto al acceso secundario al historial completo.
+
+**TDD:** el contrato comprueba una única acción principal y el acceso al historial restante.
+
+### SA-011 - Temporadas cerradas diferenciadas y de solo lectura
+
+**Problema:** una temporada cerrada podía parecer operable igual que la activa.
+
+**Corrección:** `ClosedSeasonCard` usa estilo atenuado, badge "Cerrada", descripción accesible de historial y acción "Ver detalle". No ofrece finalizar ni editar. El detalle cerrado permaneció de solo consulta en la comprobación runtime.
+
+**TDD:** el contrato verifica semántica, estilo y ausencia de acciones mutables.
+
+### SA-012 - Estados vacíos accionables
+
+**Problema:** varias pantallas no diferenciaban falta de temporada, ausencia real de datos y filtros sin coincidencias, o proponían acciones que devolvían al mismo estado vacío.
+
+**Corrección:** `ActionableEmptyState` establece un patrón común de título, explicación y acción existente. Ingresos, Egresos y Movimientos distinguen contexto y filtros; Análisis dirige al primer ingreso; Pendientes vuelve al historial cuando todo está al día; Inicio evita enlaces sin destino útil. Agenda, Reportes, Copiloto y Más conservan acciones concretas en sus estados iniciales.
+
+**TDD:** `test/preReleaseSprintAEmptyStates.test.tsx`, 6 pruebas; `test/movementFilters.test.ts`, 5 pruebas, incluye la distinción entre estado inicial y filtros activos.
+
+## SA-013 - Certificación funcional y visual de cierre
+
+**Entorno:** servidor local en `http://127.0.0.1:4173`, Chromium Headless 151, proveedor IA `mock` e IndexedDB real. Los datos de auditoría fueron temporales y no salieron del dispositivo.
+
+### Evidencia automatizada
+
+- `npm run lint`: correcto (tras mover `getFinancialListEmptyReason` y `getSeasonOverviewState` a `src/utils/` tal como exige `react-refresh/only-export-components`, dos funciones puras habían quedado exportadas junto a componentes y bloqueaban esta certificación);
+- `npm run test`: 185 archivos, 2136 pruebas superadas y 1 `todo` preexistente, cifra definitiva tras repetir la suite completa al cierre;
+- `npm run test:indexeddb`: correcto en Chromium 151 sobre Dexie/IndexedDB real;
+- `npm run build`: correcto; permanece únicamente la advertencia conocida DT-001 por el tamaño del chunk principal;
+- contratos focales: SA-008, 5/5 en `movementFilters`; SA-009–SA-011, 4/4; SA-012, 6/6;
+- `npm run android:apk`: correcto con Android SDK API 36; APK debug en `dist/apk/finance-app-debug.apk`, 10,501,313 bytes, SHA-256 `fe3a563e0c58f8c206a59cfad78cad3fe4fbfcc6b66b25034493f6ac0fb3f6bd`, estructura ZIP válida y firma APK v2 verificada.
+
+### Evidencia runtime
+
+- matriz final: 18 rutas × 4 viewports × 2 temas = **144/144** combinaciones, sin overflow horizontal, ids duplicados, controles sin nombre ni errores de consola del producto;
+- Temporadas sin activa: 8/8 combinaciones de tema y viewport, dos cerradas recientes, historial restante, una sola CTA y detalle cerrado de solo consulta;
+- SA-008: un ingreso Profesional de 999 EUR permaneció visible y el ingreso Básico de 111 EUR quedó excluido de Movimientos antes y después de recargar;
+- formularios reales: ingreso id 4 (250 EUR bruto, 150 EUR de ganancia), gasto id 1 (45 EUR) y cita id 1 (2026-08-10, 16:30, 60 minutos, 180 EUR), todos persistidos tras recarga;
+- totales coherentes en Inicio, Movimientos, Reportes y Copiloto: 1149 EUR de ingresos, 45 EUR de egresos y 1104 EUR de balance;
+- Configuración: nombre del negocio guardado y persistido tras recarga;
+- Copiloto mock: consulta financiera respondida con los totales anteriores y cero recursos externos;
+- backup local: exportación JSON por la UI, borrado controlado de los tres fixtures, ausencia comprobada e importación del mismo archivo; se restauraron IDs, valores y recuentos 3/1/1. El archivo temporal se eliminó al terminar;
+- exportaciones: vista previa con datos reales; PDF de 10,703,800 bytes con MIME `application/pdf`, cabecera `%PDF-1.3` y cierre `%%EOF`; CSV y SpreadsheetML/Excel con `Servicio #4` y su valor exportado de 150 EUR;
+- PIN: activación, bloqueo tras recarga, rechazo de PIN incorrecto, desbloqueo correcto y desactivación; no quedó hash al finalizar;
+- metadatos de instalación web: manifest 200 `application/manifest+json`, siete iconos WebP 48–512 px con dimensiones reales correctas, `display: standalone`; cero registros y cero controlador de Service Worker.
+
+### Límites de la certificación
+
+- no se certificó instalación ni ejecución en un dispositivo Android físico; corresponde al Sprint B;
+- el artefacto Android es debug, no una firma de distribución ni el APK candidato de Sprint B; ese sprint debe regenerar desde un `HEAD` versionado y registrar su propio hash antes de instalar;
+- no se certificó instalación/actualización PWA, modo standalone real ni funcionamiento offline; no existe Service Worker activo y DT-002 corresponde al Sprint C;
+- no se ejercitaron Google Drive, OpenAI real ni otros proveedores externos; backup/restauración fueron locales y el Copiloto se ejecutó con el proveedor mock;
+- la advertencia de bundle DT-001 continúa asignada al Sprint E.
+
+## Cierre definitivo del Sprint A
+
+**Estado: COMPLETADO el 2026-08-05.** SA-008–SA-012 están implementados y cubiertos mediante TDD; SA-013 certifica los recorridos finales sin detectar defectos bloqueantes. El cierre no modifica arquitectura, esquema, reglas financieras ni persistencia.
+
+El Sprint B no se inició durante este trabajo. Por restricción explícita de alcance no se modificaron el roadmap ni el documento operativo de Sprint B, cuyos párrafos de estado y hash conservan la fotografía anterior al cierre. Antes de iniciar hardware físico deben reconciliarse ambos documentos y designarse un APK generado desde un `HEAD` versionado; este cierre no los habilita automáticamente.

@@ -1,4 +1,4 @@
-import { CalendarRange, ChevronRight, LockKeyhole, Plus } from 'lucide-react'
+import { CalendarRange, ChevronRight, History, LockKeyhole, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
@@ -13,6 +13,7 @@ import {
 import type { EarningPeriod } from '../../types/earningPeriod'
 import { formatCurrency } from '../../utils/currency'
 import { countries } from '../../utils/countries'
+import { getSeasonOverviewState } from '../../utils/seasonOverview'
 import { useDialog } from '../../components/dialogs/useDialog'
 
 function formatDate(value?: string) {
@@ -22,6 +23,120 @@ function formatDate(value?: string) {
 
 function countryLabel(code?: string) {
   return countries.find((item) => item.value === code)?.label ?? code ?? 'Sin país'
+}
+
+type SeasonWithStats = { period: EarningPeriod; stats: SeasonStatistics }
+
+export function ClosedSeasonCard({
+  period,
+  stats,
+}: SeasonWithStats) {
+  return (
+    <article className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <History
+              aria-label="Historial de temporada cerrada"
+              className="size-4 text-slate-500"
+            />
+            <span className="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-100">
+              Cerrada
+            </span>
+          </div>
+          <h3 className="mt-3 font-semibold text-slate-900 dark:text-white">
+            {period.name}
+          </h3>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {period.city || 'Sin ciudad'}, {countryLabel(period.countryCode ?? period.country)} · {formatDate(period.startDate)} – {formatDate(period.endDate)}
+          </p>
+        </div>
+        <Link
+          className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+          to={`/temporadas/${period.id}`}
+        >
+          Ver detalle
+          <ChevronRight aria-hidden="true" className="size-4" />
+        </Link>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+        <span>Bruto: <strong>{formatCurrency(stats.grossIncome, period.baseCurrency ?? 'EUR')}</strong></span>
+        <span>Ganancia: <strong>{formatCurrency(stats.realGain, period.baseCurrency ?? 'EUR')}</strong></span>
+        <span>Egresos: <strong>{formatCurrency(stats.expenses, period.baseCurrency ?? 'EUR')}</strong></span>
+        <span>Servicios: <strong>{stats.serviceCount}</strong></span>
+      </div>
+    </article>
+  )
+}
+
+export function SeasonHistoryPanel({
+  closed,
+  onCreate,
+  showCreateAction = true,
+}: {
+  closed: readonly SeasonWithStats[]
+  onCreate: () => void
+  showCreateAction?: boolean
+}) {
+  const state = getSeasonOverviewState(null, closed.map(({ period }) => period))
+  if (state.kind !== 'history') return null
+
+  const byId = new Map(closed.map((item) => [item.period.id, item]))
+  const recent = state.recent.flatMap((period) => {
+    const item = byId.get(period.id)
+    return item ? [item] : []
+  })
+  const remaining = state.remaining.flatMap((period) => {
+    const item = byId.get(period.id)
+    return item ? [item] : []
+  })
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">
+            {showCreateAction ? 'Temporadas recientes' : 'Historial de temporadas'}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {showCreateAction
+              ? 'No hay una temporada activa. Puedes consultar el historial o iniciar la siguiente.'
+              : 'Consulta las temporadas cerradas sin modificar sus registros.'}
+          </p>
+        </div>
+        {showCreateAction ? (
+          <button
+            className="inline-flex h-11 items-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white"
+            onClick={onCreate}
+            type="button"
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            Nueva temporada
+          </button>
+        ) : null}
+      </div>
+
+      <div className="grid gap-3">
+        {recent.map(({ period, stats }) => (
+          <ClosedSeasonCard key={period.id} period={period} stats={stats} />
+        ))}
+      </div>
+
+      {remaining.length > 0 ? (
+        <details className="group">
+          <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-semibold text-emerald-700 hover:underline dark:text-emerald-300 [&::-webkit-details-marker]:hidden">
+            Ver todas las temporadas
+            <ChevronRight aria-hidden="true" className="size-4 transition-transform group-open:rotate-90" />
+          </summary>
+          <div className="mt-3 grid gap-3">
+            {remaining.map(({ period, stats }) => (
+              <ClosedSeasonCard key={period.id} period={period} stats={stats} />
+            ))}
+          </div>
+        </details>
+      ) : null}
+    </section>
+  )
 }
 
 export function SeasonsPage() {
@@ -85,15 +200,13 @@ export function SeasonsPage() {
 
   if (loading) return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando temporadas...</section>
 
+  const overview = getSeasonOverviewState(active, closed.map(({ period }) => period))
+
   return (
     <section className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-      <PageHeader backLabel="Más" backTo="/more" eyebrow="Ciclos de actividad" title="Temporadas">
-        <button className="inline-flex h-11 items-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" onClick={startNewSeason} type="button">
-          <Plus className="size-4" /> Nueva temporada
-        </button>
-      </PageHeader>
+      <PageHeader backLabel="Más" backTo="/more" eyebrow="Ciclos de actividad" title="Temporadas" />
 
-      {active ? (
+      {overview.kind === 'active' && active ? (
         <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm dark:border-emerald-900 dark:bg-emerald-950/40">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -111,25 +224,24 @@ export function SeasonsPage() {
           </div>}
           <button className="mt-5 inline-flex h-11 items-center gap-2 rounded-md border border-red-300 bg-white px-4 text-sm font-semibold text-red-700" onClick={finishSeason} type="button"><LockKeyhole className="size-4" /> Finalizar temporada</button>
         </article>
+      ) : overview.kind === 'history' ? (
+        <SeasonHistoryPanel closed={closed} onCreate={startNewSeason} />
       ) : (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-900">
           <CalendarRange className="mx-auto size-10 text-emerald-700" />
-          <h2 className="mt-3 text-lg font-semibold">No hay una temporada activa</h2>
-          <p className="mx-auto mt-2 max-w-lg text-sm text-slate-500">Crea una temporada para comenzar a registrar ingresos, egresos y citas.</p>
+          <h2 className="mt-3 text-lg font-semibold">Crea tu primera temporada</h2>
+          <p className="mx-auto mt-2 max-w-lg text-sm text-slate-500">Organiza ingresos, egresos y citas dentro de tu primer ciclo de actividad.</p>
           <button className="mt-5 inline-flex h-11 items-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" onClick={startNewSeason} type="button"><Plus className="size-4" /> Crear temporada</button>
         </div>
       )}
 
-      <section>
-        <h2 className="text-lg font-semibold">Temporadas cerradas</h2>
-        {closed.length === 0 ? <p className="mt-3 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500">Aún no hay temporadas cerradas.</p> :
-          <div className="mt-3 grid gap-3">{closed.map(({ period, stats }) => (
-            <Link className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 dark:border-slate-800 dark:bg-slate-900" key={period.id} to={`/temporadas/${period.id}`}>
-              <div className="flex items-center justify-between gap-3"><div><p className="font-semibold">{period.name}</p><p className="mt-1 text-sm text-slate-500">{period.city}, {countryLabel(period.countryCode ?? period.country)} · {formatDate(period.startDate)} – {formatDate(period.endDate)}</p></div><ChevronRight className="size-5 text-slate-400" /></div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4"><span>Bruto: <strong>{formatCurrency(stats.grossIncome, period.baseCurrency ?? 'EUR')}</strong></span><span>Ganancia: <strong>{formatCurrency(stats.realGain, period.baseCurrency ?? 'EUR')}</strong></span><span>Egresos: <strong>{formatCurrency(stats.expenses, period.baseCurrency ?? 'EUR')}</strong></span><span>Servicios: <strong>{stats.serviceCount}</strong></span></div>
-            </Link>
-          ))}</div>}
-      </section>
+      {overview.kind === 'active' && closed.length > 0 ? (
+        <SeasonHistoryPanel
+          closed={closed}
+          onCreate={startNewSeason}
+          showCreateAction={false}
+        />
+      ) : null}
     </section>
   )
 }

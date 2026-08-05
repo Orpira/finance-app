@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   INCOME_CALCULATION_METHODS,
   WORKED_TIME_UNITS,
+  getWorkedTimeUnitForMethod,
   isIncomeCalculationMethod,
   isWorkedTimeUnit,
 } from '../src/catalogs/incomeCalculationMethods'
@@ -46,5 +47,19 @@ describe('isWorkedTimeUnit', () => {
     [undefined, false],
   ])('%s -> %s', (value, expected) => {
     expect(isWorkedTimeUnit(value)).toBe(expected)
+  })
+})
+
+describe('getWorkedTimeUnitForMethod', () => {
+  // Regresión: el formulario de "Registrar ingreso" pedía el tiempo
+  // trabajado en minutos incluso con "Jornada por horas" seleccionada en el
+  // wizard/configuración, porque tomaba la unidad de settings.workedTimeUnit
+  // (por defecto 'minutes') en vez de derivarla del método elegido.
+  it('"Jornada por horas" siempre pide el tiempo trabajado en horas, nunca en minutos', () => {
+    expect(getWorkedTimeUnitForMethod('hourly_workday')).toBe('hours')
+  })
+
+  it('"Servicio por tiempo" siempre pide el tiempo trabajado en minutos', () => {
+    expect(getWorkedTimeUnitForMethod('service_duration')).toBe('minutes')
   })
 })

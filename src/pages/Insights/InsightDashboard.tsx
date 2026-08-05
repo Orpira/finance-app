@@ -26,7 +26,10 @@ export function InsightDashboard({ state, onReload }: InsightDashboardProps) {
     return (
       <div className="grid gap-4">
         <InsightSummary viewModel={state.data} />
-        <InsightEmptyView onReload={onReload} />
+        <InsightEmptyView
+          hasData={state.data.summary.hasData}
+          onReload={onReload}
+        />
       </div>
     )
   }

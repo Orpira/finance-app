@@ -1,3 +1,4 @@
+import { ActionableEmptyState } from '../../components/ActionableEmptyState'
 import type {
   InsightDashboardUseCaseError,
 } from './insightDashboardContracts'
@@ -12,6 +13,11 @@ interface InsightPartialViewProps extends InsightStateViewProps {
 
 interface InsightErrorViewProps extends InsightStateViewProps {
   readonly error: InsightDashboardUseCaseError
+}
+
+interface InsightEmptyViewProps {
+  readonly hasData?: boolean
+  readonly onReload?: () => void
 }
 
 function ReloadButton({ onReload }: InsightStateViewProps) {
@@ -38,20 +44,26 @@ export function InsightLoadingView() {
   )
 }
 
-export function InsightEmptyView({ onReload }: InsightStateViewProps) {
+export function InsightEmptyView({
+  hasData = false,
+  onReload,
+}: InsightEmptyViewProps = {}) {
   return (
     <section
-      aria-live="polite"
       className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm"
-      role="status"
     >
-      <p className="font-semibold text-slate-900">Aún no hay suficientes datos financieros</p>
-      <p className="mt-1">
-        Registra ingresos o egresos para comenzar a generar tu análisis financiero.
-      </p>
-      <div className="mt-4">
-        <ReloadButton onReload={onReload} />
-      </div>
+      <ActionableEmptyState
+        action={hasData && onReload
+          ? { label: 'Actualizar análisis', onClick: onReload }
+          : { label: 'Registrar ingreso', to: '/income/nuevo' }}
+        compact
+        description={hasData
+          ? 'Tus datos financieros están disponibles, pero no generan recomendaciones en este momento.'
+          : 'Registra ingresos o egresos para comenzar a generar tu análisis financiero.'}
+        title={hasData
+          ? 'No hay recomendaciones por ahora'
+          : 'Aún no hay suficientes datos financieros'}
+      />
     </section>
   )
 }

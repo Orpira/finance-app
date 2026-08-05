@@ -57,6 +57,18 @@ export function readMovementFilters(params: URLSearchParams): MovementFilters {
   }
 }
 
+export function hasActiveMovementFilters(filters: MovementFilters): boolean {
+  return (
+    filters.period !== 'all' ||
+    filters.type !== 'all' ||
+    filters.category !== '' ||
+    filters.currency !== '' ||
+    filters.reported !== 'all' ||
+    filters.query.trim() !== '' ||
+    filters.order !== 'newest'
+  )
+}
+
 export function applyMovementFilters<T extends FilterableMovement>(
   movements: readonly T[],
   filters: MovementFilters,

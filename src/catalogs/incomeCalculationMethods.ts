@@ -18,3 +18,12 @@ export function isIncomeCalculationMethod(value: unknown): value is IncomeCalcul
 export function isWorkedTimeUnit(value: unknown): value is WorkedTimeUnit {
   return WORKED_TIME_UNITS.some((item) => item.code === value)
 }
+
+// "Jornada por horas" siempre pide el tiempo trabajado en horas y "Servicio
+// por tiempo" en minutos: son las únicas unidades válidas por método, no una
+// preferencia libre de la usuaria.
+export function getWorkedTimeUnitForMethod(
+  method: IncomeCalculationMethod,
+): WorkedTimeUnit {
+  return method === 'hourly_workday' ? 'hours' : 'minutes'
+}

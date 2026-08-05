@@ -2,6 +2,7 @@ import { CheckCircle2, CheckSquare, ChevronLeft, ChevronRight, Pencil, Plus, Rec
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
+import { ActionableEmptyState } from '../../components/ActionableEmptyState'
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { SensitiveAmount } from '../../components/SensitiveAmount'
@@ -25,6 +26,7 @@ import type { AppSettings, CountryCode, CurrencyCode } from '../../types/setting
 import { getIncomeDisplayName } from '../../utils/activityLabels'
 import { countries } from '../../utils/countries'
 import { formatCurrency } from '../../utils/currency'
+import { getFinancialListEmptyReason } from '../../utils/financialListEmptyState'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 import { getIncomeDurationDisplay } from '../../utils/serviceDuration'
@@ -543,6 +545,16 @@ export function IncomeListPage() {
     setIncomePage(1)
   }
 
+  function clearFilters() {
+    setDateFrom('')
+    setDateTo('')
+    setSelectedCountry('ALL')
+    setSelectedCity('ALL')
+    setSelectedPaymentType('ALL')
+    setSelectedIncomeType('ALL')
+    handleReportStatusFilterChange('ALL')
+  }
+
   if (isLoading) {
     return (
       <section className="flex min-h-[60dvh] items-center justify-center">
@@ -550,6 +562,12 @@ export function IncomeListPage() {
       </section>
     )
   }
+
+  const emptyReason = getFinancialListEmptyReason({
+    totalRecords: incomes.length,
+    requiresActiveSeason: Boolean(settings && requiresSeason(settings)),
+    hasActiveSeason: activePeriodId !== undefined,
+  })
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -736,13 +754,25 @@ export function IncomeListPage() {
 
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           {filteredIncomes.length === 0 ? (
-            <p className="p-4 text-sm text-slate-500">
-              {settings && isBasicMode(settings)
-                ? 'No hay ingresos con los filtros seleccionados.'
-                : !activePeriodId
-                  ? 'No hay ingresos recientes porque no existe una temporada activa.'
-                  : 'No hay ingresos de la temporada activa con los filtros seleccionados.'}
-            </p>
+            emptyReason === 'no-active-season' ? (
+              <ActionableEmptyState
+                action={{ label: 'Ir a Temporadas', to: '/temporadas' }}
+                description="Inicia una temporada para poder registrar y consultar ingresos profesionales."
+                title="No hay una temporada activa"
+              />
+            ) : emptyReason === 'no-records' ? (
+              <ActionableEmptyState
+                action={{ label: 'Registrar ingreso', to: '/income/nuevo' }}
+                description="Añade tu primer ingreso para comenzar a construir el historial financiero."
+                title="Aún no hay ingresos"
+              />
+            ) : (
+              <ActionableEmptyState
+                action={{ label: 'Limpiar filtros', onClick: clearFilters }}
+                description="Restablece las fechas, ubicaciones, tipos y estados para volver a ver tus ingresos."
+                title="Ningún ingreso coincide con los filtros"
+              />
+            )
           ) : (
             groupedPaginatedIncomes.map((group) => (
               <div key={group.date}>

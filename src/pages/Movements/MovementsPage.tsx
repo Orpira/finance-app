@@ -2,6 +2,7 @@ import { ArrowDownLeft, ArrowUpRight, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
+import { ActionableEmptyState } from '../../components/ActionableEmptyState'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
@@ -17,7 +18,12 @@ import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 import { getRecordReportBadge } from '../../utils/reportStatus'
 import ExpenseListPage from '../Expenses/ExpenseListPage'
 import IncomeListPage from '../Income/IncomeListPage'
-import { applyMovementFilters, readMovementFilters, scopeRecordsByUsageMode } from './movementFilters'
+import {
+  applyMovementFilters,
+  hasActiveMovementFilters,
+  readMovementFilters,
+  scopeRecordsByUsageMode,
+} from './movementFilters'
 
 type MovementTab = 'todos' | 'ingresos' | 'egresos'
 
@@ -122,6 +128,10 @@ function AllMovementsTab() {
     setSearchParams(next, { replace: true })
   }
 
+  function clearFilters() {
+    setSearchParams(new URLSearchParams(), { replace: true })
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <label className="relative block">
@@ -163,9 +173,21 @@ function AllMovementsTab() {
       {filtered === null ? (
         <p className="py-10 text-center text-sm text-slate-500">Cargando movimientos…</p>
       ) : filtered.length === 0 ? (
-        <p className="py-10 text-center text-sm text-slate-500">
-          {filters.query ? 'No hay movimientos que coincidan con la búsqueda.' : 'Todavía no hay movimientos con estos filtros.'}
-        </p>
+        movements?.length === 0 ? (
+          <ActionableEmptyState
+            action={{ label: 'Registrar ingreso', to: '/income/nuevo' }}
+            description="Añade tu primer ingreso o egreso para construir el historial de movimientos."
+            title="Aún no hay movimientos"
+          />
+        ) : (
+          <ActionableEmptyState
+            action={{ label: 'Limpiar filtros', onClick: clearFilters }}
+            description="Prueba de nuevo con todos los períodos, tipos y categorías."
+            title={hasActiveMovementFilters(filters)
+              ? 'Ningún movimiento coincide con los filtros'
+              : 'No hay movimientos disponibles'}
+          />
+        )
       ) : (
         <ul className="flex flex-col gap-2">
           {filtered.map((movement) => (

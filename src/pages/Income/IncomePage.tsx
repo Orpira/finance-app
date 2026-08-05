@@ -9,7 +9,7 @@ import {
 } from '../../components/income/IncomeAdditionalsSection'
 import { PageHeader } from '../../components/layout/PageHeader'
 import type { IncomeCalculationMethod, WorkedTimeUnit } from '../../catalogs/incomeCalculationMethods'
-import { WORKED_TIME_UNITS } from '../../catalogs/incomeCalculationMethods'
+import { WORKED_TIME_UNITS, getWorkedTimeUnitForMethod } from '../../catalogs/incomeCalculationMethods'
 import {
   addIncomeAdditional,
   deleteIncomeAdditional,
@@ -287,7 +287,6 @@ export function IncomePage() {
           (currentPeriod?.baseCurrency as CurrencyCode | undefined) ??
             currentSettings.defaultCurrency,
         )
-        setWorkedTimeUnit(currentSettings.workedTimeUnit)
         setHourlyRateApplied(currentSettings.hourlyRate)
       }
     }
@@ -360,6 +359,13 @@ export function IncomePage() {
     !isBasicUser && isServiceType && effectiveMethod === 'service_duration'
   const usesHourlyWorkday =
     !isBasicUser && isServiceType && effectiveMethod === 'hourly_workday'
+  // Al editar un ingreso existente se respeta la unidad con la que se
+  // guardó originalmente (workedTimeUnit ya viene cargada desde
+  // editingIncome) para no reinterpretar datos históricos; para uno nuevo se
+  // deriva siempre del método vigente.
+  const effectiveWorkedTimeUnit: WorkedTimeUnit = editingIncome
+    ? workedTimeUnit
+    : getWorkedTimeUnitForMethod(effectiveMethod)
   // additionalsTotal es solo informativo (usado para el snapshot inicial del
   // ingreso al crear); nunca entra al motor de cálculo — el total del
   // registro (realGain/totalAmount) es siempre exclusivamente el importe de
@@ -377,7 +383,7 @@ export function IncomePage() {
         usageMode: isBasicUser ? 'basic' : 'professional',
         incomeType,
         workedTime,
-        workedTimeUnit,
+        workedTimeUnit: effectiveWorkedTimeUnit,
         hourlyRate: hourlyRateApplied,
         storedRealGain: editingIncome?.realGain,
       })
@@ -390,13 +396,13 @@ export function IncomePage() {
   }, [
     editingIncome?.realGain,
     effectiveMethod,
+    effectiveWorkedTimeUnit,
     hourlyRateApplied,
     incomeType,
     isBasicUser,
     percentage,
     totalAmount,
     workedTime,
-    workedTimeUnit,
   ])
   const realGain = calculation.realGain
   const principalAmount = usesHourlyWorkday ? calculation.realGain : totalAmount
@@ -550,7 +556,7 @@ export function IncomePage() {
         totalIncome: principalAmount,
         workedTime: usesHourlyWorkday ? workedTime : undefined,
         workedTimeUnit:
-          !isBasicUser && isServiceType ? workedTimeUnit : undefined,
+          !isBasicUser && isServiceType ? effectiveWorkedTimeUnit : undefined,
         hourlyRateApplied: usesHourlyWorkday ? hourlyRateApplied : undefined,
         currency,
         earningPeriodId: editingIncome?.earningPeriodId ?? activePeriod?.id,
@@ -744,7 +750,7 @@ export function IncomePage() {
         {usesServiceDuration && (
           <ServiceDurationSelect
             onChange={handleDurationChange}
-            unit={workedTimeUnit}
+            unit={effectiveWorkedTimeUnit}
             value={durationLabel}
           />
         )}
@@ -760,12 +766,12 @@ export function IncomePage() {
                   className="h-11 flex-1 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                   min={0}
                   onChange={(event) => setWorkedTime(Number(event.target.value))}
-                  step="1"
+                  step={effectiveWorkedTimeUnit === 'hours' ? '0.25' : '1'}
                   type="number"
                   value={workedTime}
                 />
                 <span className="text-sm font-medium text-slate-500">
-                  {WORKED_TIME_UNITS.find((unit) => unit.code === workedTimeUnit)?.label}
+                  {WORKED_TIME_UNITS.find((unit) => unit.code === effectiveWorkedTimeUnit)?.label}
                 </span>
               </div>
             </label>

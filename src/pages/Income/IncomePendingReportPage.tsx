@@ -2,6 +2,7 @@ import { ArrowRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { ActionableEmptyState } from '../../components/ActionableEmptyState'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
@@ -32,6 +33,19 @@ function groupIncomesByDate(incomes: ServiceIncome[]) {
   })
 
   return groups
+}
+
+export function PendingIncomeEmptyState() {
+  return (
+    <div className="rounded-lg border border-dashed border-slate-300 p-4 dark:border-slate-700">
+      <ActionableEmptyState
+        action={{ label: 'Ver todos los ingresos', to: '/income' }}
+        compact
+        description="No hay ingresos pendientes de reportar. Puedes consultar el historial completo."
+        title="Todo está al día"
+      />
+    </div>
+  )
 }
 
 export function IncomePendingReportPage() {
@@ -99,9 +113,7 @@ export function IncomePendingReportPage() {
       </article>
 
       {groups.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500 dark:border-slate-700">
-          No hay ingresos pendientes de reportar.
-        </p>
+        <PendingIncomeEmptyState />
       ) : (
         <div className="flex flex-col gap-3">
           {groups.map((group) => {
@@ -141,13 +153,15 @@ export function IncomePendingReportPage() {
         </div>
       )}
 
-      <Link
-        className="inline-flex h-12 items-center justify-center gap-2 self-stretch rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:self-end"
-        to="/income?reportStatus=unreviewed"
-      >
-        Ir a Ingresos para reportarlos
-        <ArrowRight className="size-4" aria-hidden="true" />
-      </Link>
+      {groups.length > 0 ? (
+        <Link
+          className="inline-flex h-12 items-center justify-center gap-2 self-stretch rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:self-end"
+          to="/income?reportStatus=unreviewed"
+        >
+          Ir a Ingresos para reportarlos
+          <ArrowRight className="size-4" aria-hidden="true" />
+        </Link>
+      ) : null}
     </section>
   )
 }

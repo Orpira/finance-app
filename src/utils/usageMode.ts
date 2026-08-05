@@ -57,6 +57,13 @@ export function recordBelongsToUsageMode(
   return resolveRecordUsageMode(record) === usageMode
 }
 
+export function hasRecordsForUsageMode(
+  records: readonly UsageModeRecord[],
+  usageMode: UsageMode,
+) {
+  return records.some((record) => recordBelongsToUsageMode(record, usageMode))
+}
+
 export function resolveRecordUsageMode(record: UsageModeRecord): UsageMode {
   if (record.usageMode) return record.usageMode
 
