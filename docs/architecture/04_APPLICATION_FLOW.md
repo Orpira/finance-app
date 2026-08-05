@@ -7,6 +7,7 @@ sequenceDiagram
   participant U as Usuario
   participant R as RouterProvider
   participant L as LicenseGuard
+  participant O as OnboardingGate
   participant P as PinGate
   participant A as AppLayout
 
@@ -14,7 +15,16 @@ sequenceDiagram
   R->>L: Evalúa licencia local
   L-->>R: active/expired/error
   alt Licencia activa
-    R->>P: Evalúa PIN
+    R->>O: Lee AppSettings.onboarding
+    alt Onboarding v2 completado
+      O->>P: Delega acceso
+    else Onboarding pendiente
+      O-->>U: Muestra configuración inicial reanudable
+      U->>O: Completa los pasos aplicables
+      O->>P: Delega acceso al finalizar
+    else Error de lectura
+      O-->>U: Bloquea el acceso y permite reintentar
+    end
     P-->>R: unlocked/locked
     alt PIN desbloqueado
       R->>A: Monta shell y rutas
@@ -25,6 +35,12 @@ sequenceDiagram
     L-->>U: Pantalla de activación/licencia
   end
 ```
+
+El onboarding v2 recorre bienvenida, tipo de uso, método de cálculo
+profesional, primera temporada, moneda, seguridad y finalización. El modo
+Personal omite método y temporada. En modo Profesional, `hourly_workday` exige
+una tarifa positiva y persiste método y tarifa en una sola actualización; una
+tarifa inválida bloquea el avance sin guardar estado parcial.
 
 ## 2) Flujo financiero local (ingreso/egreso)
 

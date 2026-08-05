@@ -9,6 +9,9 @@ Se prioriza cobertura de:
 - persistencia append-only e idempotencia;
 - flujos críticos de AI Foundation e Insights.
 
+Los incrementos funcionales siguen TDD (`RED -> GREEN -> REFACTOR`) según la
+disciplina operativa descrita en [../TESTING.md](../TESTING.md).
+
 ## 2) Herramientas
 
 - `vitest` para unitarias/integración de módulos TS.
@@ -18,18 +21,24 @@ Se prioriza cobertura de:
 ## 3) Comandos operativos
 
 - `npm test`
+- `npm run typecheck`
 - `npm run build`
 - `npm run test:indexeddb`
 - `npm run lint`
 
-## 4) Cobertura observable por inventario
+## 4) Última validación completa
 
-Conteo por patrón ejecutado sobre `src`, `test`, `api`, `server`:
+Validación de PB-001 a PB-003 y de la corrección posterior del método/tarifa,
+ejecutada el 2026-08-05:
 
-- `describe_total=56`
-- `test_total=866`
+- 183 archivos de prueba aprobados;
+- 2118 pruebas aprobadas;
+- 1 `todo` preexistente;
+- ESLint y build TypeScript/Vite correctos;
+- migración Dexie v31 aprobada en el runner de IndexedDB real.
 
-Nota: estas cifras son métricas de inventario textual, no porcentaje de cobertura lineal.
+Estas cifras describen una ejecución concreta; no representan porcentaje de
+cobertura lineal.
 
 ## 5) Suites relevantes detectadas
 
@@ -41,6 +50,19 @@ Nota: estas cifras son métricas de inventario textual, no porcentaje de cobertu
 - `homeBalanceSummaryService.test.ts`
 - `financeStats.test.ts`
 
+### Onboarding y planificación de temporada (PB-001 a PB-003)
+
+- `onboarding.test.ts` — estado versionado, decisión de navegación, método de
+cálculo, tarifa obligatoria y "No aplica = 100 %".
+- `onboardingIncomeMethodStep.test.tsx` — contrato visible del paso profesional:
+métodos canónicos sin confundirlos con unidades de duración.
+- `seasonPlanning.test.ts` — progreso, meta alcanzada, sobrecumplimiento y
+restante nunca negativo.
+- `serviceDuration.test.ts` y `serviceDurationSelect.test.tsx` — regresión de
+presentación y almacenamiento de la duración.
+- `test/indexeddb/browser.ts` — migración v31 sobre IndexedDB real, preservando
+movimientos y saneando solo planificación opcional inválida.
+
 ### Método de cálculo del ingreso y Adicionales (PB-IS-0007)
 
 - `incomeCalculationMethods.test.ts` — catálogo de métodos/unidades.
@@ -48,7 +70,8 @@ Nota: estas cifras son métricas de inventario textual, no porcentaje de cobertu
 - `incomeCalculation.test.ts` — motor Strategy: equivalencia byte-a-byte con `calculateStoredRealGain` para "Servicio por tiempo", cálculo sin % para "Jornada por horas", validaciones, despachador.
 - `incomeAdditionals.test.ts` — validación/suma pura de la entidad Adicional.
 - `incomeService.test.ts` — defaults de método, inmutabilidad al editar, cascade-delete de Adicionales (gap detectado: este archivo no tenía tests previos a este milestone).
-- `incomeAdditionalService.test.ts` — CRUD de Adicionales, recálculo de `realGain`/`totalIncome`/valores convertidos por método.
+- `incomeAdditionalService.test.ts` — CRUD y consistencia de Adicionales según
+la regla que mantiene el importe principal separado.
 - `serviceTimerService.test.ts` — regresión: "Jornada por horas" nunca inicia el cronómetro (test sobre el guard ya existente, sin cambio de producción).
 - `appointmentCompletionService.test.ts` — las citas agendadas siempre persisten `service_duration`, sin leer la configuración del método.
 - `backupService.test.ts` — `incomeAdditionals` viaja en la cadena de backup.
@@ -85,8 +108,8 @@ Nota: estas cifras son métricas de inventario textual, no porcentaje de cobertu
 ## 7) Gaps actuales
 
 - falta de cobertura e2e completa de workflows n8n fuera del entorno de tests unitarios;
-- ausencia de pipeline CI/CD formal documentado para gates automáticos;
-- deuda de lint global fuera de algunos alcances funcionales.
+- branch protection de GitHub pendiente de configuración para hacer obligatorio
+el CI ya existente.
 
 ## 8) Recomendaciones
 

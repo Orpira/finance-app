@@ -45,14 +45,28 @@ Esta línea de tiempo resume hitos técnicos relevantes para lectura rápida de 
 - validaciones de request y CORS/headers defensivos;
 - contrato de automatización con idempotencia explícita.
 
-## 5) Estado actual consolidado
+## 5) Onboarding y planificación inicial
+
+- PB-001 a PB-003 incorporan onboarding v2 local, versionado y reanudable, con
+siete pasos y omisión condicional del flujo profesional.
+- El wizard profesional configura el método financiero real. `hourly_workday`
+exige una tarifa positiva y persiste método y tarifa de forma atómica;
+`workedTimeUnit` permanece como contrato independiente.
+- La primera temporada admite finalización prevista, meta económica y la opción
+"No aplica = 100 %", sin cierre automático ni cambios en fórmulas financieras.
+- Dexie v31 añade planificación de temporada mediante una migración aditiva
+validada en IndexedDB real.
+- PB-004 se conserva como auditoría separada y abierta; esta entrega no remedia
+ni cierra sus nueve hallazgos.
+
+## 6) Estado actual consolidado
 
 - app productiva local-first estable;
 - automatización remota operativa con riesgos acotados y documentados;
 - AI Foundation disponible en modo controlado/no global;
 - documentación de handoff y arquitectura consolidada para certificación.
 
-## 6) Próxima ventana de evolución recomendada
+## 7) Próxima ventana de evolución recomendada
 
 1. cierre de deuda P0 en workflows y definición formal 8A;
 2. refuerzo de gates CI/CD;

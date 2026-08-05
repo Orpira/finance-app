@@ -32,6 +32,7 @@ Responsabilidad: ciclo de citas/temporizadores y contexto profesional.
 ### Configuración y seguridad local
 
 - `settingsService.ts`
+- `onboardingService.ts`
 - `pinService.ts`
 - `securityRecoveryService.ts`
 - `signedLicenseService.ts`
@@ -41,7 +42,10 @@ Responsabilidad: ciclo de citas/temporizadores y contexto profesional.
 - `deviceIdentityService.ts`
 - `playIntegrityService.ts`
 
-Responsabilidad: settings, PIN, licencias y estado de dispositivo.
+Responsabilidad: settings, onboarding reanudable, PIN, licencias y estado de
+dispositivo. `onboardingService` valida y persiste la configuración inicial sin
+red; para `hourly_workday`, método y tarifa positiva se guardan en una sola
+actualización.
 
 ### Backup y operación
 
@@ -88,6 +92,8 @@ Responsabilidad: pipeline determinista, validación de fronteras y proyección p
 ## 4) Servicios críticos para operación diaria
 
 - `settingsService`: estado transversal de modo, moneda, tema y reglas.
+- `onboardingService`: progreso versionado, configuración inicial y creación
+controlada de la primera temporada profesional.
 - `automationOutboxService`: resiliencia ante fallas de red.
 - `homeBalanceSummaryService`: integración legacy + adapter + snapshot.
 - `communicationChannelService`: UX de estado WhatsApp en cliente.

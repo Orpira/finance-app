@@ -13,7 +13,11 @@ El **Sprint A (Calidad) está en progreso, reabierto el 2026-08-04** tras habers
 ### Cliente
 
 - React + TypeScript + Vite activos.
-- Guardias de licencia, PIN y modo de uso operativos.
+- Guardias de licencia, onboarding, PIN y modo de uso operativos, en el orden
+`LicenseGuard -> OnboardingGate -> PinGate`.
+- Onboarding v2 local y reanudable con siete pasos. El modo Personal omite los
+pasos profesionales; el modo Profesional configura el método real del ingreso
+y exige una tarifa positiva al elegir `hourly_workday`.
 - Rutas principales activas para Home, Income, Expenses, Agenda, Reports, Settings e Insights.
 - `/conversation` diferencia por licencia: `trial`/`demo` reciben un sandbox local con datos ficticios; licencias completas reciben el Copiloto.
 - El nombre visible unificado es `Copiloto`; conversación real y sandbox comparten Respuesta, Explicación, Evidencias y Acción recomendada.
@@ -22,7 +26,11 @@ El **Sprint A (Calidad) está en progreso, reabierto el 2026-08-04** tras habers
 
 ### Persistencia local
 
-- Dexie en versión 30; `financialGoals` se añadió de forma aditiva y está incluido en backup/restauración.
+- Dexie en versión 31. v30 añadió `financialGoals` de forma aditiva y lo integró
+en backup/restauración; v31 añadió planificación opcional de temporada mediante
+`plannedEndDate` y `economicGoal`, sin recalcular movimientos ni balances.
+- `AppSettings.onboarding` conserva versión, paso y estado de finalización para
+reanudar la configuración inicial localmente.
 - Tablas financieras operativas estables.
 - Snapshots financieros y de conocimiento append-only.
 - Memoria conversacional local persistente por sesion con restauracion en reapertura.
@@ -99,9 +107,12 @@ El **Sprint A (Calidad) está en progreso, reabierto el 2026-08-04** tras habers
 
 ## 3) Estado de calidad
 
-- Suite de tests extensa disponible.
-- Build TypeScript/Vite operativo.
-- Persisten deudas conocidas de lint/operación n8n documentadas.
+- Última validación completa (2026-08-05): 183 archivos y 2118 pruebas
+aprobadas, con 1 `todo` preexistente.
+- ESLint y build TypeScript/Vite correctos; migración Dexie v31 aprobada en
+IndexedDB real.
+- La auditoría PB-004 de conversación permanece abierta y separada de la
+entrega PB-001 a PB-003; sus hallazgos no se consideran remediados.
 
 ## 4) Estado documental
 

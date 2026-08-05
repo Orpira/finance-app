@@ -21,6 +21,31 @@
 - Los registros pueden quedar vinculados a temporada activa.
 - Los cierres de temporada afectan mutabilidad y reportes.
 
+## Configuración inicial y planificación
+
+- El onboarding v2 es local, reanudable y consta de siete pasos: bienvenida,
+  tipo de uso, método de cálculo profesional, primera temporada, moneda, seguridad
+  y finalización. El modo Personal omite los pasos exclusivos del modo
+  Profesional.
+- Los usuarios con datos locales previos no son obligados a repetir el
+  onboarding. El progreso se conserva en `AppSettings.onboarding` con versión,
+  paso actual y estado de finalización.
+- En modo Profesional, el método de cálculo del ingreso se elige de forma
+  explícita. `workedTimeUnit` solo representa una unidad de captura y nunca
+  decide entre `service_duration` y `hourly_workday`.
+- Elegir `hourly_workday` exige un `hourlyRate` finito mayor que cero. Método y
+  tarifa se validan y persisten juntos; ante una tarifa inválida, la operación
+  se rechaza sin guardar una configuración parcial. Elegir `service_duration`
+  no sobrescribe una tarifa previamente configurada.
+- La primera temporada profesional puede incluir `plannedEndDate` y
+  `economicGoal`. La fecha prevista es informativa: alcanzarla no cierra la
+  temporada ni modifica movimientos. El cierre siempre requiere una acción
+  explícita.
+- La opción "No aplica porcentaje, usar 100 %" guarda
+  `earningPercentage = 100`; no crea un valor nulo ni un estado especial.
+- El progreso de la meta económica puede superar el 100 %, mientras que el
+  importe restante nunca se presenta como negativo.
+
 ## Ingresos
 
 - Se registran como servicios o variantes derivadas según utilidades de tipo.

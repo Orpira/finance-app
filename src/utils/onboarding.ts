@@ -3,7 +3,7 @@ import {
   LAST_ONBOARDING_STEP_INDEX,
   type OnboardingState,
 } from '../types/onboarding'
-import type { WorkedTimeUnit } from '../catalogs/incomeCalculationMethods'
+import type { IncomeCalculationMethod } from '../catalogs/incomeCalculationMethods'
 
 export const DEFAULT_LANGUAGE = 'es'
 export const DEFAULT_TIME_ZONE = 'Europe/Madrid'
@@ -26,9 +26,27 @@ export function createCompletedOnboardingState(completedAt: string): OnboardingS
   }
 }
 
-export function getOnboardingWorkModeSettings(workedTimeUnit: WorkedTimeUnit) {
+export function getOnboardingIncomeCalculationSettings(
+  incomeCalculationMethod: IncomeCalculationMethod,
+  hourlyRate?: number,
+) {
+  if (incomeCalculationMethod === 'hourly_workday') {
+    if (
+      hourlyRate === undefined ||
+      !Number.isFinite(hourlyRate) ||
+      hourlyRate <= 0
+    ) {
+      throw new Error('El valor por hora debe ser mayor a cero.')
+    }
+
+    return {
+      hourlyRate,
+      incomeCalculationMethod,
+    }
+  }
+
   return {
-    workedTimeUnit,
+    incomeCalculationMethod,
   }
 }
 

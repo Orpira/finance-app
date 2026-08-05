@@ -10,7 +10,7 @@ Se revisó cada pantalla bajo `src/pages/**` respondiendo cuatro preguntas: ¿po
 
 ### Flujo del usuario, de principio a fin
 
-1. **Apertura** → `LicenseGuard` (comprobación/activación de licencia) → `OnboardingGate` (tutorial la primera vez) → `PinGate` (bloqueo local) → `HomePage`.
+1. **Apertura** → `LicenseGuard` (comprobación/activación de licencia) → `OnboardingGate` (configuración inicial local y versionada) → `PinGate` (bloqueo local) → `HomePage`.
 2. **Inicio** → resumen del mes, ingresos sin reportar, acciones rápidas, agenda próxima, resumen inteligente (ad-hoc, ver hallazgo en ADR-030 §2), actividad reciente.
 3. **Movimientos** (o Agenda, o Copiloto, o Más) según la necesidad puntual.
 4. **Cierre**: no hay una acción explícita de "salir"; la app se bloquea sola por PIN tras inactividad.
@@ -20,7 +20,7 @@ Este flujo ya es razonablemente corto. El problema no es la profundidad de naveg
 ### Pantallas: qué aportan y qué podría simplificarse o automatizarse
 
 | Pantalla | Por qué existe | Candidata a... |
-|---|---|---|
+| --- | --- | --- |
 | `IncomeDetailPage` (`/income/:id`) | Vista de solo lectura de un ingreso | Fusionarse con `IncomePage` (modo lectura/edición del mismo componente) o resolverse como panel inline desde `MovementsPage` |
 | `IncomePendingReportPage` (`/income/pendientes`) | Ingresos sin reportar agrupados por fecha | Es un filtro de `IncomeListPage` (de hecho ya existe el alias `/incomes?reportStatus=pending`); candidata a desaparecer como ruta propia y resolverse como consulta del asistente + filtro en Movimientos |
 | `MovementsPage` + `IncomeListPage` + `ExpenseListPage` | Tres formas de ver esencialmente los mismos datos | Ya identificado en la iteración 1; consolidar de verdad en una sola vista con filtros, no en 3 pantallas que se importan entre sí |
@@ -46,7 +46,7 @@ Basado en lo anterior, los candidatos de mayor impacto para el modelo conversaci
 
 ## 2. Nuevo mapa funcional
 
-```
+```text
 Private Balance
 │
 ├── Inicio                     — panorama y punto de entrada a todo lo demás

@@ -8,7 +8,7 @@ El sistema separa estrictamente:
 - datos derivados de análisis (append-only);
 - datos remotos de licencia/dispositivo/canal para automatización.
 
-## 2) Persistencia local Dexie (v29)
+## 2) Persistencia local Dexie (v31)
 
 ### Tablas operativas
 
@@ -21,20 +21,34 @@ El sistema separa estrictamente:
 - `expenses`: egresos y ajustes.
 - `appointments`: agenda y ejecución de citas.
 - `settings`: configuración de negocio y dispositivo, incluyendo el método
-  de cálculo del ingreso por defecto, la unidad de tiempo y el valor por
-  hora (PB-IS-0007).
+  de cálculo del ingreso por defecto, la unidad de tiempo, el valor por hora
+  (PB-IS-0007) y el estado reanudable y versionado del onboarding v2.
 - `exchangeRates`: tasas históricas.
 - `cutoffReports`: cortes/reportes periódicos.
-- `earningPeriods`: temporadas/modos de operación.
+- `earningPeriods`: temporadas/modos de operación. Desde v31 admite la fecha
+  informativa de finalización prevista (`plannedEndDate`) y la meta económica
+  opcional (`economicGoal`); ninguna de las dos cierra o altera una temporada.
+- `financialGoals`: objetivos financieros persistidos, incorporados en v30 e
+  incluidos en backup/restauración.
 - `licenses`: licencia activa local.
 - `automationOutbox`: cola de eventos a gateway.
 - `communicationChannels`: cache local de estado de canal.
 - `deviceIdentity`: vínculo `userCode/deviceCode` local.
 - `incomeAdditionals` (PB-IS-0007): 0..N importes positivos ("Adicionales")
-  vinculados a un ingreso vía `incomeId`, que se suman íntegros (100%,
-  nunca sujetos al % de temporada) al `realGain` final. Se eliminan en
-  cascada cuando se borra el ingreso padre — a diferencia de los ajustes en
-  `expenses`, que bloquean ese borrado.
+  vinculados a un ingreso vía `incomeId`. `additionalsTotal` conserva su
+  snapshot informativo, pero los Adicionales no modifican `realGain` ni
+  `totalAmount`; se agregan al balance mediante `getStoredIncomeValue`. Se
+  eliminan en cascada cuando se borra el ingreso padre, a diferencia de los
+  ajustes en `expenses`, que bloquean ese borrado.
+
+### Evolución reciente del esquema
+
+- v30 añade `financialGoals` de forma aditiva y lo integra en
+  backup/restauración.
+- v31 añade el índice `plannedEndDate` a `earningPeriods`. Su migración conserva
+  movimientos y temporadas válidos y elimina únicamente valores opcionales
+  inválidos de `plannedEndDate` o `economicGoal`; no recalcula importes ni
+  modifica balances históricos.
 
 ### Tablas derivadas append-only
 

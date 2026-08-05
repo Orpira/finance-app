@@ -9,7 +9,7 @@ El proyecto usa dos capas de persistencia con responsabilidades distintas:
 
 ## Base local Dexie
 
-La base FinanceDB está definida en src/database/db.ts y llega actualmente a la versión 29.
+La base FinanceDB está definida en src/database/db.ts y llega actualmente a la versión 31.
 
 ### Tablas locales confirmadas
 
@@ -30,6 +30,7 @@ La base FinanceDB está definida en src/database/db.ts y llega actualmente a la 
 - financialSnapshots.
 - knowledgeSnapshots.
 - incomeAdditionals.
+- financialGoals.
 
 ### Finalidad de tablas clave
 
@@ -49,6 +50,7 @@ La base FinanceDB está definida en src/database/db.ts y llega actualmente a la 
 - financialSnapshots: artefactos Financial Snapshot sellados, persistidos de forma local y append-only; no forma parte del libro financiero operativo.
 - knowledgeSnapshots: artefactos Knowledge Snapshot sellados, persistidos localmente de forma transaccional, append-only e idempotente; no forma parte del libro financiero operativo.
 - incomeAdditionals: entidad "Adicional" (PB-IS-0007) — 0..N importes positivos vinculados a un ingreso vía `incomeId`, que se suman íntegros (100%, nunca sujetos al % de temporada) al `realGain` final. Se eliminan en cascada cuando se borra el ingreso padre, a diferencia de los ajustes en `expenses`, que bloquean ese borrado.
+- financialGoals: objetivos financieros locales con tipo, estado, fechas y marca de actualización.
 
 ### Financial Snapshot local (v23)
 
@@ -93,6 +95,12 @@ La migración v29 es 100% aditiva: no modifica ningún registro existente de `se
 Al eliminar un ingreso (`deleteServiceIncome`), sus `incomeAdditionals` se borran en cascada dentro de la misma transacción — a diferencia de los ajustes de `expenses`, que bloquean el borrado del ingreso padre mientras existan.
 
 Migración verificada con el harness real de IndexedDB (`test/indexeddb/browser.ts`, Chrome real vía CDP): backfill de settings sobre orígenes v25/v24/v22, tabla `incomeAdditionals` operativa, y roundtrip completo de export/import/reset.
+
+### Objetivos financieros y planificación de temporadas (v30-v31)
+
+La versión 30 añade la tabla `financialGoals` sin transformar las tablas financieras existentes. La versión 31 incorpora el índice `plannedEndDate` en `earningPeriods` y admite `economicGoal` como dato opcional de planificación.
+
+La migración v31 conserva temporadas y movimientos. Solo elimina un `economicGoal` opcional cuando no es finito o no es positivo, y un `plannedEndDate` opcional cuando no es una fecha válida o es anterior al inicio de la temporada. No cierra temporadas, no recalcula importes y no modifica balances históricos.
 
 ## Neon PostgreSQL
 

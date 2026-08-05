@@ -8,6 +8,8 @@ Este índice centraliza la documentación canónica existente y el paquete de ha
 - `docs/DECISIONS.md`: ADRs vigentes.
 - `docs/CHANGELOG.md`: historial de cambios por hitos.
 - `docs/03_DATABASE.md`: estado de persistencia Dexie + Neon.
+- `docs/product/PB_ONBOARDING_SEASON_PLANNING.md`: cierre técnico PB-001 a PB-003 y sus garantías de onboarding y temporadas.
+- `docs/product/PB_004_CONVERSATION_AUDIT.md`: auditoría PB-004 y estado abierto de sus hallazgos.
 - `docs/04_N8N_WORKFLOWS.md`: inventario de workflows y riesgos.
 - `docs/AUTOMATION_HUB.md`: contrato operativo PWA -> Vercel -> n8n.
 - `docs/09_AI_CORE_ARCHITECTURE.md`: arquitectura objetivo del AI Core (no implica implementación completa).

@@ -8,7 +8,7 @@ import {
   pickFirstAvailableTutorialTarget,
   resolveInitialScreen,
   validateOnboardingPreferences,
-  getOnboardingWorkModeSettings,
+  getOnboardingIncomeCalculationSettings,
   resolveOnboardingEarningPercentage,
 } from '../src/utils/onboarding'
 
@@ -155,13 +155,26 @@ describe('pickFirstAvailableTutorialTarget', () => {
   })
 })
 
-describe('getOnboardingWorkModeSettings', () => {
-  it.each(['minutes', 'hours'] as const)(
-    'configura la unidad %s sin cambiar el método de cálculo financiero',
-    (workedTimeUnit) => {
-      expect(getOnboardingWorkModeSettings(workedTimeUnit)).toEqual({
-        workedTimeUnit,
-      })
+describe('getOnboardingIncomeCalculationSettings', () => {
+  it('configura Servicio por tiempo sin sobrescribir el valor por hora', () => {
+    expect(getOnboardingIncomeCalculationSettings('service_duration', 35)).toEqual({
+      incomeCalculationMethod: 'service_duration',
+    })
+  })
+
+  it('configura Jornada por horas junto con una tarifa positiva', () => {
+    expect(getOnboardingIncomeCalculationSettings('hourly_workday', 35.5)).toEqual({
+      hourlyRate: 35.5,
+      incomeCalculationMethod: 'hourly_workday',
+    })
+  })
+
+  it.each([undefined, 0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rechaza Jornada por horas con una tarifa inválida: %s',
+    (hourlyRate) => {
+      expect(() =>
+        getOnboardingIncomeCalculationSettings('hourly_workday', hourlyRate),
+      ).toThrow('El valor por hora debe ser mayor a cero.')
     },
   )
 })

@@ -6,7 +6,26 @@ Finance App es una herramienta para llevar el control de tus finanzas personales
 
 ## 1. Inicio de la aplicación
 
-Al abrir la aplicación, verás la pantalla de bienvenida con las principales secciones:
+En el primer inicio, el asistente solicita el tipo de uso. En modo Profesional
+también permite elegir directamente el **Método de cálculo del ingreso**:
+`Servicio por tiempo` o `Jornada por horas`. Esta elección determina qué
+formulario se muestra al registrar nuevos ingresos; no se deduce de una unidad
+de minutos u horas. Si eliges `Jornada por horas`, el asistente solicita también
+un **Valor por hora** mayor que cero. Este importe se aplicará en la moneda
+principal seleccionada más adelante en el mismo asistente.
+
+En modo Profesional, el asistente también configura la primera temporada: nombre,
+fecha de inicio, finalización prevista, meta económica y porcentaje de ganancia.
+La finalización prevista es informativa y nunca cierra la temporada de forma
+automática. La opción **No aplica porcentaje, usar 100 %** equivale a guardar
+100 %, no a dejar el porcentaje vacío. El modo Personal omite estos pasos.
+
+Si interrumpes la configuración, la aplicación conserva localmente el paso y
+permite continuar desde allí. Los usuarios que ya tenían datos locales antes de
+esta versión no son obligados a repetir el asistente.
+
+Después de completar la configuración, verás la pantalla principal con las
+secciones:
 
 - Dashboard
 - Ingresos
@@ -30,7 +49,7 @@ La pantalla principal ofrece accesos rápidos a las funciones clave:
 
 ## 3. Registrar ingresos
 
-El formulario de `Ingresos` se adapta automáticamente según el **Método de cálculo del ingreso** que hayas elegido en `Configuración → Datos generales` (ver sección 8). Hay dos métodos disponibles:
+El formulario de `Ingresos` se adapta automáticamente según el **Método de cálculo del ingreso** elegido en el asistente inicial o actualizado después en `Configuración → Datos generales`. Hay dos métodos disponibles:
 
 ### 3.1. Servicio por tiempo (método por defecto)
 
@@ -50,7 +69,7 @@ Si en Configuración elegiste "Jornada por horas", el formulario ya no pide dura
 1. Ve a `Ingresos`.
 2. Selecciona la fecha.
 3. Ingresa el **Tiempo trabajado** (en la unidad que configuraste: horas o minutos).
-4. El **Valor por hora** aparece precargado desde Configuración; podés modificarlo, pero el cambio solo afecta a este ingreso puntual, nunca al valor configurado.
+4. El cálculo usa el **Valor por hora** indicado en el asistente inicial o actualizado después en Configuración. El formulario del ingreso no modifica ese valor; cada ingreso conserva una copia de la tarifa aplicada.
 5. El sistema calcula automáticamente el **Total calculado** (tiempo trabajado × valor por hora). No hay cronómetro ni importe manual en este método.
 6. Opcionalmente, indicá si el ingreso tiene un **Adicional** (ver 3.3).
 7. Presiona `Guardar`.

@@ -3,10 +3,10 @@ import { createEarningPeriod, getActiveEarningPeriod } from './earningPeriodServ
 import { getSettings, updateSettings } from './settingsService'
 import type { InitialSeasonDraft, OnboardingState } from '../types/onboarding'
 import type { CurrencyCode, UsageMode } from '../types/settings'
-import type { WorkedTimeUnit } from '../catalogs/incomeCalculationMethods'
+import type { IncomeCalculationMethod } from '../catalogs/incomeCalculationMethods'
 import {
   createCompletedOnboardingState,
-  getOnboardingWorkModeSettings,
+  getOnboardingIncomeCalculationSettings,
 } from '../utils/onboarding'
 
 /**
@@ -86,10 +86,12 @@ export async function configureOnboardingUsageMode(usageMode: UsageMode) {
   )
 }
 
-export function configureOnboardingWorkMode(workedTimeUnit: WorkedTimeUnit) {
+export function configureOnboardingIncomeCalculationMethod(
+  incomeCalculationMethod: IncomeCalculationMethod,
+  hourlyRate?: number,
+) {
   return updateSettings(
-    getOnboardingWorkModeSettings(workedTimeUnit),
-    { allowWorkModeChange: true },
+    getOnboardingIncomeCalculationSettings(incomeCalculationMethod, hourlyRate),
   )
 }
 

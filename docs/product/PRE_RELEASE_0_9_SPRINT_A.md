@@ -120,7 +120,7 @@ Dieciséis pantallas de producto, cada una recorrida en escritorio, tablet, móv
 13. Backup → `/settings/backup` (exportar)
 14. Restauración → `/settings/backup` (importar, mismo flujo que Backup)
 15. Pantallas de Error → licencia expirada/no verificable, ruta desconocida, validación de formularios, archivo de backup inválido
-16. Onboarding → los cuatro pasos (bienvenida, preferencias, seguridad, tutorial)
+16. Onboarding (estado histórico de esta ronda) → los cuatro pasos disponibles entonces: bienvenida, preferencias, seguridad y tutorial
 
 ## Segunda ronda - Resultados
 
@@ -134,6 +134,13 @@ Dieciséis pantallas de producto, cada una recorrida en escritorio, tablet, móv
 - Perfil de errores: ruta desconocida, licencia vencida y licencia no verificable, recorridos en la matriz completa de formatos y temas.
 
 Total: 208 combinaciones formato×tema con navegación real y comprobación automática; ninguna quedó en estado `[BLOCKER]` al cierre de la ronda.
+
+> **Nota de vigencia (2026-08-05):** las 32 combinaciones anteriores son la
+> evidencia histórica de aquella ronda y no certifican el onboarding actual.
+> PB-001 a PB-003 lo reemplazaron por onboarding v2 de siete pasos, con omisión
+> condicional de los pasos profesionales. La validación focal y global de ese
+> flujo se registra en
+> [PB_ONBOARDING_SEASON_PLANNING.md](PB_ONBOARDING_SEASON_PLANNING.md).
 
 ## Problemas corregidos (segunda ronda)
 
