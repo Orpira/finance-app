@@ -1,6 +1,7 @@
 # Private Balance — Documentation Baseline + 9A Patch
 
 Entrega:
+
 - Gobierno documental fundacional.
 - Roadmap y glosario oficiales.
 - Arquitectura y ADR de AI Interaction Platform.
@@ -9,6 +10,7 @@ Entrega:
 - 3 pruebas unitarias.
 
 Validación:
+
 - test específico: 3/3 passing.
 - build: passing.
 - lint específico 9A: passing.

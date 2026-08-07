@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD033 MD041 -->
+
 <div align="center">
 
 <picture>
@@ -21,6 +23,8 @@ Aplicación financiera privada y local-first para profesionales independientes y
 [Documentación](docs/README.md) · [Arquitectura](docs/00_SYSTEM_ARCHITECTURE_MASTER.md) · [Privacidad](docs/PRIVACY.md) · [Seguridad](SECURITY.md) · [Contribuir](CONTRIBUTING.md) · [Guía para agentes IA](AGENTS.md)
 
 </div>
+
+<!-- markdownlint-enable MD033 MD041 -->
 
 ---
 
@@ -63,7 +67,7 @@ Lo diferencia frente a una hoja de cálculo o una app financiera genérica es es
 Private Balance está en **desarrollo activo**, no en versión estable publicada. El estado por área, verificado contra el código fuente:
 
 | Área | Estado | Notas |
-|---|---|---|
+| --- | --- | --- |
 | Ingresos, gastos, ajustes, agenda | Implementado | `src/pages`, `src/services`, `src/database` |
 | Modo Básico / Profesional y temporadas | Implementado | reglas en `docs/PRIVATE_BALANCE_CONSTITUTION.md` |
 | Persistencia local (Dexie/IndexedDB) | Implementado | `src/database`, migraciones versionadas |
@@ -198,7 +202,7 @@ Detalle adicional en [docs/08_DEPLOYMENT.md](docs/08_DEPLOYMENT.md).
 ## Documentación
 
 | Documento | Contenido |
-|---|---|
+| --- | --- |
 | [docs/README.md](docs/README.md) | Índice documental completo |
 | [docs/PRIVATE_BALANCE_CONSTITUTION.md](docs/PRIVATE_BALANCE_CONSTITUTION.md) | Reglas de negocio y principios técnicos, fuente principal de verdad |
 | [docs/00_SYSTEM_ARCHITECTURE_MASTER.md](docs/00_SYSTEM_ARCHITECTURE_MASTER.md) | Mapa integral de arquitectura, estado y roadmap |
@@ -233,8 +237,10 @@ Este repositorio no incluye actualmente un archivo de licencia formal. El uso, c
 
 ## Autor
 
+<!-- markdownlint-disable-next-line MD033 -->
 <img src="docs/assets/isotype.svg" alt="" width="16" height="16" align="absmiddle"> **Orlando Pineda** — OrPiRa.
 
 ---
 
+<!-- markdownlint-disable-next-line MD033 -->
 <sub>Este README describe el estado verificado del código al momento de su redacción. Si algo aquí no coincide con el comportamiento real de la aplicación, prevalece el código y agradecemos que se abra un issue.</sub>

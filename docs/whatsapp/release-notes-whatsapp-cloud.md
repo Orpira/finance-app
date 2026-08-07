@@ -70,7 +70,7 @@ Las migraciones 006/007 son aditivas (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE 
 
 ## Commits incluidos
 
-```
+```text
 1b7edbc docs: document n8n WhatsApp Cloud staging workflows and channel persistence
 14b69ab feat: add n8n staging workflows for WhatsApp Cloud
 293b53a docs: document WhatsApp Cloud backend integration

@@ -100,7 +100,7 @@ Las reglas completas viven en [`PRIVATE_BALANCE_CONSTITUTION.md`](PRIVATE_BALANC
 Private Balance distingue siempre entre arquitectura **implementada**, **parcial**, **planificada** y **exploratoria**. Los documentos no deben presentar una capacidad objetivo como si estuviera disponible.
 
 | Capacidad | Estado | Fuente principal |
-|---|---|---|
+| --- | --- | --- |
 | Finanzas locales y UI principal | Implementada | `src/pages`, `src/services`, `src/database` |
 | Dexie/IndexedDB y migraciones | Implementada | `src/database` |
 | Android/Capacitor | Implementada | `android/` |
@@ -514,7 +514,7 @@ Ninguna sincronización debe comenzar antes de definir modelo de identidad, clav
 Leyenda: **Sí** = dependencia permitida; **Puerto** = solo mediante contrato; **No** = prohibida.
 
 | Consumidor ↓ / Proveedor → | Ledger | Persistence | Snapshot | Knowledge | Insights | AI | Automation | Communication |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | UI | Puerto | No directo | Read model | Read model | Read model | Puerto futuro | Puerto | Puerto |
 | Application Services | Sí | Puerto | Puerto | Puerto | Puerto | Puerto | Puerto | Puerto |
 | Ledger Domain | — | No | No | No | No | No | No | No |
@@ -575,7 +575,7 @@ Estos valores se reciben mediante parámetros o puertos y quedan disponibles par
 ### 11.1 Clasificación de datos
 
 | Clase | Ejemplos | Tratamiento |
-|---|---|---|
+| --- | --- | --- |
 | Financiero sensible | ingresos, egresos, balances | local por defecto; mínima exposición |
 | Identidad/Dispositivo | userCode, deviceCode | acceso restringido y trazable |
 | Credenciales | claves privadas, API keys, tokens | nunca en cliente ni repositorio |
@@ -889,7 +889,7 @@ Todo release debe verificar que no se incluyan:
 Resumen; la autoridad completa está en [`DECISIONS.md`](DECISIONS.md).
 
 | ADR | Decisión | Estado |
-|---|---|---|
+| --- | --- | --- |
 | ADR-001 | Neon como backend principal de licencias/dispositivos/canales | Accepted |
 | ADR-002 | n8n como motor de automatización | Accepted |
 | ADR-003 | Evolution API como proveedor WhatsApp encapsulado | Accepted |
@@ -916,7 +916,7 @@ Resumen; la autoridad completa está en [`DECISIONS.md`](DECISIONS.md).
 ## 20. Deuda técnica priorizada
 
 | ID | Área | Prioridad | Estado | Acción requerida |
-|---|---|---:|---|---|
+| --- | --- | ---: | --- | --- |
 | TD-001 | Lint global | P1 | Abierta | Corregir sin relajar reglas |
 | TD-002 | Secret handling | P0 | Abierta | Retirar/rotar clave privada y asegurar exclusiones |
 | TD-003 | n8n ramas sin respuesta | P0 | Abierta | Auditar workflows desplegados y corregir |
@@ -974,7 +974,7 @@ La prioridad P0 representa riesgo de seguridad o integridad que debe atenderse a
 ### Fases consolidadas
 
 | Fase | Capacidad | Estado |
-|---|---|---|
+| --- | --- | --- |
 | 1–6 | Core financiero, persistencia, UI e integraciones base | Implementado |
 | 7A–7F | Engine integration e Insight Dashboard | Implementado |
 | 8A | AI Privacy Boundary | Implementado |
@@ -986,20 +986,20 @@ La prioridad P0 representa riesgo de seguridad o integridad que debe atenderse a
 
 ### Fase 9 — Conversation Layer
 
-**9A — Conversation Domain & Session Contracts**
+#### 9A — Conversation Domain & Session Contracts
 
 - IDs, estados, mensajes, roles y visibilidad.
 - Políticas de sesión.
 - Resultados y fallos discriminados.
 - Sin UI, persistencia, prompts, red o proveedor real.
 
-**9B — Conversation Lifecycle Service**
+#### 9B — Conversation Lifecycle Service
 
 - creación, activación, suspensión, cierre y archivo;
 - reloj e IDs inyectados;
 - invariantes de transición.
 
-**9C — Turn Orchestration**
+#### 9C — Turn Orchestration
 
 - preparación de turno;
 - contexto autorizado;
@@ -1007,19 +1007,19 @@ La prioridad P0 representa riesgo de seguridad o integridad que debe atenderse a
 - normalización de respuesta;
 - cancelación y timeout como contratos.
 
-**9D — Ephemeral Conversation Runtime**
+#### 9D — Ephemeral Conversation Runtime
 
 - almacenamiento solo en memoria;
 - límites de tamaño;
 - borrado explícito;
 - sin persistencia todavía.
 
-**9E — Conversation Read Models**
+#### 9E — Conversation Read Models
 
 - vistas seguras para UI;
 - separación entre contenido visible, interno y auditoría.
 
-**9F — Conversation UI Pilot**
+#### 9F — Conversation UI Pilot
 
 - interfaz local sobre mock adapter;
 - accesibilidad;
