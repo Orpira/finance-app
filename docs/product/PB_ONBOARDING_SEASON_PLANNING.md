@@ -78,6 +78,11 @@ La planificación y el progreso de la temporada se muestran en Inicio,
 Temporadas y Reportes. La fecha prevista siempre se identifica como informativa
 y no como fecha de cierre automático.
 
+El paso de bienvenida utiliza el recurso público `Favicon_512.png` como logotipo
+de producto. El PNG tiene fondo exterior transparente y se presenta dentro de
+un área estable de 96 × 96 px sin deformar su proporción; la misma ruta pública
+funciona en web y en el paquete Android generado.
+
 La corrección posterior del wizard reemplaza la selección aislada `Por minutos`
 / `Por horas`, que solo cambiaba la presentación de la duración, por la selección
 del método financiero real. `Servicio por tiempo` mantiene el selector de

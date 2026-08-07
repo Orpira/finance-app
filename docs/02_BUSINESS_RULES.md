@@ -14,12 +14,17 @@
 
 - No usa temporadas.
 - Debe seguir funcionando sin la lógica avanzada del modo Profesional.
+- En la interfaz de Ingresos no ofrece Adicionales ni estados operativos del
+  servicio (`Pendiente`, `En ejecución`, `Finalizado`). El usuario puede crear,
+  modificar y eliminar el ingreso principal sin esos controles profesionales.
 
 ### Modo Profesional
 
 - Usa temporadas o periodos.
 - Los registros pueden quedar vinculados a temporada activa.
 - Los cierres de temporada afectan mutabilidad y reportes.
+- Conserva los Adicionales y los estados operativos de los ingresos de tipo
+  servicio, tanto en el listado como en sus flujos de alta y edición.
 
 ## Configuración inicial y planificación
 

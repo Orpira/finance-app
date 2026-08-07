@@ -31,6 +31,7 @@ Este directorio contiene la documentación oficial del proyecto. La fuente canó
 - [product/PB_ONBOARDING_SEASON_PLANNING.md](product/PB_ONBOARDING_SEASON_PLANNING.md) - Implementación PB-001 a PB-003: onboarding, método de cálculo del ingreso y planificación de temporadas.
 - [product/PB_004_CONVERSATION_AUDIT.md](product/PB_004_CONVERSATION_AUDIT.md) - Auditoría PB-004 de conversación, privacidad y robustez; sus hallazgos permanecen abiertos.
 - [product/configurable-reports.md](product/configurable-reports.md) - Flujo configurable de reportes y formatos soportados.
+- [handoff/MILESTONE_9A_MANIFEST.md](handoff/MILESTONE_9A_MANIFEST.md) y [handoff/MILESTONE_9B_MANIFEST.md](handoff/MILESTONE_9B_MANIFEST.md) - Manifiestos históricos de entrega de los hitos 9A y 9B.
 - [architecture/24_LOCAL_DIAGNOSTICS.md](architecture/24_LOCAL_DIAGNOSTICS.md) - Diagnóstico local y exportación segura para soporte.
 - [context/TECHNICAL_BACKLOG.md](context/TECHNICAL_BACKLOG.md) - Deuda técnica identificada y criterios de cierre.
 - [08_DEPLOYMENT.md](08_DEPLOYMENT.md) - Despliegue y entornos.
@@ -46,6 +47,7 @@ Este directorio contiene la documentación oficial del proyecto. La fuente canó
 
 Documentación de la migración de Evolution API a WhatsApp Cloud API de Meta (proveedor `meta-cloud`, seleccionable vía `WHATSAPP_PROVIDER`):
 
+- [whatsapp/release-notes-whatsapp-cloud.md](whatsapp/release-notes-whatsapp-cloud.md) - Notas de release consolidadas de la integración WhatsApp Cloud API.
 - [whatsapp/provider-abstraction.md](whatsapp/provider-abstraction.md) - Abstracción `WhatsAppProvider` compartida entre `evolution` y `meta-cloud`.
 - [whatsapp/provider-routing.md](whatsapp/provider-routing.md) - Selección de proveedor activo y compatibilidad hacia atrás.
 - [whatsapp/meta-cloud-environment.md](whatsapp/meta-cloud-environment.md) - Variables de entorno del backend meta-cloud.
@@ -60,6 +62,8 @@ Documentación de la migración de Evolution API a WhatsApp Cloud API de Meta (p
 - [whatsapp/evolution-current-state.md](whatsapp/evolution-current-state.md) - Estado de Evolution API previo a la migración, como referencia de compatibilidad/rollback.
 
 ## Presentación y colaboración (raíz del repositorio)
+
+La raíz se reserva para puntos de entrada reconocibles por personas y herramientas; la documentación histórica o de dominio vive dentro de `docs/`.
 
 - [../README.md](../README.md) - Presentación pública del proyecto.
 - [../AGENTS.md](../AGENTS.md) - Guía práctica para agentes de IA y nuevos colaboradores.

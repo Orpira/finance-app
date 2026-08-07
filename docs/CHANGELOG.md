@@ -250,6 +250,10 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Changed
 
+- **Identidad visual del onboarding**: `public/Favicon_512.png` deja de incluir el lienzo negro exterior y pasa a tener canal alfa con contorno suavizado. `WelcomeStep.tsx` reutiliza este recurso mediante `/Favicon_512.png` en lugar de `private-balance-logo.svg`, conservando el bloque visual de 96 × 96 px con `object-contain`. El recurso sigue siendo común a web y al build Android generado por Capacitor.
+
+- **Organización de la documentación raíz**: los manifiestos históricos `MANIFEST.md` y `MILESTONE-9B-MANIFEST.md` se trasladan a `docs/handoff/MILESTONE_9A_MANIFEST.md` y `docs/handoff/MILESTONE_9B_MANIFEST.md`; `RELEASE_NOTES_WHATSAPP_CLOUD.md` pasa a `docs/whatsapp/release-notes-whatsapp-cloud.md`, con sus enlaces relativos corregidos. La raíz queda reservada para `README.md`, `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md` y el puntero `CHANGELOG.md`.
+
 - The documentation hierarchy was normalized so [PRIVATE_BALANCE_CONSTITUTION.md](PRIVATE_BALANCE_CONSTITUTION.md) is the single canonical source.
 - [MCP_RULES.md](MCP_RULES.md) now acts as a short operational summary for agents.
 - [DECISIONS.md](DECISIONS.md) was aligned with ADR structure and references the Constitution explicitly.
@@ -268,6 +272,8 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 - The obsolete 06_MCP_RULES.md document is no longer part of the tree.
 
 ### Fixed
+
+- **Ingresos recientes en modo Personal**: se elimina el acceso residual “Añadir adicional”, que apuntaba a la misma ruta de modificación sin abrir un flujo de adicional. El listado centraliza ahora sus capacidades por modo: Personal no muestra el total de Adicionales, el botón para añadirlos ni el estado operativo (`Pendiente`/`En ejecución`/`Finalizado`); Profesional conserva exactamente esas tres presentaciones y sus flujos existentes. No se modifican cálculos, persistencia, registros históricos, formularios profesionales ni reglas de reporte. Cobertura de regresión en `test/incomeListModeFeatures.test.ts` para ambos modos. Validación: `npm run lint`, `npm run build` y suite completa con 186 archivos / 2138 pruebas aprobadas y 1 `todo` preexistente.
 
 - **Método de cálculo del ingreso configurado desde el wizard**: el paso profesional deja de interpretar `Por minutos` / `Por horas` como una preferencia de presentación y ofrece directamente los métodos canónicos `Servicio por tiempo` y `Jornada por horas`. La elección persiste `incomeCalculationMethod`, que Ingresos ya usa como fuente de verdad para mostrar el formulario correspondiente; `workedTimeUnit` deja de decidir el método. Al elegir `Jornada por horas`, el mismo paso solicita un `Valor por hora` positivo y lo persiste junto con el método; `Servicio por tiempo` no sobrescribe una tarifa existente. Esta corrección reemplaza la solución anterior que solo convertía las etiquetas de duración. Cubierto mediante TDD en `test/onboarding.test.ts` y `test/onboardingIncomeMethodStep.test.tsx`.
 

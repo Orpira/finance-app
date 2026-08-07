@@ -51,9 +51,9 @@ La integración se construyó de forma aislada del dominio financiero: ningún c
 
 ## Qué NO incluye esta release
 
-- **Validación end-to-end contra Meta en tráfico real**: la recepción de mensajes reales (no solo el botón "Test" de Meta) y el primer envío saliente real no se han confirmado completos — ver `docs/whatsapp/staging-validation-report.md`, que documenta explícitamente ~20 pasos como `NO EJECUTADO`.
+- **Validación end-to-end contra Meta en tráfico real**: la recepción de mensajes reales (no solo el botón "Test" de Meta) y el primer envío saliente real no se han confirmado completos — ver [staging-validation-report.md](staging-validation-report.md), que documenta explícitamente ~20 pasos como `NO EJECUTADO`.
 - **Activación del reenvío a n8n**: `WHATSAPP_CLOUD_FORWARD_INBOUND_TO_N8N`/`_STATUS_TO_N8N` quedan en `false`.
-- **Publicación de la app de Meta ni token de sistema permanente**: se documenta el procedimiento (`docs/whatsapp/meta-cloud-security.md`) pero no se ejecuta en esta release.
+- **Publicación de la app de Meta ni token de sistema permanente**: se documenta el procedimiento en [meta-cloud-security.md](meta-cloud-security.md), pero no se ejecuta en esta release.
 - Cambios de dominio, DNS o infraestructura de Vercel: requieren decisión y ejecución manual del propietario (ver informe de entrega de la sesión).
 
 ## Rollback
@@ -99,10 +99,10 @@ ef6f89b fix: honor WhatsApp real send environment flag strictly
 5da7e45 fix: release Meta webhook idempotency claim on partial failure
 ```
 
-Más los commits de la revisión de producción de esta sesión (limpieza de dependencias, seguridad, documentación) — ver `docs/CHANGELOG.md` y el informe de entrega para el detalle y los hashes finales.
+Más los commits de la revisión de producción de esta sesión (limpieza de dependencias, seguridad, documentación) — ver [el changelog técnico](../CHANGELOG.md) y el informe de entrega para el detalle y los hashes finales.
 
 ## Documentación relacionada
 
-- [docs/whatsapp/](docs/whatsapp/) — documentación técnica completa (configuración, seguridad, webhooks, pruebas, contratos n8n).
-- [docs/CHANGELOG.md](docs/CHANGELOG.md) — entrada detallada de esta migración.
-- [README.md](README.md) — estado del proyecto y arquitectura actualizados.
+- [Documentación técnica de WhatsApp](./) — configuración, seguridad, webhooks, pruebas y contratos n8n.
+- [Changelog técnico](../CHANGELOG.md) — entrada detallada de esta migración.
+- [README principal](../../README.md) — estado del proyecto y arquitectura actualizados.

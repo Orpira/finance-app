@@ -1,4 +1,3 @@
-import logoUrl from '../../../assets/private-balance-logo.svg'
 import { OnboardingLayout } from '../OnboardingLayout'
 
 interface WelcomeStepProps {
@@ -26,7 +25,12 @@ export function WelcomeStep({ currentStep, isBusy, onStart }: WelcomeStepProps) 
       }
       title="Private Balance"
     >
-      <img alt="" aria-hidden="true" className="mx-auto size-24" src={logoUrl} />
+      <img
+        alt=""
+        aria-hidden="true"
+        className="mx-auto size-24 object-contain"
+        src="/Favicon_512.png"
+      />
     </OnboardingLayout>
   )
 }

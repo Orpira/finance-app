@@ -47,6 +47,8 @@ Este índice centraliza la documentación canónica existente y el paquete de ha
 
 - `docs/AI_CONTEXT.md`: contexto operativo para agentes IA y handoff técnico.
 - `docs/HANDOFF.md`: resumen ejecutivo de traspaso y criterio de cierre 8A.
+- `docs/handoff/MILESTONE_9A_MANIFEST.md`: manifiesto histórico de la entrega 9A.
+- `docs/handoff/MILESTONE_9B_MANIFEST.md`: manifiesto histórico de la entrega 9B.
 
 ## 5) Orden de lectura recomendado
 

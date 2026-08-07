@@ -38,6 +38,7 @@ import {
 import { getIncomeType, getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
 import { canMarkAsReported, formatReportStatusMeta, getRecordReportBadge } from '../../utils/reportStatus'
 import { useDialog } from '../../components/dialogs/useDialog'
+import { getIncomeListModeFeatures } from './incomeListModeFeatures'
 
 const INCOMES_PER_PAGE = 10
 type ReportStatusFilter = 'ALL' | 'unreviewed' | 'pending' | 'reported'
@@ -149,6 +150,7 @@ export function IncomeListPage() {
   const [selectedIncomeIds, setSelectedIncomeIds] = useState<Set<number>>(new Set())
   const [incomeBeingReported, setIncomeBeingReported] = useState<ServiceIncome | null>(null)
   const [isBulkReportDialogOpen, setIsBulkReportDialogOpen] = useState(false)
+  const incomeListModeFeatures = getIncomeListModeFeatures(settings)
 
   function handleReportStatusFilterChange(value: ReportStatusFilter) {
     setIncomePage(1)
@@ -845,7 +847,7 @@ export function IncomeListPage() {
                               {reportBadge.label}
                             </span>
                           )}
-                          {!isBasicMode(settings ?? undefined) && isService && <span
+                          {incomeListModeFeatures.showOperationalStatus && isService && <span
                             className={[
                               'inline-flex rounded-md px-2 py-0.5 text-xs font-semibold',
                               getIncomeStatusClass(status),
@@ -859,7 +861,7 @@ export function IncomeListPage() {
                           {/* {income.percentage}% ·{' '} */}
                           {getPaymentTypeLabel(income.paymentType)}
                         </p>}
-                        {!isBasicMode(settings ?? undefined) && isService && Boolean(income.additionalsTotal) && (
+                        {incomeListModeFeatures.showAdditionals && isService && Boolean(income.additionalsTotal) && (
                           <p className="mt-1 text-sm text-emerald-700">
                             + Adicionales: <SensitiveAmount hidden={hidden} value={formatCurrency(
                               income.additionalsTotal as number,
@@ -931,7 +933,7 @@ export function IncomeListPage() {
                       >
                         <Pencil className="size-4" aria-hidden="true" />
                       </Link>
-                      {isService && (
+                      {incomeListModeFeatures.showAdditionals && isService && (
                         <Link
                           aria-label="Adicional"
                           className="inline-flex size-10 items-center justify-center rounded-md border border-emerald-200 text-emerald-700 transition hover:bg-emerald-50"

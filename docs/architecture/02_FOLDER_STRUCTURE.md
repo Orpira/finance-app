@@ -9,6 +9,9 @@
 - `test/`: pruebas unitarias/integración y validación IndexedDB en navegador.
 - `scripts/`: utilidades de build, deploy y operaciones de soporte.
 - `android/`: proyecto nativo Capacitor/Gradle.
+- Los Markdown de raíz se limitan a puntos de entrada estándar: `README.md`,
+  `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md` y `CHANGELOG.md`. Manifiestos,
+  notas de release y documentos de dominio deben ubicarse bajo `docs/`.
 
 ## 2) Estructura de `src/` por responsabilidad
 
