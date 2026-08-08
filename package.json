@@ -39,7 +39,7 @@
     "jspdf": "^4.2.1",
     "lucide-react": "^1.17.0",
     "openai": "^6.49.0",
-    "react": "^19.2.6",
+    "react": "^19.2.8",
     "react-calendar": "^6.0.1",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.17.0",
