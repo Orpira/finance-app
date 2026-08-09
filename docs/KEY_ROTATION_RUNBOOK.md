@@ -2,6 +2,19 @@
 
 Documento operativo privado. Describe cómo reconocer una posible exposición de la clave privada de firma de licencias, cómo rotarla y, si fuera necesario, cómo purgar el historial de Git. **No contiene ningún secreto.** Está pensado para el propietario del repositorio, no para publicación externa con contexto adicional que facilite un ataque.
 
+## Estado de la rotación de pago
+
+El 2026-08-09 el propietario autorizó la **Opción A — Rotación inmediata
+incompatible**. El árbol de trabajo actual contiene la nueva clave pública de
+pago en `src/services/signedLicenseService.ts` y
+`server/automationSecurity.ts`; la clave privada permanece fuera del
+repositorio y no se documenta aquí. La clave dedicada de trial no cambió.
+
+Cuando este cambio se despliegue, todas las licencias V2 de pago firmadas con
+la clave anterior dejarán de ser válidas y deberán reemitirse. El despliegue
+del cliente web, el backend y Android debe coordinarse para que todos los
+verificadores cambien en el mismo momento.
+
 ## Contexto del incidente que originó este runbook
 
 Durante una auditoría documental (2026-07-28) se detectaron dos archivos en la raíz del repositorio, rastreados por Git, con material JWK:
@@ -165,7 +178,10 @@ La nueva versión deja de aceptar licencias firmadas con la clave anterior. Más
 
 La app acepta temporalmente ambas claves públicas (anterior y nueva); las licencias **nuevas** se firman solo con la nueva clave; la clave anterior se retira del código tras un periodo de transición acordado. Requiere modificar `signedLicenseService.ts`/`automationSecurity.ts` para aceptar una lista de claves públicas confiables en lugar de una sola constante — **este es un cambio de modelo de confianza y no debe implementarse sin autorización explícita del propietario**, tal como exige esta fase.
 
-**Decisión pendiente del propietario:** elegir entre Opción A y Opción B, y confirmar si la clave expuesta llegó a firmar alguna licencia real entregada.
+**Decisión del propietario (2026-08-09):** Opción A. La nueva clave pública de
+pago quedó aplicada en el árbol de trabajo. Sigue pendiente confirmar si la
+clave expuesta llegó a firmar alguna licencia real entregada y completar el
+despliegue coordinado.
 
 ## Plan de purga del historial
 

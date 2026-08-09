@@ -24,8 +24,8 @@ const publicLicenseKeyJwk: JsonWebKey = {
   key_ops: ['verify'],
   ext: true,
   kty: 'EC',
-  x: 'DYNiVDNSdO_PV1g6QE4n2xtPkZXdlxuY2T0FV2md7fs',
-  y: 'LLO8InWuxK-EZDBqDegKqK8WQlvnnnzFSLqxynmqlzU',
+  x: 'grrdjKkITnHi_lCj83UP4hUq1dLHayceJI5SlViVIdg',
+  y: 'LWVQaG7bCaUyL8IPovhE_kHlnLkVNNMPzIJEIVMN2KU',
   crv: 'P-256',
 }
 

@@ -25,6 +25,7 @@ license-private-key.pem
 # acepta rutas de salida arbitrarias; estos patrones cubren salidas accidentales
 # en la raíz que no coinciden con los nombres por defecto de arriba.
 /PB-????-????-????
+/PB-DEVICE-*
 /lifetime
 
 # Editor directories and files

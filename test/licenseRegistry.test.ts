@@ -149,7 +149,7 @@ describe('License registry - authorization flow', () => {
 
   it('Caso 5: Licencia single - Segundo dispositivo debe responder "Esta licencia pertenece a otro dispositivo." via verifySignedLicenseForDevice', async () => {
     const server = await import('../server/automationSecurity')
-    const singleDeviceLicense = 'PB-LIC-V2.eyJhcHAiOiJwcml2YXRlLWJhbGFuY2UiLCJ2ZXJzaW9uIjoyLCJkZXZpY2VDb2RlIjoiUEItREVWSUNFLUFBQUFBQUFBLUFBQUEtNEFBQS04QUFBLUFBQUFBQUFBQUFBQSIsImxpY2Vuc2VUeXBlIjoibGlmZXRpbWUiLCJpc3N1ZWRBdCI6IjIwMjYtMDctMDJUMjE6Mzg6NDUuNDkyWiIsImV4cGlyZXNBdCI6bnVsbCwiZmVhdHVyZXMiOlsiY29yZSIsImJhY2t1cCIsInJlcG9ydHMiXSwiZGV2aWNlUG9saWN5Ijoic2luZ2xlIn0.d6l8VX9RD_VvnUosJ597H0KQzpRg6Xye-klIIPPPwII2Ceio_Ag5H9eYxsms7VvBqfbttVHGQvDQUooc3BpzKA'
+    const singleDeviceLicense = 'PB-LIC-V2.eyJhcHAiOiJwcml2YXRlLWJhbGFuY2UiLCJ2ZXJzaW9uIjoyLCJkZXZpY2VDb2RlIjoiUEItREVWSUNFLUFBQUFBQUFBLUFBQUEtNEFBQS04QUFBLUFBQUFBQUFBQUFBQSIsImxpY2Vuc2VUeXBlIjoibGlmZXRpbWUiLCJpc3N1ZWRBdCI6IjIwMjYtMDgtMDlUMTI6NTA6NTUuMzEzWiIsImV4cGlyZXNBdCI6bnVsbCwiZmVhdHVyZXMiOlsiY29yZSIsImJhY2t1cCIsInJlcG9ydHMiXSwiZGV2aWNlUG9saWN5Ijoic2luZ2xlIn0.rIGCNYwZF1ZDnuJcaj5pOoMrODXRjCeoyCB2w8dD0gJ7IXDLimBBIdHevLoci6QwDgrnalMjPzLnOAjk_5vaNQ'
 
     expect(() => server.verifySignedLicenseForDevice(
       singleDeviceLicense,
