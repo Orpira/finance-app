@@ -8,9 +8,11 @@ import {
   Upload,
 } from 'lucide-react'
 import { type ChangeEvent, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import {
+  type BackupImportSummary,
   exportBackup,
   exportEncryptedBackup,
   importBackup,
@@ -26,6 +28,7 @@ import {
 import { getSettings, updateSettings } from '../../services/settingsService'
 import type { AppSettings } from '../../types/settings'
 import { useDialog } from '../../components/dialogs/useDialog'
+import { getBackupImportFeedback } from './backupImportFeedback'
 
 type BackupStatus = 'idle' | 'running' | 'success' | 'error'
 
@@ -37,6 +40,8 @@ export function SettingsBackupPage() {
   const { confirm } = useDialog()
   const [backupStatus, setBackupStatus] = useState<BackupStatus>('idle')
   const [backupMessage, setBackupMessage] = useState('')
+  const [importSummary, setImportSummary] =
+    useState<BackupImportSummary | null>(null)
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const encryptedFileInputRef = useRef<HTMLInputElement | null>(null)
@@ -212,13 +217,21 @@ export function SettingsBackupPage() {
 
     setBackupStatus('running')
     setBackupMessage('')
+    setImportSummary(null)
 
     try {
-      await importBackup(file)
-      window.location.reload()
-    } catch {
+      const summary = await importBackup(file)
+      const feedback = getBackupImportFeedback(summary)
+
+      setSettings(await getSettings())
+      setImportSummary(summary)
+      setBackupStatus('success')
+      setBackupMessage(feedback.message)
+    } catch (error) {
       setBackupStatus('error')
-      setBackupMessage('No se pudo importar el backup.')
+      setBackupMessage(
+        getErrorMessage(error, 'No se pudo importar el backup.'),
+      )
     } finally {
       event.target.value = ''
     }
@@ -357,13 +370,13 @@ export function SettingsBackupPage() {
             <p className="mt-3 font-medium text-slate-700">
               Último backup realizado
             </p>
-            <p className="mt-1 break-words text-slate-500">
+            <p className="mt-1 wrap-break-word text-slate-500">
               {settings?.googleDriveLastBackupAt ?? 'Sin ejecutar'}
             </p>
             <p className="mt-3 font-medium text-slate-700">
               Último estado del backup
             </p>
-            <p className="mt-1 break-words text-slate-500">
+            <p className="mt-1 wrap-break-word text-slate-500">
               {settings?.googleDriveLastBackupStatus ??
                 'Sin estado registrado'}
             </p>
@@ -471,7 +484,7 @@ export function SettingsBackupPage() {
             Importar backup JSON
           </button>
           <input
-            accept="application/json,.json"
+            accept=".json,application/json,text/json,text/plain,application/octet-stream"
             className="hidden"
             onChange={handleImportBackup}
             ref={fileInputRef}
@@ -480,14 +493,29 @@ export function SettingsBackupPage() {
         </div>
 
         {backupMessage ? (
-          <p
-            className={[
-              'mt-3 text-sm font-medium',
-              backupStatus === 'error' ? 'text-rose-600' : 'text-emerald-700',
-            ].join(' ')}
-          >
-            {backupMessage}
-          </p>
+          <div className="mt-3">
+            <p
+              className={[
+                'text-sm font-medium',
+                backupStatus === 'error' ? 'text-rose-600' : 'text-emerald-700',
+              ].join(' ')}
+            >
+              {backupMessage}
+            </p>
+            {importSummary ? (
+              <div className="mt-3 flex flex-col items-start gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-sm text-emerald-900">
+                  {getBackupImportFeedback(importSummary).detail}
+                </p>
+                <Link
+                  className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
+                  to={getBackupImportFeedback(importSummary).actionTo}
+                >
+                  {getBackupImportFeedback(importSummary).actionLabel}
+                </Link>
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </section>
 

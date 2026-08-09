@@ -277,6 +277,26 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Fixed
 
+- **Restauración compatible y fail-closed**: `importBackup()` distingue el
+  `DatabaseSnapshot` vigente del envelope histórico `BackupData`, normaliza
+  colecciones opcionales ausentes y rechaza JSON ajenos o malformados antes de
+  abrir la transacción que reemplaza Dexie. El selector Android admite además
+  `.json`, `application/json`, `text/json`, `text/plain` y
+  `application/octet-stream`, resolviendo proveedores de documentos que no
+  conservan el MIME original. Tras importar, la pantalla confirma los recuentos
+  persistidos y dirige a Ingresos o al historial de Temporadas según exista una
+  temporada activa. Se añadieron regresiones para formato histórico, rechazo
+  previo y feedback contextual.
+- **Distribución Android trazable**: se incrementa la aplicación a
+  `versionName 1.0.1` / `versionCode 2`; `scripts/build-apk.sh` autodetecta JDK
+  21 y Android SDK API 36, construye desde cero, lee `output-metadata.json`,
+  copia un APK con nombre versionado y publica su SHA-256. El diagnóstico local
+  obtiene en Android la versión y el build del paquete instalado. Capacitor
+  `core`, Android, iOS y CLI quedan alineados en 8.5.0. Validación: ESLint, build
+  e IndexedDB real en Chrome 151 en verde, 187 archivos / 2143 pruebas aprobadas
+  (1 `todo`), APK `1.0.1 (2)` con assets actuales y firma v2 válida; queda
+  pendiente la prueba en dispositivo físico.
+
 - **Ingresos recientes en modo Personal**: se elimina el acceso residual “Añadir adicional”, que apuntaba a la misma ruta de modificación sin abrir un flujo de adicional. El listado centraliza ahora sus capacidades por modo: Personal no muestra el total de Adicionales, el botón para añadirlos ni el estado operativo (`Pendiente`/`En ejecución`/`Finalizado`); Profesional conserva exactamente esas tres presentaciones y sus flujos existentes. No se modifican cálculos, persistencia, registros históricos, formularios profesionales ni reglas de reporte. Cobertura de regresión en `test/incomeListModeFeatures.test.ts` para ambos modos. Validación: `npm run lint`, `npm run build` y suite completa con 186 archivos / 2138 pruebas aprobadas y 1 `todo` preexistente.
 
 - **Método de cálculo del ingreso configurado desde el wizard**: el paso profesional deja de interpretar `Por minutos` / `Por horas` como una preferencia de presentación y ofrece directamente los métodos canónicos `Servicio por tiempo` y `Jornada por horas`. La elección persiste `incomeCalculationMethod`, que Ingresos ya usa como fuente de verdad para mostrar el formulario correspondiente; `workedTimeUnit` deja de decidir el método. Al elegir `Jornada por horas`, el mismo paso solicita un `Valor por hora` positivo y lo persiste junto con el método; `Servicio por tiempo` no sobrescribe una tarifa existente. Esta corrección reemplaza la solución anterior que solo convertía las etiquetas de duración. Cubierto mediante TDD en `test/onboarding.test.ts` y `test/onboardingIncomeMethodStep.test.tsx`.

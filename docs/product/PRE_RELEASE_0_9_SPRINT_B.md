@@ -1,12 +1,19 @@
 # Fase Pre-Release 0.9 - Sprint B: Validación Android en hardware físico
 
-**Estado:** No iniciado — documento operativo preparado, bloqueado por requisito de entrada incumplido.
+**Estado:** Listo para ejecutar — requisito de entrada cumplido y APK técnico
+designado; pendiente de acceso a hardware físico.
 
 **Fecha de preparación de este documento:** 2026-08-04
 
+**Última actualización:** 2026-08-09
+
 **Alcance funcional:** Congelado
 
-**Requisito de entrada:** Sprint A (Calidad) COMPLETADO. **No se cumple actualmente** — Sprint A se reabrió el 2026-08-04 (mismo día de su cierre) por un documento de ampliación pendiente (SA-008–SA-012); SA-008 ya está corregido, pero SA-009–SA-012 siguen abiertos. Ver [Sprint A: Calidad](./PRE_RELEASE_0_9_SPRINT_A.md) para el estado vigente. Este documento no habilita el inicio de Sprint B por sí mismo; solo queda listo para ejecutarse en cuanto Sprint A vuelva a cerrarse.
+**Requisito de entrada:** Sprint A (Calidad) COMPLETADO. El requisito quedó
+cumplido definitivamente el 2026-08-05 con SA-008–SA-013 documentados y
+certificados. Ver [Sprint A: Calidad](./PRE_RELEASE_0_9_SPRINT_A.md). La
+ejecución de Sprint B puede comenzar cuando estén disponibles los cuatro tipos
+de dispositivo físico exigidos por la matriz.
 
 ## Objetivo
 
@@ -18,21 +25,30 @@ Sprint A pudo ejecutarse íntegramente porque cada verificación corría contra 
 
 ## Build a validar
 
-- **APK:** `dist/apk/finance-app-debug.apk`
-- **SHA-256:** `71b85925983932bf794a548f9ffb086d15bc0f26afa7d87c578e421c7f1bc530`
-- **versionName / versionCode:** `1.0` / `1`
+- **APK:** `dist/apk/private-balance-1.0.1-2-debug.apk`
+- **SHA-256:** `8ba20250787bb35dc48d2f9e24ff7a46539bfefd3f2937956cfb37c0166c7d63`
+- **versionName / versionCode:** `1.0.1` / `2`
 - **minSdkVersion / targetSdkVersion / compileSdkVersion:** `24` / `36` / `36`
-- **Commit de origen:** `4144a1c` (cierre de Sprint A en `main`)
-- **Regenerar antes de instalar si el commit anterior no es el HEAD actual de `main`:** `bash scripts/build-apk.sh`
+- **applicationId:** `com.financeapp.app`
+- **Toolchain:** JDK 21, Android SDK API 36 y Capacitor 8.5.0 alineado.
+- **Commit de origen:** `HEAD` de `main` que incorpora esta actualización de
+  restauración y empaquetado Android.
+- **Regenerar antes de instalar si el checkout no coincide con `origin/main`:**
+  `npm run android:apk`.
+
+El comando debe imprimir ruta, versión y SHA-256. Antes de distribuir, confirmar
+que la copia versionada coincide byte a byte con
+`android/app/build/outputs/apk/debug/app-debug.apk` y que `apksigner verify`
+acepta su firma v2.
 
 ## Matriz mínima de dispositivos
 
-| Marca | Modelo | Versión de Android | Resultado | Defectos |
-|---|---|---|---|---|
-| Samsung | _(por completar)_ | _(por completar)_ | _(por completar)_ | _(por completar)_ |
-| Xiaomi | _(por completar)_ | _(por completar)_ | _(por completar)_ | _(por completar)_ |
-| Google Pixel | _(por completar)_ | _(por completar)_ | _(por completar)_ | _(por completar)_ |
-| Motorola | _(por completar)_ | _(por completar)_ | _(por completar)_ | _(por completar)_ |
+| Marca        | Modelo            | Versión de Android | Resultado         | Defectos          |
+| ------------ | ----------------- | ------------------ | ----------------- | ----------------- |
+| Samsung      | _(por completar)_ | _(por completar)_  | _(por completar)_ | _(por completar)_ |
+| Xiaomi       | _(por completar)_ | _(por completar)_  | _(por completar)_ | _(por completar)_ |
+| Google Pixel | _(por completar)_ | _(por completar)_  | _(por completar)_ | _(por completar)_ |
+| Motorola     | _(por completar)_ | _(por completar)_  | _(por completar)_ | _(por completar)_ |
 
 Cada fila debe completarse con marca, modelo exacto, versión de Android instalada, resultado (`OK` / `MINOR` / `MAJOR` / `BLOCKER`) y los identificadores `SB-00N` de los defectos encontrados en ese dispositivo, si los hay.
 
@@ -41,20 +57,28 @@ Cada fila debe completarse con marca, modelo exacto, versión de Android instala
 Por cada dispositivo de la matriz, ejecutar y registrar evidencia (captura o video) de:
 
 1. **Instalación** del APK desde cero (dispositivo sin versión previa).
-2. **Actualización** del APK sobre una instalación previa, confirmando que los datos locales (IndexedDB/Dexie) sobreviven intactos.
+2. **Actualización** del APK sobre una instalación previa, sin desinstalar y
+   confirmando que los datos locales (IndexedDB/Dexie) sobreviven intactos. Si
+   Android rechaza la firma, detener la prueba antes de borrar la aplicación.
 3. **Arranque** en frío y en caliente.
 4. **Rotación** de pantalla en las rutas principales (Inicio, Movimientos, Copiloto, Reportes).
 5. **Modo oscuro** del sistema operativo, con la app en `system` y en `dark` explícito.
 6. **Notificaciones** locales (recordatorios de citas, temporizador de servicio) — confirmar que se disparan y son accionables.
 7. **Teclado** nativo del dispositivo en formularios (Nuevo ingreso, Nuevo gasto, Nueva cita) — confirmar que no tapa el campo activo ni el botón de guardar.
 8. **Safe areas** (recorte de cámara, barra de gestos, notch) en las pantallas con navegación inferior fija.
-9. **Flujos críticos:** registrar un ingreso, registrar un gasto, generar un reporte, activar una licencia, ejecutar un backup local.
+9. **Versión instalada:** abrir `Configuración → Diagnóstico local` y comprobar
+   que muestra `1.0.1 (2)`.
+10. **Flujos críticos:** registrar un ingreso, registrar un gasto, generar un
+    reporte y activar una licencia.
+11. **Backup/restauración:** exportar un backup local, importar el mismo archivo
+    y confirmar recuentos y navegación posterior. Repetir con un JSON inválido
+    y comprobar que los datos existentes permanecen intactos.
 
 ## Registro de hallazgos
 
 Cada defecto encontrado se documenta con el siguiente identificador y formato, continuando la numeración donde la dejó Sprint A (que cerró sin necesidad de abrir `SA-008`):
 
-```
+```text
 ### SB-00N - <título breve>
 
 **Dispositivo:** <marca, modelo, versión de Android>

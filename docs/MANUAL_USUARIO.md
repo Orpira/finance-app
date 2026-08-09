@@ -147,6 +147,9 @@ En `Configuración` puedes ajustar:
 - tema visual (`Sistema`, `Claro`, `Oscuro`)
 - activar, cambiar o desactivar el PIN de acceso
 - consultar y actualizar la licencia del dispositivo
+- exportar, importar y cifrar respaldos en `Configuración → Respaldo`
+- consultar la versión instalada y el estado local en
+  `Configuración → Diagnóstico local`
 
 ### 8.1. Gestión de PIN
 
@@ -170,11 +173,33 @@ El código firmado distingue mayúsculas y minúsculas y debe comenzar por
 
 ### 9.1. Exportar respaldo
 
-Ve a `Reportes` y selecciona `Exportar backup` para descargar un archivo `backup.json` con todos los datos.
+Ve a `Configuración → Respaldo`. Desde esta pantalla puedes:
+
+- exportar `backup.json` como snapshot local sin cifrar;
+- configurar una clave y exportar un backup cifrado `.json.enc`;
+- conectar Google Drive App Folder y subir un backup cifrado manualmente o de
+  forma automática.
+
+El JSON sin cifrar contiene datos financieros y debe guardarse en un lugar
+seguro. La clave del backup cifrado no se incluye en el archivo; sin esa clave
+no es posible restaurarlo.
 
 ### 9.2. Importar respaldo
 
-En la misma sección puedes cargar un archivo `backup.json` para restaurar el estado completo de la aplicación.
+En `Configuración → Respaldo` puedes importar un `backup.json`, un backup
+cifrado con su clave o el último backup disponible en Google Drive App Folder.
+La restauración reemplaza los datos locales actuales, por lo que conviene
+exportar primero un respaldo nuevo.
+
+La importación JSON acepta snapshots actuales y backups históricos de Private
+Balance. Antes de reemplazar IndexedDB, la aplicación comprueba que el archivo
+sea JSON válido, que corresponda a un formato reconocido y que sus relaciones
+financieras sean consistentes. Si la validación falla, los datos locales
+existentes permanecen intactos.
+
+Al finalizar una importación sin cifrar se muestran los recuentos restaurados.
+Si el backup solo contiene temporadas cerradas, la acción posterior abre el
+historial de temporadas; si contiene una temporada activa, abre Ingresos.
 
 ## 10. Consejos prácticos
 
@@ -188,8 +213,16 @@ En la misma sección puedes cargar un archivo `backup.json` para restaurar el es
 - Si la aplicación no carga datos, recarga la página y verifica que el navegador permita `IndexedDB`.
 - Si el PIN no funciona, revisa que estés usando el código correcto y que el modo correcto esté activo en `Configuración`.
 - Si la exportación de reportes falla, intenta usar un navegador diferente o reiniciar la app.
+- Si Android no muestra un archivo JSON en el selector, confirma que el nombre
+  termine en `.json`; la app también acepta proveedores que lo identifican
+  como texto u octet-stream.
+- Si después de instalar un APK no aparecen los cambios esperados, abre
+  `Configuración → Diagnóstico local` y comprueba la versión y el código de
+  compilación instalados.
 
 ## 12. Soporte básico
 
-- Para respaldo seguro de datos, guarda el archivo `backup.json` en un lugar confiable.
-- Si necesitas reinstalar, importa tu respaldo desde `Reportes`.
+- Para respaldo seguro de datos, guarda el archivo y, si está cifrado, su clave
+  en ubicaciones separadas y confiables.
+- Si necesitas reinstalar, importa el respaldo desde
+  `Configuración → Respaldo`.

@@ -69,6 +69,20 @@ Reglas:
 - migraciones son aditivas y preservan historial.
 - importación valida consistencia antes de limpiar datos existentes.
 
+### Compatibilidad de backup
+
+La importación JSON reconoce dos envelopes propios de Private Balance:
+
+- `DatabaseSnapshot`, con `exportedAt` y `settings` como array;
+- `BackupData` histórico, con `appName`, `version`, `generatedAt` y `settings`
+  como objeto.
+
+Ambos se normalizan al snapshot vigente antes de abrir la transacción Dexie.
+Las colecciones opcionales ausentes se sustituyen por arrays vacíos, pero las
+colecciones financieras base y las relaciones entre ajustes, Adicionales e
+ingresos deben ser válidas. Ante cualquier inconsistencia se rechaza toda la
+restauración y se conserva la base local existente.
+
 ## 4) Persistencia remota Neon
 
 ### Tablas principales

@@ -10,6 +10,14 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 - Reestructuración de la presentación y documentación pública del repositorio: README principal, `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md` (raíz), `docs/PRIVACY.md`, plantillas de GitHub y guía de recursos visuales. No introduce cambios funcionales en la aplicación.
 
+### Fixed
+
+- La restauración JSON reconoce backups actuales e históricos, valida antes de
+  reemplazar IndexedDB y ofrece feedback contextual tras importar.
+- El pipeline Android genera APK identificable por versión/código, imprime su
+  SHA-256, detecta el SDK local y muestra `versionName (versionCode)` en el
+  diagnóstico. Línea base actual: `1.0.1 (2)` con Capacitor 8.5.0 alineado.
+
 ### Changed
 
 - El favicon principal usa fondo transparente y se reutiliza como logotipo del paso de bienvenida del onboarding.

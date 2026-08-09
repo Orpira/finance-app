@@ -19,14 +19,14 @@ Todo lo anterior se guarda localmente en IndexedDB mediante Dexie (`src/database
 
 ## Qué datos pueden salir del dispositivo
 
-| Integración | Cuándo se activa | Qué sale | Hacia dónde |
-|---|---|---|---|
-| Conversión de moneda (Frankfurter) | Siempre que se registra un ingreso en moneda distinta a la base | Códigos de moneda y fecha, sin datos financieros del usuario | `api.frankfurter.dev` (API pública) |
-| Asistente conversacional con IA (proveedor OpenAI real) | Solo si el usuario tiene el proveedor configurado (`VITE_AI_PROVIDER=OPENAI`) y licencia activa | El mensaje del usuario y el contexto financiero estructurado necesario para responder | Proxy propio (`api/ai-provider-openai.ts`) → OpenAI |
-| Automatización (n8n) | Solo si `N8N_AUTOMATION_WEBHOOK_URL` está configurada en el servidor; si no lo está, el evento se marca como entregado localmente y no se reintenta (ver [ADR-029](adr/ADR-029-Private-Balance-Core-Redesign.md)) | Eventos `income.created`, `expense.created`, `calendar.created` (outbox local) | Proxy propio en Vercel → n8n → Neon PostgreSQL |
-| Canal WhatsApp (Evolution API) | Solo si el usuario conecta un canal de comunicación | Mensajes y estado del canal, resueltos por dispositivo/usuario | n8n → Evolution API |
-| Backup en Google Drive | Solo si el usuario conecta Google Drive y activa el backup | Backup cifrado (AES-GCM) de las tablas financieras | `appDataFolder` de Google Drive del propio usuario |
-| Activación de licencia | Al activar o renovar una licencia | Código de licencia firmado y código de dispositivo | Backend de licencias (`api/license-activate.ts`, Neon) |
+| Integración                                             | Cuándo se activa                                                                                                                                                                                                  | Qué sale                                                                              | Hacia dónde                                            |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Conversión de moneda (Frankfurter)                      | Siempre que se registra un ingreso en moneda distinta a la base                                                                                                                                                   | Códigos de moneda y fecha, sin datos financieros del usuario                          | `api.frankfurter.dev` (API pública)                    |
+| Asistente conversacional con IA (proveedor OpenAI real) | Solo si el usuario tiene el proveedor configurado (`VITE_AI_PROVIDER=OPENAI`) y licencia activa                                                                                                                   | El mensaje del usuario y el contexto financiero estructurado necesario para responder | Proxy propio (`api/ai-provider-openai.ts`) → OpenAI    |
+| Automatización (n8n)                                    | Solo si `N8N_AUTOMATION_WEBHOOK_URL` está configurada en el servidor; si no lo está, el evento se marca como entregado localmente y no se reintenta (ver [ADR-029](adr/ADR-029-Private-Balance-Core-Redesign.md)) | Eventos `income.created`, `expense.created`, `calendar.created` (outbox local)        | Proxy propio en Vercel → n8n → Neon PostgreSQL         |
+| Canal WhatsApp (Evolution API)                          | Solo si el usuario conecta un canal de comunicación                                                                                                                                                               | Mensajes y estado del canal, resueltos por dispositivo/usuario                        | n8n → Evolution API                                    |
+| Backup en Google Drive                                  | Solo si el usuario conecta Google Drive y activa el backup                                                                                                                                                        | Backup cifrado (AES-GCM) de las tablas financieras                                    | `appDataFolder` de Google Drive del propio usuario     |
+| Activación de licencia                                  | Al activar o renovar una licencia                                                                                                                                                                                 | Código de licencia firmado y código de dispositivo                                    | Backend de licencias (`api/license-activate.ts`, Neon) |
 
 Sin activar ninguna de estas integraciones, la app no envía datos financieros a ningún servicio externo.
 
@@ -42,6 +42,9 @@ Las exportaciones de reportes (PDF, CSV, XLS) se generan y descargan localmente;
 
 - **Backup local cifrado**: exportación/importación cifrada con una clave definida por el usuario; no sale del dispositivo salvo que el usuario lo comparta manualmente.
 - **Backup a Google Drive**: usa exclusivamente el scope `drive.appdata` (carpeta privada de la aplicación, no accesible desde el Drive general del usuario ni desde otras apps) y cifra los datos con AES-GCM antes de subirlos. El JSON plano nunca sale sin cifrar por esta vía.
+- **Restauración local**: el JSON se analiza, normaliza y valida íntegramente en
+  el dispositivo antes de reemplazar IndexedDB. Un archivo inválido no provoca
+  una subida externa ni borra los datos locales existentes.
 
 ## Eliminación de información
 

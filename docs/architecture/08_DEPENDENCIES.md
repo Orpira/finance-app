@@ -16,13 +16,14 @@
 
 ### Capacitor / móvil
 
-- `@capacitor/core`, `@capacitor/android`, `@capacitor/app`, `@capacitor/device`
+- `@capacitor/core`, `@capacitor/android`, `@capacitor/ios` y
+  `@capacitor/cli` están fijados y alineados en `8.5.0`.
+- `@capacitor/app`, `@capacitor/device`
 - plugins: filesystem, notifications, preferences, share
 
 ### Exportación y utilidades
 
-- `jspdf`, `jspdf-autotable`
-- `date-fns`
+- `jspdf`
 
 ### Backend remoto
 
@@ -57,13 +58,18 @@ Estas dependencias no están en `package.json` como librerías runtime del front
 - cambios de API en Evolution/n8n impactan workflows críticos;
 - cambios en @neondatabase/serverless impactan tipado y ejecución SQL;
 - debt de lint/test puede bloquear upgrades de toolchain.
+- mezclar versiones menores distintas de `@capacitor/core`, Android, iOS y CLI
+  produce advertencias en `cap sync` y deja el empaquetado sin una línea base
+  reproducible.
 
 ## 6) Política recomendada de upgrades
 
 1. actualizar en ramas controladas por lote temático;
-2. correr `npm test`, `npm run build` y `npm run test:indexeddb`;
-3. validar contratos API/gateway y workflows n8n;
-4. documentar impacto en changelog técnico.
+2. mantener alineados los paquetes base de Capacitor;
+3. correr `npm test`, `npm run build` y `npm run test:indexeddb` cuando el
+   cambio afecte persistencia;
+4. validar contratos API/gateway y workflows n8n;
+5. documentar impacto en changelog técnico.
 
 ## 7) Dependencias prohibidas implícitas
 

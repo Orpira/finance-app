@@ -50,6 +50,15 @@ export interface EncryptedBackupFile {
   generatedAt: string
 }
 
+export interface BackupImportSummary {
+  appointments: number
+  closedEarningPeriods: number
+  earningPeriods: number
+  expenses: number
+  hasActiveEarningPeriod: boolean
+  services: number
+}
+
 interface EncryptedBackupDocument {
   filename?: string
   generatedAt: string
@@ -113,6 +122,47 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Error desconocido.'
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function hasCoreBackupCollections(value: Record<string, unknown>) {
+  return (
+    Array.isArray(value.services) &&
+    Array.isArray(value.expenses) &&
+    Array.isArray(value.appointments)
+  )
+}
+
+function parseBackupSnapshot(content: string): DatabaseSnapshot {
+  let document: unknown
+
+  try {
+    document = JSON.parse(content)
+  } catch {
+    throw new Error('El archivo no contiene un JSON válido.')
+  }
+
+  if (!isRecord(document) || !hasCoreBackupCollections(document)) {
+    throw new Error('El archivo no contiene un backup válido de Private Balance.')
+  }
+
+  if (
+    document.appName === 'Private Balance' &&
+    typeof document.version === 'string' &&
+    typeof document.generatedAt === 'string' &&
+    isRecord(document.settings)
+  ) {
+    return backupDataToSnapshot(document as unknown as BackupData)
+  }
+
+  if (typeof document.exportedAt === 'string' && Array.isArray(document.settings)) {
+    return document as unknown as DatabaseSnapshot
+  }
+
+  throw new Error('El archivo no contiene un backup válido de Private Balance.')
+}
+
 export async function exportBackup() {
   const snapshot = await exportDatabaseSnapshot()
   const content = JSON.stringify(snapshot, null, 2)
@@ -122,10 +172,30 @@ export async function exportBackup() {
 
 export async function importBackup(file: File) {
   const content = await file.text()
-  const snapshot = JSON.parse(content) as DatabaseSnapshot
+  const snapshot = parseBackupSnapshot(content)
 
   await importDatabaseSnapshot(snapshot)
   await migrateLegacyRecordsToSeasons()
+
+  const [services, expenses, appointments, earningPeriods] = await Promise.all([
+    db.services.count(),
+    db.expenses.count(),
+    db.appointments.count(),
+    db.earningPeriods.toArray(),
+  ])
+
+  return {
+    appointments,
+    closedEarningPeriods: earningPeriods.filter(
+      (period) => period.status === 'closed',
+    ).length,
+    earningPeriods: earningPeriods.length,
+    expenses,
+    hasActiveEarningPeriod: earningPeriods.some(
+      (period) => period.status === 'active',
+    ),
+    services,
+  } satisfies BackupImportSummary
 }
 
 export function backupDataToSnapshot(backupData: BackupData): DatabaseSnapshot {

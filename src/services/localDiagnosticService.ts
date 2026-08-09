@@ -1,3 +1,6 @@
+import { App } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
+
 import { db } from '../database/db'
 
 const ACTIVITY_STORAGE_KEY = 'private-balance:diagnostic-activity:v1'
@@ -105,11 +108,28 @@ function detectPlatform(): string {
   return /android/i.test(navigator.userAgent) ? 'android' : 'web'
 }
 
+async function resolveAppVersion(): Promise<string> {
+  const fallbackVersion = import.meta.env.VITE_APP_VERSION || 'development'
+
+  if (!Capacitor.isNativePlatform()) return fallbackVersion
+
+  try {
+    const info = await App.getInfo()
+    const version = info.version.trim()
+    const build = info.build.trim()
+
+    if (!version) return fallbackVersion
+    return build ? `${version} (${build})` : version
+  } catch {
+    return fallbackVersion
+  }
+}
+
 export async function getLocalDiagnosticReport(): Promise<LocalDiagnosticReport> {
   await db.open()
   return collectLocalDiagnostics({
     now: () => new Date().toISOString(),
-    appVersion: import.meta.env.VITE_APP_VERSION || 'development',
+    appVersion: await resolveAppVersion(),
     platform: detectPlatform(),
     schemaVersion: db.verno,
     estimateStorage: async () => (

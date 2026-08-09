@@ -70,7 +70,11 @@ La recuperación del PIN no revela ni descifra el PIN. Al no existir backend o i
 
 - Web escritorio: `npm run dev`, abrir la URL local y comprobar barra lateral, Inicio, Resumen completo, ocultación y bloqueo tras 2 minutos.
 - Móvil/PWA: abrir la URL desde un dispositivo o modo responsive, instalar desde el navegador y comprobar navegación inferior. Las notificaciones web requieren permiso y solo se garantiza sonido con la app activa.
-- APK Android: `npm run android:apk`, instalar `dist/apk/finance-app-debug.apk`, aceptar notificaciones/alarmas exactas, crear una cita próxima con recordatorio local y probar segundo plano, Detener y Posponer.
+- APK Android: `npm run android:apk`, instalar el archivo versionado
+  `dist/apk/private-balance-<versionName>-<versionCode>-debug.apk` sobre la
+  instalación anterior, aceptar notificaciones/alarmas exactas y probar una
+  cita próxima, segundo plano, Detener y Posponer. La línea base vigente es
+  `1.0.1 (2)`.
 
 ## 5. Modelo de datos
 
@@ -195,7 +199,21 @@ Genera reportes en:
 ### 7.8. `backupService`
 
 - `exportBackup()` — descarga `backup.json` con snapshot completo.
-- `importBackup()` — importa datos desde un archivo JSON.
+- `importBackup()` — acepta el snapshot actual (`exportedAt`, `settings[]`) y
+  el documento histórico `BackupData` (`appName`, `version`, `generatedAt`,
+  `settings` como objeto). Normaliza ambos a `DatabaseSnapshot`, rechaza JSON
+  ajenos o malformados antes de tocar Dexie, ejecuta la importación
+  transaccional y devuelve recuentos persistidos para el feedback de UI.
+- `exportEncryptedBackup()` / `importEncryptedBackup()` — exportan y restauran
+  el documento cifrado con la clave configurada por el usuario.
+- `runDriveBackupNow()` / `restoreLatestDriveBackup()` — suben y restauran
+  exclusivamente contenido cifrado en Google Drive App Folder.
+
+La importación exige como mínimo las colecciones históricas `services`,
+`expenses` y `appointments`. Colecciones añadidas posteriormente, como
+`exchangeRates`, `incomeAdditionals` o `financialGoals`, se normalizan a arrays
+vacíos cuando no existen en un backup antiguo. Las invariantes de ajustes y
+Adicionales se validan antes de limpiar las tablas actuales.
 
 ### 7.9. `communicationChannelService`
 
@@ -221,6 +239,14 @@ Hub se limpia y la outbox vuelve a intentar sus eventos con la nueva licencia.
 
 La activación no comparte transacciones ni operaciones destructivas con las
 tablas financieras.
+
+### 7.12. `localDiagnosticService`
+
+Recopila metadatos técnicos y conteos sin leer movimientos completos. En web
+usa `VITE_APP_VERSION` como fallback; en Android consulta `App.getInfo()` y
+muestra `versionName (versionCode)`, por ejemplo `1.0.1 (2)`. Esto permite
+confirmar qué APK está realmente instalado sin incluir datos financieros en el
+diagnóstico exportable.
 
 ## 8. Flujo de conversión de moneda
 
@@ -250,7 +276,9 @@ El acceso general está protegido con PIN si el usuario lo habilita en configura
 
 - Node.js compatible con Vite
 - npm
-- Android SDK para compilación móvil
+- JDK 21
+- Android SDK API 36 para compilación móvil
+- Capacitor `core`, `android`, `ios` y `cli` en la misma versión menor
 
 ### 10.2. Comandos principales
 
@@ -261,7 +289,8 @@ El acceso general está protegido con PIN si el usuario lo habilita en configura
 - `npm run android:add` — agregar plataforma Android
 - `npm run android:sync` — sincronizar cambios con Android
 - `npm run android:open` — abrir proyecto Android en Android Studio
-- `npm run android:apk` — construir APK de debug
+- `npm run android:apk` — construir el APK de debug, copiarlo con versión y
+  código en `dist/apk` e imprimir su SHA-256
 
 ## 11. Consideraciones de mantenimiento
 

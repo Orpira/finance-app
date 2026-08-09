@@ -74,8 +74,8 @@ Private Balance está en **desarrollo activo**, no en versión estable publicada
 | Reportes y exportación (PDF, CSV, XLS) | Implementado | `src/services/incomeExportService.ts`, jsPDF |
 | PIN y bloqueo de acceso | Implementado | hash con sal, bloqueo por inactividad/segundo plano |
 | Licencias firmadas por dispositivo (V2) | Implementado | ECDSA P-256, ver [SECURITY.md](SECURITY.md) |
-| Backup cifrado a Google Drive (appDataFolder) | Implementado | AES-GCM en cliente antes de subir |
-| Android vía Capacitor | Implementado | `android/`, R8/ProGuard en release |
+| Backup local y cifrado a Google Drive (appDataFolder) | Implementado | importación validada antes de reemplazar IndexedDB; AES-GCM antes de subir |
+| Android vía Capacitor | Implementado | Capacitor 8.5.0 alineado; `android/`, R8/ProGuard en release |
 | Web App instalable (manifest + iconos) | Parcial | manifest e iconos activos; **sin** service worker/caché offline (`vite-plugin-pwa` no está registrado en `vite.config.ts`) |
 | Automatización con n8n / Vercel Functions | Implementado, con riesgos abiertos | ver [docs/AUTOMATION_HUB.md](docs/AUTOMATION_HUB.md) y [docs/04_N8N_WORKFLOWS.md](docs/04_N8N_WORKFLOWS.md) |
 | Canal WhatsApp (Evolution API / Meta Cloud API) | Implementado, con riesgos operativos | proveedor seleccionable vía `WHATSAPP_PROVIDER` (`evolution` \| `meta-cloud`), nunca directo desde el cliente; Meta Cloud API añade webhook propio con firma HMAC e idempotencia — ver [docs/whatsapp/](docs/whatsapp/) |
@@ -97,7 +97,10 @@ Esta tabla resume el estado a alto nivel. El detalle completo y verificado por m
 - **Conversación con IA**: asistente que responde preguntas financieras sobre los datos locales usando herramientas deterministas, con proveedor OpenAI real opcional y respaldo determinista si la IA no está disponible.
 - **Seguridad**: PIN local con hash y sal, bloqueo por inactividad y al pasar a segundo plano.
 - **Licencias**: activación firmada digitalmente y vinculada al dispositivo.
-- **Backup**: exportación/importación cifrada local y backup automático opcional a Google Drive (`appDataFolder`).
+- **Backup**: exportación/importación JSON clásica y cifrada, compatibilidad con
+        backups históricos de Private Balance y backup automático opcional a Google
+        Drive (`appDataFolder`). Un archivo inválido se rechaza antes de reemplazar
+        los datos locales.
 - **Automatización**: eventos de ingreso/gasto/agenda enviados de forma opcional a un flujo n8n a través de un proxy propio, sin exponer credenciales en el cliente.
 - **Android**: empaquetado con Capacitor, con ofuscación R8/ProGuard en los builds de release.
 
@@ -195,7 +198,12 @@ La suite de Vitest es extensa (más de cien archivos de prueba) y cubre principa
 ## PWA y Android
 
 - **Web/PWA**: `public/manifest.webmanifest` e iconos están activos y la app es instalable, pero **no** hay un service worker registrado (`vite-plugin-pwa` es una dependencia presente pero no está conectado en `vite.config.ts`); no hay caché de assets ni uso completo offline garantizado por un service worker propio.
-- **Android**: empaquetado con Capacitor (`capacitor.config.ts`, `android/`). Comandos: `npm run android:add`, `npm run android:sync`, `npm run android:open`, `npm run android:apk`. Los builds de release usan R8/ProGuard (`minifyEnabled`, `shrinkResources`).
+- **Android**: empaquetado con Capacitor (`capacitor.config.ts`, `android/`).
+        Comandos: `npm run android:add`, `npm run android:sync`,
+        `npm run android:open`, `npm run android:apk`. El último genera
+        `dist/apk/private-balance-<versionName>-<versionCode>-debug.apk`, muestra su
+        SHA-256 y actualmente usa la línea base `1.0.1 (2)`. Los builds de release
+        usan R8/ProGuard (`minifyEnabled`, `shrinkResources`).
 
 Detalle adicional en [docs/08_DEPLOYMENT.md](docs/08_DEPLOYMENT.md).
 

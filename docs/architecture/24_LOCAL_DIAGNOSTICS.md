@@ -6,7 +6,7 @@
 
 ## Contenido
 
-- versión de aplicación y plataforma;
+- versión de aplicación, código de compilación y plataforma;
 - versión del esquema Dexie;
 - integridad de lectura de tablas;
 - uso y cuota estimada del almacenamiento;
@@ -21,6 +21,13 @@ El recolector usa `count()` y nunca `toArray()`. El exportable no incluye movimi
 ## Exportación
 
 En web se descarga JSON. En Android se escribe temporalmente en la caché de Capacitor y se abre el selector nativo para compartir. No existe subida automática ni endpoint remoto.
+
+## Resolución de versión
+
+En Android, `localDiagnosticService` consulta `App.getInfo()` y presenta
+`versionName (versionCode)`. Esta metadata proviene del paquete instalado y
+permite distinguir una actualización real de un APK anterior. En web se usa
+`VITE_APP_VERSION` cuando está configurada y `development` como fallback.
 
 ## Actividad de backup
 

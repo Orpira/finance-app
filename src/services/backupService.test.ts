@@ -2,15 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppSettings } from '../types/settings'
 
-const servicesTable = { toArray: vi.fn() }
-const expensesTable = { toArray: vi.fn() }
-const appointmentsTable = { toArray: vi.fn() }
+const servicesTable = { count: vi.fn(), toArray: vi.fn() }
+const expensesTable = { count: vi.fn(), toArray: vi.fn() }
+const appointmentsTable = { count: vi.fn(), toArray: vi.fn() }
 const exchangeRatesTable = { toArray: vi.fn() }
 const cutoffReportsTable = { toArray: vi.fn() }
 const earningPeriodsTable = { toArray: vi.fn() }
 const communicationChannelsTable = { toArray: vi.fn() }
 const incomeAdditionalsTable = { toArray: vi.fn() }
 const financialGoalsTable = { toArray: vi.fn() }
+const importDatabaseSnapshotMock = vi.fn()
 
 vi.mock('../database/db', () => ({
   db: {
@@ -25,7 +26,7 @@ vi.mock('../database/db', () => ({
     financialGoals: financialGoalsTable,
   },
   exportDatabaseSnapshot: vi.fn(),
-  importDatabaseSnapshot: vi.fn(),
+  importDatabaseSnapshot: importDatabaseSnapshotMock,
 }))
 
 const getSettingsMock = vi.fn()
@@ -39,7 +40,7 @@ vi.mock('./earningPeriodService', () => ({
   migrateLegacyRecordsToSeasons: vi.fn(),
 }))
 
-const { generateBackupData, backupDataToSnapshot } = await import('./backupService')
+const { generateBackupData, backupDataToSnapshot, importBackup } = await import('./backupService')
 
 function settings(): AppSettings {
   return { id: 'app', businessName: 'Negocio' } as AppSettings
@@ -48,8 +49,11 @@ function settings(): AppSettings {
 beforeEach(() => {
   vi.clearAllMocks()
   servicesTable.toArray.mockResolvedValue([])
+  servicesTable.count.mockResolvedValue(0)
   expensesTable.toArray.mockResolvedValue([])
+  expensesTable.count.mockResolvedValue(0)
   appointmentsTable.toArray.mockResolvedValue([])
+  appointmentsTable.count.mockResolvedValue(0)
   exchangeRatesTable.toArray.mockResolvedValue([])
   cutoffReportsTable.toArray.mockResolvedValue([])
   earningPeriodsTable.toArray.mockResolvedValue([])
@@ -116,5 +120,77 @@ describe('backupDataToSnapshot', () => {
     })
 
     expect(snapshot.incomeAdditionals).toEqual([])
+  })
+})
+
+describe('importBackup', () => {
+  it('rechaza un JSON ajeno antes de tocar la base local', async () => {
+    const file = {
+      text: vi.fn().mockResolvedValue(JSON.stringify({ hello: 'world' })),
+    } as unknown as File
+
+    await expect(importBackup(file)).rejects.toThrow(
+      'El archivo no contiene un backup válido de Private Balance.',
+    )
+    expect(importDatabaseSnapshotMock).not.toHaveBeenCalled()
+  })
+
+  it('normaliza el formato BackupData histórico antes de importarlo', async () => {
+    const legacySettings = settings()
+    const file = {
+      text: vi.fn().mockResolvedValue(JSON.stringify({
+        version: '2',
+        generatedAt: '2026-08-08T00:00:00.000Z',
+        appName: 'Private Balance',
+        services: [],
+        expenses: [],
+        appointments: [],
+        settings: legacySettings,
+      })),
+    } as unknown as File
+
+    await importBackup(file)
+
+    expect(importDatabaseSnapshotMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exportedAt: '2026-08-08T00:00:00.000Z',
+        exchangeRates: [],
+        settings: [legacySettings],
+      }),
+    )
+  })
+
+  it('confirma los registros persistidos e identifica un backup solo histórico', async () => {
+    servicesTable.count.mockResolvedValue(179)
+    expensesTable.count.mockResolvedValue(2)
+    appointmentsTable.count.mockResolvedValue(3)
+    earningPeriodsTable.toArray.mockResolvedValue([
+      { id: 1, status: 'closed' },
+      { id: 2, status: 'closed' },
+    ])
+    const file = {
+      text: vi.fn().mockResolvedValue(JSON.stringify({
+        services: [],
+        expenses: [],
+        appointments: [],
+        settings: [],
+        exchangeRates: [],
+        cutoffReports: [],
+        earningPeriods: [],
+        communicationChannels: [],
+        incomeAdditionals: [],
+        financialGoals: [],
+        exportedAt: '2026-08-08T00:00:00.000Z',
+      })),
+    } as unknown as File
+
+    await expect(importBackup(file)).resolves.toEqual({
+      appointments: 3,
+      closedEarningPeriods: 2,
+      earningPeriods: 2,
+      expenses: 2,
+      hasActiveEarningPeriod: false,
+      services: 179,
+    })
   })
 })

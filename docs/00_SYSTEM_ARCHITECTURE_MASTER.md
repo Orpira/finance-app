@@ -2,7 +2,7 @@
 
 **Estado:** Activo  
 **Versión:** 1.0  
-**Última actualización:** 2026-08-02
+**Última actualización:** 2026-08-09
 **Ámbito:** Producto, arquitectura, gobierno técnico y roadmap  
 **Audiencia:** Desarrollo, arquitectura, QA, seguridad, operaciones y agentes de IA
 
@@ -103,7 +103,8 @@ Private Balance distingue siempre entre arquitectura **implementada**, **parcial
 | --- | --- | --- |
 | Finanzas locales y UI principal | Implementada | `src/pages`, `src/services`, `src/database` |
 | Dexie/IndexedDB y migraciones | Implementada | `src/database` |
-| Android/Capacitor | Implementada | `android/` |
+| Android/Capacitor | Implementada; APK debug trazable `1.0.1 (2)` certificado, pendiente de validación física | `android/`, `scripts/build-apk.sh` |
+| Backup local/cifrado/Drive | Implementada; importación actual e histórica con validación previa fail-closed | `src/services/backupService.ts`, `src/pages/Settings/SettingsBackupPage.tsx` |
 | Web App instalable (manifest + iconos) | Parcial: manifest e iconos activos; instalable según capacidades del navegador; sin service worker activo (`vite-plugin-pwa` no está registrado en `vite.config.ts`); existe rutina de desregistro de service workers residuales (`src/utils/staleServiceWorkerCleanup.ts`); no debe describirse como PWA offline completa hasta que exista una estrategia de caché activa | `public/manifest.webmanifest`, `vite.config.ts`, `src/utils/staleServiceWorkerCleanup.ts` |
 | Licencias y dispositivos | Implementada | `api/`, `server/` |
 | Automatización n8n | Implementada con riesgos abiertos | gateway serverless + workflows externos |
@@ -412,6 +413,11 @@ No puede convertirse en una fuente alternativa de cálculo ni alterar el libro.
 - Dexie/IndexedDB es infraestructura local principal.
 - Migraciones deben ser incrementales y probadas.
 - Import/export requiere validación antes de reemplazar datos.
+- La importación JSON normaliza snapshots actuales y `BackupData` históricos;
+      un archivo ajeno, malformado o inconsistente se rechaza antes de limpiar
+      tablas.
+- El selector de archivos debe tolerar los MIME usados por proveedores Android
+      para documentos JSON sin relajar la validación de contenido.
 - Snapshots de inteligencia no sustituyen tablas operativas.
 
 ### 8.6 Licensing & Device Registry
