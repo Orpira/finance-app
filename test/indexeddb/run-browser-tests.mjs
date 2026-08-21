@@ -203,7 +203,34 @@ try {
   if (report?.status !== 'passed') {
     throw new Error(`Real IndexedDB browser test failed\n${JSON.stringify(details, null, 2)}\nChrome:\n${stderr}`)
   }
-  console.log(JSON.stringify(details, null, 2))
+  const printPdf = await new Promise((resolve, reject) => {
+    const id = ++commandId
+    const timeout = setTimeout(() => reject(new Error('Chrome print-to-PDF timeout')), 10000)
+    const listener = (event) => {
+      const message = JSON.parse(event.data)
+      if (message.id !== id) return
+      clearTimeout(timeout)
+      socket.removeEventListener('message', listener)
+      if (message.error !== undefined) {
+        reject(new Error(`Chrome print-to-PDF failed: ${JSON.stringify(message)}`))
+        return
+      }
+      resolve(message.result?.data)
+    }
+    socket.addEventListener('message', listener)
+    socket.send(JSON.stringify({
+      id,
+      method: 'Page.printToPDF',
+      params: { printBackground: true, preferCSSPageSize: true },
+    }))
+  })
+  if (typeof printPdf !== 'string' || printPdf.length < 1000) {
+    throw new Error('Chrome print preview produced an empty PDF')
+  }
+  console.log(JSON.stringify({
+    ...details,
+    printPreviewPdfBytes: Math.floor((printPdf.length * 3) / 4),
+  }, null, 2))
 } finally {
   await terminateChild(child)
   await closeSocket(socket)

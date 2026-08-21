@@ -8,6 +8,13 @@ import { PageHeader } from '../../components/layout/PageHeader'
 import { SeasonGoalCard } from '../../components/seasons/SeasonGoalCard'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
+import {
+  groupIncomesByDate,
+} from '../../services/incomeReport.service'
+import {
+  buildIncomeDateTableHtml,
+  buildIncomeDateText,
+} from '../../services/incomeReportPresentation'
 import { getSettings } from '../../services/settingsService'
 import { getSeasonGoalProgress, listEarningPeriods } from '../../services/earningPeriodService'
 import { buildBalanceReport } from '../../services/balanceReportService'
@@ -32,7 +39,6 @@ import {
 import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 import {
   getIncomeTypeLabel,
-  isAdjustmentIncome,
   isServiceIncome,
 } from '../../utils/incomeTypes'
 import { getIncomeDurationDisplay } from '../../utils/serviceDuration'
@@ -185,6 +191,18 @@ function buildPrintableDocument(title: string, body: string) {
       th { background: #f1f5f9; color: #334155; font-size: 11px; text-transform: uppercase; }
       tfoot td { background: #f8fafc; border-top: 2px solid #94a3b8; font-weight: 700; }
       td.amount, th.amount { text-align: right; white-space: nowrap; }
+      .income-table-scroll { overflow-x: auto; width: 100%; }
+      .income-date-table { min-width: 760px; table-layout: fixed; }
+      .income-date-table .income-name { width: 38%; }
+      .record-meta { color: #64748b; display: block; font-size: 10px; margin-top: 3px; }
+      @media print {
+        .income-table-scroll { overflow: visible; }
+        .income-date-table { font-size: 9px; min-width: 0; }
+        .income-date-table th, .income-date-table td { overflow-wrap: anywhere; padding: 5px 4px; }
+        .income-date-table thead { display: table-header-group; }
+        .income-date-table tfoot { display: table-row-group; }
+        .income-date-table tr { break-inside: avoid; page-break-inside: avoid; }
+      }
       .subtotal {
         background: #ecfdf5;
         border: 1px solid #a7f3d0;
@@ -747,54 +765,34 @@ export function ReportsPage() {
     `
   }
 
-  function buildIncomeTextRows(reportIncomes: ServiceIncome[]) {
-    const totalDuration = reportIncomes.reduce(
-      (total, income) =>
-        total +
-        (!isBasicUser && isServiceIncome(income)
-          ? income.actualDuration ?? income.duration
-          : 0),
-      0,
-    )
-    const totalAmount = reportIncomes.reduce(
-      (total, income) => total + getIncomeValue(income, primaryCurrency),
-      0,
-    )
-    const rows = reportIncomes
-      .map((income) => {
-        const amount = getIncomeValue(income, primaryCurrency)
-        const adjustmentCount = income.id ? adjustmentsByIncomeId.get(income.id) ?? 0 : 0
-        const isReportable = canMarkAsReported(income, activeUsageMode)
-        const badge = getRecordReportBadge(income)
+  function buildIncomeDateTable(
+    reportIncomes: ServiceIncome[],
+    dateTotal: number,
+    totalDurationMinutes: number,
+  ) {
+    return buildIncomeDateTableHtml({
+      incomes: reportIncomes,
+      primaryCurrency,
+      usageMode: activeUsageMode,
+      adjustmentCounts: adjustmentsByIncomeId,
+      dateTotal,
+      totalDurationMinutes,
+    })
+  }
 
-        return [
-          `- ${getIncomeDisplayName(income)}`,
-          `Clase: ${getIncomeTypeLabel(income)}`,
-          `Tipo: ${getPaymentTypeLabel(income.paymentType)}`,
-          !isBasicUser
-            ? `Duración: ${isServiceIncome(income) ? getIncomeDurationDisplay(income) : 'No aplica'}`
-            : '',
-          `Fecha de ingreso: ${income.date}`,
-          `Fecha de creación: ${formatExportDateTime(income.createdAt)}`,
-          !isBasicUser ? `Estado: ${isReportable ? badge.label : 'No aplica'}` : '',
-          !isBasicUser && isReportable && badge.isReported
-            ? `Fecha de reporte: ${formatExportDateTime(badge.reportedAt)}`
-            : '',
-          !isBasicUser && isReportable && badge.reportReference
-            ? `Referencia: ${badge.reportReference}`
-            : '',
-          !isBasicUser && isReportable && badge.reportNotes ? `Notas: ${badge.reportNotes}` : '',
-          adjustmentCount > 0 ? `Afectado por ajuste (${adjustmentCount})` : 'Sin ajustes relacionados',
-          `Valor: ${formatCurrency(amount, primaryCurrency)}`,
-        ].filter(Boolean).join(' | ')
-      })
-      .join('\n')
-
-    return [
-      rows,
-      !isBasicUser ? `Total duración: ${totalDuration} min` : '',
-      `Total valor: ${formatCurrency(totalAmount, primaryCurrency)}`,
-    ].filter(Boolean).join('\n')
+  function buildIncomeTextRows(
+    reportIncomes: ServiceIncome[],
+    totalDurationMinutes?: number,
+    totalLabel = 'Total valor',
+  ) {
+    return buildIncomeDateText({
+      incomes: reportIncomes,
+      primaryCurrency,
+      usageMode: activeUsageMode,
+      adjustmentCounts: adjustmentsByIncomeId,
+      totalDurationMinutes,
+      totalLabel,
+    })
   }
 
   function buildExpenseTable(reportExpenses: Expense[]) {
@@ -1048,55 +1046,37 @@ export function ReportsPage() {
         (sum, income) => sum + getIncomeValue(income, primaryCurrency),
         0,
       )
-      const incomeSections = [
-        {
-          label: 'Servicios',
-          records: incomes.filter(isServiceIncome),
-        },
-        {
-          label: 'Ajustes',
-          records: incomes.filter(isAdjustmentIncome),
-        },
-        {
-          label: 'Otros ingresos históricos',
-          records: incomes.filter(
-            (income) =>
-              !isServiceIncome(income) && !isAdjustmentIncome(income),
-          ),
-        },
-      ].filter((section) => section.records.length > 0)
+      const incomeDateGroups = groupIncomesByDate(incomes, primaryCurrency)
       const reportBodyText =
         incomes.length === 0
           ? 'No hay ingresos con los filtros seleccionados.'
-          : incomeSections
-              .map(
-                (section) =>
-                  `${section.label}\n${buildCitySubtotalTextBlocks(
-                    section.records,
-                    (income) => income.country,
-                    (income) => income.city,
-                    (income) => getIncomeValue(income, primaryCurrency),
-                    buildIncomeTextRows,
-                  )}`,
+          : incomeDateGroups
+              .map((group) =>
+                [
+                  `Fecha: ${group.date}`,
+                  buildIncomeTextRows(
+                    group.incomes,
+                    group.totalDurationMinutes,
+                    'Subtotal fecha',
+                  ),
+                ].join('\n'),
               )
               .join('\n\n')
       reportHtml =
         buildReportHeader(reportTitle, total, incomes.length) +
         (incomes.length === 0
           ? '<p class="empty">No hay ingresos con los filtros seleccionados.</p>'
-          : incomeSections
-              .map(
-                (section) => `
-                  <h2>${escapeHtml(section.label)}</h2>
-                  ${buildCitySubtotalBlocks(
-                    section.records,
-                    (income) => income.country,
-                    (income) => income.city,
-                    (income) => getIncomeValue(income, primaryCurrency),
-                    buildIncomeTable,
+          : incomeDateGroups
+              .map((group) => `
+                <section class="income-date-group">
+                  <h2>Fecha: ${escapeHtml(group.date)}</h2>
+                  ${buildIncomeDateTable(
+                    group.incomes,
+                    group.total,
+                    group.totalDurationMinutes,
                   )}
-                `,
-              )
+                </section>
+              `)
               .join(''))
       reportText = `${buildReportTextHeader(
         reportTitle,

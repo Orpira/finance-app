@@ -9,6 +9,9 @@ import { getActiveEarningPeriod } from './earningPeriodService'
 import { getSettings } from './settingsService'
 import { assertCanMarkAsReported, canMarkAsReported } from '../utils/reportStatus'
 import { getStoredIncomeValue } from '../utils/financeStats'
+import { roundMoney } from '../utils/currency'
+import { getEffectiveFinancialDuration } from '../utils/serviceDuration'
+import { isServiceIncome } from '../utils/incomeTypes'
 import { recordBelongsToUsageMode } from '../utils/usageMode'
 import type { ServiceIncome } from '../types/service'
 import type { CurrencyCode } from '../types/settings'
@@ -28,8 +31,66 @@ export interface BulkMarkIncomesAsReportedResult {
   failed: Array<{ id: number; error: string }>
 }
 
+export interface IncomeDateGroup {
+  date: string
+  incomes: ServiceIncome[]
+  total: number
+  totalDurationMinutes: number
+}
+
 /** Un ingreso pendiente sin reportar por más de este número de días entra en el conteo de vencidos. */
 export const PENDING_INCOME_OVERDUE_AFTER_DAYS = 7
+
+export function getIncomeDurationTotalMinutes(
+  incomes: readonly ServiceIncome[],
+) {
+  return incomes.reduce(
+    (total, income) =>
+      total +
+      (isServiceIncome(income)
+        ? getEffectiveFinancialDuration(income) ?? 0
+        : 0),
+    0,
+  )
+}
+
+export function groupIncomesByDate(
+  incomes: readonly ServiceIncome[],
+  currency: CurrencyCode,
+): IncomeDateGroup[] {
+  const incomesByDate = new Map<string, ServiceIncome[]>()
+
+  incomes.forEach((income) => {
+    incomesByDate.set(income.date, [
+      ...(incomesByDate.get(income.date) ?? []),
+      income,
+    ])
+  })
+
+  return Array.from(incomesByDate.entries())
+    .sort(([firstDate], [secondDate]) => secondDate.localeCompare(firstDate))
+    .map(([date, dateIncomes]) => ({
+      date,
+      incomes: dateIncomes,
+      total: roundMoney(
+        dateIncomes.reduce(
+          (total, income) => total + getStoredIncomeValue(income, currency),
+          0,
+        ),
+      ),
+      totalDurationMinutes: getIncomeDurationTotalMinutes(dateIncomes),
+    }))
+}
+
+export function formatIncomeDurationSubtotal(totalMinutes: number) {
+  const normalizedMinutes = Math.max(0, Math.round(totalMinutes))
+  const hours = Math.floor(normalizedMinutes / 60)
+  const minutes = normalizedMinutes % 60
+
+  if (hours === 0) return `${minutes} min`
+  if (minutes === 0) return `${hours} h`
+  return `${hours} h ${minutes} min`
+}
 
 async function getIncomeOrThrow(id: number) {
   const income = await db.services.get(id)

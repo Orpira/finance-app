@@ -23,6 +23,15 @@ import { executeSnapshotPromotion } from '../../src/services/snapshotPromotionEx
 import { executeKnowledgePromotion } from '../../src/services/knowledgePromotionExecutor'
 import { getSettings, updateSettings } from '../../src/services/settingsService'
 import { getOnboardingState, setOnboardingStep } from '../../src/services/onboardingService'
+import { groupIncomesByDate } from '../../src/services/incomeReport.service'
+import {
+  buildIncomeDateTableHtml,
+  buildIncomeDateText,
+} from '../../src/services/incomeReportPresentation'
+import {
+  createReportPdf,
+  createReportPdfFromText,
+} from '../../src/services/reportShareService'
 import { CURRENT_ONBOARDING_VERSION, LAST_ONBOARDING_STEP_INDEX } from '../../src/types/onboarding'
 import type { Expense } from '../../src/types/expense'
 import type { ServiceIncome } from '../../src/types/service'
@@ -1076,6 +1085,102 @@ async function run() {
     'resetDatabase reseeds the default incomeCalculationMethod',
   )
   resetDatabaseInstance.close()
+  await Dexie.delete(databaseName)
+
+  const reportDatabase = new FinanceDB()
+  await reportDatabase.open()
+  const reportRecords: ServiceIncome[] = [
+    {
+      id: 9101, createdAt: '2026-08-09T09:00:00.000Z', date: '2026-08-09',
+      duration: 45, totalAmount: 100, currency: 'EUR', percentage: 50,
+      realGain: 50, eurValue: 50, copValue: 215000, exchangeRateUsed: 4300,
+      type: 'ingreso', usageMode: 'professional', paymentType: 'cash',
+      country: 'ES', city: 'Madrid', baseCurrency: 'EUR', baseCurrencyValue: 50,
+      reportStatusCode: 'reported', reportReference: 'RUNTIME-1',
+      reportNotes: 'Nota runtime extensa para verificar conservación y renderizado.',
+    },
+    {
+      id: 9102, createdAt: '2026-08-09T10:00:00.000Z', date: '2026-08-09',
+      duration: 0, totalAmount: 20000, currency: 'COP', percentage: 50,
+      realGain: 40, eurValue: 40, copValue: 20000, exchangeRateUsed: 500,
+      type: 'ingreso', usageMode: 'professional', paymentType: 'card',
+      country: 'CO', city: 'Bogotá', baseCurrency: 'EUR', baseCurrencyValue: 40,
+      incomeCalculationMethod: 'hourly_workday', workedTime: 2,
+      workedTimeUnit: 'hours', reportStatusCode: 'unreviewed',
+    },
+    {
+      id: 9103, createdAt: '2026-08-09T11:00:00.000Z', date: '2026-08-09',
+      duration: 999, totalAmount: 10, currency: 'EUR', percentage: 0,
+      realGain: 10, eurValue: 10, copValue: 43000, exchangeRateUsed: 4300,
+      type: 'ajuste', usageMode: 'professional', country: 'ES', city: 'Madrid',
+      baseCurrency: 'EUR', baseCurrencyValue: 10, reportStatusCode: 'unreviewed',
+    },
+    {
+      id: 9104, createdAt: '2026-08-08T11:00:00.000Z', date: '2026-08-08',
+      duration: 999, totalAmount: 5, currency: 'EUR', percentage: 0,
+      realGain: 5, eurValue: 5, copValue: 21500, exchangeRateUsed: 4300,
+      type: 'otro', usageMode: 'professional', country: 'ES', city: 'Sevilla',
+      baseCurrency: 'EUR', baseCurrencyValue: 5, reportStatusCode: 'unreviewed',
+    },
+  ]
+  await reportDatabase.services.bulkPut(reportRecords)
+  const persistedBeforeReload = await reportDatabase.services
+    .where('id').anyOf(reportRecords.map((record) => record.id!)).toArray()
+  const groupsBeforeReload = groupIncomesByDate(persistedBeforeReload, 'EUR')
+  assert(groupsBeforeReload.length === 2, 'report runtime groups multiple persisted dates')
+  assert(groupsBeforeReload[0]?.date === '2026-08-09', 'report runtime orders persisted dates newest first')
+  assert(groupsBeforeReload[0]?.total === 100, 'report runtime uses canonical converted subtotal')
+  assert(groupsBeforeReload[0]?.totalDurationMinutes === 165, 'report runtime normalizes 45 minutes plus two worked hours')
+
+  const runtimeHtml = groupsBeforeReload.map((group) => buildIncomeDateTableHtml({
+    incomes: group.incomes, primaryCurrency: 'EUR', usageMode: 'professional',
+    dateTotal: group.total, totalDurationMinutes: group.totalDurationMinutes,
+  })).join('')
+  const runtimeText = groupsBeforeReload.map((group) => buildIncomeDateText({
+    incomes: group.incomes, primaryCurrency: 'EUR', usageMode: 'professional',
+    dateTotal: group.total, totalDurationMinutes: group.totalDurationMinutes,
+    totalLabel: 'Subtotal fecha',
+  })).join('\n')
+  const runtimeContainer = document.createElement('section')
+  runtimeContainer.style.width = '360px'
+  runtimeContainer.innerHTML = runtimeHtml
+  document.body.append(runtimeContainer)
+  assert(runtimeContainer.querySelectorAll('[data-income-id]').length === 4, 'mobile-width runtime HTML keeps every mixed record')
+  assert(runtimeContainer.textContent?.includes('2 h 45 min') === true, 'mobile-width runtime HTML renders normalized duration')
+  assert(runtimeContainer.textContent?.includes('Bogotá') === true, 'mobile-width runtime HTML preserves geography')
+  runtimeContainer.style.width = '1024px'
+  assert(runtimeContainer.querySelectorAll('.income-date-table').length === 2, 'desktop-width runtime HTML keeps both date tables')
+  assert(runtimeText.includes('Total duración: 2 h 45 min'), 'shared text matches HTML normalized duration')
+  assert(runtimeText.includes('Importe original: 20.000'), 'shared text preserves original currency amount')
+
+  const runtimePdf = await createReportPdf({
+    fileName: 'runtime-report', html: `<html><body>${runtimeHtml.repeat(6)}</body></html>`,
+    text: runtimeText.repeat(6), title: 'Reporte runtime',
+  })
+  assert(runtimePdf.internal.getNumberOfPages() > 1, 'real HTML PDF generation paginates representative content')
+  assert(runtimePdf.output('arraybuffer').byteLength > 1000, 'real HTML PDF generation produces non-empty output')
+  const fallbackPdf = createReportPdfFromText({
+    fileName: 'runtime-report-text', html: '', text: runtimeText.repeat(6),
+    title: 'Reporte runtime texto',
+  })
+  assert(fallbackPdf.output('arraybuffer').byteLength > 1000, 'text fallback produces non-empty PDF output')
+  reportDatabase.close()
+
+  const reopenedReportDatabase = new FinanceDB()
+  await reopenedReportDatabase.open()
+  const persistedAfterReload = await reopenedReportDatabase.services
+    .where('id').anyOf(reportRecords.map((record) => record.id!)).toArray()
+  const groupsAfterReload = groupIncomesByDate(persistedAfterReload, 'EUR')
+  deepEqual(
+    groupsAfterReload.map(({ date, total, totalDurationMinutes, incomes }) => ({
+      date, total, totalDurationMinutes, ids: incomes.map((income) => income.id),
+    })),
+    groupsBeforeReload.map(({ date, total, totalDurationMinutes, incomes }) => ({
+      date, total, totalDurationMinutes, ids: incomes.map((income) => income.id),
+    })),
+    'full IndexedDB reopen preserves report records, order, totals and durations',
+  )
+  reopenedReportDatabase.close()
   await Dexie.delete(databaseName)
 
   localStorage.removeItem('finance-app:settings')

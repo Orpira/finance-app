@@ -12,6 +12,12 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 ### Fixed
 
+- Los reportes de ingresos agrupan los registros por fecha sin perder identidad,
+  tipo, método de pago, ubicación, moneda original, importe convertido, notas ni
+  trazabilidad. Los subtotales profesionales reutilizan la duración efectiva
+  canónica, por lo que `hourly_workday` respeta `workedTime/workedTimeUnit` y
+  presenta combinaciones normalizadas como `2 h 30 min` en HTML, impresión, PDF
+  y texto compartido.
 - La restauración JSON reconoce backups actuales e históricos, valida antes de
   reemplazar IndexedDB y ofrece feedback contextual tras importar.
 - El pipeline Android genera APK identificable por versión/código, imprime su

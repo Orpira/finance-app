@@ -20,7 +20,7 @@ function sanitizeFileName(fileName: string) {
     .toLowerCase()
 }
 
-function createReportPdfFromText(options: ShareReportPdfOptions) {
+export function createReportPdfFromText(options: ShareReportPdfOptions) {
   const pdf = new jsPDF({ format: 'a4', orientation: 'portrait', unit: 'mm' })
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
@@ -172,7 +172,7 @@ async function createReportPdfFromHtml(options: ShareReportPdfOptions) {
   }
 }
 
-async function createReportPdf(options: ShareReportPdfOptions) {
+export async function createReportPdf(options: ShareReportPdfOptions) {
   try {
     return await createReportPdfFromHtml(options)
   } catch {

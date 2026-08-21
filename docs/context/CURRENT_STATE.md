@@ -8,6 +8,14 @@ La construcción funcional previa a 1.0 está cerrada y la **Fase Pre-Release 0.
 
 El **Sprint A (Calidad) quedó COMPLETADO de forma definitiva el 2026-08-05**. Tras la reapertura, SA-008 aisló `Movimientos → Todos` por `usageMode` reutilizando `recordBelongsToUsageMode`; SA-009–SA-011 incorporaron los estados de historial, la acción contextual y la presentación de solo lectura de Temporadas; SA-012 normalizó estados vacíos accionables. SA-013 certificó el cierre en Chromium 151 con IndexedDB real, matriz visual 144/144, formularios y persistencia, backup/restauración local, exportaciones, PIN, Copiloto mock y APK debug verificable. No se añadieron entidades, tablas, rutas, servicios, integraciones, migraciones ni cálculos financieros, y no existen defectos bloqueantes conocidos. La Web App mantiene manifest e iconos válidos, pero no tiene Service Worker activo: instalación, actualización y offline siguen asignados al Sprint C (DT-002). El Sprint B todavía no ha ejecutado su validación física, pero ya dispone de una línea base técnica trazable: APK debug `1.0.1 (2)`, generado desde metadata Gradle con nombre versionado, SHA-256 y firma v2 comprobables. Detalle completo en [Sprint A: Calidad](../product/PRE_RELEASE_0_9_SPRINT_A.md).
 
+La Auditoría Pre-Sprint B del reporte de ingresos quedó recertificada en
+Chromium 151 antes de iniciar la matriz física: agrupación descendente por fecha,
+subtotales monetarios canónicos, duración profesional normalizada mediante
+`getEffectiveFinancialDuration`, conservación de información individual,
+HTML móvil/escritorio, impresión real, PDF HTML multipágina, fallback textual e
+IndexedDB tras cierre y reapertura. Sprint A permanece cerrado y Sprint B sigue
+listo para ejecución física, todavía no iniciado.
+
 ## 2) Estado por componente
 
 ### Cliente
@@ -25,6 +33,10 @@ El **Sprint A (Calidad) quedó COMPLETADO de forma definitiva el 2026-08-05**. T
 - `/conversation` diferencia por licencia: `trial`/`demo` reciben un sandbox local con datos ficticios; licencias completas reciben el Copiloto.
 - El nombre visible unificado es `Copiloto`; conversación real y sandbox comparten Respuesta, Explicación, Evidencias y Acción recomendada.
 - Inicio sigue un orden contractual de siete secciones; Reportes usa un único flujo de configuración, vista previa, confirmación y generación.
+- El reporte de ingresos agrupa por fecha sin fusionar servicios, ajustes ni
+  históricos; muestra importes original y convertido, conserva ubicación y
+  metadata, y normaliza subtotales de duración en minutos antes de presentarlos
+  como horas/minutos.
 - `/settings/diagnostics` muestra integridad, esquema, almacenamiento, conteos
   locales y la versión nativa `versionName (versionCode)` en Android; exporta
   metadatos sanitizados sin contenido financiero.
@@ -120,7 +132,7 @@ El **Sprint A (Calidad) quedó COMPLETADO de forma definitiva el 2026-08-05**. T
 
 ## 3) Estado de calidad
 
-- Última validación completa (2026-08-09): 187 archivos y 2143 pruebas
+- Última validación completa (2026-08-21): 188 archivos y 2153 pruebas
   aprobadas, con 1 `todo` preexistente.
 - ESLint, build TypeScript/Vite e IndexedDB real correctos en Chromium 151. La
   matriz visual certificada permanece en 144/144 y Temporadas 8/8, sin

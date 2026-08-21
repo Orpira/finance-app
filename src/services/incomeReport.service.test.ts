@@ -36,6 +36,8 @@ vi.mock('./earningPeriodService', () => ({
 const {
   getPendingIncomeSummary,
   getPendingIncomes,
+  formatIncomeDurationSubtotal,
+  groupIncomesByDate,
   markIncomeAsPending,
   markIncomeAsReported,
   markMultipleIncomesAsReported,
@@ -105,6 +107,72 @@ beforeEach(() => {
   vi.clearAllMocks()
   getSettingsMock.mockResolvedValue(baseSettings())
   getActiveEarningPeriodMock.mockResolvedValue({ id: 1 })
+})
+
+describe('groupIncomesByDate', () => {
+  it('groups services by date, sorts dates newest first and totals each date', () => {
+    const groups = groupIncomesByDate(
+      [
+        income({ id: 1, date: '2026-08-08', baseCurrencyValue: 30 }),
+        income({ id: 2, date: '2026-08-09', baseCurrencyValue: 50 }),
+        income({ id: 3, date: '2026-08-08', baseCurrencyValue: 70 }),
+      ],
+      'EUR',
+    )
+
+    expect(groups.map((group) => group.date)).toEqual([
+      '2026-08-09',
+      '2026-08-08',
+    ])
+    expect(groups[0]?.incomes.map((item) => item.id)).toEqual([2])
+    expect(groups[0]?.total).toBe(50)
+    expect(groups[0]?.totalDurationMinutes).toBe(60)
+    expect(groups[1]?.incomes.map((item) => item.id)).toEqual([1, 3])
+    expect(groups[1]?.total).toBe(100)
+    expect(groups[1]?.totalDurationMinutes).toBe(120)
+  })
+
+  it('normalizes service-duration and hourly-workday records without counting adjustments', () => {
+    const groups = groupIncomesByDate(
+      [
+        income({ id: 1, duration: 45, baseCurrencyValue: 25 }),
+        income({
+          id: 2,
+          duration: 0,
+          incomeCalculationMethod: 'hourly_workday',
+          workedTime: 2,
+          workedTimeUnit: 'hours',
+          baseCurrencyValue: 40,
+        }),
+        income({
+          id: 3,
+          type: 'ajuste',
+          duration: 999,
+          totalAmount: 10,
+          baseCurrencyValue: 10,
+        }),
+        income({ id: 4, type: 'otro', duration: 999, baseCurrencyValue: 5 }),
+      ],
+      'EUR',
+    )
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.incomes.map((item) => item.id)).toEqual([1, 2, 3, 4])
+    expect(groups[0]?.total).toBe(80)
+    expect(groups[0]?.totalDurationMinutes).toBe(165)
+  })
+})
+
+describe('formatIncomeDurationSubtotal', () => {
+  it.each([
+    [45, '45 min'],
+    [60, '1 h'],
+    [90, '1 h 30 min'],
+    [120, '2 h'],
+    [150, '2 h 30 min'],
+  ])('formats %i normalized minutes as %s', (minutes, expected) => {
+    expect(formatIncomeDurationSubtotal(minutes)).toBe(expected)
+  })
 })
 
 describe('markIncomeAsReported', () => {
