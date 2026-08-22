@@ -16,6 +16,7 @@ describe('buildInitialServiceTimerState — regresión PB-IS-0007', () => {
       durationLabel: undefined,
       createdAt: '2026-01-01T00:00:00.000Z',
       timerStartedAt: undefined,
+      timerUsed: false,
     })
 
     expect(state).toEqual({})
@@ -28,10 +29,24 @@ describe('buildInitialServiceTimerState — regresión PB-IS-0007', () => {
       durationLabel: '60',
       createdAt: '2026-01-01T00:00:00.000Z',
       timerStartedAt: undefined,
+      timerUsed: true,
     })
 
     expect(state.timerStatus).toBe('running')
     expect(typeof state.timerStartedAt).toBe('string')
     expect(typeof state.timerEndsAt).toBe('string')
+  })
+
+  it('no inicia el cronómetro cuando el usuario lo desactiva para un Servicio por tiempo', () => {
+    const state = buildInitialServiceTimerState({
+      type: 'ingreso',
+      duration: 60,
+      durationLabel: '60',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      timerStartedAt: undefined,
+      timerUsed: false,
+    })
+
+    expect(state).toEqual({})
   })
 })

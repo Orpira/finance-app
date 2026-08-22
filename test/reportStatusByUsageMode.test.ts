@@ -22,6 +22,11 @@ const professionalAdjustment = {
   type: 'ajuste',
 } as ServiceIncome
 
+const professionalHourlyWorkday = {
+  ...professionalService,
+  incomeCalculationMethod: 'hourly_workday',
+} as ServiceIncome
+
 const basicExpense = {
   type: 'gasto',
   usageMode: 'basic',
@@ -45,6 +50,7 @@ const appointment = {
 describe('report status rules by usage mode', () => {
   it('allows only professional services in professional mode', () => {
     expect(canMarkAsReported(professionalService, 'professional')).toBe(true)
+    expect(canMarkAsReported(professionalHourlyWorkday, 'professional')).toBe(false)
     expect(canMarkAsReported(professionalAdjustment, 'professional')).toBe(false)
     expect(canMarkAsReported(basicExpense, 'professional')).toBe(false)
     expect(canMarkAsReported(appointment, 'professional')).toBe(false)

@@ -27,10 +27,14 @@ function resolveTimerStartAt(input: Pick<ServiceIncome, 'createdAt' | 'timerStar
 }
 
 export function buildInitialServiceTimerState(
-  income: Pick<ServiceIncome, 'type' | 'duration' | 'durationLabel' | 'createdAt' | 'timerStartedAt'>,
+  income: Pick<ServiceIncome, 'type' | 'duration' | 'durationLabel' | 'createdAt' | 'timerStartedAt' | 'timerUsed'>,
   nowIso = new Date().toISOString(),
 ) {
   if (!isServiceIncome(income)) return {}
+  // Los flujos existentes que no declaran esta preferencia conservan el
+  // comportamiento histórico. El formulario de ingresos siempre envía una
+  // elección explícita para Servicio por tiempo.
+  if (income.timerUsed === false) return {}
 
   const effectiveDuration = calculateEffectiveDuration(income)
   if (effectiveDuration <= 0) return {}

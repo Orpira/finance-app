@@ -181,6 +181,7 @@ export function IncomePage() {
   const [currency, setCurrency] = useState<CurrencyCode>('EUR')
   const [paymentType, setPaymentType] = useState(paymentTypes[0].value)
   const [notes, setNotes] = useState('')
+  const [timerPreference, setTimerPreference] = useState<'yes' | 'no' | ''>('')
   const [percentage, setPercentage] = useState(50)
   const [exchangeRate, setExchangeRate] = useState(EUR_COP_DEFAULT_RATE)
   const [exchangeRateSource, setExchangeRateSource] =
@@ -287,6 +288,7 @@ export function IncomePage() {
         setCurrency(currentIncome.currency as CurrencyCode)
         setPaymentType(currentIncome.paymentType ?? paymentTypes[0].value)
         setNotes(currentIncome.notes ?? '')
+        setTimerPreference(currentIncome.timerUsed === false ? 'no' : 'yes')
         setPercentage(currentIncome.percentage ?? 0)
         setExchangeRate(
           currentIncome.exchangeRateBaseToSecondary ??
@@ -517,6 +519,12 @@ export function IncomePage() {
       return
     }
 
+    if (!isEditing && usesServiceDuration && !timerPreference) {
+      setSaveStatus('error')
+      setSaveError('Indica si deseas activar el cronómetro para este servicio.')
+      return
+    }
+
     setSaveStatus('saving')
     setSaveError('')
 
@@ -573,6 +581,11 @@ export function IncomePage() {
               ? durationLabel || undefined
               : editingIncome?.durationLabel,
         notes: notes.trim() || undefined,
+        timerUsed: usesServiceDuration
+          ? isEditing
+            ? editingIncome?.timerUsed
+            : timerPreference === 'yes'
+          : false,
         totalAmount: principalAmount,
         // Snapshot: el método nunca se sobreescribe al editar (incomeService.ts
         // lo refuerza descartando este campo en las actualizaciones).
@@ -785,6 +798,47 @@ export function IncomePage() {
             unit={effectiveWorkedTimeUnit}
             value={durationLabel}
           />
+        )}
+
+        {!isEditing && usesServiceDuration && (
+          <fieldset className="flex flex-col gap-3">
+            <legend className="text-sm font-medium text-slate-700">
+              ¿Deseas activar el cronómetro para este servicio?
+            </legend>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { label: 'Sí, activar', value: 'yes' },
+                { label: 'No, registrar sin cronómetro', value: 'no' },
+              ] as const).map((option) => (
+                <label
+                  className={[
+                    'flex min-h-11 cursor-pointer items-center justify-center rounded-md border px-3 py-2 text-center text-sm font-semibold transition',
+                    timerPreference === option.value
+                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                      : 'border-slate-300 text-slate-600 hover:bg-slate-50',
+                  ].join(' ')}
+                  key={option.value}
+                >
+                  <input
+                    checked={timerPreference === option.value}
+                    className="sr-only"
+                    name="timerPreference"
+                    onChange={() => {
+                      setTimerPreference(option.value)
+                      setSaveError('')
+                    }}
+                    type="radio"
+                    value={option.value}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500">
+              Si eliges “No”, el ingreso se guardará igualmente y no se mostrará
+              ningún aviso al finalizar la duración.
+            </p>
+          </fieldset>
         )}
 
         {usesHourlyWorkday ? (

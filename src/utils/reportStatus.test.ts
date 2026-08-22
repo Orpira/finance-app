@@ -61,6 +61,15 @@ describe('canMarkAsReported', () => {
     expect(canMarkAsReported(serviceIncome(), 'professional')).toBe(true)
   })
 
+  it('rejects a professional hourly workday income', () => {
+    expect(
+      canMarkAsReported(
+        serviceIncome({ incomeCalculationMethod: 'hourly_workday' }),
+        'professional',
+      ),
+    ).toBe(false)
+  })
+
   it('rejects an adjustment or other-income record in professional mode', () => {
     expect(canMarkAsReported(serviceIncome({ type: 'ajuste' }), 'professional')).toBe(false)
     expect(canMarkAsReported(serviceIncome({ type: 'otro' }), 'professional')).toBe(false)

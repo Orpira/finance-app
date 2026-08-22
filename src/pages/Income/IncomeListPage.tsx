@@ -785,6 +785,8 @@ export function IncomeListPage() {
                   {group.incomes.map((income) => {
                 const status = getIncomeStatus(income)
                 const isService = isServiceIncome(income)
+                const usesServiceDuration =
+                  isService && income.incomeCalculationMethod !== 'hourly_workday'
                 const incomeAdjustments = income.id
                   ? adjustmentsByIncomeId.get(income.id) ?? []
                   : []
@@ -847,7 +849,7 @@ export function IncomeListPage() {
                               {reportBadge.label}
                             </span>
                           )}
-                          {incomeListModeFeatures.showOperationalStatus && isService && <span
+                          {incomeListModeFeatures.showOperationalStatus && usesServiceDuration && <span
                             className={[
                               'inline-flex rounded-md px-2 py-0.5 text-xs font-semibold',
                               getIncomeStatusClass(status),
