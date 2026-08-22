@@ -6,15 +6,48 @@ Private Balance se encuentra en estado operativo con arquitectura local-first es
 
 La construcción funcional previa a 1.0 está cerrada y la **Fase Pre-Release 0.9** está activa. La planificación ya no usa nuevas iteraciones numeradas: los sprints A-G deben demostrar calidad, Android real, PWA, accesibilidad, rendimiento, privacidad y estabilidad antes de declarar `Private Balance 0.9 RC` y preparar `Private Balance 1.0`. Ver [roadmap de pre-release](../roadmap/PRODUCT_RELEASE_ROADMAP.md).
 
-El **Sprint A (Calidad) quedó COMPLETADO de forma definitiva el 2026-08-05**. Tras la reapertura, SA-008 aisló `Movimientos → Todos` por `usageMode` reutilizando `recordBelongsToUsageMode`; SA-009–SA-011 incorporaron los estados de historial, la acción contextual y la presentación de solo lectura de Temporadas; SA-012 normalizó estados vacíos accionables. SA-013 certificó el cierre en Chromium 151 con IndexedDB real, matriz visual 144/144, formularios y persistencia, backup/restauración local, exportaciones, PIN, Copiloto mock y APK debug verificable. No se añadieron entidades, tablas, rutas, servicios, integraciones, migraciones ni cálculos financieros, y no existen defectos bloqueantes conocidos. La Web App mantiene manifest e iconos válidos, pero no tiene Service Worker activo: instalación, actualización y offline siguen asignados al Sprint C (DT-002). El Sprint B todavía no ha ejecutado su validación física, pero ya dispone de una línea base técnica trazable: APK debug `1.0.1 (2)`, generado desde metadata Gradle con nombre versionado, SHA-256 y firma v2 comprobables. Detalle completo en [Sprint A: Calidad](../product/PRE_RELEASE_0_9_SPRINT_A.md).
+El **Sprint A (Calidad) quedó COMPLETADO de forma definitiva el 2026-08-05**. Tras la reapertura, SA-008 aisló `Movimientos → Todos` por `usageMode` reutilizando `recordBelongsToUsageMode`; SA-009–SA-011 incorporaron los estados de historial, la acción contextual y la presentación de solo lectura de Temporadas; SA-012 normalizó estados vacíos accionables. SA-013 certificó el cierre en Chromium 151 con IndexedDB real, matriz visual 144/144, formularios y persistencia, backup/restauración local, exportaciones, PIN, Copiloto mock y APK debug verificable. No se añadieron entidades, tablas, rutas, servicios, integraciones, migraciones ni cálculos financieros. La Web App mantiene manifest e iconos válidos, pero no tiene Service Worker activo: instalación, actualización y offline siguen asignados al Sprint C (DT-002). Sprint B dispone de una línea base técnica trazable y ya ejecutó validación física parcial en Samsung; esa ejecución abrió SB-002. Detalle completo en [Sprint A: Calidad](../product/PRE_RELEASE_0_9_SPRINT_A.md).
 
 La Auditoría Pre-Sprint B del reporte de ingresos quedó recertificada en
 Chromium 151 antes de iniciar la matriz física: agrupación descendente por fecha,
 subtotales monetarios canónicos, duración profesional normalizada mediante
 `getEffectiveFinancialDuration`, conservación de información individual,
 HTML móvil/escritorio, impresión real, PDF HTML multipágina, fallback textual e
-IndexedDB tras cierre y reapertura. Sprint A permanece cerrado y Sprint B sigue
-listo para ejecución física, todavía no iniciado.
+IndexedDB tras cierre y reapertura. Sprint A permanece cerrado y Sprint B quedó
+habilitado para iniciar su preparación técnica y posterior matriz física.
+
+El Sprint B inició su ejecución física el 2026-08-21 y queda **EN EJECUCIÓN —
+SAMSUNG CERTIFICADO TRAS BLOQUE CORRECTIVO**. El APK candidato fue regenerado desde `95ab862` como
+`private-balance-1.0.1-2-debug.apk`, SHA-256
+`1f6e2f12f518332b8932169480fc9f1862de00b8e0cd68cdd3691e84194edb82`, con
+metadata `1.0.1 (2)`, copias idénticas y firma v2 válida. En un Samsung Galaxy
+A16 `SM-A165F`, Android 16/API 36, SB-SAM-001 (ADB) y SB-SAM-018
+(actualización conservando PIN, configuración e IndexedDB) obtuvieron PASS.
+La instalación limpia y el onboarding alcanzaron PASS. SB-002, que impedía que
+el selector Android entregara el archivo al bloquearse la app, fue corregido con
+TDD y reverificado. La matriz SB-SAM-001–SB-SAM-019 ya tiene cobertura física
+completa: 15 casos PASS y 4 FAIL. Permanecen abiertos SB-003 (edición de cita),
+SB-004 (impresión Android), SB-005 (clasificación de Jornada por tipo de pago) y
+SB-006 (PIN ausente tras restauración/arranque frío); SB-007 es un defecto bajo
+al cancelar el selector de compartir. El Galaxy queda **NO CERTIFICADO POR
+DEFECTOS ABIERTOS** para ese APK histórico.
+
+El bloque correctivo post-certificación generó e instaló como actualización un
+nuevo APK desde la misma base de commit `95ab862eba5629f96644d8f146482166cf3f4a2f`:
+`dist/apk/private-balance-1.0.1-2-debug.apk`, `1.0.1 (2)`, 10.514.428 bytes,
+SHA-256 `6800160c7b82e63aaf887e02b39f5b130e03405c48884e11731de580818021b6`,
+firma v2 válida con 1 firmante debug Android. Gates verdes: `git diff --check`,
+ESLint global, TypeScript, Vitest focal 20/20, Vitest completo 196 archivos /
+2189 PASS / 1 todo y build Vite/TypeScript. Recertificación física dirigida en
+Galaxy A16: instalación `adb install -r` conservó datos; el PIN se solicitó en
+arranque frío y tras `force-stop`, rechazó PIN incorrecto y aceptó el PIN QA; el
+PDF abrió el chooser Android con `balance-por-temporadas.pdf` y al cancelar no
+apareció error falso. Tras `adb reboot` y reconexión ADB, la app volvió a pedir
+PIN antes de exponer contenido y el PIN QA desbloqueó correctamente. La pasada
+estricta de Logcat no devolvió `FATAL EXCEPTION`, ANR ni excepciones críticas de
+Filesystem/Share atribuibles al APK correctivo. Samsung Galaxy A16 queda
+**CERTIFICADO** para ese APK. Xiaomi, Pixel y Motorola permanecen pendientes y
+Sprint C no está habilitado.
 
 ## 2) Estado por componente
 
@@ -132,16 +165,31 @@ listo para ejecución física, todavía no iniciado.
 
 ## 3) Estado de calidad
 
-- Última validación completa (2026-08-21): 188 archivos y 2153 pruebas
+- Última validación completa (2026-08-22): 193 archivos y 2182 pruebas
   aprobadas, con 1 `todo` preexistente.
 - ESLint, build TypeScript/Vite e IndexedDB real correctos en Chromium 151. La
   matriz visual certificada permanece en 144/144 y Temporadas 8/8, sin
   bloqueantes.
-- APK debug `1.0.1 (2)` construido con JDK 21 y Android SDK API 36 desde un
-  entorno sin `ANDROID_HOME`; estructura, copia versionada, assets y firma APK
-  v2 verificados. No equivale a una prueba en dispositivo físico.
+- APK debug correctivo `1.0.1 (2)` construido con JDK 21 y Android SDK API 36:
+  SHA-256 `6800160c7b82e63aaf887e02b39f5b130e03405c48884e11731de580818021b6`,
+  estructura y firma APK v2 verificadas. Instalado mediante actualización en un
+  Samsung Galaxy A16 físico, con PIN/configuración conservados, arranque frío,
+  `force-stop`, reboot, PDF Android y cancelación del chooser verificados. La
+  matriz física Samsung histórica está completa y el APK correctivo queda
+  certificado.
 - La auditoría PB-004 de conversación permanece abierta y separada de la
   entrega PB-001 a PB-003; sus hallazgos no se consideran remediados.
+- SB-002 quedó corregido y reverificado en el Galaxy A16: `PinGate` preserva el
+  árbol desbloqueado durante actividades externas y el backup JSON recuperó
+  ingreso, gasto, cita, temporadas y configuración sin crash. El PIN pareció
+  válido en la sesión, pero SB-006 demostró que no persistía tras arranque frío.
+  El APK usado para esta reverificación tiene SHA-256
+  `a46ed312aa86563241d50d8320b47945cae62a47eaf98970968c5d03218aa725`.
+- Cierre Samsung (2026-08-22): Temporadas, Gastos, Movimientos, exportaciones,
+  ciclo Android, rotación, tema y estabilidad alcanzaron PASS. Agenda, Reportes,
+  PDF/impresión y PIN quedaron FAIL por SB-003–SB-006. El PDF compartible fue
+  A4 de 2 páginas; CSV, Excel y PDF existieron físicamente y abrieron el selector
+  Android sin enviarse a servicios externos.
 
 ## 4) Estado documental
 
@@ -158,4 +206,4 @@ listo para ejecución física, todavía no iniciado.
 
 ## 6) Veredicto de fase documental
 
-Estado de entrega documental: Sprint A cerrado definitivamente con SA-008–SA-013 documentados y certificados. La línea base técnica de Android para Sprint B queda designada como `1.0.1 (2)`; la instalación y validación en dispositivo físico continúan pendientes. PWA offline, accesibilidad, rendimiento, privacidad y estabilidad conservan sus sprints propios.
+Estado de entrega documental: Sprint A cerrado definitivamente con SA-008–SA-013 documentados y certificados. La línea base técnica de Android para Sprint B queda designada como `1.0.1 (2)`; la cobertura Samsung está completa y el Galaxy A16 queda certificado con el APK correctivo post-certificación. No se inicia otro fabricante ni Sprint C. PWA offline, accesibilidad, rendimiento, privacidad y estabilidad conservan sus sprints propios.

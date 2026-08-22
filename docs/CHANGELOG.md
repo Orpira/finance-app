@@ -12,6 +12,34 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 - **Rotación inmediata de la clave de firma V2 para licencias de pago** (autorizada por el propietario el 2026-08-09): cliente y backend de automatización pasan a confiar coordinadamente en el nuevo par público; la clave privada se conserva fuera del repositorio con permisos restrictivos y la clave dedicada de trial permanece sin cambios. Las licencias V2 de pago emitidas con la clave anterior dejarán de ser válidas al desplegar este cambio y deberán reemitirse. Se actualizó la fixture firmada de política `single` y `.gitignore` protege ahora también salidas accidentales cuyo nombre comience por `PB-DEVICE-`. Se verificaron 28 pruebas focalizadas de licencias/automatización. El despliegue coordinado de web, servidor y Android sigue pendiente.
 
+### Fixed
+
+- **Sprint B Samsung — bloque correctivo post-certificación**: se aplican
+  correcciones TDD para SB-003–SB-007. Causa raíz y corrección: agenda persistía
+  mediante `updateAppointment`, pero el guardado quedaba acoplado a errores
+  secundarios de programación de recordatorios; PDF Android usaba el recorrido
+  web de `window.open` desde vista previa; el reporte por tipo de pago agrupaba
+  por `paymentType` crudo y no por semántica de Jornada; la restauración de
+  settings no cerraba explícitamente el contrato `pinEnabled + pinHash`; y
+  `Share.share` no distinguía cancelación voluntaria de error real. Cobertura:
+  `src/services/appointmentService.test.ts`,
+  `src/services/paymentTypeReportService.test.ts`,
+  `src/services/reportShareService.test.ts`,
+  `src/services/backupService.test.ts` y regresiones existentes de exportación.
+  Gates: `git diff --check`, `npm run lint`, `npm run typecheck`,
+  focal 20/20, suite completa 196 archivos / 2189 PASS / 1 todo, y
+  `npm run build` verdes. APK correctivo instalado con `adb install -r`:
+  `private-balance-1.0.1-2-debug.apk`, `1.0.1 (2)`, 10.514.428 bytes,
+  SHA-256 `6800160c7b82e63aaf887e02b39f5b130e03405c48884e11731de580818021b6`,
+  firma APK Signature Scheme v2, 1 firmante debug Android, base
+  `95ab862eba5629f96644d8f146482166cf3f4a2f`. Recertificación dirigida física
+  en Samsung Galaxy A16: PIN solicitado tras instalación, force-stop y reboot,
+  PIN incorrecto rechazado, PIN QA aceptado, PDF abre chooser Android con
+  `balance-por-temporadas.pdf` y cancelación vuelve sin error. La pasada
+  estricta de Logcat no devolvió `FATAL EXCEPTION`, ANR ni excepciones críticas
+  de Filesystem/Share atribuibles al APK correctivo. Resultado:
+  **SAMSUNG GALAXY A16 — CERTIFICADO** para ese APK.
+
 ### Added
 
 - **Corrección: "Jornada por horas" pedía el tiempo trabajado en minutos** (reportado por el usuario desde el formulario `/income/nuevo`, con capturas del wizard/configuración y del registro de ingreso): el campo "Tiempo trabajado" tomaba la unidad de `settings.workedTimeUnit` — un ajuste global con valor por defecto `'minutes'` que nunca se sincronizaba con el método de cálculo elegido — en vez de derivarla del `incomeCalculationMethod` vigente. Se añade `getWorkedTimeUnitForMethod` en `catalogs/incomeCalculationMethods.ts`, que fija la unidad por método (horas para `hourly_workday`, minutos para `service_duration`, ya que los minutos son propios de "Servicio por tiempo"); `IncomePage.tsx` la deriva en render (`effectiveWorkedTimeUnit`) para ingresos nuevos y respeta la unidad ya guardada al editar un registro existente, para no reinterpretar datos históricos capturados antes de esta corrección. El input de horas ahora admite decimales (`step="0.25"`, p. ej. 7.5 horas). Cobertura: `test/incomeCalculationMethods.test.ts`.

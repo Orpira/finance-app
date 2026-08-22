@@ -1035,6 +1035,10 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.settings.bulkPut(
           (snapshot.settings ?? []).map((settings) => {
             const usageMode = resolveUsageMode(settings)
+            const pinHash =
+              typeof settings.pinHash === 'string' && settings.pinHash.length > 0
+                ? settings.pinHash
+                : undefined
 
             return {
               ...createDefaultSettings(),
@@ -1042,6 +1046,8 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
               id: DEFAULT_SETTINGS_ID,
               usageMode,
               userType: toLegacyUserType(usageMode),
+              pinEnabled: Boolean(settings.pinEnabled && pinHash),
+              pinHash,
             }
           }),
         ),

@@ -359,7 +359,11 @@ export function AppointmentFormPage() {
       }
 
       if (savedAppointment) {
-        await scheduleAppointmentReminders(savedAppointment)
+        try {
+          await scheduleAppointmentReminders(savedAppointment)
+        } catch (error) {
+          console.warn('No se pudieron programar los recordatorios de la cita.', error)
+        }
         navigate(`/agenda?date=${date}&appointment=${savedAppointment.id}`, {
           replace: true,
         })

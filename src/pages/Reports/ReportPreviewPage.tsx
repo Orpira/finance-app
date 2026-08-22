@@ -1,4 +1,5 @@
 import { FileText, Share2 } from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -57,6 +58,26 @@ export function ReportPreviewPage() {
   const report = useMemo(() => getStoredReportPreview(), [])
 
   async function handlePrintReport() {
+    if (report && Capacitor.isNativePlatform()) {
+      try {
+        const { shareReportPdf } = await import('../../services/reportShareService')
+
+        await shareReportPdf({
+          fileName: report.title,
+          html: report.html,
+          text: report.text,
+          title: report.title,
+        })
+      } catch {
+        await alert({
+          type: 'error',
+          title: 'No se pudo generar el reporte',
+          message: 'No se pudo generar el PDF del reporte.',
+        })
+      }
+      return
+    }
+
     if (!report || openPrintReport(report.title, report.html)) {
       return
     }
@@ -76,12 +97,13 @@ export function ReportPreviewPage() {
     try {
       const { shareReportPdf } = await import('../../services/reportShareService')
 
-      await shareReportPdf({
+      const result = await shareReportPdf({
         fileName: report.title,
         html: report.html,
         text: report.text,
         title: report.title,
       })
+      if (result === 'cancelled') return
     } catch {
       await alert({
         type: 'error',

@@ -19,6 +19,7 @@ import { getSettings } from '../../services/settingsService'
 import { getSeasonGoalProgress, listEarningPeriods } from '../../services/earningPeriodService'
 import { buildBalanceReport } from '../../services/balanceReportService'
 import { runFinancialEngineShadowMode } from '../../services/financialEngineShadowMode'
+import { groupReportableIncomesByPaymentType } from '../../services/paymentTypeReportService'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
@@ -38,6 +39,7 @@ import {
 } from '../../utils/financeStats'
 import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 import {
+  getIncomePaymentTypeLabel,
   getIncomeTypeLabel,
   isServiceIncome,
 } from '../../utils/incomeTypes'
@@ -713,7 +715,7 @@ export function ReportsPage() {
           <tr>
             <td>${escapeHtml(getIncomeDisplayName(income))}</td>
             <td>${escapeHtml(getIncomeTypeLabel(income))}</td>
-            <td>${escapeHtml(getPaymentTypeLabel(income.paymentType))}</td>
+            <td>${escapeHtml(getIncomePaymentTypeLabel(income))}</td>
             ${!isBasicUser ? `<td>${isServiceIncome(income) ? escapeHtml(getIncomeDurationDisplay(income)) : 'No aplica'}</td>` : ''}
             <td>${escapeHtml(income.date)}</td>
             <td>${escapeHtml(formatExportDateTime(income.createdAt))}</td>
@@ -1124,21 +1126,9 @@ export function ReportsPage() {
         (sum, income) => sum + getIncomeValue(income, primaryCurrency),
         0,
       )
-      const paymentTypeMap = new Map<string, ServiceIncome[]>()
-      paymentIncomesOnly.forEach((income) => {
-        const paymentType = income.paymentType || 'SIN_TIPO'
-        paymentTypeMap.set(paymentType, [
-          ...(paymentTypeMap.get(paymentType) ?? []),
-          income,
-        ])
-      })
+      const paymentTypeMap = groupReportableIncomesByPaymentType(paymentIncomesOnly)
       const paymentTypeSections = Array.from(paymentTypeMap.entries())
-        .sort(([firstType], [secondType]) =>
-          getPaymentTypeLabel(firstType).localeCompare(
-            getPaymentTypeLabel(secondType),
-            'es',
-          ),
-        )
+        .sort(([firstType], [secondType]) => firstType.localeCompare(secondType, 'es'))
         .map(([paymentType, paymentIncomes]) => {
           const paymentTotal = paymentIncomes.reduce(
             (sum, income) => sum + getIncomeValue(income, primaryCurrency),
@@ -1146,7 +1136,7 @@ export function ReportsPage() {
           )
 
           return `
-            <h2>Tipo de pago: ${escapeHtml(getPaymentTypeLabel(paymentType))}</h2>
+            <h2>Tipo de pago: ${escapeHtml(paymentType)}</h2>
             <div class="subtotal">Subtotal tipo de pago: ${escapeHtml(
               formatCurrency(paymentTotal, primaryCurrency),
             )}</div>
@@ -1161,12 +1151,7 @@ export function ReportsPage() {
         })
         .join('')
       const paymentTypeTextSections = Array.from(paymentTypeMap.entries())
-        .sort(([firstType], [secondType]) =>
-          getPaymentTypeLabel(firstType).localeCompare(
-            getPaymentTypeLabel(secondType),
-            'es',
-          ),
-        )
+        .sort(([firstType], [secondType]) => firstType.localeCompare(secondType, 'es'))
         .map(([paymentType, paymentIncomes]) => {
           const paymentTotal = paymentIncomes.reduce(
             (sum, income) => sum + getIncomeValue(income, primaryCurrency),
@@ -1174,7 +1159,7 @@ export function ReportsPage() {
           )
 
           return [
-            `Tipo de pago: ${getPaymentTypeLabel(paymentType)}`,
+            `Tipo de pago: ${paymentType}`,
             `Subtotal tipo de pago: ${formatCurrency(
               paymentTotal,
               primaryCurrency,
@@ -1306,12 +1291,13 @@ export function ReportsPage() {
     try {
       const { shareReportPdf } = await import('../../services/reportShareService')
 
-      await shareReportPdf({
+      const result = await shareReportPdf({
         fileName: report.title,
         html: report.html,
         text: report.text,
         title: report.title,
       })
+      if (result === 'cancelled') return
     } catch {
       await alert({
         type: 'error',
@@ -1332,7 +1318,8 @@ export function ReportsPage() {
     try {
       const { shareIncomesAsCsv } = await import('../../services/incomeExportService')
 
-      await shareIncomesAsCsv(incomes, primaryCurrency, activeUsageMode, 'reporte-de-ingresos')
+      const result = await shareIncomesAsCsv(incomes, primaryCurrency, activeUsageMode, 'reporte-de-ingresos')
+      if (result === 'cancelled') return
     } catch {
       await alert({
         type: 'error',
@@ -1346,7 +1333,8 @@ export function ReportsPage() {
     try {
       const { shareIncomesAsExcel } = await import('../../services/incomeExportService')
 
-      await shareIncomesAsExcel(incomes, primaryCurrency, activeUsageMode, 'reporte-de-ingresos')
+      const result = await shareIncomesAsExcel(incomes, primaryCurrency, activeUsageMode, 'reporte-de-ingresos')
+      if (result === 'cancelled') return
     } catch {
       await alert({
         type: 'error',

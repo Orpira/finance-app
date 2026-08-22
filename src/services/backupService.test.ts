@@ -160,6 +160,31 @@ describe('importBackup', () => {
     )
   })
 
+  it('mantiene pinEnabled y pinHash al restaurar una copia y prepararla para arranque frío', async () => {
+    const restoredSettings = {
+      ...settings(),
+      pinEnabled: true,
+      pinHash: 'v2:210000:salt:hash',
+    } as AppSettings
+    const snapshot = backupDataToSnapshot({
+      version: '2',
+      generatedAt: '2026-08-22T00:00:00.000Z',
+      appName: 'Private Balance',
+      services: [],
+      expenses: [],
+      appointments: [],
+      settings: restoredSettings,
+      exchangeRates: [],
+    })
+
+    expect(snapshot.settings[0]).toEqual(
+      expect.objectContaining({
+        pinEnabled: true,
+        pinHash: 'v2:210000:salt:hash',
+      }),
+    )
+  })
+
   it('confirma los registros persistidos e identifica un backup solo histórico', async () => {
     servicesTable.count.mockResolvedValue(179)
     expensesTable.count.mockResolvedValue(2)

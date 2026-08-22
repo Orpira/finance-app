@@ -11,6 +11,8 @@ interface ShareReportPdfOptions {
   title: string
 }
 
+export type ShareReportResult = 'success' | 'cancelled'
+
 function sanitizeFileName(fileName: string) {
   return fileName
     .normalize('NFD')
@@ -198,7 +200,11 @@ function downloadPdfWeb(blob: Blob, fileName: string) {
   }, 1000)
 }
 
-async function sharePdfWeb(blob: Blob, fileName: string, title: string) {
+async function sharePdfWeb(
+  blob: Blob,
+  fileName: string,
+  title: string,
+): Promise<ShareReportResult> {
   const file = new File([blob], fileName, { type: 'application/pdf' })
   const canShareFiles =
     typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })
@@ -208,13 +214,19 @@ async function sharePdfWeb(blob: Blob, fileName: string, title: string) {
       files: [file],
       title,
     })
-    return
+    return 'success' satisfies ShareReportResult
   }
 
   downloadPdfWeb(blob, fileName)
+  return 'success' satisfies ShareReportResult
 }
 
-export async function shareReportPdf(options: ShareReportPdfOptions) {
+function isShareCancelled(error: unknown) {
+  if (!(error instanceof Error)) return false
+  return error.name === 'AbortError' || /cancel/i.test(error.message)
+}
+
+export async function shareReportPdf(options: ShareReportPdfOptions): Promise<ShareReportResult> {
   const pdf = await createReportPdf(options)
   const fileName = `${sanitizeFileName(options.fileName) || 'reporte'}.pdf`
 
@@ -226,13 +238,23 @@ export async function shareReportPdf(options: ShareReportPdfOptions) {
       path: fileName,
     })
 
-    await Share.share({
-      dialogTitle: 'Compartir reporte',
-      files: [savedFile.uri],
-      title: options.title,
-    })
-    return
+    try {
+      await Share.share({
+        dialogTitle: 'Compartir reporte',
+        files: [savedFile.uri],
+        title: options.title,
+      })
+      return 'success'
+    } catch (error) {
+      if (isShareCancelled(error)) return 'cancelled'
+      throw error
+    }
   }
 
-  await sharePdfWeb(pdf.output('blob'), fileName, options.title)
+  try {
+    return await sharePdfWeb(pdf.output('blob'), fileName, options.title)
+  } catch (error) {
+    if (isShareCancelled(error)) return 'cancelled'
+    throw error
+  }
 }

@@ -56,6 +56,9 @@ export function applyTheme(theme: AppSettings['theme']) {
 
 function normalizeSettings(settings: AppSettings): AppSettings {
   const usageMode = resolveUsageMode(settings)
+  const pinHash = typeof settings.pinHash === 'string' && settings.pinHash.length > 0
+    ? settings.pinHash
+    : undefined
 
   return {
     ...createDefaultSettings(),
@@ -63,7 +66,13 @@ function normalizeSettings(settings: AppSettings): AppSettings {
     id: DEFAULT_SETTINGS_ID,
     usageMode,
     userType: toLegacyUserType(usageMode),
+    pinEnabled: Boolean(settings.pinEnabled && pinHash),
+    pinHash,
   }
+}
+
+export function normalizeRestoredSettings(settings: AppSettings): AppSettings {
+  return normalizeSettings(settings)
 }
 
 export async function getSettings() {

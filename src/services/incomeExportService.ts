@@ -4,8 +4,7 @@ import { Share } from '@capacitor/share'
 
 import { getIncomeDisplayName } from '../utils/activityLabels'
 import { getStoredIncomeValue } from '../utils/financeStats'
-import { getIncomeTypeLabel } from '../utils/incomeTypes'
-import { getPaymentTypeLabel } from '../utils/paymentTypes'
+import { getIncomePaymentTypeLabel, getIncomeTypeLabel } from '../utils/incomeTypes'
 import { canMarkAsReported, getRecordReportBadge } from '../utils/reportStatus'
 import type { ServiceIncome } from '../types/service'
 import type { CurrencyCode, UsageMode } from '../types/settings'
@@ -26,6 +25,8 @@ export interface IncomeExportRow {
   amount: number
   currency: CurrencyCode
 }
+
+export type ShareTextFileResult = 'success' | 'cancelled'
 
 const EXPORT_COLUMNS: Array<{ key: keyof IncomeExportRow; header: string }> = [
   { key: 'id', header: 'ID' },
@@ -77,7 +78,7 @@ export function buildIncomeExportRows(
       reportedAt: isReportable && badge.isReported ? formatDateTime(badge.reportedAt) : '',
       reportReference: isReportable ? badge.reportReference ?? '' : '',
       reportNotes: isReportable ? badge.reportNotes ?? '' : '',
-      paymentType: getPaymentTypeLabel(income.paymentType),
+      paymentType: getIncomePaymentTypeLabel(income),
       country: income.country ?? '',
       city: income.city ?? '',
       amount: getStoredIncomeValue(income, currency),
@@ -179,7 +180,7 @@ async function shareTextFile(
   fileName: string,
   mimeType: string,
   dialogTitle: string,
-) {
+): Promise<ShareTextFileResult> {
   if (Capacitor.isNativePlatform()) {
     const savedFile = await Filesystem.writeFile({
       data: content,
@@ -188,15 +189,26 @@ async function shareTextFile(
       path: fileName,
     })
 
-    await Share.share({
-      dialogTitle,
-      files: [savedFile.uri],
-      title: dialogTitle,
-    })
-    return
+    try {
+      await Share.share({
+        dialogTitle,
+        files: [savedFile.uri],
+        title: dialogTitle,
+      })
+      return 'success'
+    } catch (error) {
+      if (isShareCancelled(error)) return 'cancelled'
+      throw error
+    }
   }
 
   downloadTextFileWeb(content, fileName, mimeType)
+  return 'success'
+}
+
+function isShareCancelled(error: unknown) {
+  if (!(error instanceof Error)) return false
+  return error.name === 'AbortError' || /cancel/i.test(error.message)
 }
 
 export async function shareIncomesAsCsv(
@@ -208,7 +220,7 @@ export async function shareIncomesAsCsv(
   const rows = buildIncomeExportRows(incomes, currency, usageMode)
   const csv = buildIncomeCsv(rows)
 
-  await shareTextFile(
+  return shareTextFile(
     csv,
     `${sanitizeFileName(fileName) || 'ingresos'}.csv`,
     'text/csv;charset=utf-8',
@@ -225,7 +237,7 @@ export async function shareIncomesAsExcel(
   const rows = buildIncomeExportRows(incomes, currency, usageMode)
   const xml = buildIncomeSpreadsheetXml(rows)
 
-  await shareTextFile(
+  return shareTextFile(
     xml,
     `${sanitizeFileName(fileName) || 'ingresos'}.xls`,
     'application/vnd.ms-excel',

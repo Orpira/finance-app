@@ -1,3 +1,4 @@
+import { getPaymentTypeLabel } from './paymentTypes'
 import type { ServiceIncome, ServiceIncomeType } from '../types/service'
 import { roundMoney } from './currency'
 
@@ -68,4 +69,12 @@ export function getIncomeTypeLabel(income: Pick<ServiceIncome, 'type'>) {
   if (type === 'ajuste') return 'Ajuste'
   if (type === 'otro') return 'Otro ingreso histórico'
   return 'Servicio'
+}
+
+export function getIncomePaymentTypeLabel(
+  income: Pick<ServiceIncome, 'incomeCalculationMethod' | 'paymentType'>,
+) {
+  return income.incomeCalculationMethod === 'hourly_workday'
+    ? 'No aplica'
+    : getPaymentTypeLabel(income.paymentType)
 }
