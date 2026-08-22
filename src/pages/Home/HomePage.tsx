@@ -430,6 +430,14 @@ export function HomePage() {
 
   const cards = [
     {
+      icon: TrendingUp,
+      label: isBasicMode(settings) ? 'Balance' : 'Ganancia',
+      value: totals.current.primaryNet,
+      previous: totals.previous.primaryNet,
+      sensitive: true,
+      tone: 'text-sky-700 bg-sky-100 dark:bg-sky-950 dark:text-sky-300',
+    },
+    {
       icon: PlusCircle,
       label: 'Ingresos',
       // additionalsTotal se muestra aparte en la tarjeta "Adicionales": no se
@@ -460,14 +468,7 @@ export function HomePage() {
           },
         ]
       : []),
-       {
-      icon: TrendingUp,
-      label: isBasicMode(settings) ? 'Balance' : 'Ganancia',
-      value: totals.current.primaryNet,
-      previous: totals.previous.primaryNet,
-      sensitive: true,
-      tone: 'text-sky-700 bg-sky-100 dark:bg-sky-950 dark:text-sky-300',
-    },
+       
   ]
   const seasonGoalProgress =
     activePeriod && activePeriodStats
