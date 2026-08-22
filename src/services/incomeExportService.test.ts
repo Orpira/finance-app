@@ -60,6 +60,14 @@ describe('buildIncomeExportRows', () => {
     expect(rows[0].reportReference).toBe('')
     expect(rows[0].reportedAt).toBe('')
   })
+
+  it('exports an hourly workday with its business label', () => {
+    const rows = buildIncomeExportRows([
+      income({ incomeCalculationMethod: 'hourly_workday' }),
+    ], 'EUR', 'professional')
+
+    expect(rows[0].type).toBe('Jornada por horas')
+  })
 })
 
 describe('buildIncomeCsv', () => {

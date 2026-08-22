@@ -40,8 +40,7 @@ import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { formatCurrency, roundMoney } from '../../utils/currency'
 import { calculateFinancialTotals, sumIncomeAdditionalsValue } from '../../utils/financeStats'
-import { getIncomeTypeLabel } from '../../utils/incomeTypes'
-import { getPaymentTypeLabel } from '../../utils/paymentTypes'
+import { getIncomeCompactLabel } from '../../utils/incomeTypes'
 import { getActiveEarningPeriod, getSeasonGoalProgress, getSeasonStatistics, type SeasonStatistics } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { FinancialGoal } from '../../types/financialGoal'
@@ -85,7 +84,7 @@ function buildRecentMovements(incomes: ServiceIncome[], expenses: Expense[]): Re
     key: `income-${income.id}`,
     kind: 'ingreso',
     date: income.date,
-    label: `${getIncomeTypeLabel(income)} · ${getPaymentTypeLabel(income.paymentType)}`,
+    label: getIncomeCompactLabel(income),
     amount: income.totalAmount,
     currency: income.currency,
     href: `/income/${income.id}`,

@@ -39,6 +39,33 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
   estricta de Logcat no devolvió `FATAL EXCEPTION`, ANR ni excepciones críticas
   de Filesystem/Share atribuibles al APK correctivo. Resultado:
   **SAMSUNG GALAXY A16 — CERTIFICADO** para ese APK.
+- **Contraste de estados de ingreso en tema oscuro**: `Finalizado`, `En
+  ejecución` y el estado por defecto usan pares explícitos de fondo y texto en
+  oscuro. El defecto se encontró al revisar el CRUD físico de Jornada en un
+  Samsung Galaxy A16 y se reverificó tras `adb install -r`: `Finalizado` alcanzó
+  `8,47:1` en oscuro y `6,70:1` en claro, con texto de 12 px y sin overflow. La
+  evidencia elevó SB-SAM-005 a PASS en ese momento; la certificación completa
+  llegó después con el bloque correctivo SB-003–SB-007.
+- **Jornada por horas sin tipo de pago inmediato**: el formulario oculta el
+  selector para `hourly_workday` y `createServiceIncome` normaliza el campo a
+  `undefined` antes de persistir, aunque otro caller lo envíe. Al editar una
+  jornada histórica se ignoran cambios de `paymentType` para conservar el dato
+  legado; `service_duration` mantiene su comportamiento. Cobertura:
+  `src/services/incomeService.test.ts` y
+  `test/incomeCalculationMethods.test.ts`.
+  Las ediciones que no vuelven a capturar el pago preservan el dato histórico
+  de los servicios, y los ingresos legado sin snapshot de método se interpretan
+  conservadoramente como `service_duration`.
+- **Ingresos anteriores al inicio de una temporada**: `createServiceIncome` y
+  `updateServiceIncome` rechazan la operación antes de escribir en IndexedDB
+  cuando la fecha del ingreso precede al inicio de la temporada vinculada. La
+  fecha inicial sí es válida, el modo Básico conserva su comportamiento y el
+  formulario profesional aplica además el inicio de la temporada vinculada
+  como fecha mínima al editar. La actualización rechaza vínculos ausentes,
+  inexistentes, inconsistentes o intentos de cambiar de temporada, y repite la
+  validación dentro de la transacción Dexie que realiza la escritura.
+  Cobertura: `src/services/incomeService.test.ts`.
+
 - **SB-002 — restauración JSON en Samsung Galaxy A16**: `PinGate` ya no desmonta
   el árbol desbloqueado y el `<input type="file">` cuando Android abre el
   selector. Lo conserva oculto e inerte durante el bloqueo. Tras TDD y
@@ -46,8 +73,37 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
   temporadas, sin crash. El PIN pareció operativo dentro de la misma sesión,
   pero SB-006 demostró después que no persistió al arranque frío.
 
+### Hallazgos históricos Samsung
+
+- **Primera matriz física Samsung Galaxy A16**: SB-SAM-001–SB-SAM-019 quedó
+  completamente ejecutada con 15 PASS y 4 FAIL sobre el APK defectuoso. En esa
+  matriz, SB-003 impedía editar una cita pendiente de la temporada activa;
+  SB-004 hacía que `Generar PDF` abriera Chrome en vez del spooler; SB-005
+  agrupaba una Jornada bajo `Transferencia` aunque la fila dijera `No aplica`;
+  SB-006 dejaba el PIN desactivado tras restauración/arranque frío y se clasificó
+  BLOCKER; y SB-007 presentaba cancelar el selector Android como fallo de
+  generación aunque el archivo existiera. Estos hallazgos fueron corregidos por
+  SB-003–SB-007 y recertificados posteriormente en el Galaxy A16, como documenta
+  el bloque correctivo anterior. En aquella matriz no se modificó código ni se
+  inició otro fabricante o Sprint C.
+
 ### Added
 
+- **Consulta de divisas desde Más**: añade una opción y pantalla propias que
+  permiten indicar importe y moneda base y presentan cuatro conversiones
+  deduplicadas, priorizando la moneda secundaria.
+  `Más` queda visible tanto en modo Personal como Profesional; Configuración
+  continúa accesible desde esa pantalla.
+  Reutiliza la cotización API diaria guardada en IndexedDB, respeta el modo de
+  tasa para la carga automática, ofrece actualización explícita y muestra la
+  fuente (`Frankfurter`, caché, tasa manual o referencia local). Sin una tasa
+  válida presenta `No disponible`; nunca altera movimientos, balances ni
+  configuración. La salida de red queda documentada en `docs/PRIVACY.md`.
+- **Terminología contextual de ingresos**: el formulario cambia a "Tipo de
+  registro" y muestra `Jornada` para `hourly_workday`; listados, detalle,
+  Inicio, Movimientos, reportes y exportaciones muestran `Jornada por horas`.
+  El tipo de pago se omite en etiquetas compactas y se presenta como "No
+  aplica" en tablas, sin migrar `type` ni reescribir valores históricos.
 - **Corrección: "Jornada por horas" pedía el tiempo trabajado en minutos** (reportado por el usuario desde el formulario `/income/nuevo`, con capturas del wizard/configuración y del registro de ingreso): el campo "Tiempo trabajado" tomaba la unidad de `settings.workedTimeUnit` — un ajuste global con valor por defecto `'minutes'` que nunca se sincronizaba con el método de cálculo elegido — en vez de derivarla del `incomeCalculationMethod` vigente. Se añade `getWorkedTimeUnitForMethod` en `catalogs/incomeCalculationMethods.ts`, que fija la unidad por método (horas para `hourly_workday`, minutos para `service_duration`, ya que los minutos son propios de "Servicio por tiempo"); `IncomePage.tsx` la deriva en render (`effectiveWorkedTimeUnit`) para ingresos nuevos y respeta la unidad ya guardada al editar un registro existente, para no reinterpretar datos históricos capturados antes de esta corrección. El input de horas ahora admite decimales (`step="0.25"`, p. ej. 7.5 horas). Cobertura: `test/incomeCalculationMethods.test.ts`.
 
 - **Higiene de Fast Refresh (`react-refresh/only-export-components`) en el trabajo de Sprint A**: `getFinancialListEmptyReason` y `getSeasonOverviewState` — funciones puras exportadas junto a componentes en `ActionableEmptyState.tsx` y `SeasonsPage.tsx` — bloqueaban `npm run lint`, contradiciendo la certificación SA-013 de más abajo. Se movieron sin cambiar comportamiento a `src/utils/financialListEmptyState.ts` y `src/utils/seasonOverview.ts`; `npm run lint` vuelve a estar en verde (185 archivos, 2136 pruebas, 1 `todo` preexistente).

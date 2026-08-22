@@ -6,7 +6,9 @@ import {
   getWorkedTimeUnitForMethod,
   isIncomeCalculationMethod,
   isWorkedTimeUnit,
+  shouldCollectPaymentTypeAtRegistration,
 } from '../src/catalogs/incomeCalculationMethods'
+import { readFileSync } from 'node:fs'
 
 describe('INCOME_CALCULATION_METHODS', () => {
   it('expone exactamente los dos métodos aprobados en PB-IS-0007', () => {
@@ -61,5 +63,23 @@ describe('getWorkedTimeUnitForMethod', () => {
 
   it('"Servicio por tiempo" siempre pide el tiempo trabajado en minutos', () => {
     expect(getWorkedTimeUnitForMethod('service_duration')).toBe('minutes')
+  })
+})
+
+describe('shouldCollectPaymentTypeAtRegistration', () => {
+  it('solo solicita tipo de pago al registrar un servicio por tiempo', () => {
+    expect(shouldCollectPaymentTypeAtRegistration('service_duration')).toBe(true)
+    expect(shouldCollectPaymentTypeAtRegistration('hourly_workday')).toBe(false)
+  })
+
+  it('mantiene los ingresos históricos sin snapshot como servicios al editarlos', () => {
+    const source = readFileSync(
+      new URL('../src/pages/Income/IncomePage.tsx', import.meta.url),
+      'utf8',
+    )
+
+    expect(source).toContain(
+      "editingIncome.incomeCalculationMethod ?? 'service_duration'",
+    )
   })
 })

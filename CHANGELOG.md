@@ -8,6 +8,9 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 ### Added
 
+- `Más` incorpora la opción `Consulta de divisas`, con importe y moneda base
+  editables, cuatro conversiones, caché diario, actualización explícita, fuente
+  visible y fallback local/offline. No modifica balances ni registros.
 - Reestructuración de la presentación y documentación pública del repositorio: README principal, `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md` (raíz), `docs/PRIVACY.md`, plantillas de GitHub y guía de recursos visuales. No introduce cambios funcionales en la aplicación.
 
 ### Fixed
@@ -25,6 +28,15 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
   de archivos está abierto. El Galaxy A16 recuperó ingreso, gasto, cita,
   temporadas y configuración; SB-006 separa la pérdida del PIN detectada después
   en un arranque frío.
+- La insignia de estado `Finalizado` recupera contraste en tema oscuro mediante
+  colores explícitos de fondo y texto; la recertificación física en el Galaxy
+  A16 midió `8,47:1` en oscuro y `6,70:1` en claro, sin overflow.
+- El registro de ingresos por Jornada por horas deja de solicitar y persistir
+  tipo de pago. Servicio por tiempo conserva el selector, y editar una jornada
+  antigua no elimina ni reescribe un valor histórico existente.
+- Los ingresos del modo Profesional ya no pueden crearse ni editarse con una
+  fecha anterior al inicio de su temporada. La validación se aplica antes de
+  persistir en IndexedDB y el selector de edición limita la fecha mínima.
 - Los reportes de ingresos agrupan los registros por fecha sin perder identidad,
   tipo, método de pago, ubicación, moneda original, importe convertido, notas ni
   trazabilidad. Los subtotales profesionales reutilizan la duración efectiva
@@ -39,6 +51,9 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 ### Changed
 
+- El formulario usa "Tipo de registro" y distingue `Servicio` de `Jornada`;
+  las superficies de consulta, reportes y exportaciones presentan
+  "Jornada por horas" sin añadir un tipo de pago que no aplica.
 - Sprint B Android queda `EN EJECUCIÓN — SAMSUNG CERTIFICADO TRAS BLOQUE
   CORRECTIVO`. La matriz física Samsung histórica está completa: 15 PASS y
   4 FAIL en el APK defectuoso. El APK correctivo post-certificación corrige

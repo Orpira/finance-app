@@ -12,9 +12,8 @@ import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { CurrencyCode } from '../../types/settings'
-import { getIncomeTypeLabel } from '../../utils/incomeTypes'
 import { formatCurrency } from '../../utils/currency'
-import { getPaymentTypeLabel } from '../../utils/paymentTypes'
+import { getIncomeCompactLabel, getIncomeTypeLabel } from '../../utils/incomeTypes'
 import { getRecordReportBadge } from '../../utils/reportStatus'
 import ExpenseListPage from '../Expenses/ExpenseListPage'
 import IncomeListPage from '../Income/IncomeListPage'
@@ -54,14 +53,14 @@ function toUnifiedMovements(incomes: ServiceIncome[], expenses: Expense[]): Unif
     key: `income-${income.id}`,
     kind: 'income',
     date: income.date,
-    label: `${getIncomeTypeLabel(income)} · ${getPaymentTypeLabel(income.paymentType)}`,
+    label: getIncomeCompactLabel(income),
     amount: income.totalAmount,
     currency: income.currency,
     href: `/income/${income.id}`,
     reportBadge: getRecordReportBadge(income),
     category: getIncomeTypeLabel(income),
     reported: getRecordReportBadge(income).isReported,
-    searchText: `${getIncomeTypeLabel(income)} ${getPaymentTypeLabel(income.paymentType)}`,
+    searchText: getIncomeCompactLabel(income),
   }))
 
   const expenseMovements: UnifiedMovement[] = expenses.map((expense) => ({

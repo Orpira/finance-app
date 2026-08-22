@@ -27,3 +27,9 @@ export function getWorkedTimeUnitForMethod(
 ): WorkedTimeUnit {
   return method === 'hourly_workday' ? 'hours' : 'minutes'
 }
+
+export function shouldCollectPaymentTypeAtRegistration(
+  method: IncomeCalculationMethod,
+) {
+  return method === 'service_duration'
+}

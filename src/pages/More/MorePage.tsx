@@ -1,4 +1,5 @@
 import {
+  ArrowLeftRight,
   ChartNoAxesCombined,
   ChevronRight,
   DatabaseBackup,
@@ -30,6 +31,17 @@ const moreSections = [
         href: '/reports',
         icon: ChartNoAxesCombined,
         label: 'Reportes',
+      },
+    ],
+  },
+  {
+    title: 'Herramientas',
+    links: [
+      {
+        description: 'Consulta equivalencias entre monedas con respaldo local.',
+        href: '/currency-converter',
+        icon: ArrowLeftRight,
+        label: 'Consulta de divisas',
       },
     ],
   },

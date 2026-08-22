@@ -2,8 +2,7 @@ import { countries } from '../utils/countries'
 import { formatCurrency } from '../utils/currency'
 import { getStoredIncomeValue } from '../utils/financeStats'
 import { getIncomeDisplayName } from '../utils/activityLabels'
-import { getIncomeTypeLabel, isServiceIncome } from '../utils/incomeTypes'
-import { getPaymentTypeLabel } from '../utils/paymentTypes'
+import { getIncomePaymentTypeLabel, getIncomeTypeLabel, isServiceIncome } from '../utils/incomeTypes'
 import { canMarkAsReported, getRecordReportBadge } from '../utils/reportStatus'
 import { getIncomeDurationDisplay } from '../utils/serviceDuration'
 import type { ServiceIncome } from '../types/service'
@@ -121,7 +120,7 @@ export function buildIncomeDateTableHtml(
           <span class="record-meta">${escapeHtml(metadata.items.join(' · '))}</span>
         </td>
         <td>${escapeHtml(getIncomeTypeLabel(income))}</td>
-        <td>${escapeHtml(getPaymentTypeLabel(income.paymentType))}</td>
+        <td>${escapeHtml(getIncomePaymentTypeLabel(income))}</td>
         <td>${escapeHtml(countryLabel(income.country))}</td>
         <td>${escapeHtml(income.city || 'Sin ciudad')}</td>
         ${!isBasic ? `<td>${isServiceIncome(income) ? escapeHtml(getIncomeDurationDisplay(income)) : 'No aplica'}</td>` : ''}
@@ -135,7 +134,7 @@ export function buildIncomeDateTableHtml(
     <div class="income-table-scroll">
     <table class="income-date-table">
       <thead><tr>
-        <th class="income-name">Servicio / ingreso</th>
+        <th class="income-name">Registro</th>
         <th>Tipo</th>
         <th>Tipo de pago</th>
         <th>País</th>
@@ -175,7 +174,7 @@ export function buildIncomeDateText(options: IncomeReportPresentationOptions) {
     return [
       `- ${getIncomeDisplayName(income)}`,
       `Clase: ${getIncomeTypeLabel(income)}`,
-      `Tipo: ${getPaymentTypeLabel(income.paymentType)}`,
+      `Tipo de pago: ${getIncomePaymentTypeLabel(income)}`,
       `País: ${countryLabel(income.country)}`,
       `Ciudad: ${income.city || 'Sin ciudad'}`,
       !isBasic

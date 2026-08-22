@@ -1,4 +1,5 @@
 import { getPaymentTypeLabel } from './paymentTypes'
+import type { IncomeCalculationMethod } from '../catalogs/incomeCalculationMethods'
 import type { ServiceIncome, ServiceIncomeType } from '../types/service'
 import { roundMoney } from './currency'
 
@@ -64,11 +65,18 @@ export function normalizeAdjustmentIncome<T extends ServiceIncome>(income: T): T
   }
 }
 
-export function getIncomeTypeLabel(income: Pick<ServiceIncome, 'type'>) {
+export function getIncomeTypeLabel(
+  income: Pick<ServiceIncome, 'type' | 'incomeCalculationMethod'>,
+) {
   const type = getIncomeType(income)
   if (type === 'ajuste') return 'Ajuste'
   if (type === 'otro') return 'Otro ingreso histórico'
+  if (income.incomeCalculationMethod === 'hourly_workday') return 'Jornada por horas'
   return 'Servicio'
+}
+
+export function getIncomeRegistrationTypeLabel(method: IncomeCalculationMethod) {
+  return method === 'hourly_workday' ? 'Jornada' : 'Servicio'
 }
 
 export function getIncomePaymentTypeLabel(
@@ -77,4 +85,13 @@ export function getIncomePaymentTypeLabel(
   return income.incomeCalculationMethod === 'hourly_workday'
     ? 'No aplica'
     : getPaymentTypeLabel(income.paymentType)
+}
+
+export function getIncomeCompactLabel(
+  income: Pick<ServiceIncome, 'type' | 'incomeCalculationMethod' | 'paymentType'>,
+) {
+  const typeLabel = getIncomeTypeLabel(income)
+  return income.incomeCalculationMethod === 'hourly_workday'
+    ? typeLabel
+    : `${typeLabel} · ${getIncomePaymentTypeLabel(income)}`
 }

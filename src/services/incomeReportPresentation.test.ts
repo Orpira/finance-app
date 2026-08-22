@@ -86,8 +86,10 @@ describe('income report presentation', () => {
     const text = buildIncomeDateText(options)
 
     expect(html).toContain('2 horas')
+    expect(html).toContain('Jornada por horas')
     expect(html).toContain('Subtotal fecha · 2 h 45 min')
     expect(text).toContain('Duración: 2 horas')
+    expect(text).toContain('Clase: Jornada por horas')
     expect(text).toContain('Total duración: 2 h 45 min')
     expect(text).not.toContain('0 min')
   })

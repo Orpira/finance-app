@@ -9,7 +9,11 @@ import {
 } from '../../components/income/IncomeAdditionalsSection'
 import { PageHeader } from '../../components/layout/PageHeader'
 import type { IncomeCalculationMethod, WorkedTimeUnit } from '../../catalogs/incomeCalculationMethods'
-import { WORKED_TIME_UNITS, getWorkedTimeUnitForMethod } from '../../catalogs/incomeCalculationMethods'
+import {
+  WORKED_TIME_UNITS,
+  getWorkedTimeUnitForMethod,
+  shouldCollectPaymentTypeAtRegistration,
+} from '../../catalogs/incomeCalculationMethods'
 import {
   addIncomeAdditional,
   deleteIncomeAdditional,
@@ -23,7 +27,11 @@ import {
 } from '../../services/incomeService'
 import { saveExchangeRate } from '../../services/exchangeRateService'
 import { getSettings } from '../../services/settingsService'
-import { getActiveEarningPeriod, isEarningPeriodClosed } from '../../services/earningPeriodService'
+import {
+  getActiveEarningPeriod,
+  getEarningPeriodById,
+  isEarningPeriodClosed,
+} from '../../services/earningPeriodService'
 import {
   convertCurrencyPair,
   convertCurrencyToEurCop,
@@ -47,6 +55,7 @@ import {
 } from '../../utils/usageMode'
 import {
   getIncomeType,
+  getIncomeRegistrationTypeLabel,
   isAdjustmentIncome,
   isServiceIncome,
 } from '../../utils/incomeTypes'
@@ -152,6 +161,7 @@ export function IncomePage() {
   const isEditing = Number.isFinite(parsedIncomeId) && parsedIncomeId !== null
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
+  const [editingPeriod, setEditingPeriod] = useState<EarningPeriod | null>(null)
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [editingIncome, setEditingIncome] = useState<ServiceIncome | null>(null)
   const [incomeType, setIncomeType] = useState<ServiceIncomeType>('ingreso')
@@ -194,6 +204,10 @@ export function IncomePage() {
         parsedIncomeId ? getServiceIncomeById(parsedIncomeId) : undefined,
       ])
       const currentPeriod = await getActiveEarningPeriod()
+      const currentIncomePeriodId = currentIncome?.earningPeriodId ?? currentIncome?.seasonPeriodId
+      const currentIncomePeriod = currentIncomePeriodId
+        ? await getEarningPeriodById(currentIncomePeriodId)
+        : undefined
 
       if (!isMounted) {
         return
@@ -201,6 +215,7 @@ export function IncomePage() {
 
       setSettings(currentSettings)
       setActivePeriod(currentPeriod ?? null)
+      setEditingPeriod(currentIncomePeriod ?? null)
       setIncomes(
         currentIncomes.filter((income) =>
           recordBelongsToUsageMode(income, currentSettings.usageMode),
@@ -346,19 +361,25 @@ export function IncomePage() {
   const isBasicUser = isBasicMode(settings ?? undefined)
   const isServiceType = isBasicUser || isServiceIncome({ type: incomeType })
   const isAdjustmentType = !isBasicUser && isAdjustmentIncome({ type: incomeType })
-  // El método de cálculo solo aplica a ingresos de tipo "Servicio". Los
+  const registrationMethod = editingIncome
+    ? editingIncome.incomeCalculationMethod ?? 'service_duration'
+    : settings?.incomeCalculationMethod ?? 'service_duration'
+  // El método de cálculo solo aplica a la actividad profesional. Los
   // ajustes y el modo básico conservan exactamente el flujo existente
   // (equivalente a 'service_duration' con additionalsTotal=0).
   const effectiveMethod: IncomeCalculationMethod =
     isBasicUser || isAdjustmentType
       ? 'service_duration'
-      : editingIncome?.incomeCalculationMethod ??
-        settings?.incomeCalculationMethod ??
-        'service_duration'
+      : registrationMethod
+  const persistedMethod = editingIncome?.incomeCalculationMethod ?? effectiveMethod
   const usesServiceDuration =
     !isBasicUser && isServiceType && effectiveMethod === 'service_duration'
   const usesHourlyWorkday =
     !isBasicUser && isServiceType && effectiveMethod === 'hourly_workday'
+  const collectsPaymentType =
+    !isBasicUser &&
+    isServiceType &&
+    shouldCollectPaymentTypeAtRegistration(effectiveMethod)
   // Al editar un ingreso existente se respeta la unidad con la que se
   // guardó originalmente (workedTimeUnit ya viene cargada desde
   // editingIncome) para no reinterpretar datos históricos; para uno nuevo se
@@ -534,7 +555,11 @@ export function IncomePage() {
         status: editingIncome?.status ?? 'FINALIZADO',
         type: isBasicUser ? 'ingreso' : incomeType,
         date: registrationDate,
-        paymentType: isAdjustmentType ? undefined : paymentType,
+        paymentType:
+          !isAdjustmentType &&
+          shouldCollectPaymentTypeAtRegistration(persistedMethod)
+            ? paymentType
+            : undefined,
         duration: isBasicUser
           ? editingIncome?.duration ?? 0
           : isAdjustmentType || usesHourlyWorkday
@@ -551,7 +576,7 @@ export function IncomePage() {
         totalAmount: principalAmount,
         // Snapshot: el método nunca se sobreescribe al editar (incomeService.ts
         // lo refuerza descartando este campo en las actualizaciones).
-        incomeCalculationMethod: editingIncome?.incomeCalculationMethod ?? effectiveMethod,
+        incomeCalculationMethod: persistedMethod,
         additionalsTotal,
         totalIncome: principalAmount,
         workedTime: usesHourlyWorkday ? workedTime : undefined,
@@ -559,7 +584,10 @@ export function IncomePage() {
           !isBasicUser && isServiceType ? effectiveWorkedTimeUnit : undefined,
         hourlyRateApplied: usesHourlyWorkday ? hourlyRateApplied : undefined,
         currency,
-        earningPeriodId: editingIncome?.earningPeriodId ?? activePeriod?.id,
+        earningPeriodId:
+          editingIncome?.earningPeriodId ??
+          editingIncome?.seasonPeriodId ??
+          activePeriod?.id,
         // "Jornada por horas" no usa el % de temporada (100% para la
         // profesional): no se captura/persiste ningún porcentaje para ese método.
         earningPercentage: isAdjustmentType || usesHourlyWorkday
@@ -680,11 +708,14 @@ export function IncomePage() {
         {!isBasicUser && (
           <fieldset className="flex flex-col gap-2">
             <legend className="text-sm font-medium text-slate-700">
-              Tipo de ingreso
+              Tipo de registro
             </legend>
             <div className="grid grid-cols-2 gap-2">
               {([
-                { label: 'Servicio', value: 'ingreso' },
+                {
+                  label: getIncomeRegistrationTypeLabel(registrationMethod),
+                  value: 'ingreso',
+                },
                 { label: 'Ajuste', value: 'ajuste' },
               ] as const).map((option) => (
                 <label
@@ -736,6 +767,7 @@ export function IncomePage() {
             </span>
             <input
               className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              min={(editingPeriod ?? activePeriod)?.startDate.slice(0, 10)}
               onChange={(event) => setDate(event.target.value)}
               required
               type="date"
@@ -861,7 +893,7 @@ export function IncomePage() {
           </fieldset>
         )}
 
-        {!isBasicUser && isServiceType && <div className="grid gap-4">
+        {collectsPaymentType && <div className="grid gap-4">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
               Tipo de pago

@@ -22,6 +22,9 @@
 
 - Usa temporadas o periodos.
 - Los registros pueden quedar vinculados a temporada activa.
+- Un ingreso vinculado a una temporada no puede tener una fecha anterior al
+  inicio de esa temporada. La creación o edición inválida se rechaza antes de
+  persistir cambios.
 - Los cierres de temporada afectan mutabilidad y reportes.
 - Conserva los Adicionales y los estados operativos de los ingresos de tipo
   servicio, tanto en el listado como en sus flujos de alta y edición.
@@ -54,7 +57,7 @@
 ## Ingresos
 
 - Se registran como servicios o variantes derivadas según utilidades de tipo.
-- Pueden incluir duración, porcentaje y tipo de pago.
+- Pueden incluir duración, porcentaje y tipo de pago según el método de cálculo.
 - Se calculan valores base, secundarios y equivalentes agregados para reportes.
 - Cada ingreso de tipo servicio se calcula según un **Método de cálculo del
   ingreso** (`incomeCalculationMethod`, snapshot inmutable fijado al crear el
@@ -69,6 +72,17 @@
   aplica ese %: el pago por hora ya es el 100% del ingreso final de la
   profesional. El cronómetro es exclusivo de `service_duration` y jamás se
   inicia para `hourly_workday`.
+- `service_duration` recopila el tipo de pago al registrar el ingreso.
+  `hourly_workday` no lo solicita ni lo persiste, porque la jornada puede
+  liquidarse después de su registro. Al editar una jornada histórica se
+  conserva cualquier tipo de pago legado sin reescribirlo.
+- La interfaz presenta este selector como **Tipo de registro**. Para
+  `service_duration` usa "Servicio"; para `hourly_workday`, "Jornada" en el
+  formulario y "Jornada por horas" en listados, detalle, movimientos,
+  reportes y exportaciones. Esta distinción deriva de
+  `incomeCalculationMethod`: el campo persistido `type` conserva su contrato y
+  no se migran registros históricos. En una jornada, el tipo de pago se
+  presenta como "No aplica" en tablas y se omite en etiquetas compactas.
 - Un ingreso puede tener 0..N **Adicionales** (importes positivos que
   complementan el ingreso, nunca negativos, sin tope). **Nunca se suman al
   `realGain`/`totalAmount` del ingreso**: el registro del ingreso refleja
@@ -88,6 +102,21 @@
 - Cambiar el método de cálculo o el valor por hora en Configuración solo
   afecta a los ingresos creados después del cambio; nunca recalcula ni
   altera ingresos históricos.
+
+## Consulta de divisas
+
+- `Más → Consulta de divisas` ofrece una herramienta informativa que convierte
+  un importe local desde una moneda base hacia cuatro monedas deduplicadas. El importe escrito no se
+  persiste ni se envía a la API y el resultado nunca modifica ingresos,
+  egresos, balances, tasas históricas ni configuración.
+- En modo de tasa automático, la consulta usa una cotización API ya guardada
+  para el mismo par y fecha antes de solicitar otra. En modo manual no hace una
+  llamada automática; el botón de actualización constituye la acción explícita
+  para consultar Frankfurter.
+- Sin red, la consulta puede usar la última tasa guardada o una referencia
+  local, siempre identificando la fuente. Si no existe una tasa válida para el
+  par, muestra "No disponible" y nunca inventa ni degrada silenciosamente un
+  valor.
 
 ## Egresos
 

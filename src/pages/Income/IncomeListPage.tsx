@@ -35,7 +35,7 @@ import {
   recordBelongsToUsageMode,
   requiresSeason,
 } from '../../utils/usageMode'
-import { getIncomeType, getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
+import { getIncomePaymentTypeLabel, getIncomeType, getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
 import { canMarkAsReported, formatReportStatusMeta, getRecordReportBadge } from '../../utils/reportStatus'
 import { useDialog } from '../../components/dialogs/useDialog'
 import { getIncomeListModeFeatures } from './incomeListModeFeatures'
@@ -91,14 +91,14 @@ function getIncomeStatus(income: ServiceIncome): ServiceIncomeStatus {
 
 function getIncomeStatusClass(status: ServiceIncomeStatus) {
   if (status === 'FINALIZADO') {
-    return 'bg-emerald-100 text-emerald-800'
+    return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100'
   }
 
   if (status === 'EJECUCION') {
-    return 'bg-amber-100 text-amber-800'
+    return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100'
   }
 
-  return 'bg-slate-100 text-slate-700'
+  return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-100'
 }
 
 function filterIncomesByMode(
@@ -859,7 +859,7 @@ export function IncomeListPage() {
                         {!isBasicMode(settings ?? undefined) && isService && <p className="mt-1 text-sm text-slate-500">
                           {getIncomeDurationDisplay(income)} ·{' '}
                           {/* {income.percentage}% ·{' '} */}
-                          {getPaymentTypeLabel(income.paymentType)}
+                          {getIncomePaymentTypeLabel(income)}
                         </p>}
                         {incomeListModeFeatures.showAdditionals && isService && Boolean(income.additionalsTotal) && (
                           <p className="mt-1 text-sm text-emerald-700">

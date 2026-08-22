@@ -37,6 +37,7 @@ import SeasonsPage from '../pages/Seasons/SeasonsPage'
 import SeasonFormPage from '../pages/Seasons/SeasonFormPage'
 import SeasonDetailPage from '../pages/Seasons/SeasonDetailPage'
 import ConversationPage from '../pages/Conversation/ConversationPage'
+import CurrencyQuotePage from '../pages/Currency/CurrencyQuotePage'
 import NotFoundPage from '../pages/NotFound/NotFoundPage'
 
 /** Alias de compatibilidad: /incomes?reportStatus=pending redirige a /income preservando el query string. */
@@ -95,6 +96,7 @@ export function RouterProvider() {
             <Route path="settings/diagnostics" element={<SettingsDiagnosticsPage />} />
             <Route path="settings/communication-channels" element={<DevOnlyGuard><CommunicationChannelsPage /></DevOnlyGuard>} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="currency-converter" element={<CurrencyQuotePage />} />
             <Route path="more" element={<MorePage />} />
             <Route path="conversation" element={<ConversationPage />} />
             <Route path="debug" element={<DevOnlyGuard><DebugPage /></DevOnlyGuard>} />

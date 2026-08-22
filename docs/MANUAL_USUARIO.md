@@ -41,15 +41,36 @@ Si tienes PIN habilitado, el primer paso será desbloquear la aplicación ingres
 La pantalla principal ofrece accesos rápidos a las funciones clave:
 
 - `Dashboard`: vista general de ingresos, gastos, ganancias y métricas del mes.
+- `Más → Consulta de divisas`: convertir un importe de referencia entre la
+  moneda base y cuatro monedas frecuentes sin alterar ningún registro financiero.
 - `Ingresos`: registrar servicios realizados y ver resultados de conversión de moneda.
 - `Gastos`: registrar gastos operativos diarios.
 - `Agenda`: programar citas y convertirlas en ingresos al completarlas.
 - `Reportes`: generar y exportar reportes por período.
 - `Configuración`: definir moneda, país, PIN y preferencias.
 
+### 2.1. Consulta de divisas
+
+Abre `Más → Consulta de divisas`, escribe un importe y elige la moneda base. La
+pantalla muestra el equivalente en cuatro monedas, priorizando la moneda secundaria configurada.
+Cada resultado identifica si procede de Frankfurter, del caché local, de una
+tasa manual o de una referencia local.
+
+Con la tasa automática activa, la aplicación reutiliza la cotización API del
+día y solo consulta de nuevo cuando hace falta. Con la tasa manual, la tarjeta
+no consulta la red al abrirse; pulsa el icono de actualización para hacerlo de
+forma explícita. Sin conexión conserva las últimas cotizaciones disponibles y
+muestra `No disponible` para cualquier par que no pueda resolver. La consulta
+es informativa: no guarda el importe escrito ni modifica balances o registros.
+
 ## 3. Registrar ingresos
 
 El formulario de `Ingresos` se adapta automáticamente según el **Método de cálculo del ingreso** elegido en el asistente inicial o actualizado después en `Configuración → Datos generales`. Hay dos métodos disponibles:
+
+El selector se llama **Tipo de registro**. Muestra `Servicio` cuando el método
+es Servicio por tiempo y `Jornada` cuando es Jornada por horas; los listados,
+detalles, movimientos, reportes y exportaciones muestran el nombre completo
+`Jornada por horas`.
 
 ### 3.1. Servicio por tiempo (método por defecto)
 
@@ -57,10 +78,11 @@ El formulario de `Ingresos` se adapta automáticamente según el **Método de c�
 2. Selecciona la fecha del servicio.
 3. Indica la duración (activa el cronómetro del servicio).
 4. Ingresa el importe total y la moneda.
-5. Ajusta el porcentaje de ganancia real si es necesario.
-6. Selecciona la tasa de cambio manual o usa la automática.
-7. Opcionalmente, indicá si el ingreso tiene un **Adicional** (ver 3.3).
-8. Presiona `Guardar` para registrar el ingreso.
+5. Selecciona el tipo de pago.
+6. Ajusta el porcentaje de ganancia real si es necesario.
+7. Selecciona la tasa de cambio manual o usa la automática.
+8. Opcionalmente, indicá si el ingreso tiene un **Adicional** (ver 3.3).
+9. Presiona `Guardar` para registrar el ingreso.
 
 ### 3.2. Jornada por horas
 
@@ -68,13 +90,18 @@ Si en Configuración elegiste "Jornada por horas", el formulario ya no pide dura
 
 1. Ve a `Ingresos`.
 2. Selecciona la fecha.
-3. Ingresa el **Tiempo trabajado** (en la unidad que configuraste: horas o minutos).
+3. Ingresa el **Tiempo trabajado** en horas, con incrementos de 0,25 horas.
 4. El cálculo usa el **Valor por hora** indicado en el asistente inicial o actualizado después en Configuración. El formulario del ingreso no modifica ese valor; cada ingreso conserva una copia de la tarifa aplicada.
 5. El sistema calcula automáticamente el **Total calculado** (tiempo trabajado × valor por hora). No hay cronómetro ni importe manual en este método.
-6. Opcionalmente, indicá si el ingreso tiene un **Adicional** (ver 3.3).
-7. Presiona `Guardar`.
+6. No se solicita tipo de pago al registrar la jornada, ya que puede liquidarse al final de la temporada o en una fecha posterior.
+7. Opcionalmente, indicá si el ingreso tiene un **Adicional** (ver 3.3).
+8. Presiona `Guardar`.
 
 Cambiar el método en Configuración nunca modifica ingresos ya registrados: cada ingreso conserva el método y los parámetros con los que fue creado.
+
+En modo Profesional, la fecha del ingreso debe coincidir con el inicio de la
+temporada activa o ser posterior. La aplicación rechaza tanto el alta como la
+edición si la fecha es anterior al inicio de la temporada.
 
 ### 3.3. Adicionales
 

@@ -2,9 +2,11 @@ import { db } from '../database/db'
 import type { DateRangeListOptions } from '../types/dataAccess'
 import type { ServiceIncome } from '../types/service'
 import type { CountryCode } from '../types/settings'
+import { shouldCollectPaymentTypeAtRegistration } from '../catalogs/incomeCalculationMethods'
 import {
   assertRecordIsMutable,
   getActiveEarningPeriod,
+  getEarningPeriodById,
 } from './earningPeriodService'
 import { getSettings } from './settingsService'
 import { recordBelongsToUsageMode, requiresSeason } from '../utils/usageMode'
@@ -37,55 +39,83 @@ export interface ServiceIncomeListOptions extends DateRangeListOptions {
   paymentType?: string
 }
 
+export const INCOME_BEFORE_SEASON_START_MESSAGE =
+  'La fecha del ingreso no puede ser anterior al inicio de la temporada.'
+export const INCOME_SEASON_REQUIRED_MESSAGE =
+  'No se puede modificar el ingreso porque su temporada no existe.'
+export const INCOME_SEASON_CHANGE_MESSAGE =
+  'No se puede cambiar la temporada de un ingreso existente.'
+
+function assertIncomeIsNotBeforeSeasonStart(
+  incomeDate: string,
+  earningPeriod?: { startDate: string },
+) {
+  if (earningPeriod && incomeDate < earningPeriod.startDate.slice(0, 10)) {
+    throw new Error(INCOME_BEFORE_SEASON_START_MESSAGE)
+  }
+}
+
 function normalizeIncomeByType<T extends CreateServiceIncomeInput>(input: T): T {
   if (!isAdjustmentIncome(input)) return input
   return normalizeAdjustmentIncome(input)
 }
 
+function normalizePaymentTypeForMethod<T extends CreateServiceIncomeInput>(input: T): T {
+  if (shouldCollectPaymentTypeAtRegistration(input.incomeCalculationMethod ?? 'service_duration')) {
+    return input
+  }
+  return { ...input, paymentType: undefined }
+}
+
 export async function createServiceIncome(input: CreateServiceIncomeInput) {
   const settings = await getSettings()
-  const earningPeriod =
-    requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
+  const normalizedInput = normalizePaymentTypeForMethod(normalizeIncomeByType(input))
+  const incomeId = await db.transaction(
+    'rw',
+    [db.services, db.automationOutbox, db.earningPeriods],
+    async () => {
+      const earningPeriod =
+        requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
 
-  if (requiresSeason(settings) && !earningPeriod) {
-    throw new Error('No hay una temporada activa. Crea una temporada para registrar actividad.')
-  }
+      if (requiresSeason(settings) && !earningPeriod) {
+        throw new Error('No hay una temporada activa. Crea una temporada para registrar actividad.')
+      }
 
-  const normalizedInput = normalizeIncomeByType(input)
+      assertIncomeIsNotBeforeSeasonStart(input.date, earningPeriod)
 
-  const createdAt = new Date().toISOString()
-  const incomeBase: ServiceIncome = normalizeReportStatus({
-    createdAt,
-    status: 'PENDIENTE',
-    ...normalizedInput,
-    type: normalizedInput.type ?? 'ingreso',
-    usageMode: settings.usageMode,
-    earningPeriodId: earningPeriod?.id,
-    seasonPeriodId: earningPeriod?.id,
-    earningPercentage: isServiceIncome(normalizedInput)
-      ? earningPeriod?.percentage ??
-        normalizedInput.earningPercentage ??
-        normalizedInput.percentage
-      : 0,
-    percentage: isServiceIncome(normalizedInput)
-      ? earningPeriod?.percentage ?? normalizedInput.percentage
-      : 0,
-    incomeCalculationMethod: normalizedInput.incomeCalculationMethod ?? 'service_duration',
-    updatedAt: createdAt,
-  })
-  const income: ServiceIncome = {
-    ...incomeBase,
-    ...buildInitialServiceTimerState(incomeBase, createdAt),
-  }
-  const incomeId = await db.transaction('rw', [db.services, db.automationOutbox], async () => {
-    const nextIncomeId = await db.services.add(income)
-    await enqueueAutomationEvent(
-      createAutomationOutboxRecord('income.created', {
-        income: { ...income, id: nextIncomeId },
-      }),
-    )
-    return nextIncomeId
-  })
+      const createdAt = new Date().toISOString()
+      const incomeBase: ServiceIncome = normalizeReportStatus({
+        createdAt,
+        status: 'PENDIENTE',
+        ...normalizedInput,
+        type: normalizedInput.type ?? 'ingreso',
+        usageMode: settings.usageMode,
+        earningPeriodId: earningPeriod?.id,
+        seasonPeriodId: earningPeriod?.id,
+        earningPercentage: isServiceIncome(normalizedInput)
+          ? earningPeriod?.percentage ??
+            normalizedInput.earningPercentage ??
+            normalizedInput.percentage
+          : 0,
+        percentage: isServiceIncome(normalizedInput)
+          ? earningPeriod?.percentage ?? normalizedInput.percentage
+          : 0,
+        incomeCalculationMethod: normalizedInput.incomeCalculationMethod ?? 'service_duration',
+        updatedAt: createdAt,
+      })
+      const income: ServiceIncome = {
+        ...incomeBase,
+        ...buildInitialServiceTimerState(incomeBase, createdAt),
+      }
+      const nextIncomeId = await db.services.add(income)
+      await enqueueAutomationEvent(
+        createAutomationOutboxRecord('income.created', {
+          income: { ...income, id: nextIncomeId },
+        }),
+      )
+      return nextIncomeId
+    },
+  )
   scheduleAutomationOutboxFlush()
 
   return incomeId
@@ -155,23 +185,54 @@ export async function updateServiceIncome(
   }
   assertReportStatusUpdateIsAllowed(currentIncome, settings.usageMode, updates)
   assertReportedRecordUpdateIsAllowed(currentIncome, updates)
-  if (requiresSeason(settings)) {
-    await assertRecordIsMutable(currentIncome)
-  }
-  return db.transaction('rw', [db.services, db.expenses], async () => {
+  return db.transaction('rw', [db.services, db.expenses, db.earningPeriods], async () => {
     const [latestIncome, incomes, expenses] = await Promise.all([
       db.services.get(id),
       db.services.toArray(),
       db.expenses.toArray(),
     ])
     if (!latestIncome) throw new Error('El ingreso que intentas modificar no existe.')
+    if (!recordBelongsToUsageMode(latestIncome, settings.usageMode)) {
+      throw new Error('Este ingreso pertenece a otro modo de uso.')
+    }
     assertReportStatusUpdateIsAllowed(latestIncome, settings.usageMode, updates)
     assertReportedRecordUpdateIsAllowed(latestIncome, updates)
+    if (requiresSeason(settings)) {
+      await assertRecordIsMutable(latestIncome)
+      const earningPeriodId = latestIncome.earningPeriodId ?? latestIncome.seasonPeriodId
+      if (
+        !earningPeriodId ||
+        (latestIncome.earningPeriodId !== undefined &&
+          latestIncome.seasonPeriodId !== undefined &&
+          latestIncome.earningPeriodId !== latestIncome.seasonPeriodId)
+      ) {
+        throw new Error(INCOME_SEASON_REQUIRED_MESSAGE)
+      }
+      if (
+        (Object.hasOwn(updates, 'earningPeriodId') && updates.earningPeriodId !== earningPeriodId) ||
+        (Object.hasOwn(updates, 'seasonPeriodId') && updates.seasonPeriodId !== earningPeriodId)
+      ) {
+        throw new Error(INCOME_SEASON_CHANGE_MESSAGE)
+      }
+      const earningPeriod = await getEarningPeriodById(earningPeriodId)
+      if (!earningPeriod) {
+        throw new Error(INCOME_SEASON_REQUIRED_MESSAGE)
+      }
+      assertIncomeIsNotBeforeSeasonStart(
+        updates.date ?? latestIncome.date,
+        earningPeriod,
+      )
+    }
 
     // El método de cálculo es inmutable una vez creado el ingreso (PB-IS-0007,
     // sección 9): editar Configuración nunca debe alterar ingresos históricos.
     const safeUpdates: UpdateServiceIncomeInput = { ...updates }
     delete safeUpdates.incomeCalculationMethod
+    if (latestIncome.incomeCalculationMethod === 'hourly_workday') {
+      delete safeUpdates.paymentType
+    } else if (safeUpdates.paymentType === undefined) {
+      delete safeUpdates.paymentType
+    }
 
     const updatedIncome = normalizeIncomeByType(
       normalizeReportStatus({

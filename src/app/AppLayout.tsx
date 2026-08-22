@@ -5,7 +5,6 @@ import {
   House,
   Moon,
   MoreHorizontal,
-  Settings,
   Sparkles,
   Sun,
 } from 'lucide-react'
@@ -67,11 +66,10 @@ const ASSISTANT_ITEM: NavItem = {
   hiddenForTrial: true,
 }
 const MORE_ITEM: NavItem = { label: 'Más', path: '/more', icon: MoreHorizontal }
-const SETTINGS_ITEM: NavItem = { label: 'Configuración', path: '/settings', icon: Settings }
 
 const navItems = [HOME_ITEM, MOVEMENTS_ITEM, AGENDA_ITEM, ASSISTANT_ITEM, MORE_ITEM]
 
-const basicNavItems = [HOME_ITEM, MOVEMENTS_ITEM, REPORTS_ITEM, ASSISTANT_ITEM, SETTINGS_ITEM]
+const basicNavItems = [HOME_ITEM, MOVEMENTS_ITEM, REPORTS_ITEM, ASSISTANT_ITEM, MORE_ITEM]
 
 let automaticBackupCheckStarted = false
 let automaticBackupTimeoutId: number | null = null
@@ -105,7 +103,10 @@ export function AppLayout() {
   const [isDarkTheme, setIsDarkTheme] = useState(() =>
     document.documentElement.classList.contains('dark'),
   )
-  const isMoreSection = ['/more', '/temporadas', '/reports', '/settings', '/debug'].some(
+  const moreSectionPaths = usageMode === 'basic'
+    ? ['/more', '/temporadas', '/currency-converter', '/settings', '/debug']
+    : ['/more', '/temporadas', '/reports', '/currency-converter', '/settings', '/debug']
+  const isMoreSection = moreSectionPaths.some(
     (path) =>
       location.pathname === path || location.pathname.startsWith(`${path}/`),
   )
