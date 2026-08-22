@@ -84,6 +84,20 @@ describe('Intent Resolver (PB-IS-014.1)', () => {
     expect(result.resolution.tools[0].toolId).toBe('financial_transactions')
   })
 
+  it.each([
+    'Registrar un ingreso',
+    'Añadir un ingreso',
+    'Crear un gasto',
+  ])('no convierte el comando de escritura "%s" en una consulta de transacciones', async (message) => {
+    const resolver = createDeterministicIntentResolver()
+    const result = await resolver.resolve(createRequest(message))
+
+    expect(result.kind).toBe('success')
+    if (result.kind !== 'success') throw new Error('Expected success result')
+    expect(result.resolution.detectedIntent).toBe('unknown')
+    expect(result.resolution.tools[0].toolId).not.toBe('financial_transactions')
+  })
+
   it('goals', async () => {
     const resolver = createDeterministicIntentResolver()
     const result = await resolver.resolve(createRequest('Cuáles son mis metas?'))

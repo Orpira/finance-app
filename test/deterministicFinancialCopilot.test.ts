@@ -157,11 +157,41 @@ describe('answerFinancialCopilotQuery', () => {
     ['¿Cuándo fue mi última cita?', '1 ago 2026', 'last-appointment'],
     ['¿Qué ingresos registré ayer?', '120,00', 'yesterday-income'],
     ['¿Cómo va mi objetivo?', 'Ahorro mensual', 'financial-goal-progress'],
+    ['Ver resumen semanal', 'Esta semana', 'weekly-summary'],
+    ['Comparar este mes con el anterior', 'julio de 2026', 'monthly-comparison'],
   ])('responde localmente a %s', (query, expectedText, intent) => {
     const result = answerFinancialCopilotQuery(query, SNAPSHOT)
 
     expect(result).toEqual(expect.objectContaining({ intent, text: expect.stringContaining(expectedText) }))
     expect(result?.explanation.length).toBeGreaterThan(0)
+  })
+
+  it('resume exclusivamente la semana actual', () => {
+    const result = answerFinancialCopilotQuery('Ver resumen semanal', SNAPSHOT)
+
+    expect(result).toEqual(expect.objectContaining({
+      intent: 'weekly-summary',
+      period: 'current_week',
+      metric: 'balance',
+    }))
+    expect(result?.text).toContain('ingresos')
+    expect(result?.text).toContain('gastos')
+    expect(result?.text).toContain('balance')
+  })
+
+  it('compara ingresos, gastos y balance del mes actual con el anterior', () => {
+    const result = answerFinancialCopilotQuery('Comparar este mes con el anterior', SNAPSHOT)
+
+    expect(result).toEqual(expect.objectContaining({
+      intent: 'monthly-comparison',
+      period: 'current_month',
+      metric: 'balance',
+      text: expect.stringContaining(SNAPSHOT.period.current.label),
+    }))
+    expect(result?.text).toContain(SNAPSHOT.period.previous.label)
+    expect(result?.text).toContain('ingresos')
+    expect(result?.text).toContain('gastos')
+    expect(result?.text).toContain('balance')
   })
 
   it('devuelve null cuando no reconoce la consulta y nunca inventa una respuesta', () => {

@@ -63,6 +63,10 @@ export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel 
   const [draft, setDraft] = useState<Record<string, string | number | null>>({ ...proposal.fields })
   const editable = isFieldEditable(proposal.status) && !disabled
   const badge = STATUS_BADGE[proposal.status]
+  const hasMissingDraftFields = proposal.missingRequiredFields.some((field) => {
+    const value = draft[field]
+    return value === null || value === undefined || value === ''
+  })
 
   function updateField(field: string, value: string | number | null) {
     setDraft((current) => ({ ...current, [field]: value }))
@@ -160,7 +164,7 @@ export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel 
           </button>
           <button
             className="h-9 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={disabled}
+            disabled={disabled || hasMissingDraftFields}
             onClick={handleConfirm}
             type="button"
           >

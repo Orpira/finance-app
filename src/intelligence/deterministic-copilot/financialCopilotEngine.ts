@@ -135,6 +135,8 @@ export interface FinancialCopilotResult {
 export type FinancialCopilotQueryIntent =
   | 'monthly-income'
   | 'monthly-expenses'
+  | 'weekly-summary'
+  | 'monthly-comparison'
   | 'top-expense-category'
   | 'pending-income-count'
   | 'last-appointment'
@@ -169,6 +171,8 @@ function normalizeText(value: string): string {
 }
 
 const LOCAL_QUERY_PATTERNS = [
+  /resumen.*(semanal|esta semana)|(esta semana).*(resumen|balance)/,
+  /compar\w*.*(este mes|mes actual).*(anterior|pasado)/,
   /cuant[oa].*(gane|ingres|cobre|recibi)/,
   /cuant[oa].*(gaste|gasto|gastos|egreso)/,
   /categoria.*(mas|mayor).*(gasto|egreso)|(mas|mayor).*(gasto|egreso).*categoria/,
@@ -525,6 +529,31 @@ export function answerFinancialCopilotQuery(
   const normalized = normalizeText(query)
   if (!canAnswerFinancialCopilotQuery(query)) return null
   const format = (value: number) => formatMoney(value, snapshot.currency)
+
+  if (/resumen.*(semanal|esta semana)|(esta semana).*(resumen|balance)/.test(normalized)) {
+    const balance = snapshot.currentWeek.income - snapshot.currentWeek.expenses
+    return {
+      intent: 'weekly-summary',
+      text: `Esta semana registraste ${format(snapshot.currentWeek.income)} en ingresos, ${format(snapshot.currentWeek.expenses)} en gastos y un balance de ${format(balance)}.`,
+      explanation: `El resumen usa ${snapshot.currentWeek.incomeCount} ${plural(snapshot.currentWeek.incomeCount, 'ingreso', 'ingresos')} y ${snapshot.currentWeek.expenseCount} ${plural(snapshot.currentWeek.expenseCount, 'gasto', 'gastos')} de la semana actual, de lunes hasta hoy.`,
+      period: 'current_week',
+      category: null,
+      metric: 'balance',
+    }
+  }
+
+  if (/compar\w*.*(este mes|mes actual).*(anterior|pasado)/.test(normalized)) {
+    const currentBalance = snapshot.currentMonth.income - snapshot.currentMonth.expenses
+    const previousBalance = snapshot.previousMonth.income - snapshot.previousMonth.expenses
+    return {
+      intent: 'monthly-comparison',
+      text: `${snapshot.period.current.label}: ingresos ${format(snapshot.currentMonth.income)}, gastos ${format(snapshot.currentMonth.expenses)} y balance ${format(currentBalance)}. ${snapshot.period.previous.label}: ingresos ${format(snapshot.previousMonth.income)}, gastos ${format(snapshot.previousMonth.expenses)} y balance ${format(previousBalance)}.`,
+      explanation: `Variación del mes actual frente al anterior: ingresos ${format(snapshot.currentMonth.income - snapshot.previousMonth.income)}, gastos ${format(snapshot.currentMonth.expenses - snapshot.previousMonth.expenses)} y balance ${format(currentBalance - previousBalance)}.`,
+      period: 'current_month',
+      category: null,
+      metric: 'balance',
+    }
+  }
 
   if (/cuant[oa].*(gane|ingres|cobre|recibi)/.test(normalized) && !/(report|pendiente)/.test(normalized)) {
     return {

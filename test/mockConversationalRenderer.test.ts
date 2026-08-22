@@ -255,7 +255,7 @@ describe('Mock Conversational Renderer (PB-IS-013.7)', () => {
 
     const serialized = JSON.stringify(result.message)
     const parsed = JSON.parse(serialized) as { text: string; origin: string }
-    expect(parsed.text).toBe('Encontré 1 transacciones.')
+    expect(parsed.text).toBe('Encontré 1 transacción.')
     expect(parsed.origin).toBe('MOCK_RENDERER')
   })
 

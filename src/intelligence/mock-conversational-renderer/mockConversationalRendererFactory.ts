@@ -56,7 +56,8 @@ function renderTransactions(step: ConversationResponseStepSuccessBlock): string 
   const itemCount = Array.isArray(output?.items) ? output.items.length : 0
   const count = typeof summaryCount === 'number' ? summaryCount : itemCount
 
-  return `Encontré ${toCount(count)} transacciones.`
+  const normalizedCount = toCount(count)
+  return `Encontré ${normalizedCount} ${normalizedCount === 1 ? 'transacción' : 'transacciones'}.`
 }
 
 function renderGoals(step: ConversationResponseStepSuccessBlock): string {

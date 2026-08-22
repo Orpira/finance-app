@@ -25,6 +25,45 @@ describe('parseAssistantIntent', () => {
     expect(result.fields.category).toBe('Transporte')
   })
 
+  it.each([
+    'Registrar un ingreso',
+    'Registrar ingreso',
+    'Agregar un ingreso',
+    'Agregar ingreso',
+    'Añadir un ingreso',
+    'Añadir ingreso',
+    'Anotar un ingreso',
+    'Crear un ingreso',
+    'Nuevo ingreso',
+  ])('reconoce el imperativo de ingreso "%s" sin inventar importe', (message) => {
+    const result = parseAssistantIntent(message, { now: NOW })
+
+    expect(result.kind).toBe('register_income')
+    if (result.kind !== 'register_income') throw new Error('expected register_income')
+    expect(result.fields.amount).toBeNull()
+    expect(result.fields.date).toBe('2026-08-01')
+  })
+
+  it.each([
+    'Registrar un gasto',
+    'Registrar gasto',
+    'Agregar un gasto',
+    'Agregar gasto',
+    'Añadir un gasto',
+    'Añadir gasto',
+    'Anotar un gasto',
+    'Crear un gasto',
+    'Nuevo gasto',
+  ])('reconoce el imperativo de gasto "%s" sin inventar importe ni categoría', (message) => {
+    const result = parseAssistantIntent(message, { now: NOW })
+
+    expect(result.kind).toBe('register_expense')
+    if (result.kind !== 'register_expense') throw new Error('expected register_expense')
+    expect(result.fields.amount).toBeNull()
+    expect(result.fields.category).toBeNull()
+    expect(result.fields.date).toBe('2026-08-01')
+  })
+
   it('reconoce "Mañana tengo una cita a las 18:30" como cita sin importe', () => {
     const result = parseAssistantIntent('Mañana tengo una cita a las 18:30', { now: NOW })
 
@@ -55,6 +94,10 @@ describe('parseAssistantIntent', () => {
   it('devuelve kind "none" para preguntas de consulta (no acción)', () => {
     expect(parseAssistantIntent('¿Cuánto gané esta semana?', { now: NOW })).toEqual({ kind: 'none' })
     expect(parseAssistantIntent('Compárame julio con agosto', { now: NOW })).toEqual({ kind: 'none' })
+    expect(parseAssistantIntent('¿Cómo registro un ingreso?', { now: NOW })).toEqual({ kind: 'none' })
+    expect(parseAssistantIntent('¿Dónde registro un ingreso?', { now: NOW })).toEqual({ kind: 'none' })
+    expect(parseAssistantIntent('¿Cómo puedo añadir un gasto?', { now: NOW })).toEqual({ kind: 'none' })
+    expect(parseAssistantIntent('¿Qué necesito para registrar un ingreso?', { now: NOW })).toEqual({ kind: 'none' })
   })
 
   it('devuelve kind "none" para texto vacío', () => {

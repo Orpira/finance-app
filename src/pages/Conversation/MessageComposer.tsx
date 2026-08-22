@@ -1,18 +1,11 @@
 import { useRef, useState } from 'react'
 
+import { QUICK_SUGGESTIONS } from './quickSuggestions'
+
 interface MessageComposerProps {
   readonly disabled?: boolean
   readonly onSend: (message: string) => Promise<void>
 }
-
-const QUICK_SUGGESTIONS = [
-  'Registrar un ingreso',
-  'Registrar un gasto',
-  'Crear una cita',
-  'Ver resumen semanal',
-  'Ingresos sin reportar',
-  'Comparar este mes con el anterior',
-]
 
 export function MessageComposer({ disabled = false, onSend }: MessageComposerProps) {
   const [value, setValue] = useState('')

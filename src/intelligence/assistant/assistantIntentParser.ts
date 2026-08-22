@@ -141,8 +141,8 @@ function addDays(date: Date, days: number): Date {
 // `\b` en JS no reconoce letras acentuadas como caracteres de palabra, así que
 // `\bgasté\b` nunca podría casar de forma fiable contra el texto original.
 const APPOINTMENT_PATTERN = /\b(cita|agenda(?:r)?|reunion|turno)\b/i
-const EXPENSE_PATTERN = /\b(gaste|pague|compre|gasto de|gasto por)\b/i
-const INCOME_PATTERN = /\b(recibi|cobre|ingreso de|ingrese|gane)\b/i
+const EXPENSE_PATTERN = /\b(gaste|pague|compre|gasto de|gasto por|(?:registrar|agregar|anadir|anotar|crear)\s+(?:un\s+)?gasto|nuevo\s+gasto)\b/i
+const INCOME_PATTERN = /\b(recibi|cobre|ingreso de|ingrese|gane|(?:registrar|agregar|anadir|anotar|crear)\s+(?:un\s+)?ingreso|nuevo\s+ingreso)\b/i
 
 function detectKind(normalizedText: string): AssistantProposalKind | 'none' {
   if (APPOINTMENT_PATTERN.test(normalizedText)) return 'create_appointment'

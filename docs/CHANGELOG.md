@@ -14,6 +14,16 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Fixed
 
+- **Quick Actions coherentes del Copiloto**: `Registrar un ingreso` y
+  `Registrar un gasto` se reconocen como propuestas editables con importe (y
+  categoría en gasto) pendientes, sin consultar `financial_transactions` ni
+  escribir antes de la confirmación. `Crear una cita` conserva su propuesta;
+  `Ver resumen semanal` usa la semana actual; `Ingresos sin reportar` mantiene
+  la consulta local; y `Comparar este mes con el anterior` presenta ingresos,
+  gastos y balance de ambos meses con datos del snapshot financiero local. El
+  router read-only rechaza defensivamente los imperativos de escritura y el
+  renderer corrige `1 transacción`. La paridad completa del registro
+  Profesional mediante Copiloto permanece pendiente.
 - **Sprint B Samsung — bloque correctivo post-certificación**: se aplican
   correcciones TDD para SB-003–SB-007. Causa raíz y corrección: agenda persistía
   mediante `updateAppointment`, pero el guardado quedaba acoplado a errores

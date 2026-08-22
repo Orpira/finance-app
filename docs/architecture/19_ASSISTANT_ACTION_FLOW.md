@@ -82,7 +82,7 @@ Tres tipos de propuesta, cada uno con sus propios campos requeridos (`IncomeProp
 ## 3. Arquitectura Confirmation (`assistantConfirmationFlow.ts`, `AssistantProposalCard.tsx`, `conversationController.ts`)
 
 - `interpretAssistantMessage()` es el único punto de entrada: conecta intents → privacidad → propuesta.
-- `AssistantProposalCard` es el Proposal Editor: mantiene un borrador local (`draft`) por campo, y solo llama a `onConfirm(draft)` cuando el usuario pulsa "Confirmar" — nunca automáticamente.
+- `AssistantProposalCard` es el Proposal Editor: mantiene un borrador local (`draft`) por campo. El botón "Confirmar" permanece deshabilitado mientras algún campo requerido siga vacío y solo llama a `onConfirm(draft)` después de que el usuario complete la propuesta — nunca automáticamente.
 - `conversationController.confirmProposal({messageId, edits})`:
   1. Aplica ediciones (`applyProposalEdits`), recalculando `missingRequiredFields`.
   2. Si siguen faltando campos, **no ejecuta nada** — el mensaje se actualiza con el estado incompleto para que el usuario complete y vuelva a confirmar.
@@ -127,6 +127,10 @@ Cada transición terminal (`completed`/`failed`/`cancelled`) registra: `timestam
 
 ## 7. Catálogo de patrones reconocidos y evolución futura
 
-`assistantIntentParser.ts` reconoce frases con un verbo de acción (recibí/cobré/ingresé/gané → ingreso; gasté/pagué/compré → gasto; cita/agenda/reunión/turno → cita) más, cuando estén presentes, importe, moneda (símbolo `€ $ £`, código ISO o palabra), fecha (hoy/ayer/mañana/ISO/DD-MM-AAAA) y hora (para citas). Un signo de interrogación desactiva la detección de acción (se trata como consulta). Cualquier frase que no calce cae, sin error visible, al camino de consulta existente.
+`assistantIntentParser.ts` reconoce frases con un verbo de acción (recibí/cobré/ingresé/gané → ingreso; gasté/pagué/compré → gasto; cita/agenda/reunión/turno → cita) y órdenes explícitas de creación (`registrar`/`agregar`/`añadir`/`anotar`/`crear`/`nuevo` + ingreso o gasto). Cuando están presentes, extrae importe, moneda (símbolo `€ $ £`, código ISO o palabra), fecha (hoy/ayer/mañana/ISO/DD-MM-AAAA) y hora (para citas). Si una orden no incluye importe o categoría obligatoria, conserva `null` y la propuesta marca el campo como pendiente; nunca inventa un valor. Un signo de interrogación desactiva la detección de acción (se trata como consulta). Cualquier frase que no calce cae, sin error visible, al camino de consulta existente.
+
+Las seis sugerencias rápidas de `MessageComposer` siguen enviando texto al mismo controlador, sin una API paralela. Las órdenes de ingreso, gasto y cita se resuelven en esta capa de acciones; `Ver resumen semanal`, `Ingresos sin reportar` y `Comparar este mes con el anterior` se resuelven antes del proveedor mediante el Copiloto financiero local. El resumen usa la semana actual (lunes hasta hoy) y la comparación mensual presenta ingresos, gastos y balance del mes actual frente al inmediatamente anterior. Ninguna de estas sugerencias depende del fallback del proveedor.
+
+La paridad completa del registro Profesional mediante Copiloto permanece fuera de alcance: `register_income` conserva el alta conservadora de `type: 'otro'`, duración y porcentaje cero descrita en §4. Duración, tarifa, método de cálculo y tipo de servicio deberán abordarse en una evolución posterior explícita.
 
 Recomendación para una futura iteración (no implementada aquí): si el parser determinista no reconoce nada Y hay un proveedor de IA externo configurado con consentimiento otorgado, se podría ofrecer una segunda pasada vía LLM como *fallback* — nunca como reemplazo del parser determinista para los patrones que ya cubre, y siempre pasando por el mismo Execution Guard antes de persistir cualquier cosa.

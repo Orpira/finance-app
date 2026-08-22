@@ -15,6 +15,13 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 ### Fixed
 
+- Las seis Quick Actions del Copiloto cumplen ahora su texto: registrar ingreso,
+  gasto o cita prepara una propuesta confirmable; el resumen usa la semana
+  actual; los pendientes continúan siendo locales; y la comparación enfrenta
+  ingresos, gastos y balance del mes actual con el anterior. Los comandos de
+  escritura ya no pueden caer en `financial_transactions`, y el renderizador
+  distingue `1 transacción` de cantidades plurales. La paridad completa del
+  registro Profesional mediante Copiloto sigue pendiente.
 - Sprint B Samsung post-certificación: se corrigen los defectos SB-003–SB-007
   con TDD focal. La edición de citas persiste y los fallos de recordatorios no
   se presentan como fallo de guardado; `Generar PDF` en APK usa el flujo nativo

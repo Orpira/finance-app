@@ -238,6 +238,7 @@ function resolveTemporalPeriod(normalized: string, referenceIso: string): Tempor
 // literal anterior no detectaba.
 
 const TRANSACTIONS_KEYWORD_PATTERN = /\b(transacc\w*|movimient\w*|ingres\w*|egres\w*|gast\w*)/
+const WRITE_ACTION_PATTERN = /\b(?:(?:registrar|agregar|anadir|anotar|crear)\s+(?:un\s+)?(?:ingreso|gasto|egreso|cita)|nuev[oa]\s+(?:ingreso|gasto|egreso|cita))\b/
 
 function resolveTransactionKinds(normalized: string): readonly ('income' | 'expense')[] | undefined {
   const hasIncome = /\bingres\w*/.test(normalized)
@@ -313,6 +314,19 @@ function resolveFromMessage(message: string, requestedAt: string): {
 } {
   const normalized = normalizeText(message)
   const noSemantics: ResolvedSemantics = { period: null, kinds: null, aggregation: null }
+
+  if (WRITE_ACTION_PATTERN.test(normalized)) {
+    return {
+      detectedIntent: 'unknown',
+      confidence: 0.3,
+      tool: {
+        toolId: 'financial_balance',
+        arguments: {},
+      },
+      reasoning: 'Write action commands are outside the read-only financial tool router.',
+      semantics: noSemantics,
+    }
+  }
 
   if (TRANSACTIONS_KEYWORD_PATTERN.test(normalized)) {
     const period = resolveTemporalPeriod(normalized, requestedAt)
