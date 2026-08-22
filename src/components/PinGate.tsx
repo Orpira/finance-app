@@ -6,9 +6,13 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useStat
 import { resetLocalAppForPinRecovery } from '../services/securityRecoveryService'
 import { getSettings } from '../services/settingsService'
 import { verifyPin } from '../services/pinService'
+import {
+  shouldMountProtectedContent,
+  type PinGateStatus,
+} from '../utils/pinGateLifecycle'
 
 interface PinGateProps { children: ReactNode }
-type GateStatus = 'loading' | 'unlocked' | 'locked'
+type GateStatus = PinGateStatus
 
 const INACTIVITY_MS = 2 * 60 * 1000
 const LAST_ACTIVITY_KEY = 'finance-app:last-activity-at'
@@ -20,6 +24,7 @@ export function PinGate({ children }: PinGateProps) {
   const [error, setError] = useState('')
   const [showRecovery, setShowRecovery] = useState(false)
   const [resetConfirmation, setResetConfirmation] = useState('')
+  const [hasUnlocked, setHasUnlocked] = useState(false)
   const lastActivity = useRef(0)
 
   const lock = useCallback(() => {
@@ -43,6 +48,7 @@ export function PinGate({ children }: PinGateProps) {
       const enabled = Boolean(settings.pinEnabled && settings.pinHash)
       setPinEnabled(enabled)
       setStatus(enabled ? 'locked' : 'unlocked')
+      setHasUnlocked(!enabled)
     })
     return () => { mounted = false }
   }, [])
@@ -90,6 +96,7 @@ export function PinGate({ children }: PinGateProps) {
     if (await verifyPin(pin)) {
       lastActivity.current = Date.now()
       localStorage.setItem(LAST_ACTIVITY_KEY, String(lastActivity.current))
+      setHasUnlocked(true)
       setStatus('unlocked')
       setPin('')
       return
@@ -105,10 +112,21 @@ export function PinGate({ children }: PinGateProps) {
   }
 
   if (status === 'loading') return <div className="flex min-h-dvh items-center justify-center bg-slate-50 text-sm text-slate-500">Cargando...</div>
-  if (status === 'unlocked') return children
+
+  const protectedContent = shouldMountProtectedContent(status, hasUnlocked) ? (
+    <div
+      aria-hidden={status === 'locked' ? true : undefined}
+      className={status === 'locked' ? 'hidden' : 'contents'}
+      inert={status === 'locked'}
+    >
+      {children}
+    </div>
+  ) : null
+
+  if (status === 'unlocked') return protectedContent
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
+    <>{protectedContent}<main className="flex min-h-dvh items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
       <form className="flex w-full max-w-sm flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900" onSubmit={handleSubmit}>
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="flex size-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-700"><LockKeyhole className="size-6" /></div>
@@ -127,6 +145,6 @@ export function PinGate({ children }: PinGateProps) {
           </aside>
         ) : null}
       </form>
-    </main>
+    </main></>
   )
 }

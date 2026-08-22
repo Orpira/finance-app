@@ -39,6 +39,12 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
   estricta de Logcat no devolvió `FATAL EXCEPTION`, ANR ni excepciones críticas
   de Filesystem/Share atribuibles al APK correctivo. Resultado:
   **SAMSUNG GALAXY A16 — CERTIFICADO** para ese APK.
+- **SB-002 — restauración JSON en Samsung Galaxy A16**: `PinGate` ya no desmonta
+  el árbol desbloqueado y el `<input type="file">` cuando Android abre el
+  selector. Lo conserva oculto e inerte durante el bloqueo. Tras TDD y
+  reinstalación, `backup (9).json` recuperó físicamente ingreso, gasto, cita y
+  temporadas, sin crash. El PIN pareció operativo dentro de la misma sesión,
+  pero SB-006 demostró después que no persistió al arranque frío.
 
 ### Added
 

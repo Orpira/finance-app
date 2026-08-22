@@ -20,6 +20,11 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
   el chooser Android vuelve como cancelación, no error. APK correctivo:
   `private-balance-1.0.1-2-debug.apk`, SHA-256
   `6800160c7b82e63aaf887e02b39f5b130e03405c48884e11731de580818021b6`.
+- SB-002 corrige la restauración JSON en Android: `PinGate` mantiene montado,
+  oculto e inerte el contenido de una sesión ya desbloqueada mientras el selector
+  de archivos está abierto. El Galaxy A16 recuperó ingreso, gasto, cita,
+  temporadas y configuración; SB-006 separa la pérdida del PIN detectada después
+  en un arranque frío.
 - Los reportes de ingresos agrupan los registros por fecha sin perder identidad,
   tipo, método de pago, ubicación, moneda original, importe convertido, notas ni
   trazabilidad. Los subtotales profesionales reutilizan la duración efectiva
