@@ -3,7 +3,7 @@ import type { AppSettings, CurrencyCode } from '../types/settings'
 import { roundMoney } from '../utils/currency'
 import { calculateStoredRealGain } from '../utils/realGain'
 import { getEffectiveFinancialDuration } from '../utils/serviceDuration'
-import { updateAppointment } from './appointmentService'
+import { claimAppointmentCompletion, getAppointmentById } from './appointmentService'
 import {
   convertCurrencyPair,
   convertCurrencyToEurCop,
@@ -56,19 +56,37 @@ export function getAppointmentActualDuration(
   )
 }
 
+/**
+ * Finaliza el servicio activo de una cita y genera su ingreso. Es
+ * idempotente: si la cita ya fue finalizada, o si nunca se inició un
+ * servicio para ella (nunca se pulsó "Iniciar servicio"), no hace nada y
+ * devuelve null en vez de crear un ingreso. Nunca crea un servicio nuevo.
+ *
+ * La cita se re-lee siempre desde la base local (nunca se confía en el
+ * objeto que pasó la UI, que puede estar obsoleto tras varias pulsaciones
+ * rápidas) y la escritura que marca la cita como completada se hace de
+ * forma atómica en `claimAppointmentCompletion`, que es quien realmente
+ * evita que dos pulsaciones concurrentes generen dos ingresos.
+ */
 export async function completeAppointmentAsIncome(
-  appointment: Appointment,
+  appointmentId: number,
   settings: AppSettings,
   now = new Date(),
 ) {
-  if (!appointment.id || appointment.completed) {
+  const appointment = await getAppointmentById(appointmentId)
+  if (!appointment || !appointment.id) {
     throw new Error('La cita no se puede finalizar.')
+  }
+
+  if (appointment.completed || !appointment.timerStartedAt) {
+    // Idempotente / regla de dominio: nada que finalizar.
+    return null
   }
 
   await assertRecordIsMutable(appointment)
 
   const timerStoppedAt = now.toISOString()
-  const timerStartedAt = appointment.timerStartedAt ?? appointment.dateTime
+  const timerStartedAt = appointment.timerStartedAt
   const serviceDate = getDateFromDateTime(timerStartedAt)
   const actualDuration = getAppointmentActualDuration(appointment, now)
   const conversionOptions = {
@@ -108,6 +126,17 @@ export async function completeAppointmentAsIncome(
     })
   }
 
+  // Reclamación atómica: si otra pulsación concurrente ya finalizó esta
+  // cita mientras se calculaba la conversión de moneda, aquí se detecta y
+  // se aborta sin crear un ingreso duplicado.
+  const claimedAppointment = await claimAppointmentCompletion(appointment.id, {
+    timerStoppedAt,
+    actualDuration,
+  })
+  if (!claimedAppointment) {
+    return null
+  }
+
   await createServiceIncome({
     date: serviceDate,
     status: 'FINALIZADO',
@@ -135,14 +164,12 @@ export async function completeAppointmentAsIncome(
     actualDuration,
     timerStartedAt,
     timerStoppedAt,
+    // El tiempo ya fue medido por la cita; el ingreso conserva las marcas
+    // históricas pero no debe iniciar un segundo cronómetro.
+    timerUsed: false,
     country: appointment.country ?? settings.country,
     city: appointment.city ?? settings.city,
   })
 
-  await updateAppointment(appointment.id, {
-    actualDuration,
-    completed: true,
-    timerStartedAt,
-    timerStoppedAt,
-  })
+  return claimedAppointment
 }

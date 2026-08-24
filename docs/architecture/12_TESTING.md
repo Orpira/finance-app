@@ -72,8 +72,19 @@ movimientos y saneando solo planificación opcional inválida.
 - `incomeService.test.ts` — defaults de método, inmutabilidad al editar, cascade-delete de Adicionales (gap detectado: este archivo no tenía tests previos a este milestone).
 - `incomeAdditionalService.test.ts` — CRUD y consistencia de Adicionales según
 la regla que mantiene el importe principal separado.
+- `incomeDetailAdditionals.test.tsx` — presentación de importe y descripción de
+  cada Adicional en el detalle del ingreso, incluido el ocultamiento de valores
+  sensibles.
 - `serviceTimerService.test.ts` — regresión: "Jornada por horas" nunca inicia el cronómetro (test sobre el guard ya existente, sin cambio de producción).
-- `appointmentCompletionService.test.ts` — las citas agendadas siempre persisten `service_duration`, sin leer la configuración del método.
+- `appointmentService.test.ts` — disponibilidad de intervalos, creación
+  concurrente, inicio temporal e idempotencia de inicio y reclamación de cierre;
+  la concurrencia se modela con una cola serializada en el mock de
+  `db.transaction`.
+- `appointmentCompletionService.test.ts` — las citas agendadas siempre
+  persisten `service_duration`, no crean ingreso sin servicio activo y limitan
+  cinco finalizaciones concurrentes a una invocación de `createServiceIncome`.
+- `appointmentReminders.test.ts` — alarma inicial de 5 minutos y cálculo siempre
+  anterior al inicio para las dos alarmas configurables.
 - `backupService.test.ts` — `incomeAdditionals` viaja en la cadena de backup.
 
 ### Snapshot / Knowledge
@@ -108,6 +119,11 @@ la regla que mantiene el importe principal separado.
 ## 7) Gaps actuales
 
 - falta de cobertura e2e completa de workflows n8n fuera del entorno de tests unitarios;
+- falta validar en navegador/IndexedDB real la doble pulsación sobre inicio y
+  finalización de citas; las pruebas actuales de concurrencia usan un mock
+  serializado de transacciones;
+- falta cubrir la recuperación cuando la cita ya fue reclamada como completada
+  y la creación posterior del ingreso falla;
 - branch protection de GitHub pendiente de configuración para hacer obligatorio
 el CI ya existente.
 

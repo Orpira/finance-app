@@ -30,6 +30,8 @@ Este directorio contiene la documentación oficial del proyecto. La fuente canó
 - [product/PRE_RELEASE_0_9_SPRINT_A.md](product/PRE_RELEASE_0_9_SPRINT_A.md) - Auditoría, correcciones TDD, validaciones y estado de cierre del Sprint A.
 - [product/PB_ONBOARDING_SEASON_PLANNING.md](product/PB_ONBOARDING_SEASON_PLANNING.md) - Implementación PB-001 a PB-003: onboarding, método de cálculo del ingreso y planificación de temporadas.
 - [product/PB_004_CONVERSATION_AUDIT.md](product/PB_004_CONVERSATION_AUDIT.md) - Auditoría PB-004 de conversación, privacidad y robustez; sus hallazgos permanecen abiertos.
+- [product/COPILOT_QUICK_ACTIONS_UI_VALIDATION.md](product/COPILOT_QUICK_ACTIONS_UI_VALIDATION.md) - Certificación funcional en la PWA/web real de las seis Quick Actions, confirmación, persistencia, consola y red.
+- [product/APPOINTMENT_SERVICE_LIFECYCLE.md](product/APPOINTMENT_SERVICE_LIFECYCLE.md) - Inicio temporal, finalización idempotente y eliminación de cronómetros visibles en Agenda, con cobertura y pendientes E2E.
 - [product/configurable-reports.md](product/configurable-reports.md) - Flujo configurable de reportes y formatos soportados.
 - [handoff/MILESTONE_9A_MANIFEST.md](handoff/MILESTONE_9A_MANIFEST.md) y [handoff/MILESTONE_9B_MANIFEST.md](handoff/MILESTONE_9B_MANIFEST.md) - Manifiestos históricos de entrega de los hitos 9A y 9B.
 - [architecture/24_LOCAL_DIAGNOSTICS.md](architecture/24_LOCAL_DIAGNOSTICS.md) - Diagnóstico local y exportación segura para soporte.

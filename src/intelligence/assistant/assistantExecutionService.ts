@@ -6,6 +6,7 @@ import { getSettings } from '../../services/settingsService'
 import { markIncomeAsReported } from '../../services/incomeReport.service'
 import { financialGoalService } from '../../services/financialGoalService'
 import { exportCopilotPeriodReport } from '../../services/copilotReportExportService'
+import { createDefaultAppointmentReminders } from '../../utils/appointmentReminders'
 import { calculateStoredRealGain } from '../../utils/realGain'
 import { recordAssistantAudit } from './assistantAuditLog'
 import { assertProposalReadyForExecution } from './assistantExecutionGuard'
@@ -154,7 +155,7 @@ async function executeByKind(proposal: AssistantProposalRecord): Promise<number 
     duration: durationMinutes ?? 60,
     expectedAmount: expectedAmount as number,
     currency: resolvedCurrency,
-    reminders: [],
+    reminders: createDefaultAppointmentReminders(),
     completed: false,
   })
 }

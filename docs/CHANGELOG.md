@@ -14,6 +14,36 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Fixed
 
+- **Adicionales visibles desde Actividad reciente**: el detalle de un ingreso
+  profesional ahora consulta la tabla relacional de Adicionales y muestra cada
+  descripción e importe por separado. Los importes respetan la preferencia de
+  ocultamiento de valores sensibles. No se modifican el ingreso, sus cálculos
+  ni el balance agregado.
+- **Agenda sin inicios anticipados ni ingresos duplicados por doble pulsación**:
+  el inicio relee y actualiza la cita en una transacción idempotente, rechaza
+  `now < dateTime` y requiere una pulsación explícita. La finalización recibe
+  `appointmentId`, relee IndexedDB y reclama `completed`, `timerStoppedAt` y
+  `actualDuration` antes de crear como máximo un ingreso. Agenda elimina el
+  reloj ascendente y el auto-inicio, usa estados `Disponible`, `Inicio
+  retrasado` y `Servicio en curso`, y protege operaciones por id. La alarma de
+  tiempo previsto conserva sonido y acciones. El ingreso resultante conserva
+  inicio, fin y duración real, pero se marca `timerUsed: false` para que no
+  arranque un segundo cronómetro tras finalizar la cita. Los recordatorios y la
+  lógica general de timers de ingresos no cambiaron. Cobertura verificada: 14
+  pruebas en `appointmentService.test.ts` y 6 en
+  `appointmentCompletionService.test.ts`.
+  Quedan pendientes la validación E2E y la recuperación si falla la creación
+  del ingreso después de reclamar la cita. Ver
+  `product/APPOINTMENT_SERVICE_LIFECYCLE.md`.
+- **Recordatorio inicial de Agenda**: cada cita nueva parte con una alarma local
+  editable 5 minutos antes. Se mantienen hasta dos alarmas configurables y ambas
+  se calculan antes del inicio; la alerta `Tiempo previsto cumplido` continúa
+  separada y solo aparece después de iniciar el servicio.
+- **Agenda sin citas solapadas**: crear una cita o cambiar su fecha/hora o
+  duración rechaza intervalos que coincidan total o parcialmente con otra cita.
+  La comprobación ocurre dentro de la transacción Dexie, cubre creaciones
+  concurrentes, permite citas exactamente consecutivas y no bloquea ediciones
+  no temporales de datos legacy ya solapados.
 - **Quick Actions coherentes del Copiloto**: `Registrar un ingreso` y
   `Registrar un gasto` se reconocen como propuestas editables con importe (y
   categoría en gasto) pendientes, sin consultar `financial_transactions` ni
@@ -23,7 +53,12 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
   gastos y balance de ambos meses con datos del snapshot financiero local. El
   router read-only rechaza defensivamente los imperativos de escritura y el
   renderer corrige `1 transacción`. La paridad completa del registro
-  Profesional mediante Copiloto permanece pendiente.
+  Profesional mediante Copiloto permanece pendiente. La validación funcional
+  posterior en Chrome 151 sobre la PWA/web real quedó aprobada: las seis
+  acciones, el bloqueo de confirmación, la cancelación y la persistencia
+  controlada pasaron; las consultas deterministas no generaron tráfico de IA.
+  Evidencia: `product/COPILOT_QUICK_ACTIONS_UI_VALIDATION.md`. Commit certificado:
+  `b300f89fb9664a746dad3cc1ae2530b7b2d520be`.
 - **Sprint B Samsung — bloque correctivo post-certificación**: se aplican
   correcciones TDD para SB-003–SB-007. Causa raíz y corrección: agenda persistía
   mediante `updateAppointment`, pero el guardado quedaba acoplado a errores

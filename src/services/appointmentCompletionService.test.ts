@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Appointment } from '../types/appointment'
 import type { AppSettings } from '../types/settings'
 
-const updateAppointmentMock = vi.fn()
+const getAppointmentByIdMock = vi.fn()
+const claimAppointmentCompletionMock = vi.fn()
 vi.mock('./appointmentService', () => ({
-  updateAppointment: (...args: unknown[]) => updateAppointmentMock(...args),
+  getAppointmentById: (...args: unknown[]) => getAppointmentByIdMock(...args),
+  claimAppointmentCompletion: (...args: unknown[]) => claimAppointmentCompletionMock(...args),
 }))
 
 const convertCurrencyPairMock = vi.fn()
@@ -45,6 +47,7 @@ function appointment(overrides: Partial<Appointment> = {}): Appointment {
     expectedAmount: 100,
     currency: 'EUR',
     completed: false,
+    timerStartedAt: '2026-01-01T10:00:00.000Z',
     ...overrides,
   } as Appointment
 }
@@ -69,16 +72,80 @@ beforeEach(() => {
   convertCurrencyToEurCopMock.mockResolvedValue({ eurValue: 50, copValue: 0 })
   resolveEurCopExchangeRateMock.mockResolvedValue({ rate: 1 })
   createServiceIncomeMock.mockResolvedValue(1)
-  updateAppointmentMock.mockResolvedValue(undefined)
+  getAppointmentByIdMock.mockResolvedValue(appointment())
+  claimAppointmentCompletionMock.mockImplementation(async (_id: number, fields: unknown) => ({
+    ...appointment(),
+    completed: true,
+    ...(fields as object),
+  }))
 })
 
 describe('completeAppointmentAsIncome', () => {
   it('siempre persiste incomeCalculationMethod="service_duration" y additionalsTotal=0, sin importar la configuración de método del usuario', async () => {
-    await completeAppointmentAsIncome(appointment(), settings(), new Date('2026-01-01T11:00:00.000Z'))
+    await completeAppointmentAsIncome(1, settings(), new Date('2026-01-01T11:00:00.000Z'))
 
     expect(createServiceIncomeMock).toHaveBeenCalledTimes(1)
     const persisted = createServiceIncomeMock.mock.calls[0][0]
     expect(persisted.incomeCalculationMethod).toBe('service_duration')
     expect(persisted.additionalsTotal).toBe(0)
+  })
+
+  it('crea el ingreso de la cita como finalizado y sin iniciar otro cronómetro', async () => {
+    await completeAppointmentAsIncome(1, settings(), new Date('2026-01-01T11:00:00.000Z'))
+
+    expect(createServiceIncomeMock).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'FINALIZADO',
+      timerUsed: false,
+      timerStartedAt: '2026-01-01T10:00:00.000Z',
+      timerStoppedAt: '2026-01-01T11:00:00.000Z',
+      actualDuration: 60,
+    }))
+  })
+
+  it('nunca crea un servicio si la cita nunca fue iniciada (sin timerStartedAt)', async () => {
+    getAppointmentByIdMock.mockResolvedValue(appointment({ timerStartedAt: undefined }))
+
+    const result = await completeAppointmentAsIncome(1, settings(), new Date('2026-01-01T11:00:00.000Z'))
+
+    expect(result).toBeNull()
+    expect(createServiceIncomeMock).not.toHaveBeenCalled()
+    expect(claimAppointmentCompletionMock).not.toHaveBeenCalled()
+  })
+
+  it('es idempotente: una cita ya finalizada no genera un ingreso nuevo (TEST F)', async () => {
+    getAppointmentByIdMock.mockResolvedValue(appointment({ completed: true }))
+
+    const result = await completeAppointmentAsIncome(1, settings(), new Date('2026-01-01T11:00:00.000Z'))
+
+    expect(result).toBeNull()
+    expect(createServiceIncomeMock).not.toHaveBeenCalled()
+    expect(claimAppointmentCompletionMock).not.toHaveBeenCalled()
+  })
+
+  it('si la reclamación atómica detecta que otra pulsación ya finalizó la cita, no crea un ingreso duplicado', async () => {
+    claimAppointmentCompletionMock.mockResolvedValue(null)
+
+    const result = await completeAppointmentAsIncome(1, settings(), new Date('2026-01-01T11:00:00.000Z'))
+
+    expect(result).toBeNull()
+    expect(createServiceIncomeMock).not.toHaveBeenCalled()
+  })
+
+  it('múltiples pulsaciones concurrentes producen como máximo un ingreso (TEST D/E)', async () => {
+    let claimed = false
+    claimAppointmentCompletionMock.mockImplementation(async (_id: number, fields: unknown) => {
+      if (claimed) return null
+      claimed = true
+      return { ...appointment(), completed: true, ...(fields as object) }
+    })
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        completeAppointmentAsIncome(1, settings(), new Date('2026-01-01T11:00:00.000Z')),
+      ),
+    )
+
+    expect(createServiceIncomeMock).toHaveBeenCalledTimes(1)
+    expect(results.filter((result) => result !== null)).toHaveLength(1)
   })
 })

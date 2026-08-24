@@ -35,6 +35,15 @@ export function createEmptyReminder(): AppointmentReminder {
   }
 }
 
+export function createDefaultAppointmentReminders(): AppointmentReminder[] {
+  return [{
+    id: createReminderId(),
+    amount: 5,
+    unit: 'minutes',
+    type: 'local',
+  }]
+}
+
 export function formatReminderTime(reminder: AppointmentReminder) {
   const unitLabel =
     reminder.amount === 1

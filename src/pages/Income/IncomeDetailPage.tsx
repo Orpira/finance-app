@@ -7,9 +7,11 @@ import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { isEarningPeriodClosed } from '../../services/earningPeriodService'
 import { listExpenseAdjustmentsForIncome } from '../../services/expenseService'
+import { listIncomeAdditionals } from '../../services/incomeAdditionalService'
 import { getServiceIncomeById } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import type { Expense } from '../../types/expense'
+import type { IncomeAdditional } from '../../types/incomeAdditional'
 import type { ServiceIncome } from '../../types/service'
 import type { CurrencyCode } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
@@ -29,11 +31,53 @@ function formatDate(value: string) {
   )
 }
 
+interface IncomeAdditionalsDetailProps {
+  additionals: IncomeAdditional[]
+  currency: CurrencyCode
+  hidden: boolean
+}
+
+export function IncomeAdditionalsDetail({
+  additionals,
+  currency,
+  hidden,
+}: IncomeAdditionalsDetailProps) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-semibold">Adicionales</h2>
+        <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+          {additionals.length} {additionals.length === 1 ? 'adicional' : 'adicionales'}
+        </span>
+      </div>
+      <ul className="mt-3 divide-y divide-slate-100">
+        {additionals.map((additional) => (
+          <li
+            className="grid gap-1 py-3 sm:grid-cols-[1fr_auto]"
+            key={additional.id}
+          >
+            <p className="text-sm text-slate-700">
+              {additional.description || 'Adicional sin descripción'}
+            </p>
+            <p className="font-semibold text-emerald-700">
+              <SensitiveAmount
+                hidden={hidden}
+                value={formatCurrency(additional.amount, currency)}
+              />
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 export function IncomeDetailPage() {
   const incomeId = Number(useParams().incomeId)
   const { hidden } = useSensitiveValues()
   const [income, setIncome] = useState<ServiceIncome | null>()
   const [adjustments, setAdjustments] = useState<Expense[]>([])
+  const [additionals, setAdditionals] = useState<IncomeAdditional[]>([])
   const [canEdit, setCanEdit] = useState(false)
   const [isBasicUser, setIsBasicUser] = useState(false)
 
@@ -46,9 +90,10 @@ export function IncomeDetailPage() {
         return
       }
 
-      const [currentIncome, currentAdjustments, settings] = await Promise.all([
+      const [currentIncome, currentAdjustments, currentAdditionals, settings] = await Promise.all([
         getServiceIncomeById(incomeId),
         listExpenseAdjustmentsForIncome(incomeId),
+        listIncomeAdditionals(incomeId),
         getSettings(),
       ])
       if (!mounted) return
@@ -74,6 +119,7 @@ export function IncomeDetailPage() {
 
       setIncome(currentIncome)
       setIsBasicUser(isBasicMode(settings))
+      setAdditionals(currentAdditionals)
       setAdjustments(
         currentAdjustments.filter((adjustment) =>
           recordBelongsToUsageMode(adjustment, settings.usageMode),
@@ -120,6 +166,14 @@ export function IncomeDetailPage() {
         {!isBasicUser && isService && <div><p className="text-xs font-semibold uppercase text-slate-500">Duración</p><p className="mt-1 font-semibold">{getIncomeDurationDisplay(income)}</p></div>}
         {income.notes && <div className="sm:col-span-3"><p className="text-xs font-semibold uppercase text-slate-500">Observación</p><p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{income.notes}</p></div>}
       </section>
+
+      {!isBasicUser && isService && additionals.length > 0 && (
+        <IncomeAdditionalsDetail
+          additionals={additionals}
+          currency={income.currency as CurrencyCode}
+          hidden={hidden}
+        />
+      )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">

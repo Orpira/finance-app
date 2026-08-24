@@ -28,6 +28,13 @@ Responsabilidad: CRUD financiero, conversiones, balance y exportables.
 - `reminderService.ts`
 
 Responsabilidad: ciclo de citas/temporizadores y contexto profesional.
+`appointmentService` protege en transacciones `rw` la disponibilidad de cada
+intervalo planificado, el inicio temporal y la reclamación idempotente de
+finalización. La creación y los cambios de fecha/hora o duración rechazan
+solapamientos, pero permiten citas exactamente consecutivas.
+`appointmentCompletionService` relee por id, calcula una duración fija y solo
+crea el ingreso cuando gana esa reclamación. El detalle y los límites vigentes están en
+[`../product/APPOINTMENT_SERVICE_LIFECYCLE.md`](../product/APPOINTMENT_SERVICE_LIFECYCLE.md).
 
 ### Configuración y seguridad local
 

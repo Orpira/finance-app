@@ -15,13 +15,33 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 ### Fixed
 
+- El detalle abierto desde `Actividad reciente` de Inicio muestra ahora los
+  Adicionales del ingreso profesional, con descripción, importe y protección de
+  valores sensibles, sin alterar cálculos ni balances.
+- Agenda impide iniciar una cita antes de su fecha/hora y evita ingresos
+  duplicados ante pulsaciones repetidas mediante inicio y finalización
+  idempotentes por cita. Se eliminaron los cronómetros ascendentes y el
+  auto-inicio silencioso de Agenda, preservando recordatorios y la alarma de
+  tiempo previsto. El ingreso creado al finalizar conserva inicio, fin y
+  duración real, pero no inicia un segundo cronómetro. La validación UI real y
+  la recuperación ante un fallo de creación del ingreso posterior a la
+  reclamación permanecen pendientes.
+- Las citas nuevas incluyen una alarma editable 5 minutos antes. Las dos alarmas
+  configurables son siempre previas al inicio; la alerta de duración prevista
+  solo se activa después de comenzar el servicio.
+- Agenda rechaza citas cuyos intervalos se solapen al crear o cambiar horario o
+  duración, incluso ante guardados concurrentes, y permite citas consecutivas.
 - Las seis Quick Actions del Copiloto cumplen ahora su texto: registrar ingreso,
   gasto o cita prepara una propuesta confirmable; el resumen usa la semana
   actual; los pendientes continúan siendo locales; y la comparación enfrenta
   ingresos, gastos y balance del mes actual con el anterior. Los comandos de
   escritura ya no pueden caer en `financial_transactions`, y el renderizador
   distingue `1 transacción` de cantidades plurales. La paridad completa del
-  registro Profesional mediante Copiloto sigue pendiente.
+  registro Profesional mediante Copiloto sigue pendiente. La validación UI real
+  de las seis acciones, confirmación, cancelación, persistencia y ausencia de
+  tráfico de IA en consultas deterministas quedó aprobada sobre el commit
+  `b300f89` y está documentada en
+  `docs/product/COPILOT_QUICK_ACTIONS_UI_VALIDATION.md`.
 - Sprint B Samsung post-certificación: se corrigen los defectos SB-003–SB-007
   con TDD focal. La edición de citas persiste y los fallos de recordatorios no
   se presentan como fallo de guardado; `Generar PDF` en APK usa el flujo nativo

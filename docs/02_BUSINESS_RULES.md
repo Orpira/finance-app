@@ -72,6 +72,12 @@
   aplica ese %: el pago por hora ya es el 100% del ingreso final de la
   profesional. El cronómetro es exclusivo de `service_duration` y jamás se
   inicia para `hourly_workday`.
+- Una cita profesional no inicia su servicio antes de `dateTime`. Alcanzar la
+  fecha y hora solo habilita la acción: el paso a servicio en curso requiere una
+  pulsación explícita y fija `timerStartedAt` una sola vez.
+- Finalizar una cita requiere un servicio previamente iniciado. La reclamación
+  de finalización es idempotente por `appointmentId`; pulsaciones repetidas no
+  deben producir ingresos duplicados.
 - `service_duration` recopila el tipo de pago al registrar el ingreso.
   `hourly_workday` no lo solicita ni lo persiste, porque la jornada puede
   liquidarse después de su registro. Al editar una jornada histórica se
@@ -129,6 +135,13 @@
 - Una cita puede convertirse en ingreso completado.
 - La duración real puede venir del temporizador o del dato manual.
 - Las alarmas y recordatorios son parte del módulo, no de la contabilidad principal.
+- Una cita nueva parte con una alarma editable 5 minutos antes y admite como
+  máximo dos alarmas configurables, ambas anteriores a la hora de inicio.
+- Las citas no pueden compartir ni cruzar tiempo planificado. La disponibilidad
+  considera desde `dateTime` hasta `dateTime + duration`; una cita consecutiva
+  puede comenzar exactamente cuando termina la anterior.
+- La alarma de duración prevista solo aplica después de iniciar el servicio y
+  se dispara al alcanzar la duración programada.
 
 ## Reportes
 

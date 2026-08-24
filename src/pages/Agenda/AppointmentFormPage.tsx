@@ -5,6 +5,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ServiceDurationSelect } from '../../components/forms/ServiceDurationSelect'
 import { PageHeader } from '../../components/layout/PageHeader'
 import {
+  APPOINTMENT_TIME_CONFLICT_MESSAGE,
   createAppointment,
   getAppointmentById,
   updateAppointment,
@@ -18,6 +19,7 @@ import type {
 } from '../../types/appointment'
 import type { AppSettings } from '../../types/settings'
 import {
+  createDefaultAppointmentReminders,
   createEmptyReminder,
   hasInvalidReminders,
 } from '../../utils/appointmentReminders'
@@ -37,7 +39,7 @@ import {
 import { isReported } from '../../catalogs/reportStatuses'
 import { useDialog } from '../../components/dialogs/useDialog'
 
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'timeConflict'
 type SeasonActionStatus = 'idle' | 'reopening' | 'reopened' | 'error'
 
 function formatInputDate(date: Date) {
@@ -108,7 +110,9 @@ export function AppointmentFormPage() {
     useState<ServiceDurationLabel | ''>('')
   const [expectedAmount, setExpectedAmount] = useState(120)
   const [notes, setNotes] = useState('')
-  const [reminders, setReminders] = useState<AppointmentReminder[]>([])
+  const [reminders, setReminders] = useState<AppointmentReminder[]>(
+    createDefaultAppointmentReminders,
+  )
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [now, setNow] = useState(new Date())
   const [loadError, setLoadError] = useState('')
@@ -371,8 +375,12 @@ export function AppointmentFormPage() {
       }
 
       setSaveStatus('saved')
-    } catch {
-      setSaveStatus('error')
+    } catch (error) {
+      setSaveStatus(
+        error instanceof Error && error.message === APPOINTMENT_TIME_CONFLICT_MESSAGE
+          ? 'timeConflict'
+          : 'error',
+      )
     }
   }
 
@@ -532,7 +540,7 @@ export function AppointmentFormPage() {
             <div className="flex items-center gap-2">
               <Bell className="size-4 text-emerald-700" aria-hidden="true" />
               <h2 className="text-sm font-semibold text-slate-900">
-                Alarmas sonoras
+                Alarmas antes de la cita
               </h2>
             </div>
             <button
@@ -614,6 +622,9 @@ export function AppointmentFormPage() {
             </p>
           )}
           <p className="text-xs leading-5 text-slate-500">
+            Las citas nuevas incluyen una alarma inicial 5 minutos antes. Las
+            dos alarmas disponibles se programan siempre antes de la hora de
+            inicio.{' '}
             En Android se programan como alarmas exactas, con sonido, vibración
             y canal de prioridad máxima. El sistema puede solicitar permisos la
             primera vez.
@@ -621,7 +632,14 @@ export function AppointmentFormPage() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-500" role="status">
+          <p
+            className={`text-sm ${
+              saveStatus === 'error' || saveStatus === 'timeConflict'
+                ? 'font-medium text-red-700'
+                : 'text-slate-500'
+            }`}
+            role="status"
+          >
             {saveStatus === 'saved' && 'Cita guardada'}
             {saveStatus === 'error' &&
               (!durationLabel
@@ -631,6 +649,7 @@ export function AppointmentFormPage() {
                 : hasReminderErrors
                   ? 'Revisa los recordatorios'
                   : 'No se pudo guardar')}
+            {saveStatus === 'timeConflict' && APPOINTMENT_TIME_CONFLICT_MESSAGE}
           </p>
 
           <div className="grid gap-2 sm:flex sm:justify-end">

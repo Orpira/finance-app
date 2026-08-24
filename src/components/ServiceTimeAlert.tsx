@@ -1,10 +1,7 @@
-import { BellRing, Check, Clock3 } from 'lucide-react'
+import { BellRing, Check } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import {
-  listAppointments,
-  updateAppointment,
-} from '../services/appointmentService'
+import { listAppointments, updateAppointment } from '../services/appointmentService'
 import {
   completeAppointmentAsIncome,
   getAppointmentActualDuration,
@@ -25,16 +22,6 @@ function getElapsedSeconds(appointment: Appointment, now: Date) {
     : now
 
   return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000))
-}
-
-function formatElapsedTime(seconds: number) {
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const remainingSeconds = seconds % 60
-
-  return [hours, minutes, remainingSeconds]
-    .map((value) => String(value).padStart(2, '0'))
-    .join(':')
 }
 
 export function ServiceTimeAlert() {
@@ -100,44 +87,6 @@ export function ServiceTimeAlert() {
   }, [reloadAppointments])
 
   useEffect(() => {
-    const dueAppointments = appointments.filter(
-      (appointment) =>
-        appointment.id &&
-        !appointment.completed &&
-        !appointment.timerStartedAt &&
-        appointment.timerMode !== 'manualPending' &&
-        new Date(appointment.dateTime).getTime() <= now.getTime(),
-    )
-
-    if (dueAppointments.length === 0) {
-      return
-    }
-
-    let isCancelled = false
-
-    async function startDueTimers() {
-      await Promise.all(
-        dueAppointments.map((appointment) =>
-          updateAppointment(appointment.id as number, {
-            timerMode: 'automatic',
-            timerStartedAt: appointment.dateTime,
-          }),
-        ),
-      )
-
-      if (!isCancelled) {
-        await reloadAppointments()
-      }
-    }
-
-    startDueTimers()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [appointments, now, reloadAppointments])
-
-  useEffect(() => {
     if (activeAppointmentId) {
       return
     }
@@ -197,12 +146,12 @@ export function ServiceTimeAlert() {
   }
 
   async function handleFinish() {
-    if (!activeAppointment || !settings) {
+    if (!activeAppointment?.id || !settings) {
       return
     }
 
     setIsSaving(true)
-    await completeAppointmentAsIncome(activeAppointment, settings, now)
+    await completeAppointmentAsIncome(activeAppointment.id, settings, now)
     await reloadAppointments()
     setActiveAppointmentId(null)
     setIsSaving(false)
@@ -248,29 +197,18 @@ export function ServiceTimeAlert() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:grid-cols-2">
-          <div>
-            <p className="text-xs font-semibold uppercase text-amber-700">
-              Cronómetro
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-semibold uppercase text-amber-700">
+            Duración real
+          </p>
+          <p className="mt-1 text-lg font-semibold text-slate-950">
+            {actualDuration} min
+          </p>
+          {extraMinutes > 0 && (
+            <p className="mt-1 text-sm font-medium text-amber-700">
+              +{extraMinutes} min extra
             </p>
-            <p className="mt-1 inline-flex items-center gap-2 text-lg font-semibold text-slate-950">
-              <Clock3 className="size-5" aria-hidden="true" />
-              {formatElapsedTime(elapsedSeconds)}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase text-amber-700">
-              Duración real
-            </p>
-            <p className="mt-1 text-lg font-semibold text-slate-950">
-              {actualDuration} min
-            </p>
-            {extraMinutes > 0 && (
-              <p className="mt-1 text-sm font-medium text-amber-700">
-                +{extraMinutes} min extra
-              </p>
-            )}
-          </div>
+          )}
         </div>
 
         <label className="mt-4 flex flex-col gap-2">

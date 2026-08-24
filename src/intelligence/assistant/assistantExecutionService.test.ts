@@ -137,7 +137,9 @@ describe('executeAssistantProposal', () => {
     expect(call.duration).toBe(60)
     expect(call.expectedAmount).toBe(80)
     expect(call.completed).toBe(false)
-    expect(call.reminders).toEqual([])
+    expect(call.reminders).toEqual([
+      expect.objectContaining({ amount: 5, unit: 'minutes', type: 'local' }),
+    ])
   })
 
   it('propaga el error del servicio de dominio como fallo, sin datos inventados', async () => {

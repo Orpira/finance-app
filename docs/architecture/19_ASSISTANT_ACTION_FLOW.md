@@ -133,4 +133,6 @@ Las seis sugerencias rápidas de `MessageComposer` siguen enviando texto al mism
 
 La paridad completa del registro Profesional mediante Copiloto permanece fuera de alcance: `register_income` conserva el alta conservadora de `type: 'otro'`, duración y porcentaje cero descrita en §4. Duración, tarifa, método de cálculo y tipo de servicio deberán abordarse en una evolución posterior explícita.
 
+La certificación funcional de este flujo en la PWA/web real, incluida la matriz de Quick Actions, persistencia controlada, consola y trazabilidad de red, está registrada en [`../product/COPILOT_QUICK_ACTIONS_UI_VALIDATION.md`](../product/COPILOT_QUICK_ACTIONS_UI_VALIDATION.md). El resultado fue **VALIDACIÓN UI APROBADA** sobre el commit `b300f89fb9664a746dad3cc1ae2530b7b2d520be`.
+
 Recomendación para una futura iteración (no implementada aquí): si el parser determinista no reconoce nada Y hay un proveedor de IA externo configurado con consentimiento otorgado, se podría ofrecer una segunda pasada vía LLM como *fallback* — nunca como reemplazo del parser determinista para los patrones que ya cubre, y siempre pasando por el mismo Execution Guard antes de persistir cualquier cosa.

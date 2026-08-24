@@ -111,6 +111,7 @@ Un Adicional es un importe positivo que complementa el ingreso principal (por ej
 
 - Al **registrar** un ingreso nuevo, marcá "Sí" en "¿Este ingreso tiene un adicional?" para que aparezca el formulario de Importe/Descripción antes de guardar.
 - Al **editar** un ingreso ya guardado, la sección "Adicionales" siempre está disponible: podés añadir o eliminar adicionales en cualquier momento (mientras el ingreso no esté reportado ni pertenezca a una temporada cerrada). También hay un acceso directo "Adicional" en el listado de `Ingresos`.
+- Al abrir el **detalle** de un ingreso profesional, incluso desde `Actividad reciente` de Inicio, se muestran por separado la descripción y el importe de cada Adicional existente.
 - El total de Adicionales de cada ingreso se muestra por separado en su tarjeta del listado. El balance de `Inicio` sí suma los Adicionales al calcular `Ganancia` (la tarjeta "Ingresos" los descuenta para no contarlos dos veces, y hay una tarjeta "Adicionales" propia con el total del mes).
 
 El sistema calculará automáticamente:
@@ -136,8 +137,20 @@ La agenda permite administrar servicios futuros y convertir citas en ingresos:
 
 - Crear una cita con nombre del cliente, fecha, hora, duración, importe esperado, moneda y notas.
 - Ver las citas programadas en el calendario.
-- Iniciar o detener el cronómetro de una cita.
-- Marcar una cita como completada; al hacerlo, se registra un ingreso con duración real y conversión de moneda.
+- Cada cita nueva incluye una alarma editable 5 minutos antes. Puedes configurar
+  hasta dos alarmas; ambas suenan antes de la hora de inicio.
+- La app impide guardar citas que coincidan total o parcialmente con la duración
+  prevista de otra cita. Sí puedes comenzar una nueva exactamente cuando termina
+  la anterior.
+- Antes de la fecha y hora programadas, `Iniciar servicio` permanece
+  deshabilitado. Al llegar la hora, pulsa el botón para comenzar; la cita no se
+  inicia automáticamente.
+- Durante el servicio se muestra la hora real de inicio, no un reloj ascendente.
+- Pulsa `Servicio realizado` para finalizar. La app fija la duración real y
+  registra el ingreso una sola vez, aunque el botón se pulse repetidamente.
+- La alarma `Tiempo previsto cumplido` conserva las opciones `Continuar` y
+  `Finalizar servicio`; aparece después de iniciar, cuando se cumple la duración
+  prevista, y permanece separada de los recordatorios anteriores a la cita.
 
 ## 6. Dashboard
 

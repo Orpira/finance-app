@@ -4,13 +4,12 @@ import {
   Bell,
   CalendarCheck,
   Check,
-  Clock3,
   Pencil,
   Play,
   Plus,
   Trash2,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Calendar from 'react-calendar'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -19,7 +18,7 @@ import { PageHeader } from '../../components/layout/PageHeader'
 import {
   deleteAppointment,
   listAppointments,
-  updateAppointment,
+  startAppointmentService,
 } from '../../services/appointmentService'
 import { completeAppointmentAsIncome } from '../../services/appointmentCompletionService'
 import { getSettings } from '../../services/settingsService'
@@ -35,6 +34,13 @@ import { formatCurrency } from '../../utils/currency'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
 import { getDurationDisplay } from '../../utils/serviceDuration'
 import { isReported } from '../../catalogs/reportStatuses'
+
+// Agenda no muestra cronómetros ni cuentas regresivas: los avisos de tiempo
+// son responsabilidad exclusiva del sistema de alarmas (AppointmentReminderAlert,
+// ServiceTimeAlert). Este `now` solo se usa para decidir si una cita ya
+// alcanzó su fecha/hora programada, por lo que no necesita precisión de
+// segundo a segundo.
+const AVAILABILITY_CHECK_INTERVAL_MS = 20_000
 
 function formatInputDate(date: Date) {
   const year = date.getFullYear()
@@ -76,57 +82,14 @@ function sortAppointments(appointments: Appointment[]) {
   )
 }
 
-function getElapsedSeconds(appointment: Appointment, now: Date) {
-  if (!appointment.timerStartedAt) {
-    return 0
-  }
-
-  const start = new Date(appointment.timerStartedAt)
-  const end = appointment.timerStoppedAt
-    ? new Date(appointment.timerStoppedAt)
-    : now
-
-  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000))
-}
-
-function formatElapsedTime(seconds: number) {
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const remainingSeconds = seconds % 60
-
-  return [hours, minutes, remainingSeconds]
-    .map((value) => String(value).padStart(2, '0'))
-    .join(':')
-}
-
-function getActualDurationMinutes(appointment: Appointment, now: Date) {
-  if (appointment.actualDuration !== undefined) {
-    return appointment.actualDuration
-  }
-
-  if (!appointment.timerStartedAt) {
-    return appointment.duration
-  }
-
-  return Math.max(1, Math.ceil(getElapsedSeconds(appointment, now) / 60))
-}
-
-function getTimerLabel(appointment: Appointment, now: Date) {
-  if (appointment.completed) {
-    return `Duración real: ${getActualDurationMinutes(appointment, now)} min`
-  }
-
-  if (appointment.timerStartedAt) {
-    return appointment.timerMode === 'manual'
-      ? 'Contador en curso: inicio manual'
-      : 'Contador en curso: inicio automático'
-  }
-
-  if (appointment.timerMode === 'manualPending') {
-    return 'Inicio retrasado: esperando inicio manual'
-  }
-
-  return `Inicio automático a las ${getTimeFromDateTime(appointment.dateTime)}`
+// Las horas reales (timerStartedAt/timerStoppedAt) se guardan con
+// toISOString() (UTC); a diferencia de dateTime (naive, ya en hora local),
+// necesitan pasar por Date para mostrarse en la hora local del dispositivo.
+function formatClockTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 export function AgendaPage() {
@@ -182,51 +145,12 @@ export function AgendaPage() {
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       setNow(new Date())
-    }, 1000)
+    }, AVAILABILITY_CHECK_INTERVAL_MS)
 
     return () => {
       window.clearInterval(intervalId)
     }
   }, [])
-
-  useEffect(() => {
-    const dueAppointments = appointments.filter(
-      (appointment) =>
-        appointment.id &&
-        !appointment.completed &&
-        !isReported(appointment) &&
-        !appointment.timerStartedAt &&
-        appointment.timerMode !== 'manualPending' &&
-        new Date(appointment.dateTime).getTime() <= now.getTime(),
-    )
-
-    if (dueAppointments.length === 0) {
-      return
-    }
-
-    let isCancelled = false
-
-    async function startDueTimers() {
-      await Promise.all(
-        dueAppointments.map((appointment) =>
-          updateAppointment(appointment.id as number, {
-            timerMode: 'automatic',
-            timerStartedAt: appointment.dateTime,
-          }),
-        ),
-      )
-
-      if (!isCancelled) {
-        await reloadAppointments()
-      }
-    }
-
-    startDueTimers()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [appointments, now, reloadAppointments])
 
   const selectedAppointments = useMemo(
     () =>
@@ -268,38 +192,54 @@ export function AgendaPage() {
     await reloadAppointments()
   }
 
-  async function handleManualPending(appointment: Appointment) {
-    if (!appointment.id || appointment.completed || appointment.timerStartedAt) {
+  // Protección UI contra múltiples pulsaciones: mientras una cita está en
+  // proceso (iniciando o finalizando) se ignoran nuevas pulsaciones sobre
+  // ella. La protección real e idempotente vive en el dominio
+  // (startAppointmentService / completeAppointmentAsIncome); esto es solo
+  // una primera barrera para evitar disparar llamadas redundantes.
+  const processingAppointmentIdsRef = useRef<Set<number>>(new Set())
+  const [processingAppointmentIds, setProcessingAppointmentIds] = useState<Set<number>>(
+    new Set(),
+  )
+
+  async function runExclusive(appointmentId: number, action: () => Promise<unknown>) {
+    if (processingAppointmentIdsRef.current.has(appointmentId)) {
       return
     }
 
-    await updateAppointment(appointment.id, {
-      timerMode: 'manualPending',
-    })
-    await reloadAppointments()
+    processingAppointmentIdsRef.current.add(appointmentId)
+    setProcessingAppointmentIds(new Set(processingAppointmentIdsRef.current))
+
+    try {
+      await action()
+    } catch (error) {
+      console.warn('[Agenda] Operación rechazada por el dominio.', error)
+    } finally {
+      processingAppointmentIdsRef.current.delete(appointmentId)
+      setProcessingAppointmentIds(new Set(processingAppointmentIdsRef.current))
+    }
   }
 
-  async function handleStartTimer(appointment: Appointment) {
-    if (!appointment.id || appointment.completed) {
+  async function handleStartService(appointment: Appointment) {
+    if (!appointment.id) {
       return
     }
 
-    await updateAppointment(appointment.id, {
-      actualDuration: undefined,
-      timerMode: 'manual',
-      timerStartedAt: new Date().toISOString(),
-      timerStoppedAt: undefined,
+    await runExclusive(appointment.id, async () => {
+      await startAppointmentService(appointment.id as number, new Date())
+      await reloadAppointments()
     })
-    await reloadAppointments()
   }
 
   async function handleCompleteAppointment(appointment: Appointment) {
-    if (!settings || !appointment.id || appointment.completed) {
+    if (!settings || !appointment.id) {
       return
     }
 
-    await completeAppointmentAsIncome(appointment, settings, now)
-    await reloadAppointments()
+    await runExclusive(appointment.id, async () => {
+      await completeAppointmentAsIncome(appointment.id as number, settings, new Date())
+      await reloadAppointments()
+    })
   }
 
   if (!settings) {
@@ -375,19 +315,15 @@ export function AgendaPage() {
             ) : (
               <ul className="divide-y divide-slate-200">
                 {selectedAppointments.map((appointment) => {
-                  const elapsedSeconds = getElapsedSeconds(appointment, now)
-                  const actualDuration = getActualDurationMinutes(
-                    appointment,
-                    now,
-                  )
                   const hasTimerStarted = Boolean(appointment.timerStartedAt)
-                  const isPlannedTimeReached =
-                    hasTimerStarted &&
+                  const scheduledStartTime = new Date(appointment.dateTime).getTime()
+                  const isAvailable = now.getTime() >= scheduledStartTime
+                  const isDelayed =
+                    !hasTimerStarted &&
                     !appointment.completed &&
-                    elapsedSeconds >= appointment.duration * 60
-                  const extraMinutes = Math.max(
-                    0,
-                    Math.floor(elapsedSeconds / 60) - appointment.duration,
+                    now.getTime() > scheduledStartTime
+                  const isProcessing = Boolean(
+                    appointment.id && processingAppointmentIds.has(appointment.id),
                   )
                   const isHighlighted =
                     String(appointment.id) === highlightedAppointmentId
@@ -402,7 +338,9 @@ export function AgendaPage() {
                     <li
                       className={[
                         'flex flex-col gap-3 p-4 transition',
-                        isHighlighted ? 'bg-emerald-50/70 ring-2 ring-inset ring-emerald-300' : '',
+                        isHighlighted
+                          ? 'bg-emerald-50/70 ring-2 ring-inset ring-emerald-300 dark:bg-emerald-950/70 dark:ring-emerald-700'
+                          : '',
                       ].join(' ')}
                       key={appointment.id}
                     >
@@ -426,29 +364,44 @@ export function AgendaPage() {
                               appointment.currency as CurrencyCode,
                             )}
                           </p>
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <span
-                              className={[
-                                'inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-sm font-semibold',
-                                isPlannedTimeReached
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-slate-100 text-slate-700',
-                              ].join(' ')}
-                            >
-                              <Clock3 className="size-4" aria-hidden="true" />
-                              {formatElapsedTime(elapsedSeconds)}
-                            </span>
-                            <span className="text-sm font-medium text-slate-500">
-                              {isPlannedTimeReached
-                                ? extraMinutes > 0
-                                  ? `Tiempo previsto cumplido · +${extraMinutes} min extra`
-                                  : 'Tiempo previsto cumplido'
-                                : getTimerLabel(appointment, now)}
-                            </span>
-                          </div>
-                          {appointment.completed && (
-                            <p className="mt-2 text-sm font-semibold text-emerald-700">
-                              Servicio realizado · {actualDuration} min reales
+                          {appointment.completed ? (
+                            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                              <span className="font-semibold text-emerald-700">
+                                ✓ Servicio realizado
+                              </span>
+                              {appointment.timerStartedAt && (
+                                <span>
+                                  Inicio real: {formatClockTime(appointment.timerStartedAt)}
+                                </span>
+                              )}
+                              {appointment.timerStoppedAt && (
+                                <span>
+                                  · Fin real: {formatClockTime(appointment.timerStoppedAt)}
+                                </span>
+                              )}
+                              {appointment.actualDuration !== undefined && (
+                                <span>· Duración: {appointment.actualDuration} min</span>
+                              )}
+                            </div>
+                          ) : hasTimerStarted ? (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <span className="inline-flex items-center gap-2 rounded-md bg-emerald-100 px-2.5 py-1 text-sm font-semibold text-emerald-800">
+                                ● Servicio en curso
+                              </span>
+                              <span className="text-sm font-medium text-slate-500">
+                                Inicio real:{' '}
+                                {formatClockTime(appointment.timerStartedAt as string)}
+                              </span>
+                            </div>
+                          ) : isDelayed ? (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <span className="inline-flex items-center gap-2 rounded-md bg-amber-100 px-2.5 py-1 text-sm font-semibold text-amber-800">
+                                Inicio retrasado
+                              </span>
+                            </div>
+                          ) : (
+                            <p className="mt-3 text-sm font-medium text-slate-500">
+                              Disponible a las {getTimeFromDateTime(appointment.dateTime)}
                             </p>
                           )}
                           {appointmentIsReported && (
@@ -509,44 +462,28 @@ export function AgendaPage() {
                       </div>
 
                       {!appointment.completed && !isClosedSeason && !appointmentIsReported && (
-                        <div className="grid gap-2 sm:grid-cols-3">
-                          {!hasTimerStarted &&
-                            appointment.timerMode !== 'manualPending' && (
-                              <button
-                                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-amber-200 px-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
-                                onClick={() =>
-                                  handleManualPending(appointment)
-                                }
-                                type="button"
-                              >
-                                Inicio retrasado
-                              </button>
-                            )}
-
-                          {(!hasTimerStarted ||
-                            appointment.timerMode === 'automatic') && (
+                        <div className="flex flex-wrap gap-2">
+                          {hasTimerStarted ? (
                             <button
-                              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                              onClick={() => handleStartTimer(appointment)}
+                              className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                              disabled={isProcessing}
+                              onClick={() => handleCompleteAppointment(appointment)}
+                              type="button"
+                            >
+                              <Check className="size-4" aria-hidden="true" />
+                              Servicio realizado
+                            </button>
+                          ) : (
+                            <button
+                              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              disabled={!isAvailable || isProcessing}
+                              onClick={() => handleStartService(appointment)}
                               type="button"
                             >
                               <Play className="size-4" aria-hidden="true" />
-                              {hasTimerStarted
-                                ? 'Reiniciar ahora'
-                                : 'Iniciar ahora'}
+                              Iniciar servicio
                             </button>
                           )}
-
-                          <button
-                            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-800 sm:col-span-1"
-                            onClick={() =>
-                              handleCompleteAppointment(appointment)
-                            }
-                            type="button"
-                          >
-                            <Check className="size-4" aria-hidden="true" />
-                            Servicio realizado
-                          </button>
                         </div>
                       )}
                     </li>
