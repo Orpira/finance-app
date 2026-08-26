@@ -9,6 +9,7 @@ vi.mock('../server/automation/webhookDispatcher', () => ({
 }))
 
 import {
+  AutomationIdentityMismatchError,
   buildN8nPayload,
   dispatchAutomationEvent,
 } from '../server/automation/eventDispatcher'
@@ -62,7 +63,7 @@ describe('Automation Gateway dispatcher', () => {
 
     const result = await dispatchAutomationEvent({
       envelope: envelope('income.created', { income: { id: 1 } }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
 
     expect(result).toEqual({
@@ -90,21 +91,21 @@ describe('Automation Gateway dispatcher', () => {
         deviceCode: DEVICE_CODE,
         phoneNumber: '34600111222',
       }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
 
     expect(isSynchronousAutomationEvent('device.whatsapp.connect.requested')).toBe(true)
     expect(result).toEqual({ status: 200, body: n8nBody, empty: false })
   })
 
-  it('conserva el payload reducido de WhatsApp connect', () => {
+  it('conserva el payload reducido de WhatsApp connect usando la identidad canónica', () => {
     const payload = buildN8nPayload(
       envelope('device.whatsapp.connect.requested', {
         userCode: USER_CODE,
         deviceCode: DEVICE_CODE,
         phoneNumber: '34600111222',
       }),
-      DEVICE_CODE,
+      { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     )
 
     expect(payload).toEqual({
@@ -148,7 +149,7 @@ describe('Communication resolver opcional', () => {
         income: { id: 1 },
         userCode: USER_CODE,
       }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
 
     expect(result).toEqual({
@@ -193,7 +194,7 @@ describe('Communication resolver opcional', () => {
         income: { id: 1 },
         userCode: USER_CODE,
       }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
 
     expect(result).toEqual({
@@ -238,7 +239,7 @@ describe('Communication resolver opcional', () => {
         expense: { id: 1 },
         userCode: USER_CODE,
       }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
 
     expect(result).toEqual({
@@ -282,7 +283,7 @@ describe('Communication resolver opcional', () => {
         expense: { id: 1 },
         userCode: USER_CODE,
       }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
 
     expect(result).toEqual({
@@ -327,7 +328,7 @@ describe('Communication resolver opcional', () => {
         calendar: { id: 1 },
         userCode: USER_CODE,
       }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
 
     expect(result).toEqual({
@@ -371,7 +372,7 @@ describe('Communication resolver opcional', () => {
         calendar: { id: 1 },
         userCode: USER_CODE,
       }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
 
     expect(result).toEqual({
@@ -403,7 +404,7 @@ describe('Communication resolver opcional', () => {
     resolveSpy.mockRestore()
   })
 
-  it('income.created extrae userCode desde envelope.data.data?.userCode', async () => {
+  it('income.created acepta userCode coincidente en envelope.data.data', async () => {
     const resolveSpy = vi.spyOn(communicationResolver, 'resolveActiveWhatsappChannel')
       .mockResolvedValue({
         id: '4',
@@ -428,14 +429,14 @@ describe('Communication resolver opcional', () => {
         income: { id: 1 },
         data: { userCode: USER_CODE },
       }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
 
     expect(resolveSpy).toHaveBeenCalledWith(USER_CODE)
     resolveSpy.mockRestore()
   })
 
-  it('income.created extrae userCode desde envelope.data.payload?.userCode', async () => {
+  it('income.created acepta userCode coincidente en envelope.data.payload', async () => {
     const resolveSpy = vi.spyOn(communicationResolver, 'resolveActiveWhatsappChannel')
       .mockResolvedValue({
         id: '5',
@@ -460,28 +461,16 @@ describe('Communication resolver opcional', () => {
         income: { id: 1 },
         payload: { userCode: USER_CODE },
       }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
 
     expect(resolveSpy).toHaveBeenCalledWith(USER_CODE)
     resolveSpy.mockRestore()
   })
 
-  it('income.created con deviceCode en la raíz resuelve userCode y agrega los datos del canal', async () => {
-    const resolveUserCodeSpy = vi.spyOn(communicationResolver, 'resolveUserCodeFromDeviceCode')
-      .mockResolvedValue(USER_CODE)
-    
+  it('income.created rechaza un deviceCode raíz distinto de la identidad canónica', async () => {
     const resolveWhatsappSpy = vi.spyOn(communicationResolver, 'resolveActiveWhatsappChannel')
-      .mockResolvedValue({
-        id: '6',
-        userCode: USER_CODE,
-        provider: 'whatsapp',
-        status: 'connected',
-        instanceName: 'default',
-        phoneNumber: '+34123456789',
-        preferences: { notify: true },
-        providerMetadata: { api: 'whatsapp' },
-      })
+      .mockResolvedValue(null)
 
     dispatchWebhook.mockResolvedValue({
       status: 202,
@@ -490,47 +479,21 @@ describe('Communication resolver opcional', () => {
       successful: true,
     })
 
-    const result = await dispatchAutomationEvent({
+    await expect(dispatchAutomationEvent({
       envelope: {
         ...envelope('income.created', { income: { id: 1 } }),
         deviceCode: ROOT_DEVICE_CODE,
       },
-      licenseDeviceCode: DEVICE_CODE,
-    })
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
+    })).rejects.toBeInstanceOf(AutomationIdentityMismatchError)
 
-    expect(result).toEqual({
-      status: 202,
-      body: { accepted: true, eventId: EVENT_ID },
-      empty: false,
-    })
-    expect(resolveUserCodeSpy).toHaveBeenCalledWith(ROOT_DEVICE_CODE)
-    expect(resolveWhatsappSpy).toHaveBeenCalledWith(USER_CODE)
-    expect(dispatchWebhook).toHaveBeenCalledWith({
-      event: 'income.created',
-      eventId: EVENT_ID,
-      payload: expect.objectContaining({
-        event: 'income.created',
-        deviceCode: DEVICE_CODE,
-        source: 'private-balance-pwa',
-        instanceName: 'default',
-        whatsappNumber: '+34123456789',
-        communicationChannel: {
-          provider: 'whatsapp',
-          instanceName: 'default',
-          phoneNumber: '+34123456789',
-          status: 'connected',
-          preferences: { notify: true },
-          providerMetadata: { api: 'whatsapp' },
-        },
-      }),
-    })
-
-    resolveUserCodeSpy.mockRestore()
+    expect(resolveWhatsappSpy).not.toHaveBeenCalled()
+    expect(dispatchWebhook).not.toHaveBeenCalled()
     resolveWhatsappSpy.mockRestore()
   })
 
-  it('income.created sin deviceCode encontrado mantiene comportamiento actual sin fallar', async () => {
-    const resolveUserCodeSpy = vi.spyOn(communicationResolver, 'resolveUserCodeFromDeviceCode')
+  it('income.created sin identidad cliente usa la identidad canónica', async () => {
+    const resolveWhatsappSpy = vi.spyOn(communicationResolver, 'resolveActiveWhatsappChannel')
       .mockResolvedValue(null)
 
     dispatchWebhook.mockResolvedValue({
@@ -543,9 +506,8 @@ describe('Communication resolver opcional', () => {
     const result = await dispatchAutomationEvent({
       envelope: envelope('income.created', {
         income: { id: 1 },
-        // No userCode en envelope
       }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
 
     expect(result).toEqual({
@@ -553,7 +515,7 @@ describe('Communication resolver opcional', () => {
       body: { accepted: true, eventId: EVENT_ID },
       empty: false,
     })
-    expect(resolveUserCodeSpy).toHaveBeenCalledWith(DEVICE_CODE)
+    expect(resolveWhatsappSpy).toHaveBeenCalledWith(USER_CODE)
     expect(dispatchWebhook).toHaveBeenCalledWith({
       event: 'income.created',
       eventId: EVENT_ID,
@@ -564,6 +526,6 @@ describe('Communication resolver opcional', () => {
       }),
     })
 
-    resolveUserCodeSpy.mockRestore()
+    resolveWhatsappSpy.mockRestore()
   })
 })

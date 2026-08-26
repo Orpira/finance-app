@@ -1,27 +1,15 @@
 /// <reference types="node" />
 
-import { z } from 'zod'
-
 import {
   rejectInvalidRequest,
   type VercelRequest,
   type VercelResponse,
 } from '../server/apiUtils.js'
 import { verifyAutomationJwt } from '../server/automationSecurity.js'
+import { resolveCanonicalUserCode } from '../server/canonicalIdentity.js'
 import {
   getCommunicationChannel,
 } from '../server/communicationChannelStore.js'
-
-const userCodeHeaderSchema = z.string().min(1)
-
-function getUserCode(request: VercelRequest) {
-  const headerValue = request.headers['x-private-balance-user-code']
-  const parsed = userCodeHeaderSchema.safeParse(headerValue)
-  if (!parsed.success) {
-    throw new Error('Falta el encabezado X-Private-Balance-User-Code.')
-  }
-  return parsed.data
-}
 
 function mapChannelToResponse(channel: Awaited<ReturnType<typeof getCommunicationChannel>>) {
   if (!channel) return null
@@ -53,15 +41,27 @@ export default async function handler(request: VercelRequest, response: VercelRe
     requireJsonContentType: false,
   })) return
 
+  let claims
   try {
-    const claims = verifyAutomationJwt(extractBearer(request))
-    const userCode = getUserCode(request)
+    claims = verifyAutomationJwt(extractBearer(request))
+  } catch {
+    response.status(401).json({ error: 'Autorización inválida o expirada.' })
+    return
+  }
+
+  let userCode
+  try {
+    userCode = await resolveCanonicalUserCode(claims.sub)
+  } catch {
+    response.status(403).json({ error: 'Dispositivo no autorizado.' })
+    return
+  }
+
+  try {
     const channel = await getCommunicationChannel(userCode, claims.sub)
     response.status(200).json({ channel: mapChannelToResponse(channel) })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'No se pudo obtener el canal.'
-    const status = message.includes('encabezado') ? 400 : message.includes('JWT') ? 401 : 500
-    response.status(status).json({ error: message })
+  } catch {
+    response.status(500).json({ error: 'No se pudo obtener el canal.' })
   }
 }
 

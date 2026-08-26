@@ -5,9 +5,21 @@ import {
   type AutomationEnvelope,
 } from './eventTypes.js'
 import { dispatchWebhook } from './webhookDispatcher.js'
-import { resolveActiveWhatsappChannel, resolveUserCodeFromDeviceCode } from './communicationResolver.js'
+import { resolveActiveWhatsappChannel } from './communicationResolver.js'
 import { resolveActiveWhatsAppProvider } from './providers/whatsapp/WhatsAppProviderFactory.js'
 import { isWhatsAppChannelEvent } from './providers/whatsapp/WhatsAppProvider.js'
+
+export class AutomationIdentityMismatchError extends Error {
+  constructor() {
+    super('La identidad del evento no coincide con la sesión autenticada.')
+    this.name = 'AutomationIdentityMismatchError'
+  }
+}
+
+export interface CanonicalAutomationIdentity {
+  userCode: string
+  deviceCode: string
+}
 
 const identityCodesSchema = z.object({
   userCode: z.string().regex(/^PB-USER-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
@@ -24,34 +36,35 @@ function nestedRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined
 }
 
-function firstString(...values: unknown[]): string | undefined {
-  return values.find((value): value is string => typeof value === 'string')
+function stringValues(...values: unknown[]): string[] {
+  return values.filter((value): value is string => typeof value === 'string')
 }
 
-async function resolveEnvelopeUserCode(
+export function assertEnvelopeIdentityMatches(
   envelope: AutomationEnvelope,
-  fallbackDeviceCode?: string,
-): Promise<string | undefined> {
+  identity: CanonicalAutomationIdentity,
+) {
   const nestedData = nestedRecord(envelope.data.data)
   const payload = nestedRecord(envelope.data.payload)
-  const userCode = firstString(
+  const clientUserCodes = stringValues(
     envelope.data.userCode,
     nestedData?.userCode,
     payload?.userCode,
     envelope.userCode,
   )
-  const deviceCode = firstString(
+  const clientDeviceCodes = stringValues(
     envelope.data.deviceCode,
     nestedData?.deviceCode,
     payload?.deviceCode,
     envelope.deviceCode,
-    fallbackDeviceCode,
   )
 
-  if (userCode) return userCode
-  if (!deviceCode) return undefined
-  const resolvedUserCode = await resolveUserCodeFromDeviceCode(deviceCode)
-  return resolvedUserCode ?? undefined
+  if (clientDeviceCodes.some((value) => value !== identity.deviceCode)) {
+    throw new AutomationIdentityMismatchError()
+  }
+  if (clientUserCodes.some((value) => value !== identity.userCode)) {
+    throw new AutomationIdentityMismatchError()
+  }
 }
 
 const provisionIdentityDataSchema = identityCodesSchema.extend({
@@ -68,7 +81,7 @@ export interface AutomationDispatchResult {
 
 export function buildN8nPayload(
   envelope: AutomationEnvelope,
-  licenseDeviceCode: string,
+  identity: CanonicalAutomationIdentity,
   communicationChannel?: {
     provider: string
     instanceName?: string
@@ -85,26 +98,26 @@ export function buildN8nPayload(
   },
 ) {
   if (envelope.event === 'device.whatsapp.connect.requested') {
-    const identity = whatsappConnectDataSchema.parse(envelope.data)
+    const data = whatsappConnectDataSchema.parse(envelope.data)
     return {
       event: envelope.event,
       userCode: identity.userCode,
       deviceCode: identity.deviceCode,
-      phoneNumber: identity.phoneNumber ?? null,
+      phoneNumber: data.phoneNumber ?? null,
       timezone: envelope.timezone,
       locale: envelope.locale,
     }
   }
 
   if (envelope.event === 'device.provision.requested') {
-    const identity = provisionIdentityDataSchema.parse(envelope.data)
+    const data = provisionIdentityDataSchema.parse(envelope.data)
     return {
       event: envelope.event,
       userCode: identity.userCode,
       deviceCode: identity.deviceCode,
-      deviceName: identity.deviceName ?? null,
-      platform: identity.platform ?? 'unknown',
-      appVersion: identity.appVersion ?? null,
+      deviceName: data.deviceName ?? null,
+      platform: data.platform ?? 'unknown',
+      appVersion: data.appVersion ?? null,
       timezone: envelope.timezone,
       locale: envelope.locale,
     }
@@ -112,7 +125,8 @@ export function buildN8nPayload(
 
   const payload = {
     ...envelope,
-    deviceCode: licenseDeviceCode,
+    userCode: identity.userCode,
+    deviceCode: identity.deviceCode,
     receivedAt: new Date().toISOString(),
     source: envelope.source ?? 'private-balance-pwa',
   }
@@ -131,8 +145,10 @@ export function buildN8nPayload(
 
 export async function dispatchAutomationEvent(input: {
   envelope: AutomationEnvelope
-  licenseDeviceCode: string
+  identity: CanonicalAutomationIdentity
 }): Promise<AutomationDispatchResult> {
+  assertEnvelopeIdentityMatches(input.envelope, input.identity)
+
   let communicationChannel
 
   if (
@@ -141,31 +157,28 @@ export async function dispatchAutomationEvent(input: {
     input.envelope.event === 'expense.created' ||
     input.envelope.event === 'calendar.created'
   ) {
-    const userCode = await resolveEnvelopeUserCode(input.envelope, input.licenseDeviceCode)
-    if (typeof userCode === 'string') {
-      const channel = await resolveActiveWhatsappChannel(userCode)
-      if (channel) {
-        communicationChannel = {
-          provider: channel.provider,
-          instanceName: channel.instanceName,
-          instanceId: channel.instanceId,
-          phoneNumber: channel.phoneNumber,
-          ownerJid: channel.ownerJid,
-          profileName: channel.profileName,
-          profilePhoto: channel.profilePhoto,
-          connectedAt: channel.connectedAt,
-          lastSeenAt: channel.lastSeenAt,
-          status: channel.status,
-          preferences: channel.preferences,
-          providerMetadata: channel.providerMetadata,
-        }
+    const channel = await resolveActiveWhatsappChannel(input.identity.userCode)
+    if (channel) {
+      communicationChannel = {
+        provider: channel.provider,
+        instanceName: channel.instanceName,
+        instanceId: channel.instanceId,
+        phoneNumber: channel.phoneNumber,
+        ownerJid: channel.ownerJid,
+        profileName: channel.profileName,
+        profilePhoto: channel.profilePhoto,
+        connectedAt: channel.connectedAt,
+        lastSeenAt: channel.lastSeenAt,
+        status: channel.status,
+        preferences: channel.preferences,
+        providerMetadata: channel.providerMetadata,
       }
     }
   }
 
   const payloadToN8N = buildN8nPayload(
     input.envelope,
-    input.licenseDeviceCode,
+    input.identity,
     communicationChannel,
   )
   const webhook = isWhatsAppChannelEvent(input.envelope.event)
@@ -173,8 +186,8 @@ export async function dispatchAutomationEvent(input: {
         event: input.envelope.event,
         eventId: input.envelope.eventId,
         payload: payloadToN8N,
-        userCode: await resolveEnvelopeUserCode(input.envelope, input.licenseDeviceCode),
-        deviceCode: input.licenseDeviceCode,
+        userCode: input.identity.userCode,
+        deviceCode: input.identity.deviceCode,
       })
     : await dispatchWebhook({
         event: input.envelope.event,

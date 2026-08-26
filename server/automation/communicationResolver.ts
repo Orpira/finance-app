@@ -41,13 +41,6 @@ function isMissingCommunicationTable(error: unknown) {
     databaseError.message?.includes('communication_channels') === true
 }
 
-function isMissingLicenseDevicesTable(error: unknown) {
-  if (!error || typeof error !== 'object') return false
-  const databaseError = error as { code?: string; message?: string }
-  return databaseError.code === '42P01' ||
-    databaseError.message?.includes('license_devices') === true
-}
-
 export function normalizeCommunicationInstanceName(value: string | null) {
   return value?.replace(/^=+/, '').trim() || undefined
 }
@@ -119,31 +112,6 @@ export async function resolveActiveWhatsappChannel(userCode: string) {
     return mapCommunicationChannelRow(row)
   } catch (error) {
     if (isMissingCommunicationTable(error)) return null
-    throw error
-  }
-}
-
-export async function resolveUserCodeFromDeviceCode(deviceCode: string): Promise<string | null> {
-  const databaseUrl = process.env.DATABASE_URL?.trim()
-  if (!databaseUrl) return null
-
-  try {
-    const sql = neon(databaseUrl)
-    const rows = await sql`
-      SELECT user_code
-      FROM license_devices
-      WHERE device_code = ${deviceCode}
-        AND status = 'active'
-      ORDER BY last_seen_at DESC
-      LIMIT 1
-    ` as Array<{ user_code: string }>
-
-    const row = rows[0]
-    if (!row) return null
-
-    return row.user_code
-  } catch (error) {
-    if (isMissingLicenseDevicesTable(error)) return null
     throw error
   }
 }

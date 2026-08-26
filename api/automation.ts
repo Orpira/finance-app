@@ -11,6 +11,7 @@ import {
 } from '../server/apiUtils.js'
 import {
   dispatchAutomationEvent,
+  AutomationIdentityMismatchError,
 } from '../server/automation/eventDispatcher.js'
 import {
   AUTOMATION_EVENT_TYPES,
@@ -22,6 +23,7 @@ import {
 } from '../server/automation/webhookDispatcher.js'
 import { WhatsAppProviderError } from '../server/automation/providers/whatsapp/errors.js'
 import { verifyAutomationJwt } from '../server/automationSecurity.js'
+import { resolveCanonicalUserCode } from '../server/canonicalIdentity.js'
 
 const identityCodesSchema = z.object({
   userCode: z.string().regex(/^PB-USER-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
@@ -113,6 +115,14 @@ export default async function handler(
     return
   }
 
+  let canonicalUserCode
+  try {
+    canonicalUserCode = await resolveCanonicalUserCode(claims.sub)
+  } catch {
+    response.status(403).json({ error: 'Dispositivo no autorizado para automatización.' })
+    return
+  }
+
   const envelope = parseGatewayRequest(request)
   if (!envelope || !hasWebhookRoute(envelope.event)) {
     response.status(422).json({ error: 'Evento no válido.' })
@@ -122,7 +132,10 @@ export default async function handler(
   try {
     const result = await dispatchAutomationEvent({
       envelope,
-      licenseDeviceCode: claims.sub,
+      identity: {
+        userCode: canonicalUserCode,
+        deviceCode: claims.sub,
+      },
     })
 
     if (result.empty) {
@@ -132,6 +145,11 @@ export default async function handler(
 
     response.status(result.status).json(result.body)
   } catch (error) {
+    if (error instanceof AutomationIdentityMismatchError) {
+      response.status(403).json({ error: 'Identidad no coincidente con la sesión autenticada.' })
+      return
+    }
+
     if (error instanceof z.ZodError) {
       response.status(422).json({ error: 'Evento no válido.' })
       return

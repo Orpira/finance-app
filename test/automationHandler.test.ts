@@ -1,16 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { dispatchAutomationEvent, verifyAutomationJwt } = vi.hoisted(() => ({
-  dispatchAutomationEvent: vi.fn(),
-  verifyAutomationJwt: vi.fn(),
-}))
+const { dispatchAutomationEvent, verifyAutomationJwt, resolveCanonicalUserCode, AutomationIdentityMismatchError } = vi.hoisted(() => {
+  class AutomationIdentityMismatchError extends Error {}
+  return {
+    dispatchAutomationEvent: vi.fn(),
+    verifyAutomationJwt: vi.fn(),
+    resolveCanonicalUserCode: vi.fn(),
+    AutomationIdentityMismatchError,
+  }
+})
 
 vi.mock('../server/automation/eventDispatcher', () => ({
   dispatchAutomationEvent,
+  AutomationIdentityMismatchError,
 }))
 
 vi.mock('../server/automationSecurity', () => ({
   verifyAutomationJwt,
+}))
+
+vi.mock('../server/canonicalIdentity', () => ({
+  resolveCanonicalUserCode,
 }))
 
 import handler from '../api/automation'
@@ -24,6 +34,7 @@ const PAYLOAD_EVENT_ID = '11111111-1111-4111-8111-111111111111'
 const IDEMPOTENCY_KEY = '22222222-2222-4222-8222-222222222222'
 const PRIVATE_EVENT_ID = '33333333-3333-4333-8333-333333333333'
 const DEVICE_CODE = 'PB-DEVICE-22222222-2222-4222-8222-222222222222'
+const USER_CODE = 'PB-USER-11111111-1111-4111-8111-111111111111'
 
 function createResponse() {
   const response = {
@@ -73,6 +84,8 @@ function createRequest(headers: Record<string, string | undefined>) {
 beforeEach(() => {
   verifyAutomationJwt.mockReset()
   verifyAutomationJwt.mockReturnValue({ sub: DEVICE_CODE })
+  resolveCanonicalUserCode.mockReset()
+  resolveCanonicalUserCode.mockResolvedValue(USER_CODE)
   dispatchAutomationEvent.mockReset()
   dispatchAutomationEvent.mockResolvedValue({
     status: 202,
@@ -92,7 +105,7 @@ describe('/api/automation idempotency headers', () => {
 
     expect(dispatchAutomationEvent).toHaveBeenCalledWith({
       envelope: expect.objectContaining({ eventId: PRIVATE_EVENT_ID }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
   })
 
@@ -105,7 +118,7 @@ describe('/api/automation idempotency headers', () => {
 
     expect(dispatchAutomationEvent).toHaveBeenCalledWith({
       envelope: expect.objectContaining({ eventId: IDEMPOTENCY_KEY }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
   })
 
@@ -116,8 +129,30 @@ describe('/api/automation idempotency headers', () => {
 
     expect(dispatchAutomationEvent).toHaveBeenCalledWith({
       envelope: expect.objectContaining({ eventId: PAYLOAD_EVENT_ID }),
-      licenseDeviceCode: DEVICE_CODE,
+      identity: { userCode: USER_CODE, deviceCode: DEVICE_CODE },
     })
+  })
+
+  it('rechaza con 403 cuando la identidad canónica del dispositivo no se puede resolver', async () => {
+    resolveCanonicalUserCode.mockRejectedValue(new Error('sin identidad'))
+
+    const response = createResponse()
+
+    await handler(createRequest({}), response)
+
+    expect(response.statusCode).toBe(403)
+    expect(dispatchAutomationEvent).not.toHaveBeenCalled()
+  })
+
+  it('rechaza con 403 cuando el dispatcher detecta identidad cliente no coincidente', async () => {
+    dispatchAutomationEvent.mockRejectedValue(new AutomationIdentityMismatchError())
+
+    const response = createResponse()
+
+    await handler(createRequest({}), response)
+
+    expect(response.statusCode).toBe(403)
+    expect(response.body).toEqual({ error: 'Identidad no coincidente con la sesión autenticada.' })
   })
 })
 
