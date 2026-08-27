@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { getIncomeListModeFeatures } from '../src/pages/Income/incomeListModeFeatures'
+import {
+  getIncomeListModeFeatures,
+  getIncomeReportingVisibility,
+} from '../src/pages/Income/incomeListModeFeatures'
 
 describe('income list features by usage mode', () => {
   it('hides additionals and operational statuses in personal mode', () => {
@@ -22,5 +25,62 @@ describe('income list features by usage mode', () => {
       showAdditionals: true,
       showOperationalStatus: true,
     })
+  })
+})
+
+describe('income reporting visibility', () => {
+  it('muestra selección y estado pendiente cuando la preferencia está activada', () => {
+    expect(getIncomeReportingVisibility({
+      showUnreportedIncome: true,
+      hasSelectableIncomes: true,
+      hasSelectedIncomes: true,
+      isSelectable: true,
+      canReport: true,
+      isReported: false,
+    })).toEqual({
+      showSelectVisible: true,
+      showSelectionSummary: true,
+      showIndividualSelection: true,
+      showReportBadge: true,
+    })
+  })
+
+  it('oculta únicamente selección y estado no reportado cuando está desactivada', () => {
+    expect(getIncomeReportingVisibility({
+      showUnreportedIncome: false,
+      hasSelectableIncomes: true,
+      hasSelectedIncomes: true,
+      isSelectable: true,
+      canReport: true,
+      isReported: false,
+    })).toEqual({
+      showSelectVisible: false,
+      showSelectionSummary: false,
+      showIndividualSelection: false,
+      showReportBadge: false,
+    })
+  })
+
+  it('mantiene visible el estado reportado al ocultar la experiencia de pendientes', () => {
+    expect(getIncomeReportingVisibility({
+      showUnreportedIncome: false,
+      canReport: true,
+      isReported: true,
+    }).showReportBadge).toBe(true)
+  })
+
+  it('no oculta el estado operacional Finalizado en modo profesional', () => {
+    const reportingVisibility = getIncomeReportingVisibility({
+      showUnreportedIncome: false,
+      canReport: true,
+      isReported: false,
+    })
+    const modeFeatures = getIncomeListModeFeatures({
+      usageMode: 'professional',
+      userType: 'primary',
+    })
+
+    expect(reportingVisibility.showReportBadge).toBe(false)
+    expect(modeFeatures.showOperationalStatus).toBe(true)
   })
 })

@@ -2,6 +2,7 @@ import { buildBalanceReport, type BalanceReportResult } from './balanceReportSer
 import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
 import type { CurrencyCode, UsageMode } from '../types/settings'
+import { recordBelongsToEarningPeriod } from '../utils/financeStats'
 import { isAdjustmentIncome } from '../utils/incomeTypes'
 import { getEffectiveFinancialDuration } from '../utils/serviceDuration'
 import { recordBelongsToUsageMode } from '../utils/usageMode'
@@ -37,32 +38,18 @@ const APPLIED_RULE_ORDER = [
   'duration.effective_financial',
 ] as const
 
-function belongsToEarningPeriod(
-  record: Pick<ServiceIncome | Expense, 'earningPeriodId' | 'seasonPeriodId'>,
-  earningPeriodId?: number,
-) {
-  if (earningPeriodId === undefined) {
-    return true
-  }
-
-  return (
-    record.earningPeriodId === earningPeriodId ||
-    record.seasonPeriodId === earningPeriodId
-  )
-}
-
 export function runFinancialEngine(input: FinancialEngineInput): FinancialEngineResult {
   const sourceIncomes = input.incomes ?? input.services ?? []
 
   const incomes = sourceIncomes.filter(
     (income) =>
       recordBelongsToUsageMode(income, input.usageMode) &&
-      belongsToEarningPeriod(income, input.earningPeriodId),
+      recordBelongsToEarningPeriod(income, input.earningPeriodId),
   )
   const expenses = input.expenses.filter(
     (expense) =>
       recordBelongsToUsageMode(expense, input.usageMode) &&
-      belongsToEarningPeriod(expense, input.earningPeriodId),
+      recordBelongsToEarningPeriod(expense, input.earningPeriodId),
   )
 
   const balanceReport = buildBalanceReport({

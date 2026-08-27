@@ -5,7 +5,12 @@ import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
 import type { AppSettings, CountryCode, CurrencyCode } from '../types/settings'
 import { isBasicMode, recordBelongsToUsageMode } from '../utils/usageMode'
-import { isServiceIncome } from '../utils/incomeTypes'
+import { isAdjustmentIncome, isServiceIncome } from '../utils/incomeTypes'
+import {
+  calculateSeasonFinancialResult,
+  recordBelongsToEarningPeriod,
+  type SeasonFinancialResult,
+} from '../utils/financeStats'
 
 export const NO_ACTIVE_SEASON_MESSAGE =
   'No hay una temporada activa. Crea una temporada para registrar actividad.'
@@ -26,11 +31,14 @@ export interface CreateSeasonInput {
 }
 
 export interface SeasonGoalProgress {
-  achieved: number
   completed: boolean
+  exceeded: number
+  expenses: number
   goal: number
+  netIncome: number
   percentage: number
   remaining: number
+  result: number
 }
 
 export interface SeasonStatistics {
@@ -63,7 +71,7 @@ function recordPeriodId(record: { earningPeriodId?: number; seasonPeriodId?: num
 
 export function getSeasonGoalProgress(
   period: Pick<EarningPeriod, 'economicGoal'>,
-  achieved: number,
+  financialResult: SeasonFinancialResult,
 ): SeasonGoalProgress | null {
   const goal = period.economicGoal
 
@@ -71,15 +79,17 @@ export function getSeasonGoalProgress(
     return null
   }
 
-  const normalizedAchieved = Math.max(0, achieved)
-  const percentage = (normalizedAchieved / goal) * 100
+  const percentage = (financialResult.result / goal) * 100
 
   return {
-    achieved: normalizedAchieved,
-    completed: normalizedAchieved >= goal,
+    completed: financialResult.result >= goal,
+    exceeded: Math.max(financialResult.result - goal, 0),
+    expenses: financialResult.expenses,
     goal,
+    netIncome: financialResult.netIncome,
     percentage,
-    remaining: Math.max(goal - normalizedAchieved, 0),
+    remaining: Math.max(goal - financialResult.result, 0),
+    result: financialResult.result,
   }
 }
 
@@ -128,12 +138,8 @@ export async function assertRecordIsMutable(record?: {
 }
 
 export async function seasonHasActivity(periodId: number) {
-  const [services, expenses, appointments] = await Promise.all([
-    db.services.where('earningPeriodId').equals(periodId).count(),
-    db.expenses.where('earningPeriodId').equals(periodId).count(),
-    db.appointments.where('earningPeriodId').equals(periodId).count(),
-  ])
-  return services + expenses + appointments > 0
+  const { incomes, expenses, appointments } = await listSeasonRecords(periodId)
+  return incomes.length + expenses.length + appointments.length > 0
 }
 
 export async function createEarningPeriod(input: CreateSeasonInput) {
@@ -280,19 +286,45 @@ export async function closeActiveEarningPeriodAndCreateNext(
 
 export async function listSeasonRecords(periodId: number) {
   const [incomes, expenses, appointments] = await Promise.all([
-    db.services.where('earningPeriodId').equals(periodId).toArray(),
-    db.expenses.where('earningPeriodId').equals(periodId).toArray(),
-    db.appointments.where('earningPeriodId').equals(periodId).toArray(),
+    db.services
+      .where('earningPeriodId').equals(periodId)
+      .or('seasonPeriodId').equals(periodId)
+      .toArray(),
+    db.expenses
+      .where('earningPeriodId').equals(periodId)
+      .or('seasonPeriodId').equals(periodId)
+      .toArray(),
+    db.appointments
+      .where('earningPeriodId').equals(periodId)
+      .or('seasonPeriodId').equals(periodId)
+      .toArray(),
   ])
-  return { incomes, expenses, appointments }
+  return {
+    incomes: incomes.filter((income) => recordBelongsToEarningPeriod(income, periodId)),
+    expenses: expenses.filter((expense) => recordBelongsToEarningPeriod(expense, periodId)),
+    appointments: appointments.filter((appointment) => recordBelongsToEarningPeriod(appointment, periodId)),
+  }
 }
 
 export async function getSeasonStatistics(periodId: number): Promise<SeasonStatistics> {
-  const { incomes, expenses, appointments } = await listSeasonRecords(periodId)
+  const [period, settings, records] = await Promise.all([
+    getEarningPeriodById(periodId),
+    getSettingsForPeriod(),
+    listSeasonRecords(periodId),
+  ])
+  const { incomes, expenses, appointments } = records
+  const currency = period?.baseCurrency ?? settings.defaultCurrency
+  const financialResult = calculateSeasonFinancialResult({
+    incomes,
+    expenses,
+    currency,
+    usageMode: 'professional',
+    earningPeriodId: periodId,
+  })
   const serviceIncomes = incomes.filter(isServiceIncome)
-  const grossIncome = incomes.reduce((sum, item) => sum + item.totalAmount, 0)
-  const realGain = incomes.reduce((sum, item) => sum + item.realGain, 0)
-  const expenseTotal = expenses.reduce((sum, item) => sum + item.amount, 0)
+  const grossIncome = incomes
+    .filter((income) => !isAdjustmentIncome(income))
+    .reduce((sum, item) => sum + item.totalAmount, 0)
   const adjustments = expenses.filter((item) => item.type === 'ajuste').reduce((sum, item) => sum + item.amount, 0)
   const dayMap = new Map<string, { count: number; amount: number }>()
   serviceIncomes.forEach((item) => {
@@ -307,10 +339,10 @@ export async function getSeasonStatistics(periodId: number): Promise<SeasonStati
   const bestDay = [...servicesByDay].sort((a, b) => b.amount - a.amount)[0]
   return {
     grossIncome,
-    realGain,
-    expenses: expenseTotal,
+    realGain: financialResult.netIncome,
+    expenses: financialResult.expenses,
     adjustments,
-    netGain: realGain - expenseTotal,
+    netGain: financialResult.result,
     bestDay: bestDay ? { date: bestDay.date, amount: bestDay.amount } : undefined,
     serviceCount: serviceIncomes.length,
     appointmentCount: appointments.length,
@@ -321,7 +353,11 @@ export async function getSeasonStatistics(periodId: number): Promise<SeasonStati
 }
 
 export async function listServiceIncomesByEarningPeriod(periodId: number) {
-  return db.services.where('earningPeriodId').equals(periodId).toArray()
+  const incomes = await db.services
+    .where('earningPeriodId').equals(periodId)
+    .or('seasonPeriodId').equals(periodId)
+    .toArray()
+  return incomes.filter((income) => recordBelongsToEarningPeriod(income, periodId))
 }
 
 export async function migrateLegacyRecordsToSeasons() {

@@ -8,6 +8,14 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 ### Added
 
+- Configuración permite mostrar u ocultar la experiencia de ingresos sin
+  reportar en Inicio y Movimientos: aviso, selección visible, checkboxes y badge
+  pendiente. La opción parte activada, persiste en backups y no modifica
+  ingresos, estados, movimientos, reportes, Meta ni cálculos financieros. Gates:
+  208 archivos / 2.314 PASS / 1 `todo`, build e IndexedDB real en Chrome 152
+  aprobados. APK técnico `1.0.6 (7)`: 10.517.374 bytes, SHA-256
+  `46f94a597370be0b0993f7ae3453993c272fe75461cef69ce8a749c90f00b6d4`,
+  con firma debug v2 válida; la validación física continúa pendiente.
 - `Más` incorpora la opción `Consulta de divisas`, con importe y moneda base
   editables, cuatro conversiones, caché diario, actualización explícita, fuente
   visible y fallback local/offline. No modifica balances ni registros.
@@ -15,6 +23,13 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 ### Fixed
 
+- La Meta de temporada usa ahora el resultado financiero realizado: ingresos
+  netos posteriores al porcentaje menos egresos, con ajustes separados. Agenda
+  y alta manual comparten el mismo cálculo, Movimientos presenta el valor neto
+  guardado y los estados negativo, exacto y superior al 100 % conservan su valor
+  matemático. No hay migración ni reescritura histórica. Gates automatizados:
+  207 archivos / 2.302 PASS / 1 `todo`; APK técnico `1.0.5 (6)` con firma debug
+  v2 válida. La validación física continúa pendiente.
 - El detalle abierto desde `Actividad reciente` de Inicio muestra ahora los
   Adicionales del ingreso profesional, con descripción, importe y protección de
   valores sensibles, sin alterar cálculos ni balances.

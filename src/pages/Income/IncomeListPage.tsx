@@ -38,7 +38,7 @@ import {
 import { getIncomePaymentTypeLabel, getIncomeType, getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
 import { canMarkAsReported, formatReportStatusMeta, getRecordReportBadge } from '../../utils/reportStatus'
 import { useDialog } from '../../components/dialogs/useDialog'
-import { getIncomeListModeFeatures } from './incomeListModeFeatures'
+import { getIncomeListModeFeatures, getIncomeReportingVisibility } from './incomeListModeFeatures'
 
 const INCOMES_PER_PAGE = 10
 type ReportStatusFilter = 'ALL' | 'unreviewed' | 'pending' | 'reported'
@@ -307,6 +307,11 @@ export function IncomeListPage() {
   const allVisibleSelected =
     selectableIncomeIds.length > 0 &&
     selectableIncomeIds.every((id) => selectedIncomeIds.has(id))
+  const reportingListVisibility = getIncomeReportingVisibility({
+    showUnreportedIncome: settings?.showUnreportedIncome ?? true,
+    hasSelectableIncomes: selectableIncomeIds.length > 0,
+    hasSelectedIncomes: selectedIncomeIds.size > 0,
+  })
 
   const getCountryLabel = (code: string): string => {
     const country = countries.find((countryOption) => countryOption.value === code)
@@ -714,7 +719,7 @@ export function IncomeListPage() {
               Ingresos recientes
             </h2>
           </div>
-          {selectableIncomeIds.length > 0 && (
+          {reportingListVisibility.showSelectVisible && (
             <button
               className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               onClick={() => handleToggleSelectAllVisible(selectableIncomeIds)}
@@ -730,7 +735,7 @@ export function IncomeListPage() {
           )}
         </div>
 
-        {selectedIncomeIds.size > 0 && (
+        {reportingListVisibility.showSelectionSummary && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950">
             <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
               {selectedIncomeIds.size} {selectedIncomeIds.size === 1 ? 'ingreso seleccionado' : 'ingresos seleccionados'}
@@ -804,12 +809,18 @@ export function IncomeListPage() {
                 const isSelectable = income.id !== undefined && canReport && !reportBadge.isReported
                 const isSelected = income.id !== undefined && selectedIncomeIds.has(income.id)
                 const registrationTime = formatRegistrationTime(income.createdAt)
+                const reportingVisibility = getIncomeReportingVisibility({
+                  showUnreportedIncome: settings?.showUnreportedIncome ?? true,
+                  isSelectable,
+                  canReport,
+                  isReported: reportBadge.isReported,
+                })
 
                 return (
                   <li className="flex flex-col gap-3 p-4" key={income.id}>
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex min-w-0 items-start gap-3">
-                        {isSelectable && (
+                        {reportingVisibility.showIndividualSelection && (
                           <input
                             aria-label={`Seleccionar ${getIncomeDisplayName(income)}`}
                             checked={isSelected}
@@ -835,7 +846,7 @@ export function IncomeListPage() {
                               {incomeAdjustments.length === 1 ? 'ajuste aplicado' : 'ajustes aplicados'}
                             </span>
                           )}
-                          {canReport && (
+                          {reportingVisibility.showReportBadge && (
                             <span
                               className={[
                                 'inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold',

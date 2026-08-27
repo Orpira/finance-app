@@ -78,6 +78,7 @@ function baseSettings(overrides: Partial<AppSettings> = {}): AppSettings {
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
+    showUnreportedIncome: overrides.showUnreportedIncome ?? true,
   }
 }
 

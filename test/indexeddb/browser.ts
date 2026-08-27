@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
 
 import {
+  db,
   exportDatabaseSnapshot,
   FinanceDB,
   importDatabaseSnapshot,
@@ -21,6 +22,16 @@ import { runSnapshotShadowMode } from '../../src/services/snapshotShadowModeServ
 import { runFinancialEngine } from '../../src/services/financialEngineAdapter'
 import { executeSnapshotPromotion } from '../../src/services/snapshotPromotionExecutor'
 import { executeKnowledgePromotion } from '../../src/services/knowledgePromotionExecutor'
+import { buildBalanceReport } from '../../src/services/balanceReportService'
+import { completeAppointmentAsIncome } from '../../src/services/appointmentCompletionService'
+import { createAppointment, startAppointmentService } from '../../src/services/appointmentService'
+import { createExpense, deleteExpense, updateExpense } from '../../src/services/expenseService'
+import {
+  createEarningPeriod,
+  getSeasonGoalProgress,
+  getSeasonStatistics,
+} from '../../src/services/earningPeriodService'
+import { deleteServiceIncome, updateServiceIncome } from '../../src/services/incomeService'
 import { getSettings, updateSettings } from '../../src/services/settingsService'
 import { getOnboardingState, setOnboardingStep } from '../../src/services/onboardingService'
 import { groupIncomesByDate } from '../../src/services/incomeReport.service'
@@ -35,6 +46,7 @@ import {
 import { CURRENT_ONBOARDING_VERSION, LAST_ONBOARDING_STEP_INDEX } from '../../src/types/onboarding'
 import type { Expense } from '../../src/types/expense'
 import type { ServiceIncome } from '../../src/types/service'
+import type { AppSettings } from '../../src/types/settings'
 import type {
   CanonicalizationVersion, CivilDate, EngineVersion, IanaTimeZone, RulesetVersion,
   SealedSnapshotId, SnapshotCandidateId, SnapshotKey, SnapshotNormativeCode,
@@ -49,6 +61,11 @@ import type {
   KnowledgeVersion,
 } from '../../src/types/knowledgeLayer'
 import type { PersistedKnowledgeSnapshot } from '../../src/types/persistedKnowledgeSnapshot'
+import {
+  calculateFinancialTotals,
+  getStoredExpenseValue,
+  getStoredIncomePrincipalValue,
+} from '../../src/utils/financeStats'
 
 const databaseName = 'finance-app'
 const at = '2026-02-01T00:00:00.000Z' as UtcInstant
@@ -468,6 +485,7 @@ async function run() {
     'reportStatusCode index resolves the migrated legacy income',
   )
 
+  await database.settings.update('app', { showUnreportedIncome: false })
   const snapshotWithAdditionals = await exportDatabaseSnapshot()
   assert(
     snapshotWithAdditionals.incomeAdditionals.some(
@@ -476,6 +494,9 @@ async function run() {
     'exportDatabaseSnapshot includes incomeAdditionals',
   )
   assert(snapshotWithAdditionals.financialGoals.some((goal) => goal.id === financialGoal.id), 'exportDatabaseSnapshot includes financialGoals')
+  const exportedSettings = snapshotWithAdditionals.settings.find((settings) => settings.id === 'app')
+  assert(exportedSettings !== undefined, 'exportDatabaseSnapshot includes settings')
+  assert(exportedSettings.showUnreportedIncome === false, 'exportDatabaseSnapshot preserves the disabled unreported-income preference')
 
   await importDatabaseSnapshot(snapshotWithAdditionals)
   const additionalsAfterRoundtrip = await database.incomeAdditionals
@@ -487,6 +508,15 @@ async function run() {
     'importDatabaseSnapshot restores incomeAdditionals',
   )
   assert((await database.financialGoals.get(financialGoal.id))?.targetAmount === 300, 'importDatabaseSnapshot restores financialGoals')
+  assert((await database.settings.get('app'))?.showUnreportedIncome === false, 'importDatabaseSnapshot restores the disabled unreported-income preference')
+
+  const legacyBackupSettings = { ...exportedSettings } as Partial<AppSettings>
+  delete legacyBackupSettings.showUnreportedIncome
+  await importDatabaseSnapshot({
+    ...snapshotWithAdditionals,
+    settings: [legacyBackupSettings as AppSettings],
+  })
+  assert((await database.settings.get('app'))?.showUnreportedIncome === true, 'importDatabaseSnapshot defaults legacy backups to showing unreported income')
 
   await expectReject(
     () =>
@@ -1182,6 +1212,217 @@ async function run() {
   )
   reopenedReportDatabase.close()
   await Dexie.delete(databaseName)
+
+  await resetDatabase()
+  const emittedVisibilitySettings: boolean[] = []
+  function handleVisibilitySettingsChanged(event: Event) {
+    emittedVisibilitySettings.push(
+      (event as CustomEvent<AppSettings>).detail.showUnreportedIncome,
+    )
+  }
+  window.addEventListener('finance-app:settings-changed', handleVisibilitySettingsChanged)
+  await updateSettings({ showUnreportedIncome: false })
+  assert((await getSettings()).showUnreportedIncome === false, 'updateSettings persists the disabled unreported-income preference')
+  db.close()
+  await db.open()
+  assert((await getSettings()).showUnreportedIncome === false, 'a full database reopen preserves the disabled unreported-income preference')
+  await updateSettings({ showUnreportedIncome: true })
+  assert((await getSettings()).showUnreportedIncome === true, 'updateSettings persists re-enabling the unreported-income preference')
+  window.removeEventListener('finance-app:settings-changed', handleVisibilitySettingsChanged)
+  deepEqual(emittedVisibilitySettings, [false, true], 'settings emits disabled and enabled unreported-income visibility changes in real time')
+  await updateSettings({
+    usageMode: 'professional',
+    userType: 'primary',
+    defaultCurrency: 'EUR',
+    secondaryCurrency: 'COP',
+    incomeCalculationMethod: 'service_duration',
+    rateMode: 'manual',
+    country: 'ES',
+    city: 'Madrid',
+  })
+  const financialPeriod = await createEarningPeriod({
+    name: 'Temporada integración financiera',
+    city: 'Madrid',
+    country: 'ES',
+    countryCode: 'ES',
+    baseCurrency: 'EUR',
+    earningPercentage: 30,
+    startDate: '2026-08-01',
+    economicGoal: 100,
+  })
+  const financialSettings = await getSettings()
+  const appointmentId = await createAppointment({
+    dateTime: '2026-08-20T10:00:00.000Z',
+    duration: 60,
+    durationLabel: '1 hora',
+    expectedAmount: 100,
+    currency: 'EUR',
+    country: 'ES',
+    city: 'Madrid',
+    reminders: [],
+    completed: false,
+  })
+  await startAppointmentService(appointmentId, new Date('2026-08-20T10:00:00.000Z'))
+  await completeAppointmentAsIncome(
+    appointmentId,
+    financialSettings,
+    new Date('2026-08-20T11:00:00.000Z'),
+  )
+
+  const appointmentIncomes = await db.services.toArray()
+  assert(appointmentIncomes.length === 1, 'agenda completion persists exactly one income')
+  const appointmentIncome = appointmentIncomes[0]!
+  assert(appointmentIncome.totalAmount === 100, 'agenda completion preserves gross income')
+  assert(appointmentIncome.percentage === 30, 'agenda completion snapshots season percentage')
+  assert(appointmentIncome.realGain === 30, 'agenda completion applies percentage exactly once')
+  assert(appointmentIncome.baseCurrencyValue === 30, 'agenda completion stores converted net income')
+
+  const homeTotals = calculateFinancialTotals(appointmentIncomes, [], 'EUR', 'COP')
+  assert(homeTotals.primaryIncome === 30, 'home totals include agenda net income')
+  const appointmentReport = buildBalanceReport({
+    incomes: appointmentIncomes,
+    expenses: [],
+    currency: 'EUR',
+  })
+  assert(appointmentReport.incomeGrossTotal === 30, 'reports include agenda net income')
+
+  const expenseId = await createExpense({
+    type: 'gasto',
+    date: '2026-08-20',
+    category: 'Materiales',
+    amount: 10,
+    currency: 'EUR',
+    eurValue: 10,
+    copValue: 43_000,
+    baseCurrency: 'EUR',
+    secondaryCurrency: 'COP',
+    baseCurrencyValue: 10,
+    secondaryCurrencyValue: 43_000,
+    exchangeRateBaseToSecondary: 4_300,
+    exchangeRateUsed: 4_300,
+    country: 'ES',
+    city: 'Madrid',
+  })
+  let financialStats = await getSeasonStatistics(financialPeriod.id!)
+  let goalProgress = getSeasonGoalProgress(financialPeriod, {
+    netIncome: financialStats.realGain,
+    expenses: financialStats.expenses,
+    result: financialStats.netGain,
+  })
+  assert(financialStats.realGain === 30, 'season statistics include agenda net income')
+  assert(financialStats.expenses === 10, 'season statistics include realized expense')
+  assert(financialStats.netGain === 20, 'season result subtracts expense from net income')
+  assert(goalProgress?.percentage === 20, 'season goal uses net result after expenses')
+
+  async function captureFinancialSurfaces() {
+    const incomes = await db.services.toArray()
+    const expenses = await db.expenses.toArray()
+    const totals = calculateFinancialTotals(incomes, expenses, 'EUR', 'COP')
+    const report = buildBalanceReport({ incomes, expenses, currency: 'EUR' })
+    const season = await getSeasonStatistics(financialPeriod.id!)
+    const progress = getSeasonGoalProgress(financialPeriod, {
+      netIncome: season.realGain,
+      expenses: season.expenses,
+      result: season.netGain,
+    })
+
+    return {
+      home: {
+        income: totals.primaryIncome,
+        expenses: totals.primaryExpenses,
+        result: totals.primaryNet,
+      },
+      movements: {
+        incomes: incomes.map((income) => getStoredIncomePrincipalValue(income, 'EUR')),
+        expenses: expenses.map((expense) => getStoredExpenseValue(expense, 'EUR')),
+      },
+      reports: {
+        income: report.incomeGrossTotal,
+        expenses: report.expenseTotal,
+        result: report.generalBalance,
+      },
+      goal: {
+        income: season.realGain,
+        expenses: season.expenses,
+        result: season.netGain,
+        percentage: progress?.percentage,
+      },
+    }
+  }
+
+  const financialSurfacesWithCard = await captureFinancialSurfaces()
+  const financialRecordsWithCard = {
+    appointments: await db.appointments.toArray(),
+    expenses: await db.expenses.toArray(),
+    services: await db.services.toArray(),
+  }
+  await updateSettings({ showUnreportedIncome: false })
+  deepEqual(
+    await captureFinancialSurfaces(),
+    financialSurfacesWithCard,
+    'disabling the unreported-income experience preserves Home, Movements, Reports and Goal financial values',
+  )
+  deepEqual(
+    {
+      appointments: await db.appointments.toArray(),
+      expenses: await db.expenses.toArray(),
+      services: await db.services.toArray(),
+    },
+    financialRecordsWithCard,
+    'disabling the unreported-income experience does not modify services, expenses or appointments',
+  )
+  await updateSettings({ showUnreportedIncome: true })
+  deepEqual(
+    await captureFinancialSurfaces(),
+    financialSurfacesWithCard,
+    're-enabling the unreported-income experience preserves Home, Movements, Reports and Goal financial values',
+  )
+  deepEqual(
+    {
+      appointments: await db.appointments.toArray(),
+      expenses: await db.expenses.toArray(),
+      services: await db.services.toArray(),
+    },
+    financialRecordsWithCard,
+    're-enabling the unreported-income experience does not modify services, expenses or appointments',
+  )
+
+  await updateExpense(expenseId, {
+    amount: 20,
+    eurValue: 20,
+    copValue: 86_000,
+    baseCurrencyValue: 20,
+    secondaryCurrencyValue: 86_000,
+  })
+  financialStats = await getSeasonStatistics(financialPeriod.id!)
+  assert(financialStats.netGain === 10, 'editing expense recalculates season result')
+
+  await deleteExpense(expenseId)
+  financialStats = await getSeasonStatistics(financialPeriod.id!)
+  assert(financialStats.netGain === 30, 'deleting expense restores season result')
+
+  await updateServiceIncome(appointmentIncome.id!, {
+    totalAmount: 200,
+    realGain: 60,
+    eurValue: 60,
+    copValue: 258_000,
+    baseCurrencyValue: 60,
+    secondaryCurrencyValue: 258_000,
+  })
+  financialStats = await getSeasonStatistics(financialPeriod.id!)
+  assert(financialStats.realGain === 60, 'editing income recalculates season net income')
+
+  await deleteServiceIncome(appointmentIncome.id!)
+  financialStats = await getSeasonStatistics(financialPeriod.id!)
+  goalProgress = getSeasonGoalProgress(financialPeriod, {
+    netIncome: financialStats.realGain,
+    expenses: financialStats.expenses,
+    result: financialStats.netGain,
+  })
+  assert(financialStats.netGain === 0, 'deleting income recalculates season result')
+  assert(goalProgress?.percentage === 0, 'deleting the last income restores zero goal progress')
+
+  await resetDatabase()
 
   localStorage.removeItem('finance-app:settings')
   const freshInstallSettings = await getSettings()

@@ -202,7 +202,7 @@ La suite de Vitest es extensa (más de cien archivos de prueba) y cubre principa
         Comandos: `npm run android:add`, `npm run android:sync`,
         `npm run android:open`, `npm run android:apk`. El último genera
         `dist/apk/private-balance-<versionName>-<versionCode>-debug.apk`, muestra su
-        SHA-256 y actualmente usa la línea base `1.0.1 (2)`. Los builds de release
+        SHA-256 y actualmente usa la línea base `1.0.6 (7)`. Los builds de release
         usan R8/ProGuard (`minifyEnabled`, `shrinkResources`).
 
 Detalle adicional en [docs/08_DEPLOYMENT.md](docs/08_DEPLOYMENT.md).

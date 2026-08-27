@@ -83,6 +83,7 @@ export function SettingsBusinessPage() {
           incomeCalculationMethod: settings.incomeCalculationMethod,
           hourlyRate: settings.hourlyRate,
           rateMode: settings.rateMode,
+          showUnreportedIncome: settings.showUnreportedIncome,
         },
       )
 
@@ -338,6 +339,34 @@ export function SettingsBusinessPage() {
             <span className="text-sm text-slate-500">El porcentaje se gestiona desde <Link className="font-semibold text-emerald-700 underline" to="/temporadas">Temporadas</Link>. Si ya hay actividad, crea una nueva temporada para cambiarlo.</span>
           </label>
         )}
+
+        <fieldset className="flex flex-col gap-3 border-t border-slate-200 pt-5">
+          <legend className="px-1 text-sm font-medium text-slate-700">
+            Presentación
+          </legend>
+          <label className="flex items-start gap-3">
+            <input
+              checked={settings.showUnreportedIncome}
+              className="mt-1 size-4 accent-emerald-700"
+              onChange={(event) =>
+                updateLocalSettings({
+                  showUnreportedIncome: event.target.checked,
+                })
+              }
+              type="checkbox"
+            />
+            <span className="flex flex-col gap-1">
+              <span className="text-sm font-medium text-slate-700">
+                Mostrar ingresos sin reportar
+              </span>
+              <span className="text-sm leading-5 text-slate-500">
+                Muestra en Inicio y Movimientos avisos y controles para
+                identificar ingresos pendientes de reportar. Desactivarlo no
+                modifica tus ingresos ni cálculos financieros.
+              </span>
+            </span>
+          </label>
+        </fieldset>
 
         <fieldset className="flex flex-col gap-3">
           <legend className="text-sm font-medium text-slate-700">

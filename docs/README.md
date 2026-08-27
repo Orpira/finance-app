@@ -32,6 +32,8 @@ Este directorio contiene la documentación oficial del proyecto. La fuente canó
 - [product/PB_004_CONVERSATION_AUDIT.md](product/PB_004_CONVERSATION_AUDIT.md) - Auditoría PB-004 de conversación, privacidad y robustez; sus hallazgos permanecen abiertos.
 - [product/COPILOT_QUICK_ACTIONS_UI_VALIDATION.md](product/COPILOT_QUICK_ACTIONS_UI_VALIDATION.md) - Certificación funcional en la PWA/web real de las seis Quick Actions, confirmación, persistencia, consola y red.
 - [product/APPOINTMENT_SERVICE_LIFECYCLE.md](product/APPOINTMENT_SERVICE_LIFECYCLE.md) - Inicio temporal, finalización idempotente y eliminación de cronómetros visibles en Agenda, con cobertura y pendientes E2E.
+- [product/SEASON_GOAL_FINANCIAL_CORRECTION_2026.md](product/SEASON_GOAL_FINANCIAL_CORRECTION_2026.md) - Decisión, implementación, pruebas y validación pendiente de PB-META-001 a PB-META-006.
+- [adr/ADR-032-SEASON-GOAL-REALIZED-NET-RESULT.md](adr/ADR-032-SEASON-GOAL-REALIZED-NET-RESULT.md) - Regla normativa del porcentaje, resultado realizado y progreso de Meta de temporada.
 - [product/configurable-reports.md](product/configurable-reports.md) - Flujo configurable de reportes y formatos soportados.
 - [handoff/MILESTONE_9A_MANIFEST.md](handoff/MILESTONE_9A_MANIFEST.md) y [handoff/MILESTONE_9B_MANIFEST.md](handoff/MILESTONE_9B_MANIFEST.md) - Manifiestos históricos de entrega de los hitos 9A y 9B.
 - [architecture/24_LOCAL_DIAGNOSTICS.md](architecture/24_LOCAL_DIAGNOSTICS.md) - Diagnóstico local y exportación segura para soporte.

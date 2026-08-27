@@ -14,4 +14,8 @@ describe('createDefaultSettings', () => {
   it('inicializa la unidad de tiempo trabajado en "minutes"', () => {
     expect(createDefaultSettings().workedTimeUnit).toBe('minutes')
   })
+
+  it('muestra por defecto la experiencia de ingresos sin reportar', () => {
+    expect(createDefaultSettings().showUnreportedIncome).toBe(true)
+  })
 })

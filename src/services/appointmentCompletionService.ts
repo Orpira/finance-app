@@ -1,7 +1,7 @@
 import type { Appointment } from '../types/appointment'
 import type { AppSettings, CurrencyCode } from '../types/settings'
 import { roundMoney } from '../utils/currency'
-import { calculateStoredRealGain } from '../utils/realGain'
+import { runIncomeCalculation } from '../utils/incomeCalculation/incomeCalculatorRegistry'
 import { getEffectiveFinancialDuration } from '../utils/serviceDuration'
 import { claimAppointmentCompletion, getAppointmentById } from './appointmentService'
 import {
@@ -94,7 +94,7 @@ export async function completeAppointmentAsIncome(
     useApi: settings.rateMode === 'automatic',
   }
   const activePeriod = await ensureActiveEarningPeriod(settings)
-  const realGain = calculateStoredRealGain({
+  const { realGain } = runIncomeCalculation('service_duration', {
     totalAmount: appointment.expectedAmount,
     percentage: activePeriod.percentage,
     usageMode: 'professional',

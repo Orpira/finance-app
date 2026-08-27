@@ -67,3 +67,11 @@ Format used: one ADR per section with Context, Decision, Status and Consequences
 - Context: the Constitution is normative, but the repository also needs one current map connecting implemented architecture, bounded contexts, dependency rules, quality gates, risks and roadmap.
 - Decision: [`00_SYSTEM_ARCHITECTURE_MASTER.md`](00_SYSTEM_ARCHITECTURE_MASTER.md) is adopted as the integrated architecture map and mandatory onboarding document immediately after the Constitution.
 - Consequences: the Constitution remains the highest normative authority; the Master must distinguish implemented capabilities from target architecture and be updated whenever a structural milestone, source of truth, major risk or roadmap state changes.
+
+## ADR-032: Season goal uses realized net result
+
+- Status: accepted with explicit owner authorization on 2026-08-27.
+- Canonical record: [ADR-032-SEASON-GOAL-REALIZED-NET-RESULT.md](adr/ADR-032-SEASON-GOAL-REALIZED-NET-RESULT.md).
+- Context: Agenda, manual income entry, Home, Movements, Seasons and Reports did not all present or aggregate the same stored financial value. Season goal progress counted income but did not subtract realized expenses, and negative results were normalized to zero.
+- Decision: for `service_duration`, the season percentage is the professional's participation and is applied exactly once as `realGain = totalAmount * percentage / 100`. Therefore, 100 at 30 % produces 30, while 0 % produces 0; choosing "No aplica porcentaje" persists 100 %. `hourly_workday` remains outside this percentage rule. The realized season result is `stored net non-adjustment income - stored non-adjustment expenses`; additions remain part of aggregate income and adjustments remain separate. Progress is `result / economicGoal * 100` and may be negative or exceed 100 %, although the visual bar is limited to 0–100 %.
+- Consequences: Agenda and manual `service_duration` registration use the same calculation Strategy; Home, Movements, Seasons and Reports consume persisted monetary snapshots without recomputing historical exchange rates. No Dexie schema change, data migration or historical rewrite is required. Records using the historical `seasonPeriodId` alias remain readable, and inconsistent dual season identifiers fail closed in the financial derivation.

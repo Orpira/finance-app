@@ -41,7 +41,7 @@ import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { formatCurrency, roundMoney } from '../../utils/currency'
-import { calculateFinancialTotals, sumIncomeAdditionalsValue } from '../../utils/financeStats'
+import { calculateFinancialTotals, recordBelongsToEarningPeriod, sumIncomeAdditionalsValue } from '../../utils/financeStats'
 import { getIncomeCompactLabel } from '../../utils/incomeTypes'
 import { getActiveEarningPeriod, getSeasonGoalProgress, getSeasonStatistics, type SeasonStatistics } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
@@ -49,6 +49,7 @@ import type { FinancialGoal } from '../../types/financialGoal'
 import { financialGoalService } from '../../services/financialGoalService'
 import { buildFinancialGoalPresentation } from '../../services/financialGoalPresentation'
 import { HOME_SECTION_ORDER } from './homeSectionOrder'
+import { selectHomeCopilotPresentation } from './homePendingIncomePresentation'
 import type {
   CivilDate,
   IanaTimeZone,
@@ -259,7 +260,7 @@ export function HomePage() {
         seasonPeriodId?: number
       }) =>
         period?.id !== undefined &&
-        (item.earningPeriodId === period.id || item.seasonPeriodId === period.id)
+        recordBelongsToEarningPeriod(item, period.id)
       const contextualIncomes = isBasicUser
         ? modeIncomes
         : modeIncomes.filter(belongsToActivePeriod)
@@ -302,24 +303,6 @@ export function HomePage() {
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
     }
   }, [])
-
-  const totals = useMemo(() => {
-    if (!settings) return null
-    return {
-      current: calculateFinancialTotals(
-        currentIncomes,
-        currentExpenses,
-        settings.defaultCurrency,
-        settings.secondaryCurrency,
-      ),
-      previous: calculateFinancialTotals(
-        previousIncomes,
-        previousExpenses,
-        settings.defaultCurrency,
-        settings.secondaryCurrency,
-      ),
-    }
-  }, [currentExpenses, currentIncomes, previousExpenses, previousIncomes, settings])
 
   const balanceSummary = useMemo(() => {
     if (!settings) {
@@ -415,6 +398,24 @@ export function HomePage() {
     [currentIncomes, currentExpenses],
   )
 
+  const totals = useMemo(() => {
+    if (!settings) return null
+    return {
+      current: calculateFinancialTotals(
+        currentIncomes,
+        currentExpenses,
+        settings.defaultCurrency,
+        settings.secondaryCurrency,
+      ),
+      previous: calculateFinancialTotals(
+        previousIncomes,
+        previousExpenses,
+        settings.defaultCurrency,
+        settings.secondaryCurrency,
+      ),
+    }
+  }, [currentExpenses, currentIncomes, previousExpenses, previousIncomes, settings])
+
   if (!settings || !totals || !balanceSummary || !financialCopilot) {
     return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando...</section>
   }
@@ -427,6 +428,16 @@ export function HomePage() {
     </section>
   }
 
+  const homeCopilotPresentation = selectHomeCopilotPresentation(
+    {
+      insights: financialCopilot.insights,
+      todayPriorities: financialCopilot.todayPriorities,
+      suggestedActions: financialCopilot.suggestedActions,
+      summary: financialCopilot.summary,
+      financialHealthReasons: financialCopilot.financialHealth.reasons,
+    },
+    settings.showUnreportedIncome,
+  )
   const currentAdditionalsTotal = sumIncomeAdditionalsValue(currentIncomes, settings.defaultCurrency)
   const previousAdditionalsTotal = sumIncomeAdditionalsValue(previousIncomes, settings.defaultCurrency)
 
@@ -474,7 +485,11 @@ export function HomePage() {
   ]
   const seasonGoalProgress =
     activePeriod && activePeriodStats
-      ? getSeasonGoalProgress(activePeriod, activePeriodStats.realGain)
+      ? getSeasonGoalProgress(activePeriod, {
+          netIncome: activePeriodStats.realGain,
+          expenses: activePeriodStats.expenses,
+          result: activePeriodStats.netGain,
+        })
       : null
 
   return (
@@ -559,7 +574,7 @@ export function HomePage() {
           <MessageCircleMore className="size-5 text-violet-700 dark:text-violet-300" aria-hidden="true" />
           Consultar al Copiloto
         </Link>
-        {financialCopilot.suggestedActions.map((action) => (
+        {homeCopilotPresentation.suggestedActions.map((action) => (
           <Link className="flex h-14 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100" key={action.id} to={action.to}>
             <ArrowRight className="size-5 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
             {action.label}
@@ -573,8 +588,8 @@ export function HomePage() {
             <ListChecks className="size-5 text-amber-700 dark:text-amber-300" aria-hidden="true" />
             {HOME_SECTION_ORDER[0]}
           </h2>
-          {financialCopilot.todayPriorities.length > 0 ? <ul className="mt-3 grid gap-3">
-            {financialCopilot.todayPriorities.slice(0, 1).map((priority) => (
+          {homeCopilotPresentation.todayPriorities.length > 0 ? <ul className="mt-3 grid gap-3">
+            {homeCopilotPresentation.todayPriorities.slice(0, 1).map((priority) => (
               <li className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/40" key={priority.id}>
                 <span className="text-sm font-medium text-amber-950 dark:text-amber-100">{priority.message}</span>
                 <Link className="shrink-0 text-xs font-semibold text-amber-800 hover:text-amber-950 dark:text-amber-200" to={priority.action.to}>
@@ -634,16 +649,16 @@ export function HomePage() {
           <p className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">{financialCopilot.financialHealth.label}</p>
           <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{financialCopilot.financialHealth.explanation}</p>
           <ul className="mt-3 list-disc space-y-1 pl-5 text-xs leading-5 text-slate-600 dark:text-slate-300">
-            {financialCopilot.financialHealth.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+            {homeCopilotPresentation.financialHealthReasons.map((reason) => <li key={reason}>{reason}</li>)}
           </ul>
           <div className="my-4 border-t border-slate-200 dark:border-slate-800" />
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             <Lightbulb className="size-5 text-amber-700 dark:text-amber-300" aria-hidden="true" />
             Resumen del Copiloto
           </h3>
-          <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{financialCopilot.summary}</p>
+          <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{homeCopilotPresentation.summary}</p>
           <ul className="mt-4 flex flex-col gap-2">
-            {financialCopilot.insights.slice(0, 2).map((insight) => (
+            {homeCopilotPresentation.insights.slice(0, 2).map((insight) => (
               <li
                 className={[
                   'rounded-lg border px-3 py-2 text-sm',

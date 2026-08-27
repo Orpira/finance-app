@@ -14,6 +14,24 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Changed
 
+- **Visibilidad opcional de ingresos sin reportar (PB-META-007)**:
+  Configuración incorpora una única preferencia `Mostrar ingresos sin reportar`,
+  activada por defecto para conservar el comportamiento existente. Al
+  desactivarla, Inicio omite el aviso, la prioridad y la acción sugerida
+  asociadas; Movimientos oculta `Seleccionar visibles`, los checkboxes y los
+  badges no reportados, pero mantiene `Finalizado`, registros, importes y demás
+  acciones. El conteo y estado local, Inicio, Movimientos, Reportes y Meta
+  permanecen intactos. La preferencia persiste en IndexedDB y backups;
+  instalaciones y backups anteriores reciben el valor compatible `true` sin
+  migración de esquema. La validación automatizada cubre ON/OFF, eventos en
+  tiempo real, reapertura, restauración, no destrucción y paridad financiera.
+  La validación PWA interactiva quedó bloqueada por las rutas locales de licencia
+  con 404. Gates: lint y TypeScript verdes; 208 archivos / 2.314 PASS / 1
+  `todo`; build Vite e IndexedDB real en Chrome 152 aprobados. APK técnico
+  `1.0.6 (7)`: 10.517.374 bytes, SHA-256
+  `46f94a597370be0b0993f7ae3453993c272fe75461cef69ce8a749c90f00b6d4`,
+  firma debug v2 válida y copia idéntica a la salida Gradle. La instalación y
+  validación física permanecen pendientes.
 - **Refinamiento UX-01 a UX-10**: Movimientos sustituye seis selectores
   permanentes por búsqueda, hoja de filtros con borrador, contador,
   `Restablecer`/`Aplicar`, persistencia de sesión y períodos Hoy/Semana/Mes/
@@ -31,6 +49,22 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Fixed
 
+- **Corrección financiera de Meta de temporada (PB-META-001 a PB-META-006)**:
+  `service_duration` aplica una sola vez el porcentaje que corresponde a la
+  profesional, tanto desde Agenda como desde el alta manual. Movimientos deja de
+  presentar el bruto como importe del ingreso y usa el snapshot neto guardado.
+  Inicio, Temporadas y Reportes derivan la Meta como ingresos netos realizados
+  menos egresos realizados, sin ajustes; editar o eliminar cualquiera de esos
+  movimientos actualiza el resultado. El porcentaje visible conserva valores
+  negativos y superiores al 100 %, mientras la barra se limita a 0–100 %. Se
+  mantienen snapshots monetarios, aislamiento por modo y temporada y el alias
+  histórico `seasonPeriodId`; no hay cambio de esquema, migración ni reescritura
+  de datos. Evidencia y pendientes físicos en
+  `product/SEASON_GOAL_FINANCIAL_CORRECTION_2026.md`. Gates: lint, TypeScript,
+  207 archivos / 2.302 PASS / 1 `todo`, build Vite e IndexedDB real en Chrome
+  152 aprobados. APK técnico `1.0.5 (6)`: 10.842.686 bytes, SHA-256
+  `97cdab9996f9ce62452afe503b377c80958244d336ddad847871671debae2458`,
+  firma debug v2 válida. La instalación y matriz física permanecen pendientes.
 - **Adicionales visibles desde Actividad reciente**: el detalle de un ingreso
   profesional ahora consulta la tabla relacional de Adicionales y muestra cada
   descripción e importe por separado. Los importes respetan la preferencia de

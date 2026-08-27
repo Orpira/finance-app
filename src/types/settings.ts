@@ -85,6 +85,7 @@ export interface AppSettings {
   usageMode: UsageMode
   userType: UserType
   theme: ThemeMode
+  showUnreportedIncome: boolean
   pinEnabled: boolean
   pinHash?: string
   backupEncryptionKey: string

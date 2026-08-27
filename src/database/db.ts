@@ -61,6 +61,7 @@ export function createDefaultSettings(): AppSettings {
     usageMode: 'professional',
     userType: 'primary',
     theme: 'system',
+    showUnreportedIncome: true,
     pinEnabled: false,
     backupEncryptionKey: '',
     driveBackupEnabled: false,

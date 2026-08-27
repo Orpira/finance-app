@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getStoredAdditionalsValue,
+  getStoredExpenseValue,
+  getStoredIncomePrincipalValue,
   getStoredIncomeValue,
   sumIncomeAdditionalsValue,
 } from '../src/utils/financeStats'
+import type { Expense } from '../src/types/expense'
 import type { ServiceIncome } from '../src/types/service'
 
 function income(overrides: Partial<ServiceIncome> = {}): ServiceIncome {
@@ -65,6 +68,10 @@ describe('sumIncomeAdditionalsValue', () => {
 })
 
 describe('getStoredIncomeValue', () => {
+  it('mantiene el importe principal separado para superficies de movimiento individual', () => {
+    expect(getStoredIncomePrincipalValue(income(), 'EUR')).toBe(50)
+  })
+
   it('para agregados de balance, suma el importe principal + la porción de Adicionales', () => {
     // baseCurrencyValue (50, principal) + additionalsTotal convertido (20) = 70
     expect(getStoredIncomeValue(income(), 'EUR')).toBe(70)
@@ -77,5 +84,37 @@ describe('getStoredIncomeValue', () => {
   it('escala correctamente en una moneda secundaria', () => {
     // baseCurrencyValue no aplica (currency pedida es COP): copValue (215000) + adicional convertido (86000)
     expect(getStoredIncomeValue(income(), 'COP')).toBe(301000)
+  })
+
+  it('usa realGain en la moneda original para registros históricos sin snapshots base', () => {
+    expect(
+      getStoredIncomeValue(
+        income({
+          currency: 'USD',
+          realGain: 30,
+          baseCurrency: undefined,
+          baseCurrencyValue: undefined,
+          additionalsTotal: 0,
+        }),
+        'USD',
+      ),
+    ).toBe(30)
+  })
+})
+
+describe('getStoredExpenseValue', () => {
+  it('usa amount en la moneda original para registros históricos sin snapshots base', () => {
+    const expense: Expense = {
+      type: 'gasto',
+      date: '2026-01-01',
+      category: 'Materiales',
+      amount: 25,
+      currency: 'USD',
+      eurValue: 0,
+      copValue: 0,
+      createdAt: '2026-01-01T10:00:00.000Z',
+    }
+
+    expect(getStoredExpenseValue(expense, 'USD')).toBe(25)
   })
 })

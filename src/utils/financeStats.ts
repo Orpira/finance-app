@@ -1,9 +1,10 @@
 import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
-import type { CurrencyCode } from '../types/settings'
+import type { CurrencyCode, UsageMode } from '../types/settings'
 import { roundMoney } from './currency'
-import { isServiceIncome } from './incomeTypes'
+import { isAdjustmentIncome, isServiceIncome } from './incomeTypes'
 import { getEffectiveFinancialDuration } from './serviceDuration'
+import { recordBelongsToUsageMode } from './usageMode'
 
 export const weekdayNames = [
   'Domingo',
@@ -43,7 +44,18 @@ function getStoredBaseIncomeValue(income: ServiceIncome, currency: CurrencyCode)
     return income.copValue
   }
 
+  if (income.currency === currency) {
+    return income.realGain
+  }
+
   return 0
+}
+
+export function getStoredIncomePrincipalValue(
+  income: ServiceIncome,
+  currency: CurrencyCode,
+) {
+  return roundMoney(getStoredBaseIncomeValue(income, currency))
 }
 
 /**
@@ -78,7 +90,7 @@ export function getStoredIncomeValue(
   currency: CurrencyCode,
 ) {
   return roundMoney(
-    getStoredBaseIncomeValue(income, currency) +
+    getStoredIncomePrincipalValue(income, currency) +
       getStoredAdditionalsValue(income, currency),
   )
 }
@@ -118,7 +130,81 @@ export function getStoredExpenseValue(expense: Expense, currency: CurrencyCode) 
     return expense.copValue
   }
 
+  if (expense.currency === currency) {
+    return expense.amount
+  }
+
   return 0
+}
+
+export interface SeasonFinancialResult {
+  netIncome: number
+  expenses: number
+  result: number
+}
+
+interface CalculateSeasonFinancialResultInput {
+  incomes: readonly ServiceIncome[]
+  expenses: readonly Expense[]
+  currency: CurrencyCode
+  usageMode: UsageMode
+  earningPeriodId?: number
+}
+
+export function recordBelongsToEarningPeriod(
+  record: { earningPeriodId?: number; seasonPeriodId?: number },
+  earningPeriodId?: number,
+) {
+  if (
+    record.earningPeriodId !== undefined &&
+    record.seasonPeriodId !== undefined &&
+    record.earningPeriodId !== record.seasonPeriodId
+  ) {
+    return false
+  }
+
+  if (earningPeriodId === undefined) return true
+
+  const recordPeriodIds = [record.earningPeriodId, record.seasonPeriodId].filter(
+    (value): value is number => value !== undefined,
+  )
+
+  return recordPeriodIds.length > 0 && recordPeriodIds.every((value) => value === earningPeriodId)
+}
+
+export function calculateSeasonFinancialResult({
+  incomes,
+  expenses,
+  currency,
+  usageMode,
+  earningPeriodId,
+}: CalculateSeasonFinancialResultInput): SeasonFinancialResult {
+  const netIncome = roundMoney(
+    incomes
+      .filter(
+        (income) =>
+          recordBelongsToUsageMode(income, usageMode) &&
+          recordBelongsToEarningPeriod(income, earningPeriodId) &&
+          !isAdjustmentIncome(income),
+      )
+      .reduce((total, income) => total + getStoredIncomeValue(income, currency), 0),
+  )
+  const expenseTotal = roundMoney(
+    expenses
+      .filter(
+        (expense) =>
+          recordBelongsToUsageMode(expense, usageMode) &&
+          recordBelongsToEarningPeriod(expense, earningPeriodId) &&
+          expense.type === 'gasto',
+      )
+      .reduce((total, expense) => total + getStoredExpenseValue(expense, currency), 0),
+  )
+
+  return {
+    netIncome,
+    expenses: expenseTotal,
+    result: roundMoney(netIncome - expenseTotal),
+  }
 }
 
 export function calculateFinancialTotals(

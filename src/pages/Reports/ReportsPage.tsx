@@ -32,8 +32,10 @@ import {
 } from '../../utils/currency'
 import { countries, getCountryCurrency } from '../../utils/countries'
 import {
+  calculateSeasonFinancialResult,
   getStoredExpenseValue,
   getStoredIncomeValue,
+  recordBelongsToEarningPeriod,
 } from '../../utils/financeStats'
 import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 import {
@@ -233,7 +235,7 @@ export function ReportsPage() {
   const [periodIncomes, setPeriodIncomes] = useState<ServiceIncome[]>([])
   const [periodExpenses, setPeriodExpenses] = useState<Expense[]>([])
   const [traceIncomes, setTraceIncomes] = useState<ServiceIncome[]>([])
-  const [traceAdjustments, setTraceAdjustments] = useState<Expense[]>([])
+  const [traceExpenses, setTraceExpenses] = useState<Expense[]>([])
   const [loadError, setLoadError] = useState('')
   const [seasons, setSeasons] = useState<EarningPeriod[]>([])
   const [selectedSeason, setSelectedSeason] = useState<string>('ALL')
@@ -288,10 +290,9 @@ export function ReportsPage() {
             recordBelongsToUsageMode(income, currentSettings.usageMode),
           ),
         )
-        setTraceAdjustments(
+        setTraceExpenses(
           allExpenses.filter(
             (expense) =>
-              expense.type === 'ajuste' &&
               recordBelongsToUsageMode(expense, currentSettings.usageMode),
           ),
         )
@@ -407,7 +408,9 @@ export function ReportsPage() {
           selectedPaymentType === 'ALL' ||
           income.paymentType === selectedPaymentType
 
-        const matchesSeason = selectedSeason === 'ALL' || String(income.earningPeriodId) === selectedSeason
+        const matchesSeason =
+          selectedSeason === 'ALL' ||
+          recordBelongsToEarningPeriod(income, Number(selectedSeason))
         const badge = getRecordReportBadge(income)
         const matchesStatus = selectedReportStatus === 'ALL' ||
           (selectedReportStatus === 'reported' ? badge.isReported : !badge.isReported)
@@ -425,7 +428,9 @@ export function ReportsPage() {
         const matchesCategory =
           selectedCategory === 'ALL' || expense.category === selectedCategory
 
-        const matchesSeason = selectedSeason === 'ALL' || String(expense.earningPeriodId) === selectedSeason
+        const matchesSeason =
+          selectedSeason === 'ALL' ||
+          recordBelongsToEarningPeriod(expense, Number(selectedSeason))
         const badge = getRecordReportBadge(expense)
         const matchesStatus = selectedReportStatus === 'ALL' ||
           (selectedReportStatus === 'reported' ? badge.isReported : !badge.isReported)
@@ -458,18 +463,18 @@ export function ReportsPage() {
     [seasons, selectedSeason],
   )
   const selectedSeasonGoalProgress = useMemo(() => {
-    if (!selectedSeasonRecord?.id) return null
+    if (!selectedSeasonRecord?.id || !settings) return null
 
-    const achieved = traceIncomes
-      .filter(
-        (income) =>
-          income.earningPeriodId === selectedSeasonRecord.id ||
-          income.seasonPeriodId === selectedSeasonRecord.id,
-      )
-      .reduce((total, income) => total + income.realGain, 0)
+    const financialResult = calculateSeasonFinancialResult({
+      incomes: traceIncomes,
+      expenses: traceExpenses,
+      currency: selectedSeasonRecord.baseCurrency ?? settings.defaultCurrency,
+      usageMode: settings.usageMode,
+      earningPeriodId: selectedSeasonRecord.id,
+    })
 
-    return getSeasonGoalProgress(selectedSeasonRecord, achieved)
-  }, [selectedSeasonRecord, traceIncomes])
+    return getSeasonGoalProgress(selectedSeasonRecord, financialResult)
+  }, [selectedSeasonRecord, settings, traceExpenses, traceIncomes])
 
   const incomesById = useMemo(
     () => new Map(traceIncomes.flatMap((income) => income.id ? [[income.id, income] as const] : [])),
@@ -477,13 +482,13 @@ export function ReportsPage() {
   )
   const adjustmentsByIncomeId = useMemo(() => {
     const counts = new Map<number, number>()
-    traceAdjustments.forEach((expense) => {
+    traceExpenses.forEach((expense) => {
       if (expense.type === 'ajuste' && expense.relatedIncomeId !== undefined) {
         counts.set(expense.relatedIncomeId, (counts.get(expense.relatedIncomeId) ?? 0) + 1)
       }
     })
     return counts
-  }, [traceAdjustments])
+  }, [traceExpenses])
 
   function handlePeriodChange(nextPeriod: ReportPeriod) {
     const nextRange = getReportPeriodRange(nextPeriod)
@@ -1228,10 +1233,12 @@ export function ReportsPage() {
             <h2>Meta de la temporada</h2>
             <div class="meta">Finalización prevista: ${escapeHtml(formatSeasonDate(selectedSeasonRecord.plannedEndDate))}</div>
             <div class="summary">
+              <div><span>Resultado</span><strong>${escapeHtml(formatCurrency(selectedSeasonGoalProgress.result, selectedSeasonRecord.baseCurrency ?? primaryCurrency))}</strong></div>
+              <div><span>Ingresos netos</span><strong>${escapeHtml(formatCurrency(selectedSeasonGoalProgress.netIncome, selectedSeasonRecord.baseCurrency ?? primaryCurrency))}</strong></div>
+              <div><span>Egresos</span><strong>${escapeHtml(formatCurrency(selectedSeasonGoalProgress.expenses > 0 ? -selectedSeasonGoalProgress.expenses : 0, selectedSeasonRecord.baseCurrency ?? primaryCurrency))}</strong></div>
               <div><span>Meta</span><strong>${escapeHtml(formatCurrency(selectedSeasonGoalProgress.goal, selectedSeasonRecord.baseCurrency ?? primaryCurrency))}</strong></div>
-              <div><span>Valor alcanzado</span><strong>${escapeHtml(formatCurrency(selectedSeasonGoalProgress.achieved, selectedSeasonRecord.baseCurrency ?? primaryCurrency))}</strong></div>
-              <div><span>Valor restante</span><strong>${escapeHtml(formatCurrency(selectedSeasonGoalProgress.remaining, selectedSeasonRecord.baseCurrency ?? primaryCurrency))}</strong></div>
-              <div><span>Porcentaje alcanzado</span><strong>${selectedSeasonGoalProgress.percentage.toFixed(1)} %</strong></div>
+              <div><span>${selectedSeasonGoalProgress.exceeded > 0 ? 'Meta superada en' : 'Faltan'}</span><strong>${escapeHtml(formatCurrency(selectedSeasonGoalProgress.exceeded > 0 ? selectedSeasonGoalProgress.exceeded : selectedSeasonGoalProgress.remaining, selectedSeasonRecord.baseCurrency ?? primaryCurrency))}</strong></div>
+              <div><span>Progreso</span><strong>${selectedSeasonGoalProgress.percentage.toFixed(1)} %</strong></div>
             </div>
           `
           : ''
@@ -1240,10 +1247,12 @@ export function ReportsPage() {
           ? [
               'Meta de la temporada',
               `Finalización prevista: ${formatSeasonDate(selectedSeasonRecord.plannedEndDate)}`,
+              `Resultado: ${formatCurrency(selectedSeasonGoalProgress.result, selectedSeasonRecord.baseCurrency ?? primaryCurrency)}`,
+              `Ingresos netos: ${formatCurrency(selectedSeasonGoalProgress.netIncome, selectedSeasonRecord.baseCurrency ?? primaryCurrency)}`,
+              `Egresos: ${formatCurrency(selectedSeasonGoalProgress.expenses > 0 ? -selectedSeasonGoalProgress.expenses : 0, selectedSeasonRecord.baseCurrency ?? primaryCurrency)}`,
               `Meta: ${formatCurrency(selectedSeasonGoalProgress.goal, selectedSeasonRecord.baseCurrency ?? primaryCurrency)}`,
-              `Valor alcanzado: ${formatCurrency(selectedSeasonGoalProgress.achieved, selectedSeasonRecord.baseCurrency ?? primaryCurrency)}`,
-              `Valor restante: ${formatCurrency(selectedSeasonGoalProgress.remaining, selectedSeasonRecord.baseCurrency ?? primaryCurrency)}`,
-              `Porcentaje alcanzado: ${selectedSeasonGoalProgress.percentage.toFixed(1)} %`,
+              `${selectedSeasonGoalProgress.exceeded > 0 ? 'Meta superada en' : 'Faltan'}: ${formatCurrency(selectedSeasonGoalProgress.exceeded > 0 ? selectedSeasonGoalProgress.exceeded : selectedSeasonGoalProgress.remaining, selectedSeasonRecord.baseCurrency ?? primaryCurrency)}`,
+              `Progreso: ${selectedSeasonGoalProgress.percentage.toFixed(1)} %`,
               '',
             ]
           : []

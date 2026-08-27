@@ -13,3 +13,28 @@ export function getIncomeListModeFeatures(
     showOperationalStatus: professionalFeaturesEnabled,
   }
 }
+
+interface IncomeReportingVisibilityInput {
+  readonly showUnreportedIncome: boolean
+  readonly hasSelectableIncomes?: boolean
+  readonly hasSelectedIncomes?: boolean
+  readonly isSelectable?: boolean
+  readonly canReport?: boolean
+  readonly isReported?: boolean
+}
+
+export function getIncomeReportingVisibility({
+  showUnreportedIncome,
+  hasSelectableIncomes = false,
+  hasSelectedIncomes = false,
+  isSelectable = false,
+  canReport = false,
+  isReported = false,
+}: IncomeReportingVisibilityInput) {
+  return {
+    showSelectVisible: showUnreportedIncome && hasSelectableIncomes,
+    showSelectionSummary: showUnreportedIncome && hasSelectedIncomes,
+    showIndividualSelection: showUnreportedIncome && isSelectable,
+    showReportBadge: canReport && (showUnreportedIncome || isReported),
+  }
+}

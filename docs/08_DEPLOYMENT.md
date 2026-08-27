@@ -92,7 +92,7 @@ No se deben documentar valores reales de estas variables.
 6. Verificar permisos de notificaciones, identidad, licencia y restauración de
    backup en el dispositivo.
 
-La línea base Android vigente es `versionName 1.0.1` y `versionCode 2`. El APK
+La línea base Android vigente es `versionName 1.0.6` y `versionCode 7`. El APK
 de debug solo puede actualizar una instalación existente cuando conserva el
 mismo `applicationId` (`com.financeapp.app`) y el mismo certificado de firma.
 Una compilación de debug generada en otra máquina puede usar otra clave; no se

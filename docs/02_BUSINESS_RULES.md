@@ -7,6 +7,11 @@
 - Los porcentajes de ganancia no se modifican de forma automática fuera de la configuración o del flujo previsto.
 - Los ajustes deben quedar visibles como ajustes.
 - Los ajustes positivos suman al balance y los negativos restan.
+- La meta económica de una temporada mide el resultado realizado:
+  `ingresos netos realizados - egresos realizados`. Los ajustes no forman parte
+  de este cálculo y permanecen separados.
+- El progreso de la meta es `resultado / meta * 100`. Puede ser negativo o
+  superar el 100 %; únicamente la barra visual se limita al intervalo 0–100 %.
 
 ## Modos de uso
 
@@ -51,8 +56,10 @@
   explícita.
 - La opción "No aplica porcentaje, usar 100 %" guarda
   `earningPercentage = 100`; no crea un valor nulo ni un estado especial.
-- El progreso de la meta económica puede superar el 100 %, mientras que el
-  importe restante nunca se presenta como negativo.
+- El porcentaje de una temporada expresa la participación que corresponde a la
+  profesional. En `service_duration`, un importe bruto de 100 con 30 % produce
+  un ingreso neto realizado de 30; 0 % produce 0. El importe restante de la meta
+  nunca se presenta como negativo.
 
 ## Ingresos
 
@@ -78,6 +85,9 @@
 - Finalizar una cita requiere un servicio previamente iniciado. La reclamación
   de finalización es idempotente por `appointmentId`; pulsaciones repetidas no
   deben producir ingresos duplicados.
+- Al finalizar una cita, `service_duration` usa el mismo Strategy que el alta
+  manual y aplica el porcentaje de temporada una sola vez. El ingreso conserva
+  sus snapshots monetarios; ningún agregado recalcula tasas históricas.
 - `service_duration` recopila el tipo de pago al registrar el ingreso.
   `hourly_workday` no lo solicita ni lo persiste, porque la jornada puede
   liquidarse después de su registro. Al editar una jornada histórica se
@@ -129,6 +139,8 @@
 - Se clasifican por categoría.
 - Pueden relacionarse con un ingreso.
 - Admiten tipo gasto o ajuste.
+- Los gastos realizados reducen el resultado de la meta de su temporada. Editar
+  o eliminar un gasto actualiza el derivado; no se persiste un acumulado aparte.
 
 ## Agenda
 

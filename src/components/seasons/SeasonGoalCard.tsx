@@ -25,6 +25,8 @@ export function SeasonGoalCard({
 }: SeasonGoalCardProps) {
   const plannedDate = formatDate(plannedEndDate)
   const displayPercentage = Math.round(progress.percentage)
+  const displayedExpenses = progress.expenses > 0 ? -progress.expenses : 0
+  const visualPercentage = Math.min(Math.max(displayPercentage, 0), 100)
 
   return (
     <article
@@ -47,17 +49,24 @@ export function SeasonGoalCard({
         </div>
         {progress.completed && (
           <span className="rounded-full bg-emerald-700 px-2.5 py-1 text-xs font-semibold text-white">
-            Objetivo conseguido
+            Meta alcanzada
           </span>
         )}
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mt-5">
+        <p className="text-xs text-slate-500 dark:text-slate-400">Resultado</p>
+        <p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">
+          <SensitiveAmount hidden={hidden} value={formatCurrency(progress.result, currency)} />
+        </p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
-          ['Meta', progress.goal],
-          ['Alcanzado', progress.achieved],
           ['Progreso', `${displayPercentage} %`],
-          ['Restante', progress.remaining],
+          ['Meta', progress.goal],
+          ['Ingresos netos', progress.netIncome],
+          ['Egresos', displayedExpenses],
         ].map(([label, value]) => (
           <div key={String(label)}>
             <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
@@ -71,10 +80,10 @@ export function SeasonGoalCard({
       </div>
 
       <div
-        aria-label={`${displayPercentage} % de la meta alcanzado`}
+        aria-label={`${displayPercentage} % de progreso de la meta`}
         aria-valuemax={100}
         aria-valuemin={0}
-        aria-valuenow={Math.min(Math.max(displayPercentage, 0), 100)}
+        aria-valuenow={visualPercentage}
         className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
         role="progressbar"
       >
@@ -83,6 +92,16 @@ export function SeasonGoalCard({
           style={{ width: `${Math.min(Math.max(progress.percentage, 0), 100)}%` }}
         />
       </div>
+
+      <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">
+        {progress.exceeded > 0 ? (
+          <>Meta superada en <SensitiveAmount hidden={hidden} value={formatCurrency(progress.exceeded, currency)} /></>
+        ) : progress.completed ? (
+          'Meta alcanzada'
+        ) : (
+          <>Faltan <SensitiveAmount hidden={hidden} value={formatCurrency(progress.remaining, currency)} /></>
+        )}
+      </p>
     </article>
   )
 }

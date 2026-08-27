@@ -16,12 +16,8 @@ import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
-import type { Expense } from '../../types/expense'
-import type { ServiceIncome } from '../../types/service'
-import type { CurrencyCode } from '../../types/settings'
+import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
-import { getIncomeCompactLabel, getIncomeTypeLabel } from '../../utils/incomeTypes'
-import { getRecordReportBadge } from '../../utils/reportStatus'
 import ExpenseListPage from '../Expenses/ExpenseListPage'
 import IncomeListPage from '../Income/IncomeListPage'
 import { MovementCreateSheet } from './MovementCreateSheet'
@@ -37,6 +33,11 @@ import {
   scopeRecordsByUsageMode,
   writeMovementFilters,
 } from './movementFilters'
+import {
+  shouldShowMovementReportBadge,
+  toUnifiedMovements,
+  type UnifiedMovement,
+} from './movementPresentation'
 
 type MovementTab = 'todos' | 'ingresos' | 'egresos'
 
@@ -49,50 +50,6 @@ const TABS: { id: MovementTab; label: string }[] = [
 const RECENT_LIMIT = 40
 const MOVEMENT_FILTERS_SESSION_KEY = 'finance-app:movement-filters'
 
-interface UnifiedMovement {
-  key: string
-  kind: 'income' | 'expense'
-  date: string
-  label: string
-  amount: number
-  currency: string
-  href: string
-  reportBadge?: { label: string; isReported: boolean; isUnreviewed: boolean }
-  category: string
-  reported?: boolean
-  searchText: string
-}
-
-function toUnifiedMovements(incomes: ServiceIncome[], expenses: Expense[]): UnifiedMovement[] {
-  const incomeMovements: UnifiedMovement[] = incomes.map((income) => ({
-    key: `income-${income.id}`,
-    kind: 'income',
-    date: income.date,
-    label: getIncomeCompactLabel(income),
-    amount: income.totalAmount,
-    currency: income.currency,
-    href: `/income/${income.id}`,
-    reportBadge: getRecordReportBadge(income),
-    category: getIncomeTypeLabel(income),
-    reported: getRecordReportBadge(income).isReported,
-    searchText: getIncomeCompactLabel(income),
-  }))
-
-  const expenseMovements: UnifiedMovement[] = expenses.map((expense) => ({
-    key: `expense-${expense.id}`,
-    kind: 'expense',
-    date: expense.date,
-    label: expense.category,
-    amount: expense.amount,
-    currency: expense.currency,
-    href: `/expenses/${expense.id}/editar`,
-    category: expense.category,
-    searchText: expense.category,
-  }))
-
-  return [...incomeMovements, ...expenseMovements]
-}
-
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${value}T00:00`))
 }
@@ -100,6 +57,7 @@ function formatDate(value: string) {
 function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () => void }) {
   const { hidden } = useSensitiveValues()
   const [movements, setMovements] = useState<UnifiedMovement[] | null>(null)
+  const [showUnreportedIncome, setShowUnreportedIncome] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = useMemo(() => readMovementFilters(searchParams), [searchParams])
@@ -148,14 +106,26 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
         const scopedIncomes = scopeRecordsByUsageMode(incomes, settings.usageMode)
         const scopedExpenses = scopeRecordsByUsageMode(expenses, settings.usageMode)
         setMovements(toUnifiedMovements(scopedIncomes, scopedExpenses))
+        setShowUnreportedIncome(settings.showUnreportedIncome)
       })
       .catch((error) => {
         console.warn('No se pudieron cargar los movimientos.', error)
         if (!cancelled) setMovements([])
       })
 
+    function handleSettingsChanged(event: Event) {
+      if (!cancelled) {
+        setShowUnreportedIncome(
+          (event as CustomEvent<AppSettings>).detail.showUnreportedIncome,
+        )
+      }
+    }
+
+    window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
+
     return () => {
       cancelled = true
+      window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
     }
   }, [])
 
@@ -298,7 +268,9 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
                     </span>
                     <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
                       {formatDate(movement.date)}
-                      {movement.reportBadge ? ` · ${movement.reportBadge.label}` : ''}
+                      {shouldShowMovementReportBadge(showUnreportedIncome, movement.reportBadge)
+                        ? ` · ${movement.reportBadge?.label}`
+                        : ''}
                     </span>
                   </span>
                 </div>

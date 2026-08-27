@@ -18,7 +18,10 @@ En modo Profesional, el asistente también configura la primera temporada: nombr
 fecha de inicio, finalización prevista, meta económica y porcentaje de ganancia.
 La finalización prevista es informativa y nunca cierra la temporada de forma
 automática. La opción **No aplica porcentaje, usar 100 %** equivale a guardar
-100 %, no a dejar el porcentaje vacío. El modo Personal omite estos pasos.
+100 %, no a dejar el porcentaje vacío. El porcentaje representa la parte del
+importe del servicio que te corresponde: por ejemplo, un servicio de 100 con
+30 % registra 30 como ingreso neto. Configurar 0 % registra un neto de 0. El
+modo Personal omite estos pasos.
 
 Si interrumpes la configuración, la aplicación conserva localmente el paso y
 permite continuar desde allí. Los usuarios que ya tenían datos locales antes de
@@ -62,6 +65,23 @@ no consulta la red al abrirse; pulsa el icono de actualización para hacerlo de
 forma explícita. Sin conexión conserva las últimas cotizaciones disponibles y
 muestra `No disponible` para cualquier par que no pueda resolver. La consulta
 es informativa: no guarda el importe escrito ni modifica balances o registros.
+
+### 2.2. Meta de la temporada
+
+En modo Profesional, la tarjeta **Meta de la temporada** usa únicamente
+movimientos realizados de esa temporada. Presenta este desglose:
+
+- **Ingresos netos**: importes guardados después de aplicar el porcentaje, más
+  los Adicionales del balance agregado.
+- **Egresos**: gastos realizados de la temporada.
+- **Resultado**: ingresos netos menos egresos.
+- **Progreso**: resultado dividido entre la meta económica.
+
+Los ajustes se muestran por separado y no alteran la Meta. Un resultado negativo
+se conserva y puede producir progreso negativo. Si el resultado supera la meta,
+el porcentaje visible puede superar el 100 %, aunque la barra queda llena al
+100 %. Editar o eliminar un ingreso o egreso recalcula la tarjeta desde los
+registros locales; no modifica los movimientos históricos.
 
 ## 3. Registrar ingresos
 
@@ -184,6 +204,8 @@ En `Configuración` puedes ajustar:
 - **método de cálculo del ingreso** (`Servicio por tiempo` o `Jornada por horas`) — ver sección 3
 - si el método es `Jornada por horas`: **valor por hora** y **unidad de tiempo** (`Horas` o `Minutos`)
 - modo de tasa de cambio (`Automático` o `Manual`)
+- mostrar u ocultar en Inicio y Movimientos los avisos y controles de ingresos
+  sin reportar; desactivarlos no cambia registros, estados ni cálculos
 - tema visual (`Sistema`, `Claro`, `Oscuro`)
 - activar, cambiar o desactivar el PIN de acceso
 - consultar y actualizar la licencia del dispositivo

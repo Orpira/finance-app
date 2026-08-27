@@ -48,7 +48,11 @@ export function SeasonDetailPage() {
     ['Ingresos brutos', stats.grossIncome], ['Ganancia real', stats.realGain], ['Egresos', stats.expenses],
     ['Ajustes', stats.adjustments], ['Ganancia neta', stats.netGain], ['Mejor día', stats.bestDay?.amount ?? 0],
   ]
-  const goalProgress = getSeasonGoalProgress(period, stats.realGain)
+  const goalProgress = getSeasonGoalProgress(period, {
+    netIncome: stats.realGain,
+    expenses: stats.expenses,
+    result: stats.netGain,
+  })
 
   function openDayDetail(day: { date: string; count: number; amount: number }) {
     if (!records) return
