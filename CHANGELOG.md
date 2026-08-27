@@ -78,6 +78,12 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 ### Changed
 
+- Refinamiento UX-01 a UX-10: Movimientos agrupa sus filtros en una hoja
+  accesible con contador, sesión y navegación temporal, Reportes adopta el mismo
+  patrón anterior/siguiente e Inicio acerca la configuración Profesional y los
+  estados vacíos accionables. No cambia cálculos, persistencia ni aislamiento
+  entre modos. La validación automatizada está aprobada; la pasada E2E licenciada
+  y física queda documentada como pendiente.
 - El formulario usa "Tipo de registro" y distingue `Servicio` de `Jornada`;
   las superficies de consulta, reportes y exportaciones presentan
   "Jornada por horas" sin añadir un tipo de pago que no aplica.

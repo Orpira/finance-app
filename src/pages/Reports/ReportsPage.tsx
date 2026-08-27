@@ -1,10 +1,11 @@
-import { CalendarRange, Download, Eye, FileSpreadsheet } from 'lucide-react'
+import { Download, Eye, FileSpreadsheet } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDialog } from '../../components/dialogs/useDialog'
 
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
+import { PeriodNavigator } from '../../components/PeriodNavigator'
 import { SeasonGoalCard } from '../../components/seasons/SeasonGoalCard'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
@@ -28,9 +29,6 @@ import { isBasicMode, recordBelongsToUsageMode } from '../../utils/usageMode'
 import { getExpenseDisplayName, getIncomeDisplayName } from '../../utils/activityLabels'
 import {
   formatCurrency,
-  getCurrentMonthRange,
-  getCurrentWeekRange,
-  getCurrentYearRange,
 } from '../../utils/currency'
 import { countries, getCountryCurrency } from '../../utils/countries'
 import {
@@ -50,11 +48,16 @@ import {
   type ConfigurableReportFormat,
   type ConfigurableReportStatus,
 } from '../../services/reportConfiguration'
+import {
+  getReportPeriodLabel,
+  getReportPeriodRange,
+  shiftReportPeriod,
+  type ReportPeriod,
+} from './reportPeriod'
 
-type Period = 'week' | 'month' | 'year'
 type ReportKind = 'income' | 'expense' | 'paymentType' | 'balance'
 
-const periods: Array<{ value: Period; label: string }> = [
+const periods: Array<{ value: ReportPeriod; label: string }> = [
   { value: 'week', label: 'Semana' },
   { value: 'month', label: 'Mes' },
   { value: 'year', label: 'Año' },
@@ -93,18 +96,6 @@ function getReportCards(isBasicUser: boolean) {
       title: isBasicUser ? 'Balance general' : 'Balance por temporadas',
     },
   ]
-}
-
-function getPeriodRange(period: Period) {
-  if (period === 'week') {
-    return getCurrentWeekRange()
-  }
-
-  if (period === 'year') {
-    return getCurrentYearRange()
-  }
-
-  return getCurrentMonthRange()
 }
 
 function getCountryLabel(code: string): string {
@@ -224,8 +215,8 @@ function buildPrintableDocument(title: string, body: string) {
 export function ReportsPage() {
   const { alert } = useDialog()
   const navigate = useNavigate()
-  const initialRange = useMemo(() => getCurrentMonthRange(), [])
-  const [period, setPeriod] = useState<Period>('month')
+  const initialRange = useMemo(() => getReportPeriodRange('month'), [])
+  const [period, setPeriod] = useState<ReportPeriod>('month')
   const [dateFrom, setDateFrom] = useState(initialRange.from)
   const [dateTo, setDateTo] = useState(initialRange.to)
   const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
@@ -494,10 +485,16 @@ export function ReportsPage() {
     return counts
   }, [traceAdjustments])
 
-  function handlePeriodChange(nextPeriod: Period) {
-    const nextRange = getPeriodRange(nextPeriod)
+  function handlePeriodChange(nextPeriod: ReportPeriod) {
+    const nextRange = getReportPeriodRange(nextPeriod)
 
     setPeriod(nextPeriod)
+    setDateFrom(nextRange.from)
+    setDateTo(nextRange.to)
+  }
+
+  function handlePeriodShift(direction: -1 | 1) {
+    const nextRange = shiftReportPeriod(period, dateFrom, direction)
     setDateFrom(nextRange.from)
     setDateTo(nextRange.to)
   }
@@ -1420,15 +1417,18 @@ export function ReportsPage() {
         </div>
       </PageHeader>
 
-      <CollapsibleFilters title="Filtros de reporte" storageKey="filters-open-reports">
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-          <CalendarRange className="size-5 text-emerald-700" aria-hidden="true" />
-          <span>
-            {dateFrom || '-'} - {dateTo || '-'}
-          </span>
-        </div>
+      <PeriodNavigator
+        canMove={Boolean(dateFrom)}
+        label={dateFrom && dateTo
+          ? getReportPeriodLabel(period, { from: dateFrom, to: dateTo })
+          : 'Selecciona un rango'}
+        navigationLabel="Navegación del período del reporte"
+        onNext={() => handlePeriodShift(1)}
+        onPrevious={() => handlePeriodShift(-1)}
+      />
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <CollapsibleFilters title="Filtros de reporte" storageKey="filters-open-reports">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {!isBasicUser && (
             <label className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-600">Temporada</span>

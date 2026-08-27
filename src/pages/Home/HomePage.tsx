@@ -15,6 +15,7 @@ import {
   Pause,
   Play,
   Save,
+  Settings,
   XCircle,
   Sparkles,
   TrendingUp,
@@ -23,6 +24,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { SensitiveAmount } from '../../components/SensitiveAmount'
+import { ActionableEmptyState } from '../../components/ActionableEmptyState'
 import { SeasonGoalCard } from '../../components/seasons/SeasonGoalCard'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { listAppointments } from '../../services/appointmentService'
@@ -484,14 +486,26 @@ export function HomePage() {
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">Inicio</h1>
             <p className="mt-2 text-sm text-slate-300">Resumen financiero del mes actual</p>
           </div>
-          <button
-            aria-label={hidden ? 'Mostrar valores sensibles' : 'Ocultar valores sensibles'}
-            className="flex size-11 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
-            onClick={toggle}
-            type="button"
-          >
-            {hidden ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {!isBasicMode(settings) && (
+              <Link
+                aria-label="Configurar actividad profesional"
+                className="flex size-11 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/80"
+                title="Configurar actividad profesional"
+                to="/settings/business?from=home"
+              >
+                <Settings aria-hidden="true" className="size-5" />
+              </Link>
+            )}
+            <button
+              aria-label={hidden ? 'Mostrar valores sensibles' : 'Ocultar valores sensibles'}
+              className="flex size-11 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/80"
+              onClick={toggle}
+              type="button"
+            >
+              {hidden ? <EyeOff aria-hidden="true" className="size-5" /> : <Eye aria-hidden="true" className="size-5" />}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -584,9 +598,14 @@ export function HomePage() {
               </Link>
             </div>
             {upcomingAppointments.length === 0 ? (
-              <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
-                No tienes citas próximas en los siguientes 14 días.
-              </p>
+              <div className="mt-4">
+                <ActionableEmptyState
+                  action={{ label: 'Crear cita', to: '/agenda/nueva' }}
+                  compact
+                  description="Programa una cita para verla aquí y comenzar el servicio a su hora."
+                  title="No tienes citas próximas"
+                />
+              </div>
             ) : (
               <ul className="mt-4 flex flex-col gap-2">
                 {upcomingAppointments.map((appointment) => (

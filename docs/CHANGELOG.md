@@ -12,6 +12,23 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 - **Rotación inmediata de la clave de firma V2 para licencias de pago** (autorizada por el propietario el 2026-08-09): cliente y backend de automatización pasan a confiar coordinadamente en el nuevo par público; la clave privada se conserva fuera del repositorio con permisos restrictivos y la clave dedicada de trial permanece sin cambios. Las licencias V2 de pago emitidas con la clave anterior dejarán de ser válidas al desplegar este cambio y deberán reemitirse. Se actualizó la fixture firmada de política `single` y `.gitignore` protege ahora también salidas accidentales cuyo nombre comience por `PB-DEVICE-`. Se verificaron 28 pruebas focalizadas de licencias/automatización. El despliegue coordinado de web, servidor y Android sigue pendiente.
 
+### Changed
+
+- **Refinamiento UX-01 a UX-10**: Movimientos sustituye seis selectores
+  permanentes por búsqueda, hoja de filtros con borrador, contador,
+  `Restablecer`/`Aplicar`, persistencia de sesión y períodos Hoy/Semana/Mes/
+  Personalizado. Movimientos y Reportes comparten navegación temporal; los deep
+  links `previous_month` y `previous_week` conservan su granularidad, y los
+  rangos manuales de Reportes muestran sus fechas reales. Inicio Profesional
+  enlaza a la misma configuración de negocio y añade un CTA cuando no hay citas
+  próximas. No se alteran fórmulas, Dexie, backups, licencias ni el aislamiento
+  Básico/Profesional. Gates: lint y TypeScript verdes; 204 archivos / 2284 PASS
+  / 1 todo; build Vite e IndexedDB real en Chrome 152 aprobados. APK técnico
+  `1.0.4 (5)`: 10.526.416 bytes, SHA-256
+  `e81fc16a791dd1490bda967cd5a96322ae98868b1fb9429977bfd4141c6156ef`, firma
+  debug v2 válida. La navegación PWA licenciada completa y la instalación física
+  permanecen pendientes; ver `product/UX_REFINEMENT_2026.md`.
+
 ### Fixed
 
 - **Adicionales visibles desde Actividad reciente**: el detalle de un ingreso

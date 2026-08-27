@@ -1,6 +1,6 @@
 import { Save } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import { INCOME_CALCULATION_METHODS } from '../../catalogs/incomeCalculationMethods'
@@ -32,6 +32,7 @@ const rateModes: Array<{ value: RateMode; label: string }> = [
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 export function SettingsBusinessPage() {
+  const [searchParams] = useSearchParams()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [cityOptions, setCityOptions] =
@@ -142,8 +143,8 @@ export function SettingsBusinessPage() {
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <PageHeader
-        backLabel="Configuración"
-        backTo="/settings"
+        backLabel={searchParams.get('from') === 'home' ? 'Inicio' : 'Configuración'}
+        backTo={searchParams.get('from') === 'home' ? '/' : '/settings'}
         eyebrow="Negocio y moneda"
         title="Datos generales"
       />
