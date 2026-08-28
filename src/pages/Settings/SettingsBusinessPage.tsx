@@ -12,7 +12,6 @@ import { listCityOptions } from '../../services/locationService'
 import type {
   AppSettings,
   CountryCode,
-  CurrencyCode,
   RateMode,
 } from '../../types/settings'
 import {
@@ -237,7 +236,7 @@ export function SettingsBusinessPage() {
             </select>
           </label>
 
-          <label className="flex flex-col gap-2">
+          {/* <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
               Moneda secundaria
             </span>
@@ -256,7 +255,7 @@ export function SettingsBusinessPage() {
                 </option>
               ))}
             </select>
-          </label>
+          </label> */}
         </div>
 
         

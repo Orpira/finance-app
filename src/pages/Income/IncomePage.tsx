@@ -378,13 +378,10 @@ export function IncomePage() {
     !isBasicUser && isServiceType && effectiveMethod === 'service_duration'
   const usesHourlyWorkday =
     !isBasicUser && isServiceType && effectiveMethod === 'hourly_workday'
-  // "Jornada por horas" no pide tipo de pago al crearse (se persiste
-  // "Efectivo" por defecto), pero al editar sí se puede modificar, igual
-  // que en "Servicio por tiempo".
   const collectsPaymentType =
     !isBasicUser &&
     isServiceType &&
-    (shouldCollectPaymentTypeAtRegistration(effectiveMethod) || (isEditing && usesHourlyWorkday))
+    shouldCollectPaymentTypeAtRegistration(effectiveMethod)
   // Al editar un ingreso existente se respeta la unidad con la que se
   // guardó originalmente (workedTimeUnit ya viene cargada desde
   // editingIncome) para no reinterpretar datos históricos; para uno nuevo se
@@ -566,7 +563,11 @@ export function IncomePage() {
         status: editingIncome?.status ?? 'FINALIZADO',
         type: isBasicUser ? 'ingreso' : incomeType,
         date: registrationDate,
-        paymentType: !isAdjustmentType && collectsPaymentType ? paymentType : undefined,
+        paymentType:
+          !isAdjustmentType &&
+          shouldCollectPaymentTypeAtRegistration(persistedMethod)
+            ? paymentType
+            : undefined,
         duration: isBasicUser
           ? editingIncome?.duration ?? 0
           : isAdjustmentType || usesHourlyWorkday
@@ -761,13 +762,13 @@ export function IncomePage() {
 
         {!isEditing || isBasicUser ? (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:!text-slate-300">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300!">
               Fecha y hora
             </p>
-            <p className="mt-1 font-medium text-slate-900 dark:!text-white">
+            <p className="mt-1 font-medium text-slate-900 dark:text-white!">
               {readOnlyDateTime}
             </p>
-            <p className="mt-1 text-xs text-slate-500 dark:!text-slate-300">
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-300!">
               Se asignan automáticamente al guardar.
             </p>
           </div>

@@ -524,13 +524,13 @@ export function ExpensesPage() {
 
         {(isBasicUser || !isEditing) && (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:!text-slate-300">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300!">
               Fecha y hora
             </p>
-            <p className="mt-1 font-medium text-slate-900 dark:!text-white">
+            <p className="mt-1 font-medium text-slate-900 dark:text-white!">
               {readOnlyDateTime}
             </p>
-            <p className="mt-1 text-xs text-slate-500 dark:!text-slate-300">
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-300!">
               Se asignan automáticamente al guardar.
             </p>
           </div>
@@ -600,7 +600,7 @@ export function ExpensesPage() {
 
         </div>
 
-        {isBasicUser && (
+       {/*  {isBasicUser && ( */}
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
               Observación <span className="font-normal text-slate-500">(opcional)</span>
@@ -613,7 +613,7 @@ export function ExpensesPage() {
               value={notes}
             />
           </label>
-        )}
+       {/*  )} */}
 
         {!isBasicUser && expenseType === 'ajuste' && (
           <div className="flex flex-col gap-4 rounded-lg border border-amber-200 bg-amber-50/60 p-4">
