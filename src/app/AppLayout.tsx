@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert'
+import { FloatingCreateMenu } from '../components/layout/FloatingCreateMenu'
 import { ServiceCompletionAlert } from '../components/ServiceCompletionAlert'
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
 import {
@@ -274,7 +275,7 @@ export function AppLayout() {
           <div className="flex items-center gap-2">
             <button
               aria-label={themeLabel}
-              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-950"
+              className="inline-flex size-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-950"
               onClick={toggleTheme}
               title={themeLabel}
               type="button"
@@ -295,7 +296,7 @@ export function AppLayout() {
           <div className="flex items-center gap-2">
             <button
               aria-label={themeLabel}
-              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="inline-flex size-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               onClick={toggleTheme}
               title={themeLabel}
               type="button"
@@ -306,6 +307,8 @@ export function AppLayout() {
         </div>
         <Outlet key={usageMode} />
       </main>
+
+      <FloatingCreateMenu usageMode={usageMode} />
 
       {usesProfessionalAgenda({ usageMode }) && <AppointmentReminderAlert />}
       {usesProfessionalAgenda({ usageMode }) && <ServiceTimeAlert />}

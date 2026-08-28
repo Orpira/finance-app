@@ -27,6 +27,8 @@ export interface Appointment {
 
   currency: string;
 
+  paymentType?: string;
+
   country?: string;
 
   city?: string;

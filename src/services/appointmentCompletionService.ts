@@ -144,6 +144,7 @@ export async function completeAppointmentAsIncome(
     durationLabel: appointment.durationLabel,
     totalAmount: appointment.expectedAmount,
     currency: appointment.currency,
+    paymentType: appointment.paymentType,
     earningPeriodId: activePeriod.id,
     earningPercentage: activePeriod.percentage,
     percentage: activePeriod.percentage,

@@ -1,7 +1,6 @@
 import {
   ArrowDownLeft,
   ArrowUpRight,
-  Plus,
   Search,
   SlidersHorizontal,
 } from 'lucide-react'
@@ -312,17 +311,7 @@ export function MovementsPage() {
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       {activeTab === 'todos' ? (
         <>
-          <PageHeader eyebrow="Movimientos" title="Ingresos y egresos">
-            <button
-              aria-label="Registrar movimiento"
-              className="inline-flex size-11 items-center justify-center self-end rounded-md bg-emerald-700 text-white transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-950 sm:self-auto"
-              onClick={() => setCreateSheetOpen(true)}
-              title="Registrar movimiento"
-              type="button"
-            >
-              <Plus aria-hidden="true" className="size-5" />
-            </button>
-          </PageHeader>
+          <PageHeader eyebrow="Movimientos" title="Ingresos y egresos" />
           {createSheetOpen && (
             <MovementCreateSheet onCancel={() => setCreateSheetOpen(false)} />
           )}

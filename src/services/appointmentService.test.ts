@@ -149,6 +149,20 @@ describe('disponibilidad de agenda', () => {
 })
 
 describe('updateAppointment', () => {
+  it('persiste el tipo de pago al crear y editar una cita', async () => {
+    const id = await createAppointment(appointment({ paymentType: 'cash' }))
+
+    await expect(getAppointmentById(id)).resolves.toEqual(
+      expect.objectContaining({ paymentType: 'cash' }),
+    )
+
+    await updateAppointment(id, { paymentType: 'bizum' })
+
+    await expect(getAppointmentById(id)).resolves.toEqual(
+      expect.objectContaining({ paymentType: 'bizum' }),
+    )
+  })
+
   it('persiste la edición de una cita activa en la base local', async () => {
     const id = await createAppointment(appointment())
 

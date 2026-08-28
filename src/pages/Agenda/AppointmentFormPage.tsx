@@ -36,6 +36,7 @@ import {
   isServiceDurationLabel,
   type ServiceDurationLabel,
 } from '../../utils/serviceDuration'
+import { paymentTypes } from '../../utils/paymentTypes'
 import { isReported } from '../../catalogs/reportStatuses'
 import { useDialog } from '../../components/dialogs/useDialog'
 
@@ -109,6 +110,7 @@ export function AppointmentFormPage() {
   const [durationLabel, setDurationLabel] =
     useState<ServiceDurationLabel | ''>('')
   const [expectedAmount, setExpectedAmount] = useState(120)
+  const [paymentType, setPaymentType] = useState(paymentTypes[0].value)
   const [notes, setNotes] = useState('')
   const [reminders, setReminders] = useState<AppointmentReminder[]>(
     createDefaultAppointmentReminders,
@@ -202,6 +204,7 @@ export function AppointmentFormPage() {
           : getNumericDurationLabel(appointment.duration) ?? '',
       )
       setExpectedAmount(appointment.expectedAmount)
+      setPaymentType(appointment.paymentType ?? paymentTypes[0].value)
       setNotes(appointment.notes ?? '')
       setReminders(
         (appointment.reminders ?? []).map((reminder) => ({
@@ -338,6 +341,7 @@ export function AppointmentFormPage() {
       expectedAmount,
       currency:
         editingAppointment?.currency ?? currentSettings.defaultCurrency,
+      paymentType,
       country: editingAppointment?.country ?? currentSettings.country,
       city: editingAppointment?.city ?? currentSettings.city,
       notes: notes.trim(),
@@ -525,6 +529,23 @@ export function AppointmentFormPage() {
             />
           </label>
         </div>
+
+        <label className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-slate-700">
+            Tipo de pago
+          </span>
+          <select
+            className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+            onChange={(event) => setPaymentType(event.target.value)}
+            value={paymentType}
+          >
+            {paymentTypes.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <label className="flex flex-col gap-2">
           <span className="text-sm font-medium text-slate-700">Notas</span>

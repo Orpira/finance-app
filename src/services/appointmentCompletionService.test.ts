@@ -102,6 +102,16 @@ describe('completeAppointmentAsIncome', () => {
     }))
   })
 
+  it('conserva en el ingreso el tipo de pago elegido al agendar la cita', async () => {
+    getAppointmentByIdMock.mockResolvedValue(appointment({ paymentType: 'bizum' }))
+
+    await completeAppointmentAsIncome(1, settings(), new Date('2026-01-01T11:00:00.000Z'))
+
+    expect(createServiceIncomeMock).toHaveBeenCalledWith(expect.objectContaining({
+      paymentType: 'bizum',
+    }))
+  })
+
   it('nunca crea un servicio si la cita nunca fue iniciada (sin timerStartedAt)', async () => {
     getAppointmentByIdMock.mockResolvedValue(appointment({ timerStartedAt: undefined }))
 
