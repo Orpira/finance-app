@@ -19,10 +19,9 @@ export const weekdayNames = [
 /**
  * Valor almacenado del ingreso PRINCIPAL (servicio u horas) ya convertido a
  * `currency`, sin Adicionales — exactamente lo que quedó calculado al crear
- * o editar el ingreso. Uso interno: `getStoredIncomeValue` (agregados de
- * balance) y `getStoredAdditionalsValue` (derivar la tasa de conversión) se
- * apoyan en esta función en vez de una en la otra, para no reintroducir
- * Adicionales dentro de sí misma.
+ * o editar el ingreso. `getStoredIncomeValue` lo usa para métricas de Ingresos
+ * y balance general; las métricas de Ganancia consumen directamente
+ * `getStoredIncomePrincipalValue`.
  */
 function getStoredBaseIncomeValue(income: ServiceIncome, currency: CurrencyCode) {
   if (income.baseCurrency === currency && income.baseCurrencyValue !== undefined) {
@@ -70,7 +69,22 @@ export function getStoredAdditionalsValue(
 ) {
   const additionalsTotal = income.additionalsTotal ?? 0
 
-  if (additionalsTotal <= 0 || !income.realGain) {
+  if (additionalsTotal <= 0) {
+    return 0
+  }
+
+  if (income.currency === currency || income.baseCurrency === currency) {
+    return roundMoney(additionalsTotal)
+  }
+
+  if (!income.realGain) {
+    if (
+      income.secondaryCurrency === currency &&
+      income.exchangeRateBaseToSecondary !== undefined
+    ) {
+      return roundMoney(additionalsTotal * income.exchangeRateBaseToSecondary)
+    }
+
     return 0
   }
 
@@ -79,11 +93,13 @@ export function getStoredAdditionalsValue(
 }
 
 /**
- * Valor total del ingreso para efectos de BALANCE agregado (Inicio,
- * Ganancia, reportes): importe principal + Adicionales. El registro del
+ * Valor total para métricas de INGRESOS y balance general: importe principal
+ * + Adicionales. Las métricas de Ganancia usan
+ * `getStoredIncomePrincipalValue`, porque un Adicional es ingreso pero no
+ * ganancia por el servicio prestado. El registro del
  * ingreso en sí (`realGain`/`totalAmount`) nunca incluye Adicionales — esta
- * función es el único punto donde ambos se suman, exclusivamente para
- * agregados, nunca persistido sobre el ingreso individual.
+ * función es el único punto donde ambos se suman y el resultado nunca se
+ * persiste sobre el ingreso individual.
  */
 export function getStoredIncomeValue(
   income: ServiceIncome,
@@ -187,7 +203,11 @@ export function calculateSeasonFinancialResult({
           recordBelongsToEarningPeriod(income, earningPeriodId) &&
           !isAdjustmentIncome(income),
       )
-      .reduce((total, income) => total + getStoredIncomeValue(income, currency), 0),
+      .reduce(
+        (total, income) =>
+          total + getStoredIncomePrincipalValue(income, currency),
+        0,
+      ),
   )
   const expenseTotal = roundMoney(
     expenses
@@ -222,6 +242,16 @@ export function calculateFinancialTotals(
     (total, income) => total + getStoredIncomeValue(income, secondaryCurrency),
     0,
   )
+  const primaryGain = incomes.reduce(
+    (total, income) =>
+      total + getStoredIncomePrincipalValue(income, primaryCurrency),
+    0,
+  )
+  const secondaryGain = incomes.reduce(
+    (total, income) =>
+      total + getStoredIncomePrincipalValue(income, secondaryCurrency),
+    0,
+  )
   const primaryExpenses = expenses.reduce(
     (total, expense) => total + getStoredExpenseValue(expense, primaryCurrency),
     0,
@@ -235,10 +265,12 @@ export function calculateFinancialTotals(
   return {
     primaryIncome: roundMoney(primaryIncome),
     secondaryIncome: roundMoney(secondaryIncome),
+    primaryGain: roundMoney(primaryGain),
+    secondaryGain: roundMoney(secondaryGain),
     primaryExpenses: roundMoney(primaryExpenses),
     secondaryExpenses: roundMoney(secondaryExpenses),
-    primaryNet: roundMoney(primaryIncome - primaryExpenses),
-    secondaryNet: roundMoney(secondaryIncome - secondaryExpenses),
+    primaryNet: roundMoney(primaryGain - primaryExpenses),
+    secondaryNet: roundMoney(secondaryGain - secondaryExpenses),
     serviceMinutes: serviceIncomes.reduce(
       (total, income) => total + (getEffectiveFinancialDuration(income) ?? 0),
       0,

@@ -81,6 +81,29 @@ describe('buildBalanceReport', () => {
     expect(report.generalBalance).toBe(-80)
   })
 
+  it('suma Adicionales en ingresos y balance general, pero no en ganancia neta', () => {
+    const report = buildBalanceReport({
+      incomes: [
+        createIncome({
+          type: 'ingreso',
+          currency: 'EUR',
+          realGain: 50,
+          eurValue: 50,
+          additionalsTotal: 20,
+        }),
+      ],
+      expenses: [createExpense({ type: 'gasto', eurValue: 10 })],
+      currency: 'EUR',
+    })
+
+    expect(report.incomeGrossTotal).toBe(70)
+    expect(report.netProfit).toBe(40)
+    expect(report.generalBalance).toBe(60)
+    expect(report.incomesByType).toEqual([
+      expect.objectContaining({ type: 'ingreso', total: 70 }),
+    ])
+  })
+
   it('separates adjustment impact from gross income and expenses', () => {
     const report = buildBalanceReport({
       incomes: [

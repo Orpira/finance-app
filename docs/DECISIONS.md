@@ -70,8 +70,15 @@ Format used: one ADR per section with Context, Decision, Status and Consequences
 
 ## ADR-032: Season goal uses realized net result
 
-- Status: accepted with explicit owner authorization on 2026-08-27.
+- Status: accepted on 2026-08-27; the Additions clause was superseded by ADR-033 on 2026-08-28.
 - Canonical record: [ADR-032-SEASON-GOAL-REALIZED-NET-RESULT.md](adr/ADR-032-SEASON-GOAL-REALIZED-NET-RESULT.md).
 - Context: Agenda, manual income entry, Home, Movements, Seasons and Reports did not all present or aggregate the same stored financial value. Season goal progress counted income but did not subtract realized expenses, and negative results were normalized to zero.
-- Decision: for `service_duration`, the season percentage is the professional's participation and is applied exactly once as `realGain = totalAmount * percentage / 100`. Therefore, 100 at 30 % produces 30, while 0 % produces 0; choosing "No aplica porcentaje" persists 100 %. `hourly_workday` remains outside this percentage rule. The realized season result is `stored net non-adjustment income - stored non-adjustment expenses`; additions remain part of aggregate income and adjustments remain separate. Progress is `result / economicGoal * 100` and may be negative or exceed 100 %, although the visual bar is limited to 0–100 %.
+- Decision: for `service_duration`, the season percentage is the professional's participation and is applied exactly once as `realGain = totalAmount * percentage / 100`. Therefore, 100 at 30 % produces 30, while 0 % produces 0; choosing "No aplica porcentaje" persists 100 %. `hourly_workday` remains outside this percentage rule. The realized season result is `stored principal non-adjustment income - stored non-adjustment expenses`; ADR-033 excludes Additions and adjustments remain separate. Progress is `result / economicGoal * 100` and may be negative or exceed 100 %, although the visual bar is limited to 0–100 %.
 - Consequences: Agenda and manual `service_duration` registration use the same calculation Strategy; Home, Movements, Seasons and Reports consume persisted monetary snapshots without recomputing historical exchange rates. No Dexie schema change, data migration or historical rewrite is required. Records using the historical `seasonPeriodId` alias remain readable, and inconsistent dual season identifiers fail closed in the financial derivation.
+
+## ADR-033: Additions count as Income, not Profit
+
+- Status: accepted with explicit owner authorization on 2026-08-28.
+- Canonical record: [ADR-033-ADDITIONALS-INCOME-NOT-PROFIT.md](adr/ADR-033-ADDITIONALS-INCOME-NOT-PROFIT.md).
+- Decision: Income is principal plus Additions; real Profit is principal; net Profit, Saving and Season Goal are principal minus expenses; general balance retains Additions and explicit adjustment impact. Net movement/cutoff balances retain Additions because they represent cash balance rather than Profit.
+- Consequences: consumers choose `getStoredIncomeValue` for Income or `getStoredIncomePrincipalValue` for Profit. `totalIncome` remains a non-authoritative legacy field, no Dexie migration or historical rewrite is performed, and insufficient currency evidence fails closed.

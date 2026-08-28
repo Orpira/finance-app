@@ -393,7 +393,7 @@ export function IncomePage() {
   // ingreso al crear); nunca entra al motor de cálculo — el total del
   // registro (realGain/totalAmount) es siempre exclusivamente el importe de
   // horas/servicio trabajado, sin adicionales. Los adicionales viven aparte
-  // y solo se suman a nivel de balance agregado (Inicio/Ganancia).
+  // y solo se suman a métricas de Ingresos y balance general.
   const draftAdditionalsTotal = draftAdditionals.reduce((sum, item) => sum + item.amount, 0)
   const additionalsTotal =
     editingIncome?.additionalsTotal ??
@@ -591,7 +591,6 @@ export function IncomePage() {
         // lo refuerza descartando este campo en las actualizaciones).
         incomeCalculationMethod: persistedMethod,
         additionalsTotal,
-        totalIncome: principalAmount,
         workedTime: usesHourlyWorkday ? workedTime : undefined,
         workedTimeUnit:
           !isBasicUser && isServiceType ? effectiveWorkedTimeUnit : undefined,

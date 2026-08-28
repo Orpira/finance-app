@@ -1,8 +1,8 @@
 import type { IncomeAdditional } from '../types/incomeAdditional'
 
 export function assertAdditionalAmountIsValid(amount: number) {
-  if (!Number.isFinite(amount) || amount < 0) {
-    throw new Error('El importe del adicional no puede ser negativo.')
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('El importe del adicional debe ser mayor que cero.')
   }
 }
 

@@ -16,8 +16,9 @@ El sistema separa estrictamente:
   snapshot inmutable del método de cálculo usado (`incomeCalculationMethod`:
   `service_duration` | `hourly_workday`, PB-IS-0007) y los parámetros con los
   que se calculó (`hourlyRateApplied`, `workedTime`/`workedTimeUnit`,
-  `additionalsTotal`, `totalIncome`), para que cambios posteriores en
-  Configuración nunca alteren ingresos históricos.
+  `additionalsTotal`), para que cambios posteriores en Configuración nunca
+  alteren ingresos históricos. `totalIncome` es un campo legado opcional y no
+  autoritativo; el total se deriva al leer.
 - `expenses`: egresos y ajustes.
 - `appointments`: agenda y ejecución de citas.
 - `settings`: configuración de negocio y dispositivo, incluyendo el método
@@ -37,9 +38,11 @@ El sistema separa estrictamente:
 - `incomeAdditionals` (PB-IS-0007): 0..N importes positivos ("Adicionales")
   vinculados a un ingreso vía `incomeId`. `additionalsTotal` conserva su
   snapshot informativo, pero los Adicionales no modifican `realGain` ni
-  `totalAmount`; se agregan al balance mediante `getStoredIncomeValue`. Se
-  eliminan en cascada cuando se borra el ingreso padre, a diferencia de los
-  ajustes en `expenses`, que bloquean ese borrado.
+  `totalAmount`; se agregan a Ingresos y balance general mediante
+  `getStoredIncomeValue`, y se excluyen de Ganancia mediante
+  `getStoredIncomePrincipalValue`. Se eliminan en cascada cuando se borra el
+  ingreso padre, a diferencia de los ajustes en `expenses`, que bloquean ese
+  borrado.
 
 ### Evolución reciente del esquema
 

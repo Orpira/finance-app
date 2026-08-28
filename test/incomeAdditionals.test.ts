@@ -7,15 +7,15 @@ import {
 } from '../src/utils/incomeAdditionals'
 
 describe('assertAdditionalAmountIsValid', () => {
-  it.each([0, 10, 250.5])('acepta %s (>= 0)', (amount) => {
+  it.each([10, 250.5])('acepta %s (> 0)', (amount) => {
     expect(() => assertAdditionalAmountIsValid(amount)).not.toThrow()
   })
 
-  it.each([-1, -0.01, Number.NaN, Number.POSITIVE_INFINITY])(
+  it.each([0, -1, -0.01, Number.NaN, Number.POSITIVE_INFINITY])(
     'rechaza %s',
     (amount) => {
       expect(() => assertAdditionalAmountIsValid(amount)).toThrow(
-        'El importe del adicional no puede ser negativo.',
+        'El importe del adicional debe ser mayor que cero.',
       )
     },
   )
@@ -40,7 +40,7 @@ describe('assertAllIncomeAdditionalsAreValid', () => {
     expect(() =>
       assertAllIncomeAdditionalsAreValid(incomes, [
         { incomeId: 1, amount: 10 },
-        { incomeId: 2, amount: 0 },
+        { incomeId: 2, amount: 5 },
       ]),
     ).not.toThrow()
   })
@@ -51,9 +51,9 @@ describe('assertAllIncomeAdditionalsAreValid', () => {
     ).toThrow(/ingreso inexistente/)
   })
 
-  it('lanza si un adicional tiene importe negativo', () => {
+  it('lanza si un adicional no tiene un importe positivo', () => {
     expect(() =>
       assertAllIncomeAdditionalsAreValid(incomes, [{ incomeId: 1, amount: -5 }]),
-    ).toThrow('El importe del adicional no puede ser negativo.')
+    ).toThrow('El importe del adicional debe ser mayor que cero.')
   })
 })

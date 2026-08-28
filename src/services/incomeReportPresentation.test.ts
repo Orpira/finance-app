@@ -94,6 +94,21 @@ describe('income report presentation', () => {
     expect(text).not.toContain('0 min')
   })
 
+  it('incluye los Adicionales en el importe del ingreso, no en la ganancia persistida', () => {
+    const options = {
+      incomes: [income({ additionalsTotal: 20 })],
+      primaryCurrency: 'EUR' as const,
+      usageMode: 'professional' as const,
+    }
+
+    const html = buildIncomeDateTableHtml(options)
+    const text = buildIncomeDateText(options)
+
+    expect(html).toContain('120,00 €')
+    expect(text).toContain('Importe original: 120,00 €')
+    expect(text).toContain('Importe convertido: 70,00 €')
+  })
+
   it('preserves mixed record identity, type, geography, currencies and metadata', () => {
     const records = [
       income({ id: 1 }),

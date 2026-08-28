@@ -105,7 +105,7 @@ export function IncomeAdditionalsSection({
                 </span>
                 <input
                   className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                  min={0}
+                  min={0.01}
                   onChange={(event) => setAmount(Number(event.target.value))}
                   step="0.01"
                   type="number"

@@ -49,6 +49,16 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Fixed
 
+- **Adicionales como Ingresos, no como Ganancia (ADR-033)**: separa la lectura
+  central del total de Ingresos (principal + Adicionales) y la Ganancia
+  principal. Inicio, Resumen completo, reportes, exportaciones y consultas de
+  transacciones incluyen Adicionales en Ingresos; Ganancia neta, Ahorro y Meta
+  los excluyen. El balance general conserva ese dinero. También se rechazan
+  Adicionales con importe cero, se conserva el importe en moneda original
+  cuando `realGain` es cero y `totalIncome` queda como campo legado no
+  autoritativo. Esta entrada sustituye únicamente las afirmaciones históricas
+  que propagaban Adicionales a Ganancia o Meta; no hay migración ni reescritura
+  de movimientos.
 - **Corrección financiera de Meta de temporada (PB-META-001 a PB-META-006)**:
   `service_duration` aplica una sola vez el porcentaje que corresponde a la
   profesional, tanto desde Agenda como desde el alta manual. Movimientos deja de

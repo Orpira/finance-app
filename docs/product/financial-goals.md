@@ -8,8 +8,8 @@ Campos: identificador local, tipo, nombre, importe, moneda, periodo mensual, ini
 
 ## Progreso determinista
 
-- ahorro: `max(ingresos - gastos, 0)`;
-- objetivo de ingreso: ingresos del periodo;
+- ahorro: `max(ganancia principal - gastos, 0)`, sin Adicionales;
+- objetivo de ingreso: principal más Adicionales del periodo;
 - límite de gasto: gastos consumidos del periodo.
 
 Los objetivos de ingreso/ahorro limitan la visualización al 100 % una vez alcanzados. El límite de gasto conserva porcentajes superiores al 100 % para declarar `limit_exceeded`. Los movimientos nunca se modifican.

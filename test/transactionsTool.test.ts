@@ -266,4 +266,28 @@ describe('financial_transactions tool — orden y seleccion (PB-IS-015.5-R2)', (
       expect(result.output.items.map((item) => item.amount)).toEqual([987.65, 123.45])
     }
   })
+
+  it('incluye los Adicionales en el registro y el total de Ingresos', async () => {
+    const { useCase } = createUseCase({
+      incomes: [
+        income({
+          id: 1,
+          date: '2026-07-20',
+          eurValue: 50,
+          additionalsTotal: 20,
+        }),
+      ],
+    })
+
+    const result = await useCase.execute(
+      baseRequest({ filters: { kinds: ['income'] } }),
+    )
+
+    expect(result.kind).toBe('success')
+    if (result.kind === 'success') {
+      expect(result.output.items[0]?.amount).toBe(70)
+      expect(result.output.summary.incomeTotal).toBe(70)
+      expect(result.output.summary.netTotal).toBe(70)
+    }
+  })
 })

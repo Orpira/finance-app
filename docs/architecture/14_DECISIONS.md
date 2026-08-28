@@ -61,10 +61,10 @@
 - Estado: aceptada (confirmada explícitamente con el propietario del proyecto ante ambigüedad de la especificación original).
 - Resultado: `realGain = workedHours × hourlyRate` para este método, sin recorte por `EarningPeriod.percentage`. El pago por hora ya es el 100% del ingreso final de la profesional, a diferencia de "Servicio por tiempo" (reparto vía `calculateStoredRealGain`).
 
-### D-012 Los Adicionales nunca se suman al registro del ingreso — solo al balance agregado
+### D-012 Los Adicionales nunca se suman al registro del ingreso
 
 - Estado: aceptada. **Supersede** una decisión anterior de esta misma sesión (`additionalsTotal` sumado a `realGain` del ingreso), revertida tras probar la funcionalidad en el navegador: mezclar Adicionales dentro de `realGain` generaba un total confuso en el listado de ingresos ("no debés sumar al total calculado los adicionales, ese total es solo de horas trabajadas").
-- Resultado: `ServiceIncome.realGain`/`totalAmount`/`totalIncome`/`eurValue`/`copValue`/etc. reflejan ÚNICAMENTE el trabajo realizado (servicio o jornada), calculados una sola vez al crear/editar el ingreso, y **nunca se recalculan** por agregar o quitar un Adicional — ni siquiera al crear el ingreso con adicionales ya cargados en el borrador. Solo `additionalsTotal` (campo propio) se mantiene al día. Los Adicionales se suman EXCLUSIVAMENTE a nivel de balance agregado, en el único punto central `getStoredIncomeValue` (`src/utils/financeStats.ts`) — de ahí se propaga automáticamente a Inicio, Ganancia, Reportes y exportaciones, sin tocar el registro individual del ingreso.
+- Resultado: `ServiceIncome.realGain`/`totalAmount`/`eurValue`/`copValue`/etc. reflejan ÚNICAMENTE el trabajo realizado (servicio o jornada), calculados una sola vez al crear/editar el ingreso, y **nunca se recalculan** por agregar o quitar un Adicional — ni siquiera al crear el ingreso con adicionales ya cargados en el borrador. Solo `additionalsTotal` (campo propio) se mantiene al día. Según ADR-033, `getStoredIncomeValue` suma los Adicionales para Ingresos y balance general; `getStoredIncomePrincipalValue` los excluye de Ganancia, Ahorro y Meta. `totalIncome` es legado no autoritativo.
 
 ### D-013 `totalAmount` reutilizado como "ingreso principal" en vez de una columna nueva
 

@@ -71,17 +71,17 @@ es informativa: no guarda el importe escrito ni modifica balances o registros.
 En modo Profesional, la tarjeta **Meta de la temporada** usa únicamente
 movimientos realizados de esa temporada. Presenta este desglose:
 
-- **Ingresos netos**: importes guardados después de aplicar el porcentaje, más
-  los Adicionales del balance agregado.
+- **Ingresos netos**: principal guardado después de aplicar el porcentaje, sin
+  Adicionales.
 - **Egresos**: gastos realizados de la temporada.
 - **Resultado**: ingresos netos menos egresos.
 - **Progreso**: resultado dividido entre la meta económica.
 
-Los ajustes se muestran por separado y no alteran la Meta. Un resultado negativo
-se conserva y puede producir progreso negativo. Si el resultado supera la meta,
-el porcentaje visible puede superar el 100 %, aunque la barra queda llena al
-100 %. Editar o eliminar un ingreso o egreso recalcula la tarjeta desde los
-registros locales; no modifica los movimientos históricos.
+Los Adicionales y los ajustes se muestran por separado y no alteran la Meta. Un
+resultado negativo se conserva y puede producir progreso negativo. Si el
+resultado supera la meta, el porcentaje visible puede superar el 100 %, aunque
+la barra queda llena al 100 %. Editar o eliminar un ingreso o egreso recalcula
+la tarjeta desde los registros locales; no modifica los movimientos históricos.
 
 ## 3. Registrar ingresos
 
@@ -132,7 +132,10 @@ Un Adicional es un importe positivo que complementa el ingreso principal (por ej
 - Al **registrar** un ingreso nuevo, marcá "Sí" en "¿Este ingreso tiene un adicional?" para que aparezca el formulario de Importe/Descripción antes de guardar.
 - Al **editar** un ingreso ya guardado, la sección "Adicionales" siempre está disponible: podés añadir o eliminar adicionales en cualquier momento (mientras el ingreso no esté reportado ni pertenezca a una temporada cerrada). También hay un acceso directo "Adicional" en el listado de `Ingresos`.
 - Al abrir el **detalle** de un ingreso profesional, incluso desde `Actividad reciente` de Inicio, se muestran por separado la descripción y el importe de cada Adicional existente.
-- El total de Adicionales de cada ingreso se muestra por separado en su tarjeta del listado. El balance de `Inicio` sí suma los Adicionales al calcular `Ganancia` (la tarjeta "Ingresos" los descuenta para no contarlos dos veces, y hay una tarjeta "Adicionales" propia con el total del mes).
+- El total de Adicionales de cada ingreso se muestra por separado en su tarjeta
+  del listado. En `Inicio`, la tarjeta **Ingresos** los incluye y la tarjeta
+  **Adicionales** los desglosa; no deben sumarse otra vez entre tarjetas. La
+  tarjeta **Ganancia** los excluye.
 
 El sistema calculará automáticamente:
 
@@ -176,9 +179,9 @@ La agenda permite administrar servicios futuros y convertir citas en ingresos:
 
 El `Dashboard` muestra un resumen mensual con:
 
-- ingresos totales
+- ingresos totales, incluidos los Adicionales
 - gastos totales
-- ganancia neta
+- ganancia neta, sin Adicionales
 - número de servicios
 - minutos trabajados
 

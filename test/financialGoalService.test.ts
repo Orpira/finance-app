@@ -58,6 +58,27 @@ describe('calculateFinancialGoalProgress', () => {
     expect(progress.state).toBe('limit_exceeded')
     expect(progress.remainingAmount).toBe(0)
   })
+
+  it('suma Adicionales a la meta de Ingresos, pero no a la meta de Ahorro', () => {
+    const incomes = [{ ...income(50), additionalsTotal: 20 }]
+    const expenses = [expense(10)]
+
+    const saving = calculateFinancialGoalProgress(
+      { ...baseGoal, type: 'saving' },
+      incomes,
+      expenses,
+      'COP',
+    )
+    const incomeTarget = calculateFinancialGoalProgress(
+      { ...baseGoal, type: 'income_target' },
+      incomes,
+      expenses,
+      'COP',
+    )
+
+    expect(saving.currentAmount).toBe(40)
+    expect(incomeTarget.currentAmount).toBe(70)
+  })
 })
 
 describe('createFinancialGoalService', () => {

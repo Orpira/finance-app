@@ -7,6 +7,7 @@ import { listServiceIncomes, type ServiceIncomeListOptions } from '../../../serv
 import type { Expense } from '../../../types/expense'
 import type { ServiceIncome } from '../../../types/service'
 import type { AppSettings, CurrencyCode } from '../../../types/settings'
+import { getStoredIncomeValue } from '../../../utils/financeStats'
 import { isAdjustmentIncome } from '../../../utils/incomeTypes'
 import { recordBelongsToUsageMode } from '../../../utils/usageMode'
 import {
@@ -185,7 +186,7 @@ function normalizeTransactionArguments(
 }
 
 function mapIncomeToTransaction(income: ServiceIncome, currency: CurrencyCode): UnifiedTransactionRecord {
-  const amount = currency === 'COP' ? income.copValue : income.eurValue
+  const amount = getStoredIncomeValue(income, currency)
   const kind: FinancialTransactionKind = isAdjustmentIncome(income) ? 'adjustment' : 'income'
 
   return {

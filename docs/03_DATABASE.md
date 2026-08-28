@@ -34,7 +34,7 @@ La base FinanceDB está definida en src/database/db.ts y llega actualmente a la 
 
 ### Finalidad de tablas clave
 
-- services: ingresos y servicios completados. Desde PB-IS-0007 (v29) cada ingreso de tipo servicio guarda además el método de cálculo usado (`incomeCalculationMethod`), snapshot inmutable, y los parámetros con los que se calculó (`hourlyRateApplied`, `workedTime`/`workedTimeUnit`, `additionalsTotal`, `totalIncome`).
+- services: ingresos y servicios completados. Desde PB-IS-0007 (v29) cada ingreso de tipo servicio guarda además el método de cálculo usado (`incomeCalculationMethod`), snapshot inmutable, y los parámetros con los que se calculó (`hourlyRateApplied`, `workedTime`/`workedTimeUnit`, `additionalsTotal`). `totalIncome` puede existir en registros históricos, pero no es autoritativo ni se escribe en altas nuevas.
 - expenses: egresos y ajustes.
 - appointments: agenda y citas.
 - settings: configuración global del negocio y del dispositivo. Desde PB-IS-0007 (v29) incluye el método de cálculo del ingreso por defecto, la unidad de tiempo y el valor por hora.
@@ -49,7 +49,7 @@ La base FinanceDB está definida en src/database/db.ts y llega actualmente a la 
 - knowledgeDocuments / knowledgeChunks: material de conocimiento indexado para el Copiloto IA.
 - financialSnapshots: artefactos Financial Snapshot sellados, persistidos de forma local y append-only; no forma parte del libro financiero operativo.
 - knowledgeSnapshots: artefactos Knowledge Snapshot sellados, persistidos localmente de forma transaccional, append-only e idempotente; no forma parte del libro financiero operativo.
-- incomeAdditionals: entidad "Adicional" (PB-IS-0007) — 0..N importes positivos vinculados a un ingreso vía `incomeId`, que se suman íntegros (100%, nunca sujetos al % de temporada) al `realGain` final. Se eliminan en cascada cuando se borra el ingreso padre, a diferencia de los ajustes en `expenses`, que bloquean ese borrado.
+- incomeAdditionals: entidad "Adicional" (PB-IS-0007) — 0..N importes estrictamente positivos vinculados a un ingreso vía `incomeId`. Se suman íntegros (100%, nunca sujetos al % de temporada) a Ingresos y balance general, pero no a `realGain`, Ganancia neta, Ahorro ni Meta. Se eliminan en cascada cuando se borra el ingreso padre, a diferencia de los ajustes en `expenses`, que bloquean ese borrado.
 - financialGoals: objetivos financieros locales con tipo, estado, fechas y marca de actualización.
 
 ### Financial Snapshot local (v23)
@@ -88,7 +88,7 @@ Knowledge Shadow Mode no crea UI, no altera Home ni Reports, no promueve Knowled
 
 `incomeAdditionals` usa `id` autoincremental como clave primaria, con índices `incomeId` y `createdAt`. Cada fila representa un importe positivo ("Adicional") vinculado a un ingreso de `services` vía `incomeId`, con `amount`, `description` opcional y timestamps.
 
-La migración v29 es 100% aditiva: no modifica ningún registro existente de `services`. Los campos nuevos de `ServiceIncome` (`incomeCalculationMethod`, `additionalsTotal`, `totalIncome`, `workedTime`, `workedTimeUnit`, `workedHours`, `hourlyRateApplied`, `timerUsed`) son opcionales y se resuelven con fallback (`?? 'service_duration'`) en tiempo de lectura, por lo que los ingresos históricos no requieren backfill. El `.upgrade()` de la migración solo inicializa `settings.incomeCalculationMethod`/`hourlyRate`/`workedTimeUnit` con sus valores por defecto (`'service_duration'`/`0`/`'minutes'`) si el usuario no tenía ninguno configurado.
+La migración v29 es 100% aditiva: no modifica ningún registro existente de `services`. Los campos nuevos de `ServiceIncome` (`incomeCalculationMethod`, `additionalsTotal`, `totalIncome`, `workedTime`, `workedTimeUnit`, `workedHours`, `hourlyRateApplied`, `timerUsed`) son opcionales y se resuelven en tiempo de lectura, por lo que los ingresos históricos no requieren backfill. Desde ADR-033, `totalIncome` se conserva solo para compatibilidad y no participa en agregados: el total de Ingresos se deriva de los snapshots principales más `additionalsTotal`. El `.upgrade()` de la migración solo inicializa `settings.incomeCalculationMethod`/`hourlyRate`/`workedTimeUnit` con sus valores por defecto (`'service_duration'`/`0`/`'minutes'`) si el usuario no tenía ninguno configurado.
 
 `resetDatabase()`, `exportDatabaseSnapshot()`/`importDatabaseSnapshot()` y la cadena de backup (`generateBackupData`/`backupDataToSnapshot`) incluyen `incomeAdditionals`. La importación de un backup con un `incomeAdditional` que referencia un `incomeId` inexistente se rechaza entera antes de limpiar datos locales (`assertAllIncomeAdditionalsAreValid`, fail-closed), igual que ya ocurre con los ajustes de `expenses`.
 

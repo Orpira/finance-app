@@ -77,7 +77,14 @@ beforeEach(() => {
 describe('addIncomeAdditional', () => {
   it('rechaza un importe negativo sin llegar a persistir nada', async () => {
     await expect(addIncomeAdditional(1, { amount: -5 })).rejects.toThrow(
-      'El importe del adicional no puede ser negativo.',
+      'El importe del adicional debe ser mayor que cero.',
+    )
+    expect(incomeAdditionalsTable.add).not.toHaveBeenCalled()
+  })
+
+  it('rechaza un importe cero sin llegar a persistir nada', async () => {
+    await expect(addIncomeAdditional(1, { amount: 0 })).rejects.toThrow(
+      'El importe del adicional debe ser mayor que cero.',
     )
     expect(incomeAdditionalsTable.add).not.toHaveBeenCalled()
   })

@@ -8,8 +8,8 @@
 - Los ajustes deben quedar visibles como ajustes.
 - Los ajustes positivos suman al balance y los negativos restan.
 - La meta económica de una temporada mide el resultado realizado:
-  `ingresos netos realizados - egresos realizados`. Los ajustes no forman parte
-  de este cálculo y permanecen separados.
+  `ganancia principal realizada - egresos realizados`. Los Adicionales y los
+  ajustes no forman parte de este cálculo y permanecen separados.
 - El progreso de la meta es `resultado / meta * 100`. Puede ser negativo o
   superar el 100 %; únicamente la barra visual se limita al intervalo 0–100 %.
 
@@ -106,12 +106,14 @@
   al crearlo como después. Solo el campo `additionalsTotal` se mantiene al
   día al agregar/quitar un Adicional; el resto del registro (incluidos los
   valores convertidos a otras monedas) nunca se recalcula por esa causa. Los
-  Adicionales se suman exclusivamente a nivel de **balance agregado**
-  (Inicio, Ganancia, Reportes, exportaciones), en el punto central
+  Adicionales se suman exclusivamente a métricas de **Ingresos** y balance
+  general (Inicio, reportes, exportaciones y consultas), en el punto central
   `getStoredIncomeValue` (`src/utils/financeStats.ts`) — nunca dentro del
-  registro individual. No son un movimiento financiero independiente: se
-  eliminan en cascada si se borra el ingreso al que pertenecen (a diferencia
-  de los ajustes, que bloquean ese borrado).
+  registro individual ni de una métrica de Ganancia. Ganancia real usa solo el
+  principal; Ganancia neta, Ahorro y Meta usan principal menos egresos. No son
+  un movimiento financiero independiente: se eliminan en cascada si se borra
+  el ingreso al que pertenecen (a diferencia de los ajustes, que bloquean ese
+  borrado). Ver ADR-033.
 - "Jornada por horas" tampoco captura ni persiste ningún porcentaje de
   temporada (`percentage`/`earningPercentage` quedan en `0`): ese % no aplica
   a este método bajo ninguna circunstancia.

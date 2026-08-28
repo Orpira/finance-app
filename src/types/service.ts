@@ -95,7 +95,7 @@ export interface ServiceIncome {
   /** Suma cacheada de los IncomeAdditional vinculados. */
   additionalsTotal?: number;
 
-  /** totalAmount + additionalsTotal ("Total del ingreso" bruto). */
+  /** Legado no autoritativo; los totales se derivan de totalAmount + additionalsTotal. */
   totalIncome?: number;
 
   /** Solo 'hourly_workday': tiempo trabajado tal cual lo tecleó la usuaria, en workedTimeUnit. */

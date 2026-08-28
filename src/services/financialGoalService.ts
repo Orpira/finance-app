@@ -46,7 +46,7 @@ export function calculateFinancialGoalProgress(
     secondaryCurrency,
   )
   const currentAmount = roundMoney(goal.type === 'saving'
-    ? Math.max(totals.primaryIncome - totals.primaryExpenses, 0)
+    ? Math.max(totals.primaryNet, 0)
     : goal.type === 'income_target'
       ? totals.primaryIncome
       : totals.primaryExpenses)

@@ -68,6 +68,16 @@ describe('buildIncomeExportRows', () => {
 
     expect(rows[0].type).toBe('Jornada por horas')
   })
+
+  it('incluye los Adicionales en el monto exportado como Ingreso', () => {
+    const rows = buildIncomeExportRows(
+      [income({ additionalsTotal: 20 })],
+      'EUR',
+      'professional',
+    )
+
+    expect(rows[0].amount).toBe(70)
+  })
 })
 
 describe('buildIncomeCsv', () => {

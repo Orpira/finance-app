@@ -3,7 +3,7 @@
 **Estado:** implementación y validación automatizada completadas; validación física pendiente  
 **Fecha:** 2026-08-27  
 **Alcance autorizado:** PB-META-001 a PB-META-006  
-**Decisión normativa:** [ADR-032](../adr/ADR-032-SEASON-GOAL-REALIZED-NET-RESULT.md)
+**Decisión normativa:** [ADR-032](../adr/ADR-032-SEASON-GOAL-REALIZED-NET-RESULT.md), con la regla de Adicionales sustituida por [ADR-033](../adr/ADR-033-ADDITIONALS-INCOME-NOT-PROFIT.md)
 
 ## Veredicto
 
@@ -29,10 +29,11 @@ produce 0; la opción "No aplica porcentaje" persiste 100 %. El método
 `hourly_workday` conserva su regla independiente y no aplica porcentaje de
 temporada.
 
-Los Adicionales se incorporan únicamente al agregado mediante el valor almacenado
-del ingreso. Los ajustes de ingreso y egreso permanecen separados y no forman
-parte del resultado de Meta. El porcentaje matemático puede ser negativo o
-superior a 100 %; sólo la barra visual se limita a 0–100 %.
+Los Adicionales se incorporan al agregado de Ingresos mediante el valor
+almacenado, pero desde ADR-033 se excluyen del resultado de Meta y de toda
+métrica de Ganancia. Los ajustes de ingreso y egreso permanecen separados y no
+forman parte del resultado de Meta. El porcentaje matemático puede ser negativo
+o superior a 100 %; sólo la barra visual se limita a 0–100 %.
 
 ## Causas raíz
 

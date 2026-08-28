@@ -119,7 +119,12 @@ Los Adicionales **no** son un input del motor de cálculo ni se suman a `realGai
 flowchart LR
     G["ServiceIncome.realGain (solo trabajo, inmutable ante Adicionales)"] --> H["getStoredIncomeValue()"]
     I["ServiceIncome.additionalsTotal"] -->|"convertido proporcionalmente"| H
-    H --> J["Inicio · Ganancia · Reportes · Exportaciones"]
+    H --> J["Ingresos · Balance general · Reportes · Exportaciones"]
+    G --> K["getStoredIncomePrincipalValue()"]
+    K --> L["Ganancia · Ahorro · Meta"]
 ```
 
-`getStoredIncomeValue` (`src/utils/financeStats.ts`) es el único punto donde ambos se suman, exclusivamente para agregados de balance — nunca se persiste ese resultado combinado sobre el ingreso individual.
+`getStoredIncomeValue` (`src/utils/financeStats.ts`) es el único punto donde
+ambos se suman, exclusivamente para Ingresos y balance general. Ganancia usa
+`getStoredIncomePrincipalValue`; el resultado combinado nunca se persiste sobre
+el ingreso individual. Ver ADR-033.

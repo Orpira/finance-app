@@ -243,6 +243,7 @@ export function FullSummaryPage() {
 
   const primaryIncome = totals.primaryIncome
   const secondaryIncome = totals.secondaryIncome
+  const primaryGain = totals.primaryGain
   const primaryExpenses = totals.primaryExpenses
   const netProfit = totals.primaryNet
   const activePercentage = activePeriod?.percentage ?? settings.incomePercentage
@@ -424,7 +425,7 @@ export function FullSummaryPage() {
             />
           </div>
           <p className="mt-3 text-2xl font-semibold text-slate-950">
-            <SensitiveAmount hidden={hidden} value={formatCurrency(primaryIncome, primaryCurrency)} />
+            <SensitiveAmount hidden={hidden} value={formatCurrency(primaryGain, primaryCurrency)} />
           </p>
           <p className="mt-1 text-sm text-slate-500">
             período activo: {activePeriod?.name ?? 'Actual'}

@@ -98,13 +98,13 @@ describe('assertIncomeCalculationInputIsValid', () => {
 })
 
 describe('assertAdditionalAmountIsValid', () => {
-  it.each([0, 10, 99.5])('acepta %s', (amount) => {
+  it.each([10, 99.5])('acepta %s', (amount) => {
     expect(() => assertAdditionalAmountIsValid(amount)).not.toThrow()
   })
 
-  it('rechaza montos negativos', () => {
-    expect(() => assertAdditionalAmountIsValid(-1)).toThrow(
-      'El importe del adicional no puede ser negativo.',
+  it.each([0, -1])('rechaza %s', (amount) => {
+    expect(() => assertAdditionalAmountIsValid(amount)).toThrow(
+      'El importe del adicional debe ser mayor que cero.',
     )
   })
 })

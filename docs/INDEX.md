@@ -93,6 +93,7 @@ Si hay conflicto entre documentos:
 - [ADR-024 — AI Conversation Integration](./adr/ADR-024-AI-Conversation-Integration.md)
 - [ADR-025 — AI Provider Production Activation](./adr/ADR-025-AI-Provider-Production-Activation.md)
 - [ADR-032 — Season Goal Uses Realized Net Result](./adr/ADR-032-SEASON-GOAL-REALIZED-NET-RESULT.md)
+- [ADR-033 — Adicionales cuentan como Ingresos, no como Ganancia](./adr/ADR-033-ADDITIONALS-INCOME-NOT-PROFIT.md)
 - [AI Interaction Domain](./domains/ai-interaction/README.md)
 - [AI Conversation Domain](./domains/ai-conversation/README.md)
 - [Prompt Builder Domain](./domains/prompt-builder/README.md)

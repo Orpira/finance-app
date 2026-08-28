@@ -63,6 +63,18 @@ describe('calculateSeasonFinancialResult', () => {
     })
   })
 
+  it('excluye los Adicionales de la Ganancia y del resultado de Meta', () => {
+    const result = calculateSeasonFinancialResult({
+      incomes: [income({ realGain: 50, eurValue: 50, baseCurrencyValue: 50, additionalsTotal: 20 })],
+      expenses: [expense()],
+      currency: 'EUR',
+      usageMode: 'professional',
+      earningPeriodId: 7,
+    })
+
+    expect(result).toEqual({ netIncome: 50, expenses: 10, result: 40 })
+  })
+
   it('aísla modo y temporada y no colapsa ajustes en ingresos o egresos', () => {
     const result = calculateSeasonFinancialResult({
       incomes: [

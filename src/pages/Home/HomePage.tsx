@@ -40,7 +40,7 @@ import type { Appointment } from '../../types/appointment'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
-import { formatCurrency, roundMoney } from '../../utils/currency'
+import { formatCurrency } from '../../utils/currency'
 import { calculateFinancialTotals, recordBelongsToEarningPeriod, sumIncomeAdditionalsValue } from '../../utils/financeStats'
 import { getIncomeCompactLabel } from '../../utils/incomeTypes'
 import { getActiveEarningPeriod, getSeasonGoalProgress, getSeasonStatistics, type SeasonStatistics } from '../../services/earningPeriodService'
@@ -453,10 +453,8 @@ export function HomePage() {
     {
       icon: PlusCircle,
       label: 'Ingresos',
-      // additionalsTotal se muestra aparte en la tarjeta "Adicionales": no se
-      // suma acá para no mostrar el mismo dinero contado dos veces.
-      value: roundMoney(totals.current.primaryIncome - currentAdditionalsTotal),
-      previous: roundMoney(totals.previous.primaryIncome - previousAdditionalsTotal),
+      value: totals.current.primaryIncome,
+      previous: totals.previous.primaryIncome,
       sensitive: true,
       tone: 'text-emerald-700 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300',
     },

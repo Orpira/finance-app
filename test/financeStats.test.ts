@@ -49,10 +49,10 @@ describe('getStoredAdditionalsValue', () => {
     expect(getStoredAdditionalsValue(income({ additionalsTotal: undefined }), 'EUR')).toBe(0)
   })
 
-  it('devuelve 0 sin lanzar cuando realGain es 0 (no se puede derivar la proporción)', () => {
+  it('conserva el adicional en la moneda original cuando la ganancia del servicio es 0', () => {
     expect(
       getStoredAdditionalsValue(income({ realGain: 0, additionalsTotal: 20 }), 'EUR'),
-    ).toBe(0)
+    ).toBe(20)
   })
 })
 
@@ -99,6 +99,33 @@ describe('getStoredIncomeValue', () => {
         'USD',
       ),
     ).toBe(30)
+  })
+})
+
+describe('calculateFinancialTotals', () => {
+  it('suma Adicionales en Ingresos pero los excluye de Ganancia', async () => {
+    const { calculateFinancialTotals } = await import('../src/utils/financeStats')
+    const totals = calculateFinancialTotals(
+      [income()],
+      [{
+        type: 'gasto',
+        date: '2026-01-01',
+        category: 'General',
+        amount: 10,
+        currency: 'EUR',
+        eurValue: 10,
+        copValue: 43000,
+        baseCurrency: 'EUR',
+        baseCurrencyValue: 10,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }],
+      'EUR',
+      'COP',
+    )
+
+    expect(totals.primaryIncome).toBe(70)
+    expect(totals.primaryGain).toBe(50)
+    expect(totals.primaryNet).toBe(40)
   })
 })
 

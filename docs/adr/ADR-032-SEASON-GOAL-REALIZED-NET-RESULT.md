@@ -1,9 +1,13 @@
 # ADR-032 - Season Goal Uses Realized Net Result
 
-Estado: Accepted  
+Estado: Superseded in part by ADR-033
 Version: 1.0  
 Fecha: 2026-08-27  
 Autorización: explícita del propietario para PB-META-001 a PB-META-006
+
+La regla de porcentaje, egresos y progreso permanece aceptada. ADR-033 sustituye
+desde 2026-08-28 únicamente la inclusión de Adicionales en el resultado de Meta:
+ahora cuentan como Ingresos, pero no como Ganancia ni Meta.
 
 ## Problema
 
@@ -33,18 +37,19 @@ resultado = ingresos netos realizados - egresos realizados
 progreso = resultado / meta económica * 100
 ```
 
-Los Adicionales forman parte únicamente del agregado de ingresos mediante el
-valor almacenado. Los ajustes de ingreso y egreso permanecen separados y no
-forman parte del resultado de Meta. El progreso matemático puede ser negativo o
-superior al 100 %; sólo la barra visual se limita a 0–100 %.
+Los Adicionales forman parte del agregado de Ingresos mediante el valor
+almacenado. Conforme a ADR-033, se excluyen del resultado de Meta. Los ajustes de
+ingreso y egreso permanecen separados y tampoco forman parte de ese resultado.
+El progreso matemático puede ser negativo o superior al 100 %; sólo la barra
+visual se limita a 0–100 %.
 
 ## Consecuencias
 
 - Agenda y alta manual de `service_duration` usan el mismo Strategy de cálculo.
 - Inicio, Movimientos, Temporadas y Reportes consumen snapshots monetarios
   persistidos y no recalculan tasas históricas.
-- Un movimiento individual presenta su neto principal; los Adicionales se suman
-  sólo en agregados, conforme al contrato existente.
+- Un movimiento individual presenta su principal y los Adicionales por separado;
+  los agregados de Ingresos los suman y los de Ganancia los excluyen.
 - Editar o eliminar un ingreso o egreso cambia el derivado de Meta sin persistir
   un acumulado paralelo.
 - El aislamiento por modo y temporada es fail-closed. Los registros históricos

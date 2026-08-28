@@ -2,7 +2,11 @@ import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
 import type { CurrencyCode } from '../types/settings'
 import { roundMoney } from '../utils/currency'
-import { getStoredExpenseValue, getStoredIncomeValue } from '../utils/financeStats'
+import {
+  getStoredExpenseValue,
+  getStoredIncomePrincipalValue,
+  getStoredIncomeValue,
+} from '../utils/financeStats'
 import {
   getIncomeType,
   getIncomeTypeLabel,
@@ -87,6 +91,7 @@ export function buildBalanceReport(input: BuildBalanceReportInput): BalanceRepor
   const expenseAdjustments: BalanceAdjustmentRecord[] = []
 
   let incomeGrossTotal = 0
+  let incomePrincipalTotal = 0
   let expenseTotal = 0
   let adjustmentsPositiveTotal = 0
   let adjustmentsNegativeTotal = 0
@@ -117,6 +122,9 @@ export function buildBalanceReport(input: BuildBalanceReportInput): BalanceRepor
     }
 
     incomeGrossTotal = roundMoney(incomeGrossTotal + value)
+    incomePrincipalTotal = roundMoney(
+      incomePrincipalTotal + getStoredIncomePrincipalValue(income, input.currency),
+    )
   }
 
   for (const expense of input.expenses) {
@@ -156,8 +164,10 @@ export function buildBalanceReport(input: BuildBalanceReportInput): BalanceRepor
   })
 
   const adjustmentImpactTotal = roundMoney(adjustmentsPositiveTotal - adjustmentsNegativeTotal)
-  const netProfit = roundMoney(incomeGrossTotal - expenseTotal)
-  const generalBalance = roundMoney(netProfit + adjustmentImpactTotal)
+  const netProfit = roundMoney(incomePrincipalTotal - expenseTotal)
+  const generalBalance = roundMoney(
+    incomeGrossTotal - expenseTotal + adjustmentImpactTotal,
+  )
 
   return {
     incomeGrossTotal,

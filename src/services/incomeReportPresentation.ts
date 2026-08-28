@@ -48,7 +48,7 @@ function countryLabel(code?: string) {
 
 function originalAmount(income: ServiceIncome) {
   return formatCurrency(
-    income.totalIncome ?? income.totalAmount,
+    income.totalAmount + (income.additionalsTotal ?? 0),
     income.currency as CurrencyCode,
   )
 }
