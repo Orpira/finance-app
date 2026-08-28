@@ -82,16 +82,12 @@ export function getIncomeRegistrationTypeLabel(method: IncomeCalculationMethod) 
 export function getIncomePaymentTypeLabel(
   income: Pick<ServiceIncome, 'incomeCalculationMethod' | 'paymentType'>,
 ) {
-  return income.incomeCalculationMethod === 'hourly_workday'
-    ? 'No aplica'
-    : getPaymentTypeLabel(income.paymentType)
+  return getPaymentTypeLabel(income.paymentType)
 }
 
 export function getIncomeCompactLabel(
   income: Pick<ServiceIncome, 'type' | 'incomeCalculationMethod' | 'paymentType'>,
 ) {
   const typeLabel = getIncomeTypeLabel(income)
-  return income.incomeCalculationMethod === 'hourly_workday'
-    ? typeLabel
-    : `${typeLabel} · ${getIncomePaymentTypeLabel(income)}`
+  return `${typeLabel} · ${getIncomePaymentTypeLabel(income)}`
 }

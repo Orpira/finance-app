@@ -28,14 +28,14 @@ describe('getIncomeTypeLabel', () => {
     expect(getIncomeRegistrationTypeLabel('service_duration')).toBe('Servicio')
   })
 
-  it('presenta el tipo de pago como no aplicable para una jornada', () => {
+  it('presenta el tipo de pago real de una jornada, igual que un servicio', () => {
     const workday = {
       type: 'ingreso' as const,
       incomeCalculationMethod: 'hourly_workday' as const,
       paymentType: 'cash',
     }
 
-    expect(getIncomePaymentTypeLabel(workday)).toBe('No aplica')
-    expect(getIncomeCompactLabel(workday)).toBe('Jornada por horas')
+    expect(getIncomePaymentTypeLabel(workday)).toBe('Efectivo')
+    expect(getIncomeCompactLabel(workday)).toBe('Jornada por horas · Efectivo')
   })
 })

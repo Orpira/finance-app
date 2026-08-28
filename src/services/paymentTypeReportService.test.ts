@@ -21,13 +21,13 @@ function income(overrides: Partial<ServiceIncome>): ServiceIncome {
 }
 
 describe('groupReportableIncomesByPaymentType', () => {
-  it('agrupa una Jornada como No aplica aunque tenga un método histórico', () => {
+  it('agrupa una Jornada con su tipo de pago real, igual que un Servicio', () => {
     const grouped = groupReportableIncomesByPaymentType([
       income({ incomeCalculationMethod: 'hourly_workday', paymentType: 'transfer' }),
     ])
 
-    expect(grouped.get('No aplica')).toHaveLength(1)
-    expect(grouped.has('Transferencia')).toBe(false)
+    expect(grouped.get('Transferencia')).toHaveLength(1)
+    expect(grouped.has('No aplica')).toBe(false)
   })
 
   it('mantiene un Servicio con transferencia bajo Transferencia', () => {

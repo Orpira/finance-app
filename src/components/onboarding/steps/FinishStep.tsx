@@ -8,9 +8,10 @@ interface FinishStepProps {
   currentStep: number
   isBusy: boolean
   onFinish: (openBackup: boolean) => void
+  onBack?: () => void
 }
 
-export function FinishStep({ currentStep, isBusy, onFinish }: FinishStepProps) {
+export function FinishStep({ currentStep, isBusy, onFinish, onBack }: FinishStepProps) {
   const [backupRequested, setBackupRequested] = useState(false)
 
   useEffect(() => {
@@ -21,6 +22,7 @@ export function FinishStep({ currentStep, isBusy, onFinish }: FinishStepProps) {
 
   return (
     <OnboardingLayout
+      backDisabled={isBusy}
       currentStep={currentStep}
       description="Private Balance está listo para utilizarse."
       footer={
@@ -35,6 +37,7 @@ export function FinishStep({ currentStep, isBusy, onFinish }: FinishStepProps) {
           )}
         </>
       }
+      onBack={onBack}
       title="Configuración completada"
     >
       <CheckCircle2 className="mx-auto size-16 text-emerald-700" aria-hidden="true" />

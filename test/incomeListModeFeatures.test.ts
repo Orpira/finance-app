@@ -42,6 +42,7 @@ describe('income reporting visibility', () => {
       showSelectionSummary: true,
       showIndividualSelection: true,
       showReportBadge: true,
+      showMarkAsReportedAction: true,
     })
   })
 
@@ -58,6 +59,7 @@ describe('income reporting visibility', () => {
       showSelectionSummary: false,
       showIndividualSelection: false,
       showReportBadge: false,
+      showMarkAsReportedAction: false,
     })
   })
 
@@ -67,6 +69,14 @@ describe('income reporting visibility', () => {
       canReport: true,
       isReported: true,
     }).showReportBadge).toBe(true)
+  })
+
+  it('oculta el botón "Marcar como reportado" al desactivar la preferencia, aunque el registro sea reportable', () => {
+    expect(getIncomeReportingVisibility({
+      showUnreportedIncome: false,
+      canReport: true,
+      isReported: false,
+    }).showMarkAsReportedAction).toBe(false)
   })
 
   it('no oculta el estado operacional Finalizado en modo profesional', () => {

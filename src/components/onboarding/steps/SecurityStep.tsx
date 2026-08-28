@@ -9,9 +9,10 @@ import { OnboardingLayout } from '../OnboardingLayout'
 interface SecurityStepProps {
   currentStep: number
   onNext: (backupRequested: boolean) => void | Promise<void>
+  onBack?: () => void
 }
 
-export function SecurityStep({ currentStep, onNext }: SecurityStepProps) {
+export function SecurityStep({ currentStep, onNext, onBack }: SecurityStepProps) {
   const [pinAlreadyConfigured, setPinAlreadyConfigured] = useState<boolean | null>(null)
   const [pin, setPinValue] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
@@ -58,7 +59,7 @@ export function SecurityStep({ currentStep, onNext }: SecurityStepProps) {
 
   if (pinAlreadyConfigured === null) {
     return (
-      <OnboardingLayout currentStep={currentStep} footer={null} title="Seguridad">
+      <OnboardingLayout currentStep={currentStep} footer={null} onBack={onBack} title="Seguridad">
         <p className="text-center text-sm text-slate-500 dark:text-slate-400">Cargando...</p>
       </OnboardingLayout>
     )
@@ -78,6 +79,7 @@ export function SecurityStep({ currentStep, onNext }: SecurityStepProps) {
             Continuar
           </button>
         }
+        onBack={onBack}
         title="Seguridad lista"
       >
         <div className="flex justify-center">
@@ -91,6 +93,7 @@ export function SecurityStep({ currentStep, onNext }: SecurityStepProps) {
 
   return (
     <OnboardingLayout
+      backDisabled={isSaving}
       currentStep={currentStep}
       description="Protege el acceso a tus datos con un PIN. El desbloqueo biométrico no está disponible todavía en esta versión."
       footer={
@@ -113,6 +116,7 @@ export function SecurityStep({ currentStep, onNext }: SecurityStepProps) {
           </button>
         </>
       }
+      onBack={onBack}
       title="Configura tu PIN"
     >
       <form

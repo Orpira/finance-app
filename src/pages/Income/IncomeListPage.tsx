@@ -956,7 +956,7 @@ export function IncomeListPage() {
                           <Plus className="size-4" aria-hidden="true" />
                         </Link>
                       )}
-                      {canReport && <button
+                      {reportingVisibility.showMarkAsReportedAction && <button
                         aria-label="Marcar como reportado"
                         className="inline-flex size-10 items-center justify-center rounded-md border border-emerald-200 text-emerald-700 transition hover:bg-emerald-50"
                         onClick={() => handleRequestMarkAsReported(income)}

@@ -64,7 +64,10 @@ function normalizePaymentTypeForMethod<T extends CreateServiceIncomeInput>(input
   if (shouldCollectPaymentTypeAtRegistration(input.incomeCalculationMethod ?? 'service_duration')) {
     return input
   }
-  return { ...input, paymentType: undefined }
+  // "Jornada por horas" no solicita el tipo de pago en el formulario, pero se
+  // persiste "Efectivo" por defecto para que listados y reportes por tipo de
+  // pago no traten la jornada como un caso especial sin tipo de pago.
+  return { ...input, paymentType: input.paymentType ?? 'cash' }
 }
 
 export async function createServiceIncome(input: CreateServiceIncomeInput) {
@@ -228,9 +231,10 @@ export async function updateServiceIncome(
     // sección 9): editar Configuración nunca debe alterar ingresos históricos.
     const safeUpdates: UpdateServiceIncomeInput = { ...updates }
     delete safeUpdates.incomeCalculationMethod
-    if (latestIncome.incomeCalculationMethod === 'hourly_workday') {
-      delete safeUpdates.paymentType
-    } else if (safeUpdates.paymentType === undefined) {
+    // El tipo de pago se puede modificar al editar, en "Jornada por horas"
+    // igual que en "Servicio por tiempo"; si no se envía, se conserva el
+    // valor existente en vez de borrarlo.
+    if (safeUpdates.paymentType === undefined) {
       delete safeUpdates.paymentType
     }
 

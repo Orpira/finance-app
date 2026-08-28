@@ -89,16 +89,26 @@
   manual y aplica el porcentaje de temporada una sola vez. El ingreso conserva
   sus snapshots monetarios; ningún agregado recalcula tasas históricas.
 - `service_duration` recopila el tipo de pago al registrar el ingreso.
-  `hourly_workday` no lo solicita ni lo persiste, porque la jornada puede
-  liquidarse después de su registro. Al editar una jornada histórica se
-  conserva cualquier tipo de pago legado sin reescribirlo.
+  `hourly_workday` no lo solicita en el formulario al crearse, pero se
+  persiste con el valor por defecto `cash` ("Efectivo") para que listados,
+  detalle y reportes por tipo de pago lo traten igual que un servicio, sin
+  un caso especial de "No aplica". Al **editar** un ingreso ya guardado, el
+  tipo de pago se puede modificar igual en `hourly_workday` que en
+  `service_duration`; si la edición no lo vuelve a enviar, se conserva el
+  valor existente sin reescribirlo.
+- El flujo Pendiente/Reportado (`canMarkAsReported`,
+  `src/utils/reportStatus.ts`) se comporta igual para `service_duration` y
+  `hourly_workday`: cualquier ingreso profesional de tipo servicio es
+  reportable, sin distinción por método de cálculo. Un usuario puede combinar
+  ambos métodos en la misma temporada y ambos requieren el mismo seguimiento
+  de reporte.
 - La interfaz presenta este selector como **Tipo de registro**. Para
   `service_duration` usa "Servicio"; para `hourly_workday`, "Jornada" en el
   formulario y "Jornada por horas" en listados, detalle, movimientos,
   reportes y exportaciones. Esta distinción deriva de
   `incomeCalculationMethod`: el campo persistido `type` conserva su contrato y
-  no se migran registros históricos. En una jornada, el tipo de pago se
-  presenta como "No aplica" en tablas y se omite en etiquetas compactas.
+  no se migran registros históricos. El tipo de pago de una jornada se
+  presenta y agrupa en reportes igual que en un servicio (ver regla anterior).
 - Un ingreso puede tener 0..N **Adicionales** (importes positivos que
   complementan el ingreso, nunca negativos, sin tope). **Nunca se suman al
   `realGain`/`totalAmount` del ingreso**: el registro del ingreso refleja

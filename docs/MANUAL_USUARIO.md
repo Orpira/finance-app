@@ -113,11 +113,15 @@ Si en Configuración elegiste "Jornada por horas", el formulario ya no pide dura
 3. Ingresa el **Tiempo trabajado** en horas, con incrementos de 0,25 horas.
 4. El cálculo usa el **Valor por hora** indicado en el asistente inicial o actualizado después en Configuración. El formulario del ingreso no modifica ese valor; cada ingreso conserva una copia de la tarifa aplicada.
 5. El sistema calcula automáticamente el **Total calculado** (tiempo trabajado × valor por hora). No hay cronómetro ni importe manual en este método.
-6. No se solicita tipo de pago al registrar la jornada, ya que puede liquidarse al final de la temporada o en una fecha posterior.
+6. No se solicita tipo de pago en el formulario; la jornada se registra
+   automáticamente con "Efectivo" por defecto y se muestra igual que un
+   servicio en listados, detalle y reportes por tipo de pago.
 7. Opcionalmente, indicá si el ingreso tiene un **Adicional** (ver 3.3).
 8. Presiona `Guardar`.
 
 Cambiar el método en Configuración nunca modifica ingresos ya registrados: cada ingreso conserva el método y los parámetros con los que fue creado.
+
+Al **editar** una jornada ya guardada, el formulario sí muestra el campo **Tipo de pago** y permite modificarlo, igual que en un Servicio por tiempo.
 
 En modo Profesional, la fecha del ingreso debe coincidir con el inicio de la
 temporada activa o ser posterior. La aplicación rechaza tanto el alta como la

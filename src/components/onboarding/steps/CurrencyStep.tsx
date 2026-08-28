@@ -8,9 +8,10 @@ import { OnboardingLayout } from '../OnboardingLayout'
 interface CurrencyStepProps {
   currentStep: number
   onNext: () => void
+  onBack?: () => void
 }
 
-export function CurrencyStep({ currentStep, onNext }: CurrencyStepProps) {
+export function CurrencyStep({ currentStep, onNext, onBack }: CurrencyStepProps) {
   const [currency, setCurrency] = useState<CurrencyCode>('EUR')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
@@ -31,6 +32,7 @@ export function CurrencyStep({ currentStep, onNext }: CurrencyStepProps) {
 
   return (
     <OnboardingLayout
+      backDisabled={isSaving}
       currentStep={currentStep}
       description="Se usará de forma predeterminada en importes, temporadas y reportes."
       footer={
@@ -38,6 +40,7 @@ export function CurrencyStep({ currentStep, onNext }: CurrencyStepProps) {
           {isSaving ? 'Guardando...' : 'Continuar'}
         </button>
       }
+      onBack={onBack}
       title="Moneda principal"
     >
       <form id="onboarding-currency-form" onSubmit={handleSubmit}>

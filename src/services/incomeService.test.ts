@@ -116,18 +116,34 @@ describe('createServiceIncome', () => {
     expect(persisted.incomeCalculationMethod).toBe('hourly_workday')
   })
 
-  it('no persiste tipo de pago en una jornada por horas', async () => {
+  it('persiste "cash" por defecto en una jornada por horas cuando el input no trae tipo de pago', async () => {
     getSettingsMock.mockResolvedValue(basicSettings())
 
     await createServiceIncome(baseIncomeInput({
       incomeCalculationMethod: 'hourly_workday',
-      paymentType: 'cash',
+      paymentType: undefined,
     }))
 
     expect(servicesTable.add).toHaveBeenCalledWith(
       expect.objectContaining({
         incomeCalculationMethod: 'hourly_workday',
-        paymentType: undefined,
+        paymentType: 'cash',
+      }),
+    )
+  })
+
+  it('respeta el tipo de pago explícito del input en una jornada por horas', async () => {
+    getSettingsMock.mockResolvedValue(basicSettings())
+
+    await createServiceIncome(baseIncomeInput({
+      incomeCalculationMethod: 'hourly_workday',
+      paymentType: 'transfer',
+    }))
+
+    expect(servicesTable.add).toHaveBeenCalledWith(
+      expect.objectContaining({
+        incomeCalculationMethod: 'hourly_workday',
+        paymentType: 'transfer',
       }),
     )
   })
@@ -230,7 +246,7 @@ describe('updateServiceIncome', () => {
     )
   })
 
-  it('ignora cambios de tipo de pago al editar una jornada histórica', async () => {
+  it('permite modificar el tipo de pago al editar una jornada por horas', async () => {
     getSettingsMock.mockResolvedValue(basicSettings())
     const current: ServiceIncome = {
       id: 1,
@@ -243,7 +259,28 @@ describe('updateServiceIncome', () => {
     servicesTable.toArray.mockResolvedValue([current])
     expensesTable.toArray.mockResolvedValue([])
 
-    const result = await updateServiceIncome(1, { paymentType: 'card' })
+    const result = await updateServiceIncome(1, { paymentType: 'transfer' })
+
+    expect(result.paymentType).toBe('transfer')
+    expect(servicesTable.put).toHaveBeenCalledWith(
+      expect.objectContaining({ paymentType: 'transfer' }),
+    )
+  })
+
+  it('conserva el tipo de pago de una jornada si la edición no lo vuelve a enviar', async () => {
+    getSettingsMock.mockResolvedValue(basicSettings())
+    const current: ServiceIncome = {
+      id: 1,
+      ...baseIncomeInput({
+        incomeCalculationMethod: 'hourly_workday',
+        paymentType: 'cash',
+      }),
+    }
+    servicesTable.get.mockResolvedValue(current)
+    servicesTable.toArray.mockResolvedValue([current])
+    expensesTable.toArray.mockResolvedValue([])
+
+    const result = await updateServiceIncome(1, { totalAmount: 200 })
 
     expect(result.paymentType).toBe('cash')
     expect(servicesTable.put).toHaveBeenCalledWith(

@@ -8,6 +8,7 @@ import { OnboardingLayout } from '../OnboardingLayout'
 interface UsageStepProps {
   currentStep: number
   onNext: (step: number) => void
+  onBack?: () => void
 }
 
 const usageOptions = [
@@ -25,7 +26,7 @@ const usageOptions = [
   },
 ]
 
-export function UsageStep({ currentStep, onNext }: UsageStepProps) {
+export function UsageStep({ currentStep, onNext, onBack }: UsageStepProps) {
   const [usageMode, setUsageMode] = useState<UsageMode | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
@@ -50,6 +51,7 @@ export function UsageStep({ currentStep, onNext }: UsageStepProps) {
 
   return (
     <OnboardingLayout
+      backDisabled={isSaving}
       currentStep={currentStep}
       description="Elige el espacio que vas a utilizar."
       footer={
@@ -62,6 +64,7 @@ export function UsageStep({ currentStep, onNext }: UsageStepProps) {
           {isSaving ? 'Guardando...' : 'Continuar'}
         </button>
       }
+      onBack={onBack}
       title="Tipo de uso"
     >
       <fieldset className="grid gap-3">

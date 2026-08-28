@@ -50,7 +50,7 @@ const appointment = {
 describe('report status rules by usage mode', () => {
   it('allows only professional services in professional mode', () => {
     expect(canMarkAsReported(professionalService, 'professional')).toBe(true)
-    expect(canMarkAsReported(professionalHourlyWorkday, 'professional')).toBe(false)
+    expect(canMarkAsReported(professionalHourlyWorkday, 'professional')).toBe(true)
     expect(canMarkAsReported(professionalAdjustment, 'professional')).toBe(false)
     expect(canMarkAsReported(basicExpense, 'professional')).toBe(false)
     expect(canMarkAsReported(appointment, 'professional')).toBe(false)

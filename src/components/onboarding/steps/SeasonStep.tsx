@@ -8,6 +8,7 @@ import { OnboardingLayout } from '../OnboardingLayout'
 interface SeasonStepProps {
   currentStep: number
   onNext: () => void
+  onBack?: () => void
 }
 
 function defaultPlannedEndDate() {
@@ -16,7 +17,7 @@ function defaultPlannedEndDate() {
   return date.toLocaleDateString('en-CA')
 }
 
-export function SeasonStep({ currentStep, onNext }: SeasonStepProps) {
+export function SeasonStep({ currentStep, onNext, onBack }: SeasonStepProps) {
   const [name, setName] = useState('Primera temporada')
   const [startDate, setStartDate] = useState(getTodayInputDate())
   const [plannedEndDate, setPlannedEndDate] = useState(defaultPlannedEndDate)
@@ -51,6 +52,7 @@ export function SeasonStep({ currentStep, onNext }: SeasonStepProps) {
 
   return (
     <OnboardingLayout
+      backDisabled={isSaving}
       currentStep={currentStep}
       description="La fecha prevista es informativa; la temporada solo se cerrará cuando tú lo indiques."
       footer={
@@ -63,6 +65,7 @@ export function SeasonStep({ currentStep, onNext }: SeasonStepProps) {
           {isSaving ? 'Guardando...' : 'Continuar'}
         </button>
       }
+      onBack={onBack}
       title="Primera temporada"
     >
       <form className="grid gap-4 text-left" id="onboarding-season-form" onSubmit={handleSubmit}>

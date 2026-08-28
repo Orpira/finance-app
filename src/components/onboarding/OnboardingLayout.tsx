@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { OnboardingProgress } from './OnboardingProgress'
@@ -8,6 +9,8 @@ interface OnboardingLayoutProps {
   description?: string
   children?: ReactNode
   footer: ReactNode
+  onBack?: () => void
+  backDisabled?: boolean
 }
 
 export function OnboardingLayout({
@@ -16,6 +19,8 @@ export function OnboardingLayout({
   description,
   children,
   footer,
+  onBack,
+  backDisabled,
 }: OnboardingLayoutProps) {
   return (
     <main
@@ -27,6 +32,17 @@ export function OnboardingLayout({
     >
       <div className="flex w-full max-w-sm flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
         <OnboardingProgress currentStep={currentStep} />
+        {onBack ? (
+          <button
+            className="inline-flex min-h-9 w-fit items-center gap-1.5 self-start rounded-md text-sm font-semibold text-emerald-700 transition hover:text-emerald-800 disabled:text-slate-300 dark:text-emerald-300 dark:hover:text-emerald-200"
+            disabled={backDisabled}
+            onClick={onBack}
+            type="button"
+          >
+            <ArrowLeft className="size-4" aria-hidden="true" />
+            <span>Atrás</span>
+          </button>
+        ) : null}
         <div className="text-center">
           <h1 className="text-xl font-semibold text-slate-950 dark:text-white">{title}</h1>
           {description ? (

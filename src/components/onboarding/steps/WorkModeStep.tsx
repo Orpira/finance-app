@@ -11,9 +11,10 @@ import { OnboardingLayout } from '../OnboardingLayout'
 interface WorkModeStepProps {
   currentStep: number
   onNext: () => void
+  onBack?: () => void
 }
 
-export function WorkModeStep({ currentStep, onNext }: WorkModeStepProps) {
+export function WorkModeStep({ currentStep, onNext, onBack }: WorkModeStepProps) {
   const [method, setMethod] = useState<IncomeCalculationMethod | null>(null)
   const [hourlyRate, setHourlyRate] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -49,6 +50,7 @@ export function WorkModeStep({ currentStep, onNext }: WorkModeStepProps) {
 
   return (
     <OnboardingLayout
+      backDisabled={isSaving}
       currentStep={currentStep}
       description="Define el formulario predeterminado para tus nuevos ingresos."
       footer={
@@ -61,6 +63,7 @@ export function WorkModeStep({ currentStep, onNext }: WorkModeStepProps) {
           {isSaving ? 'Guardando...' : 'Continuar'}
         </button>
       }
+      onBack={onBack}
       title="Método de cálculo del ingreso"
     >
       <form

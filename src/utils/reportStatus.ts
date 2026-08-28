@@ -46,11 +46,7 @@ export function canMarkAsReported(record: ReportableRecord, usageMode: UsageMode
   if (usageMode === 'professional') {
     return (
       getRecordTypeCode(record) === 'income' &&
-      getIncomeTypeCode(record as ServiceIncome) === 'service' &&
-      // El flujo Pendiente/Reportado pertenece al servicio medido por
-      // duración. Una jornada liquidada directamente por horas no necesita
-      // revisión posterior ni debe aparecer como reportable.
-      (record as ServiceIncome).incomeCalculationMethod !== 'hourly_workday'
+      getIncomeTypeCode(record as ServiceIncome) === 'service'
     )
   }
 

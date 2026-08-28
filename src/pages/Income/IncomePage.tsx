@@ -378,10 +378,13 @@ export function IncomePage() {
     !isBasicUser && isServiceType && effectiveMethod === 'service_duration'
   const usesHourlyWorkday =
     !isBasicUser && isServiceType && effectiveMethod === 'hourly_workday'
+  // "Jornada por horas" no pide tipo de pago al crearse (se persiste
+  // "Efectivo" por defecto), pero al editar sí se puede modificar, igual
+  // que en "Servicio por tiempo".
   const collectsPaymentType =
     !isBasicUser &&
     isServiceType &&
-    shouldCollectPaymentTypeAtRegistration(effectiveMethod)
+    (shouldCollectPaymentTypeAtRegistration(effectiveMethod) || (isEditing && usesHourlyWorkday))
   // Al editar un ingreso existente se respeta la unidad con la que se
   // guardó originalmente (workedTimeUnit ya viene cargada desde
   // editingIncome) para no reinterpretar datos históricos; para uno nuevo se
@@ -563,11 +566,7 @@ export function IncomePage() {
         status: editingIncome?.status ?? 'FINALIZADO',
         type: isBasicUser ? 'ingreso' : incomeType,
         date: registrationDate,
-        paymentType:
-          !isAdjustmentType &&
-          shouldCollectPaymentTypeAtRegistration(persistedMethod)
-            ? paymentType
-            : undefined,
+        paymentType: !isAdjustmentType && collectsPaymentType ? paymentType : undefined,
         duration: isBasicUser
           ? editingIncome?.duration ?? 0
           : isAdjustmentType || usesHourlyWorkday

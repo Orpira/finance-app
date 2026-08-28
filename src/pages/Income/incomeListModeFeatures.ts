@@ -36,5 +36,8 @@ export function getIncomeReportingVisibility({
     showSelectionSummary: showUnreportedIncome && hasSelectedIncomes,
     showIndividualSelection: showUnreportedIncome && isSelectable,
     showReportBadge: canReport && (showUnreportedIncome || isReported),
+    // Acción "Marcar como reportado": solo para registros aún no reportados,
+    // así que depende únicamente del toggle, sin la excepción de isReported.
+    showMarkAsReportedAction: canReport && showUnreportedIncome && !isReported,
   }
 }
