@@ -1,9 +1,8 @@
 import { CheckCircle2, CheckSquare, ChevronLeft, ChevronRight, Pencil, Plus, ReceiptText, RotateCcw, Square, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
 import { ActionableEmptyState } from '../../components/ActionableEmptyState'
-import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { MarkIncomeReportedDialog, type MarkIncomeReportedValues } from '../../components/income/MarkIncomeReportedDialog'
@@ -20,32 +19,25 @@ import {
 import { getSettings } from '../../services/settingsService'
 import { listExpenses } from '../../services/expenseService'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
-import type { ServiceIncome, ServiceIncomeStatus, ServiceIncomeType } from '../../types/service'
+import type { ServiceIncome, ServiceIncomeStatus } from '../../types/service'
 import type { Expense } from '../../types/expense'
-import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
+import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { getIncomeDisplayName } from '../../utils/activityLabels'
-import { countries } from '../../utils/countries'
 import { formatCurrency } from '../../utils/currency'
 import { getFinancialListEmptyReason } from '../../utils/financialListEmptyState'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
-import { getPaymentTypeLabel } from '../../utils/paymentTypes'
 import { getIncomeDurationDisplay } from '../../utils/serviceDuration'
 import {
   isBasicMode,
   recordBelongsToUsageMode,
   requiresSeason,
 } from '../../utils/usageMode'
-import { getIncomePaymentTypeLabel, getIncomeType, getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
+import { getIncomePaymentTypeLabel, getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
 import { canMarkAsReported, formatReportStatusMeta, getRecordReportBadge } from '../../utils/reportStatus'
 import { useDialog } from '../../components/dialogs/useDialog'
 import { getIncomeListModeFeatures, getIncomeReportingVisibility } from './incomeListModeFeatures'
 
 const INCOMES_PER_PAGE = 10
-type ReportStatusFilter = 'ALL' | 'unreviewed' | 'pending' | 'reported'
-
-function parseReportStatusFilter(value: string | null): ReportStatusFilter {
-  return value === 'unreviewed' || value === 'pending' || value === 'reported' ? value : 'ALL'
-}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(
@@ -128,45 +120,16 @@ function filterAdjustmentsByMode(expenses: Expense[], settings: AppSettings) {
 export function IncomeListPage() {
   const { alert, confirm } = useDialog()
   const { hidden } = useSensitiveValues()
-  const [searchParams, setSearchParams] = useSearchParams()
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [relatedAdjustments, setRelatedAdjustments] = useState<Expense[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [activePeriodId, setActivePeriodId] = useState<number>()
-  const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
-  const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL')
-  const [selectedPaymentType, setSelectedPaymentType] =
-    useState<string | 'ALL'>('ALL')
-  const [selectedIncomeType, setSelectedIncomeType] =
-    useState<ServiceIncomeType | 'ALL'>('ALL')
-  const selectedReportStatus = useMemo(
-    () => parseReportStatusFilter(searchParams.get('reportStatus')),
-    [searchParams],
-  )
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
   const [incomePage, setIncomePage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
   const [selectedIncomeIds, setSelectedIncomeIds] = useState<Set<number>>(new Set())
   const [incomeBeingReported, setIncomeBeingReported] = useState<ServiceIncome | null>(null)
   const [isBulkReportDialogOpen, setIsBulkReportDialogOpen] = useState(false)
   const incomeListModeFeatures = getIncomeListModeFeatures(settings)
-
-  function handleReportStatusFilterChange(value: ReportStatusFilter) {
-    setIncomePage(1)
-    setSearchParams(
-      (current) => {
-        const next = new URLSearchParams(current)
-        if (value === 'ALL') {
-          next.delete('reportStatus')
-        } else {
-          next.set('reportStatus', value)
-        }
-        return next
-      },
-      { replace: true },
-    )
-  }
 
   const adjustmentsByIncomeId = useMemo(() => {
     const grouped = new Map<number, Expense[]>()
@@ -180,100 +143,16 @@ export function IncomeListPage() {
     return grouped
   }, [relatedAdjustments])
 
-  const availableCountries = useMemo(() => {
-    const countryCodes = new Set<CountryCode>()
-
-    incomes.forEach((income) => {
-      if (income.country) {
-        countryCodes.add(income.country as CountryCode)
-      }
-    })
-
-    return Array.from(countryCodes).sort()
-  }, [incomes])
-
-  const availableCities = useMemo(() => {
-    const cityNames = new Set<string>()
-
-    incomes.forEach((income) => {
-      const matchesCountry =
-        selectedCountry === 'ALL' || income.country === selectedCountry
-
-      if (income.city && matchesCountry) {
-        cityNames.add(income.city)
-      }
-    })
-
-    return Array.from(cityNames).sort((firstCity, secondCity) =>
-      firstCity.localeCompare(secondCity, 'es'),
-    )
-  }, [incomes, selectedCountry])
-
-  const availablePaymentTypes = useMemo(() => {
-    const paymentTypes = new Set<string>()
-
-    incomes.forEach((income) => {
-      const matchesCountry =
-        selectedCountry === 'ALL' || income.country === selectedCountry
-      const matchesCity = selectedCity === 'ALL' || income.city === selectedCity
-
-      if (income.paymentType && matchesCountry && matchesCity) {
-        paymentTypes.add(income.paymentType)
-      }
-    })
-
-    return Array.from(paymentTypes).sort((firstType, secondType) =>
-      getPaymentTypeLabel(firstType).localeCompare(
-        getPaymentTypeLabel(secondType),
-        'es',
-      ),
-    )
-  }, [incomes, selectedCity, selectedCountry])
-
-  const filteredIncomes = useMemo(
-    () =>
-      incomes.filter((income) => {
-        const matchesCountry =
-          selectedCountry === 'ALL' || income.country === selectedCountry
-        const matchesCity = selectedCity === 'ALL' || income.city === selectedCity
-        const matchesPaymentType =
-          selectedPaymentType === 'ALL' ||
-          income.paymentType === selectedPaymentType
-        const matchesDateFrom = !dateFrom || income.date >= dateFrom
-        const matchesDateTo = !dateTo || income.date <= dateTo
-        const matchesIncomeType =
-          selectedIncomeType === 'ALL' ||
-          getIncomeType(income) === selectedIncomeType
-        const matchesReportStatus =
-          selectedReportStatus === 'ALL' ||
-          Boolean(
-            settings &&
-              canMarkAsReported(income, settings.usageMode) &&
-              getRecordReportBadge(income).reportStatusCode === selectedReportStatus,
-          )
-
-        return (
-          matchesCountry &&
-          matchesCity &&
-          matchesPaymentType &&
-          matchesIncomeType &&
-          matchesReportStatus &&
-          matchesDateFrom &&
-          matchesDateTo
-        )
-      }),
-    [dateFrom, dateTo, incomes, selectedCity, selectedCountry, selectedIncomeType, selectedPaymentType, selectedReportStatus, settings],
-  )
   const totalIncomePages = Math.max(
     1,
-    Math.ceil(filteredIncomes.length / INCOMES_PER_PAGE),
+    Math.ceil(incomes.length / INCOMES_PER_PAGE),
   )
   const currentIncomePage = Math.min(incomePage, totalIncomePages)
   const paginatedIncomes = useMemo(() => {
     const startIndex = (currentIncomePage - 1) * INCOMES_PER_PAGE
 
-    return filteredIncomes.slice(startIndex, startIndex + INCOMES_PER_PAGE)
-  }, [currentIncomePage, filteredIncomes])
+    return incomes.slice(startIndex, startIndex + INCOMES_PER_PAGE)
+  }, [currentIncomePage, incomes])
 
   // Se agrupa por serviceDate (income.date), nunca por la fecha de creación.
   const groupedPaginatedIncomes = useMemo(() => {
@@ -312,12 +191,6 @@ export function IncomeListPage() {
     hasSelectableIncomes: selectableIncomeIds.length > 0,
     hasSelectedIncomes: selectedIncomeIds.size > 0,
   })
-
-  const getCountryLabel = (code: string): string => {
-    const country = countries.find((countryOption) => countryOption.value === code)
-
-    return country?.label || code
-  }
 
   async function reloadIncomes() {
     if (!settings) {
@@ -369,14 +242,8 @@ export function IncomeListPage() {
       setActivePeriodId(nextActivePeriodId)
       setIncomes(filterIncomesByMode(currentIncomes, nextSettings, nextActivePeriodId))
       setRelatedAdjustments(filterAdjustmentsByMode(currentExpenses, nextSettings))
-      setSelectedIncomeType('ALL')
       setSelectedIncomeIds(new Set())
       setIncomePage(1)
-      setSearchParams((current) => {
-        const next = new URLSearchParams(current)
-        next.delete('reportStatus')
-        return next
-      }, { replace: true })
     }
 
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
@@ -385,7 +252,7 @@ export function IncomeListPage() {
       isMounted = false
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
     }
-  }, [setSearchParams])
+  }, [])
 
   function handleRequestMarkAsReported(income: ServiceIncome) {
     if (!income.id || !settings || !canMarkAsReported(income, settings.usageMode)) {
@@ -524,44 +391,6 @@ export function IncomeListPage() {
     }
   }
 
-  function handleCountryFilterChange(country: string) {
-    setSelectedCountry(country || 'ALL')
-    setSelectedCity('ALL')
-    setSelectedPaymentType('ALL')
-    setIncomePage(1)
-  }
-
-  function handleCityFilterChange(city: string) {
-    setSelectedCity(city || 'ALL')
-    setSelectedPaymentType('ALL')
-    setIncomePage(1)
-  }
-
-  function handlePaymentTypeFilterChange(paymentType: string) {
-    setSelectedPaymentType(paymentType || 'ALL')
-    setIncomePage(1)
-  }
-
-  function handleDateFromChange(date: string) {
-    setDateFrom(date)
-    setIncomePage(1)
-  }
-
-  function handleDateToChange(date: string) {
-    setDateTo(date)
-    setIncomePage(1)
-  }
-
-  function clearFilters() {
-    setDateFrom('')
-    setDateTo('')
-    setSelectedCountry('ALL')
-    setSelectedCity('ALL')
-    setSelectedPaymentType('ALL')
-    setSelectedIncomeType('ALL')
-    handleReportStatusFilterChange('ALL')
-  }
-
   if (isLoading) {
     return (
       <section className="flex min-h-[60dvh] items-center justify-center">
@@ -591,125 +420,6 @@ export function IncomeListPage() {
           + Nuevo Ingreso
         </Link>
       </PageHeader>
-
-      <CollapsibleFilters title="Filtros" storageKey="filters-open-income">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">
-              Fecha desde
-            </span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              max={dateTo || undefined}
-              onChange={(event) => handleDateFromChange(event.target.value)}
-              type="date"
-              value={dateFrom}
-            />
-          </label>
-
-          {settings && !isBasicMode(settings) && (
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-600">Clase de ingreso</span>
-              <select
-                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                onChange={(event) => {
-                  setSelectedIncomeType(event.target.value as ServiceIncomeType | 'ALL')
-                  setIncomePage(1)
-                }}
-                value={selectedIncomeType}
-              >
-                <option value="ALL">Todas las clases</option>
-                <option value="ingreso">Servicios</option>
-                <option value="ajuste">Ajustes</option>
-                <option value="otro">Otros ingresos</option>
-              </select>
-            </label>
-          )}
-
-          {settings && !isBasicMode(settings) && (
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-600">Estado de reporte</span>
-              <select
-                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                onChange={(event) =>
-                  handleReportStatusFilterChange(event.target.value as ReportStatusFilter)
-                }
-                value={selectedReportStatus}
-              >
-                <option value="ALL">Todos</option>
-                <option value="unreviewed">Sin revisar</option>
-                <option value="pending">Pendientes</option>
-                <option value="reported">Reportados</option>
-              </select>
-            </label>
-          )}
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">
-              Fecha hasta
-            </span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              min={dateFrom || undefined}
-              onChange={(event) => handleDateToChange(event.target.value)}
-              type="date"
-              value={dateTo}
-            />
-          </label>
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">País</span>
-            <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) => handleCountryFilterChange(event.target.value)}
-              value={selectedCountry}
-            >
-              <option value="ALL">Todos los países</option>
-              {availableCountries.map((country) => (
-                <option key={country} value={country}>
-                  {getCountryLabel(country)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">Ciudad</span>
-            <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) => handleCityFilterChange(event.target.value)}
-              value={selectedCity}
-            >
-              <option value="ALL">Todas las ciudades</option>
-              {availableCities.map((city) => (
-                <option key={city} value={city}>
-                  {city}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">
-              Tipo de pago
-            </span>
-            <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) =>
-                handlePaymentTypeFilterChange(event.target.value)
-              }
-              value={selectedPaymentType}
-            >
-              <option value="ALL">Todos los tipos</option>
-              {availablePaymentTypes.map((paymentType) => (
-                <option key={paymentType} value={paymentType}>
-                  {getPaymentTypeLabel(paymentType)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </CollapsibleFilters>
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -760,24 +470,18 @@ export function IncomeListPage() {
         )}
 
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          {filteredIncomes.length === 0 ? (
+          {incomes.length === 0 ? (
             emptyReason === 'no-active-season' ? (
               <ActionableEmptyState
                 action={{ label: 'Ir a Temporadas', to: '/temporadas' }}
                 description="Inicia una temporada para poder registrar y consultar ingresos profesionales."
                 title="No hay una temporada activa"
               />
-            ) : emptyReason === 'no-records' ? (
+            ) : (
               <ActionableEmptyState
                 action={{ label: 'Registrar ingreso', to: '/income/nuevo' }}
                 description="Añade tu primer ingreso para comenzar a construir el historial financiero."
                 title="Aún no hay ingresos"
-              />
-            ) : (
-              <ActionableEmptyState
-                action={{ label: 'Limpiar filtros', onClick: clearFilters }}
-                description="Restablece las fechas, ubicaciones, tipos y estados para volver a ver tus ingresos."
-                title="Ningún ingreso coincide con los filtros"
               />
             )
           ) : (
@@ -986,11 +690,11 @@ export function IncomeListPage() {
           )}
         </div>
 
-        {filteredIncomes.length > INCOMES_PER_PAGE ? (
+        {incomes.length > INCOMES_PER_PAGE ? (
           <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-medium text-slate-500">
               Página {currentIncomePage} de {totalIncomePages} ·{' '}
-              {filteredIncomes.length} registros
+              {incomes.length} registros
             </p>
             <div className="flex items-center gap-2">
               <button

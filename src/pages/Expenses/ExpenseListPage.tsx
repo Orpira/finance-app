@@ -9,7 +9,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { ActionableEmptyState } from '../../components/ActionableEmptyState'
-import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
@@ -19,9 +18,8 @@ import { getSettings } from '../../services/settingsService'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
-import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
+import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { getExpenseDisplayName } from '../../utils/activityLabels'
-import { countries } from '../../utils/countries'
 import { formatCurrency } from '../../utils/currency'
 import { getFinancialListEmptyReason } from '../../utils/financialListEmptyState'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
@@ -34,7 +32,6 @@ import { canMarkAsReported, formatReportStatusMeta, getRecordReportBadge, toggle
 import { useDialog } from '../../components/dialogs/useDialog'
 
 const EXPENSES_PER_PAGE = 10
-type ReportStatusFilter = 'ALL' | 'pending' | 'reported'
 
 function filterExpensesByMode(
   expenses: Expense[],
@@ -73,13 +70,6 @@ export function ExpenseListPage() {
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [activePeriodId, setActivePeriodId] = useState<number>()
-  const [selectedCountry, setSelectedCountry] = useState<string | 'ALL'>('ALL')
-  const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL')
-  const [selectedCategory, setSelectedCategory] = useState<string | 'ALL'>('ALL')
-  const [selectedReportStatus, setSelectedReportStatus] =
-    useState<ReportStatusFilter>('ALL')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
   const [expensePage, setExpensePage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
   const incomesById = useMemo(
@@ -87,98 +77,16 @@ export function ExpenseListPage() {
     [incomes],
   )
 
-  const availableCountries = useMemo(() => {
-    const countryCodes = new Set<CountryCode>()
-
-    expenses.forEach((expense) => {
-      if (expense.country) {
-        countryCodes.add(expense.country as CountryCode)
-      }
-    })
-
-    return Array.from(countryCodes).sort()
-  }, [expenses])
-
-  const availableCities = useMemo(() => {
-    const cityNames = new Set<string>()
-
-    expenses.forEach((expense) => {
-      const matchesCountry =
-        selectedCountry === 'ALL' || expense.country === selectedCountry
-
-      if (expense.city && matchesCountry) {
-        cityNames.add(expense.city)
-      }
-    })
-
-    return Array.from(cityNames).sort((firstCity, secondCity) =>
-      firstCity.localeCompare(secondCity, 'es'),
-    )
-  }, [expenses, selectedCountry])
-
-  const availableCategories = useMemo(() => {
-    const categories = new Set<string>()
-
-    expenses.forEach((expense) => {
-      const matchesCountry =
-        selectedCountry === 'ALL' || expense.country === selectedCountry
-      const matchesCity = selectedCity === 'ALL' || expense.city === selectedCity
-
-      if (expense.category && matchesCountry && matchesCity) {
-        categories.add(expense.category)
-      }
-    })
-
-    return Array.from(categories).sort((firstCategory, secondCategory) =>
-      firstCategory.localeCompare(secondCategory, 'es'),
-    )
-  }, [expenses, selectedCity, selectedCountry])
-
-  const filteredExpenses = useMemo(
-    () =>
-      expenses.filter((expense) => {
-        const matchesCountry =
-          selectedCountry === 'ALL' || expense.country === selectedCountry
-        const matchesCity = selectedCity === 'ALL' || expense.city === selectedCity
-        const matchesCategory =
-          selectedCategory === 'ALL' || expense.category === selectedCategory
-        const matchesDateFrom = !dateFrom || expense.date >= dateFrom
-        const matchesDateTo = !dateTo || expense.date <= dateTo
-        const matchesReportStatus =
-          selectedReportStatus === 'ALL' ||
-          Boolean(
-            settings &&
-              canMarkAsReported(expense, settings.usageMode) &&
-              getRecordReportBadge(expense).reportStatusCode === selectedReportStatus,
-          )
-
-        return (
-          matchesCountry &&
-          matchesCity &&
-          matchesCategory &&
-          matchesReportStatus &&
-          matchesDateFrom &&
-          matchesDateTo
-        )
-      }),
-    [dateFrom, dateTo, expenses, selectedCategory, selectedCity, selectedCountry, selectedReportStatus, settings],
-  )
   const totalExpensePages = Math.max(
     1,
-    Math.ceil(filteredExpenses.length / EXPENSES_PER_PAGE),
+    Math.ceil(expenses.length / EXPENSES_PER_PAGE),
   )
   const currentExpensePage = Math.min(expensePage, totalExpensePages)
   const paginatedExpenses = useMemo(() => {
     const startIndex = (currentExpensePage - 1) * EXPENSES_PER_PAGE
 
-    return filteredExpenses.slice(startIndex, startIndex + EXPENSES_PER_PAGE)
-  }, [currentExpensePage, filteredExpenses])
-
-  const getCountryLabel = (code: string): string => {
-    const country = countries.find((countryOption) => countryOption.value === code)
-
-    return country?.label || code
-  }
+    return expenses.slice(startIndex, startIndex + EXPENSES_PER_PAGE)
+  }, [currentExpensePage, expenses])
 
   async function reloadExpenses() {
     if (!settings) {
@@ -234,7 +142,6 @@ export function ExpenseListPage() {
       setActivePeriodId(nextActivePeriodId)
       setExpenses(filterExpensesByMode(currentExpenses, nextSettings, nextActivePeriodId))
       setIncomes(filterIncomesByMode(currentIncomes, nextSettings, nextActivePeriodId))
-      setSelectedReportStatus('ALL')
       setExpensePage(1)
     }
 
@@ -312,44 +219,6 @@ export function ExpenseListPage() {
     await reloadExpenses()
   }
 
-  function handleCountryFilterChange(country: string) {
-    setSelectedCountry(country || 'ALL')
-    setSelectedCity('ALL')
-    setSelectedCategory('ALL')
-    setExpensePage(1)
-  }
-
-  function handleCityFilterChange(city: string) {
-    setSelectedCity(city || 'ALL')
-    setSelectedCategory('ALL')
-    setExpensePage(1)
-  }
-
-  function handleCategoryFilterChange(category: string) {
-    setSelectedCategory(category || 'ALL')
-    setExpensePage(1)
-  }
-
-  function handleDateFromChange(date: string) {
-    setDateFrom(date)
-    setExpensePage(1)
-  }
-
-  function handleDateToChange(date: string) {
-    setDateTo(date)
-    setExpensePage(1)
-  }
-
-  function clearFilters() {
-    setDateFrom('')
-    setDateTo('')
-    setSelectedCountry('ALL')
-    setSelectedCity('ALL')
-    setSelectedCategory('ALL')
-    setSelectedReportStatus('ALL')
-    setExpensePage(1)
-  }
-
   if (isLoading) {
     return (
       <section className="flex min-h-[60dvh] items-center justify-center">
@@ -380,106 +249,6 @@ export function ExpenseListPage() {
         </Link>
       </PageHeader>
 
-      <CollapsibleFilters title="Filtros" storageKey="filters-open-expenses">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">
-              Fecha desde
-            </span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              max={dateTo || undefined}
-              onChange={(event) => handleDateFromChange(event.target.value)}
-              type="date"
-              value={dateFrom}
-            />
-          </label>
-
-          {settings && isBasicMode(settings) && (
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-600">Estado de reporte</span>
-              <select
-                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                onChange={(event) => {
-                  setSelectedReportStatus(event.target.value as ReportStatusFilter)
-                  setExpensePage(1)
-                }}
-                value={selectedReportStatus}
-              >
-                <option value="ALL">Todos</option>
-                <option value="pending">Pendientes</option>
-                <option value="reported">Reportados</option>
-              </select>
-            </label>
-          )}
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">
-              Fecha hasta
-            </span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              min={dateFrom || undefined}
-              onChange={(event) => handleDateToChange(event.target.value)}
-              type="date"
-              value={dateTo}
-            />
-          </label>
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">País</span>
-            <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) => handleCountryFilterChange(event.target.value)}
-              value={selectedCountry}
-            >
-              <option value="ALL">Todos los países</option>
-              {availableCountries.map((country) => (
-                <option key={country} value={country}>
-                  {getCountryLabel(country)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">Ciudad</span>
-            <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) => handleCityFilterChange(event.target.value)}
-              value={selectedCity}
-            >
-              <option value="ALL">Todas las ciudades</option>
-              {availableCities.map((city) => (
-                <option key={city} value={city}>
-                  {city}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-600">
-              Categoría
-            </span>
-            <select
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              onChange={(event) =>
-                handleCategoryFilterChange(event.target.value)
-              }
-              value={selectedCategory}
-            >
-              <option value="ALL">Todas las categorías</option>
-              {availableCategories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </CollapsibleFilters>
-
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <ReceiptText className="size-5 text-emerald-700" aria-hidden="true" />
@@ -489,24 +258,18 @@ export function ExpenseListPage() {
         </div>
 
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          {filteredExpenses.length === 0 ? (
+          {expenses.length === 0 ? (
             emptyReason === 'no-active-season' ? (
               <ActionableEmptyState
                 action={{ label: 'Ir a Temporadas', to: '/temporadas' }}
                 description="Inicia una temporada para poder registrar y consultar egresos profesionales."
                 title="No hay una temporada activa"
               />
-            ) : emptyReason === 'no-records' ? (
+            ) : (
               <ActionableEmptyState
                 action={{ label: 'Registrar egreso', to: '/expenses/nuevo' }}
                 description="Añade tu primer egreso para comenzar a construir el historial financiero."
                 title="Aún no hay egresos"
-              />
-            ) : (
-              <ActionableEmptyState
-                action={{ label: 'Limpiar filtros', onClick: clearFilters }}
-                description="Restablece las fechas, ubicaciones, categorías y estados para volver a ver tus egresos."
-                title="Ningún egreso coincide con los filtros"
               />
             )
           ) : (
@@ -661,11 +424,11 @@ export function ExpenseListPage() {
           )}
         </div>
 
-        {filteredExpenses.length > EXPENSES_PER_PAGE ? (
+        {expenses.length > EXPENSES_PER_PAGE ? (
           <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-medium text-slate-500">
               Página {currentExpensePage} de {totalExpensePages} ·{' '}
-              {filteredExpenses.length} registros
+              {expenses.length} registros
             </p>
             <div className="flex items-center gap-2">
               <button

@@ -58,7 +58,7 @@ npx cap sync android
 
 echo "Building Android debug APK..."
 cd "$ANDROID_DIR"
-./gradlew assembleDebug
+./gradlew assembleDebug --no-daemon
 
 cd "$ROOT_DIR"
 if [[ ! -f "$APK_METADATA" ]]; then
