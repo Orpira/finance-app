@@ -9,13 +9,15 @@ Private Balance es local-first: el dominio financiero (ingresos, gastos, agenda,
 ## Tipos de datos manejados
 
 - **Datos financieros**: ingresos (servicios), gastos, ajustes, agenda/citas, temporadas, reportes y su estado (`pendiente`/`reportado`).
-- **Configuración**: moneda, tema, modo de uso (Básico/Profesional), PIN (como hash con sal, nunca en texto plano).
+- **Configuración**: nombre o alias del negocio, país, ciudad, moneda, tema, modo de uso (Básico/Profesional), PIN (como hash con sal, nunca en texto plano).
 - **Identidad de licencia**: código de dispositivo (`deviceCode`), tipo y estado de licencia.
 - **Memoria conversacional de IA**: historial de conversación con el asistente, persistido localmente para poder retomarlo tras reiniciar la app.
 
 ## Dónde se almacenan
 
 Todo lo anterior se guarda localmente en IndexedDB mediante Dexie (`src/database`), con un respaldo puntual de configuración en `localStorage` para recuperación rápida. No hay una base de datos remota propia que reciba estos datos para el uso diario.
+
+La resolución automática ciudad → país → moneda se realiza en el dispositivo con un índice local derivado de `cities5000` de [GeoNames](https://www.geonames.org/) (CC BY 4.0). El nombre de la ciudad no se envía a un servicio de geocodificación.
 
 ## Qué datos pueden salir del dispositivo
 

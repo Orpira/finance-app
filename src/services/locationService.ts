@@ -1,97 +1,68 @@
-import type { CountryCode } from '../types/settings'
+import type { CountryCode, CurrencyCode } from '../types/settings'
 import {
-  countries,
-  type CityOption,
   fallbackCityOptions,
+  getCityOption,
+  getCountryCurrency,
+  type CityOption,
 } from '../utils/countries'
 
-const COUNTRIES_NOW_CITIES_URL =
-  'https://countriesnow.space/api/v0.1/countries'
-
-interface CountriesNowCountry {
-  country: string
-  iso2: string
-  iso3: string
-  cities: string[]
+export interface ResolvedCityOption extends CityOption {
+  currency: CurrencyCode
 }
 
-interface CountriesNowCitiesResponse {
-  error: boolean
-  msg: string
-  data: CountriesNowCountry[]
+function normalizeCityName(value: string) {
+  return value
+    .trim()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^\p{Letter}\p{Number}]+/gu, ' ')
+    .trim()
+    .toLocaleLowerCase('en')
 }
 
-const supportedCountryCodes = new Set<string>(
-  countries.map((country) => country.value),
-)
+function resolveOptionCurrency(
+  cityOption: CityOption,
+): ResolvedCityOption | undefined {
+  const currency = getCountryCurrency(cityOption.country)
 
-function isSupportedCountryCode(countryCode: string): countryCode is CountryCode {
-  return supportedCountryCodes.has(countryCode)
-}
-
-function normalizeCityOptions(data: CountriesNowCountry[]): CityOption[] {
-  const uniqueOptions = new Map<string, CityOption>()
-
-  data.forEach((country) => {
-    const countryCode = country.iso2?.toUpperCase()
-
-    if (!isSupportedCountryCode(countryCode)) {
-      return
-    }
-
-    country.cities.forEach((city) => {
-      const normalizedCity = city.trim()
-
-      if (!normalizedCity) {
-        return
-      }
-
-      uniqueOptions.set(`${countryCode}:${normalizedCity}`, {
-        value: normalizedCity,
-        label: normalizedCity,
-        country: countryCode,
-      })
-    })
-  })
-
-  return Array.from(uniqueOptions.values()).sort((firstCity, secondCity) =>
-    firstCity.label.localeCompare(secondCity.label, 'es'),
-  )
-}
-
-function mergeCityOptions(...optionGroups: CityOption[][]) {
-  const uniqueOptions = new Map<string, CityOption>()
-
-  optionGroups.flat().forEach((city) => {
-    uniqueOptions.set(`${city.country}:${city.value}`, city)
-  })
-
-  return Array.from(uniqueOptions.values()).sort((firstCity, secondCity) =>
-    firstCity.label.localeCompare(secondCity.label, 'es'),
-  )
+  return currency ? { ...cityOption, currency } : undefined
 }
 
 export async function listCityOptions() {
-  try {
-    const response = await fetch(COUNTRIES_NOW_CITIES_URL)
+  return fallbackCityOptions
+}
 
-    if (!response.ok) {
-      throw new Error('No se pudo cargar la lista de ciudades.')
-    }
+export async function resolveCityOption(
+  city: string,
+  preferredCountry?: CountryCode,
+): Promise<ResolvedCityOption | undefined> {
+  const normalizedCity = normalizeCityName(city)
 
-    const payload = (await response.json()) as CountriesNowCitiesResponse
-
-    if (payload.error || !Array.isArray(payload.data)) {
-      throw new Error(payload.msg || 'La respuesta de ciudades no es válida.')
-    }
-
-    const cityOptions = mergeCityOptions(
-      fallbackCityOptions,
-      normalizeCityOptions(payload.data),
-    )
-
-    return cityOptions.length > 0 ? cityOptions : fallbackCityOptions
-  } catch {
-    return fallbackCityOptions
+  if (!normalizedCity) {
+    return undefined
   }
+
+  const localOption = getCityOption(city, fallbackCityOptions)
+
+  if (localOption) {
+    return resolveOptionCurrency(localOption)
+  }
+
+  const { cityCountryIndex } = await import('../data/cityCountryIndex')
+  const countryCandidates = cityCountryIndex[normalizedCity]
+
+  if (!countryCandidates || countryCandidates.length === 0) {
+    return undefined
+  }
+
+  const country =
+    preferredCountry && countryCandidates.includes(preferredCountry)
+      ? preferredCountry
+      : countryCandidates[0]
+
+  return resolveOptionCurrency({
+    value: city.trim(),
+    label: city.trim(),
+    country,
+  })
 }

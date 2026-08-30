@@ -31,6 +31,7 @@ license-private-key.pem
 # Editor directories and files
 scripts/*
 !scripts/generate-docs-summary.mjs
+!scripts/generate-city-country-index.mjs
 .vscode/*
 !.vscode/extensions.json
 .idea

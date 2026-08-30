@@ -8,7 +8,10 @@ import {
   getSettings,
   updateSettings,
 } from '../../services/settingsService'
-import { listCityOptions } from '../../services/locationService'
+import {
+  listCityOptions,
+  resolveCityOption,
+} from '../../services/locationService'
 import type {
   AppSettings,
   CountryCode,
@@ -37,6 +40,7 @@ export function SettingsBusinessPage() {
   const [cityOptions, setCityOptions] =
     useState<CityOption[]>(fallbackCityOptions)
   const [isLoadingCities, setIsLoadingCities] = useState(true)
+  const [isResolvingCity, setIsResolvingCity] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -71,12 +75,21 @@ export function SettingsBusinessPage() {
     setSaveStatus('saving')
 
     try {
+      const resolvedCity =
+        settings.usageMode === 'professional'
+          ? await resolveCityOption(settings.city, settings.country)
+          : undefined
+      const country = resolvedCity?.country ?? settings.country
+      const defaultCurrency =
+        resolvedCity?.currency ??
+        getCountryCurrency(country) ??
+        settings.defaultCurrency
       const updatedSettings = await updateSettings(
         {
           businessName: settings.businessName.trim(),
-          country: settings.country,
+          country,
           city: settings.city.trim(),
-          defaultCurrency: settings.defaultCurrency,
+          defaultCurrency,
           secondaryCurrency: settings.secondaryCurrency,
           incomePercentage: settings.incomePercentage,
           incomeCalculationMethod: settings.incomeCalculationMethod,
@@ -116,6 +129,55 @@ export function SettingsBusinessPage() {
         settings?.defaultCurrency ??
         'EUR',
     })
+  }
+
+  async function handleCityBlur(city: string) {
+    const requestedCity = city.trim()
+
+    if (!requestedCity) {
+      return
+    }
+
+    setIsResolvingCity(true)
+
+    try {
+      const selectedCity = await resolveCityOption(
+        requestedCity,
+        settings?.country,
+      )
+
+      if (!selectedCity) {
+        return
+      }
+
+      setCityOptions((currentOptions) =>
+        currentOptions.some(
+          (option) =>
+            option.country === selectedCity.country &&
+            option.value === selectedCity.value,
+        )
+          ? currentOptions
+          : [...currentOptions, selectedCity],
+      )
+      setSettings((currentSettings) => {
+        if (
+          !currentSettings ||
+          currentSettings.city.trim() !== requestedCity
+        ) {
+          return currentSettings
+        }
+
+        return {
+          ...currentSettings,
+          city: selectedCity.value,
+          country: selectedCity.country,
+          defaultCurrency: selectedCity.currency,
+        }
+      })
+      setSaveStatus('idle')
+    } finally {
+      setIsResolvingCity(false)
+    }
   }
 
   function handleCountryChange(country: CountryCode) {
@@ -179,8 +241,10 @@ export function SettingsBusinessPage() {
             <label className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-700">Ciudad</span>
               <input
+                aria-busy={isResolvingCity}
                 className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                 list="city-options"
+                onBlur={(event) => void handleCityBlur(event.currentTarget.value)}
                 onChange={(event) => handleCityChange(event.target.value)}
                 placeholder={
                   isLoadingCities ? 'Cargando ciudades...' : 'Busca una ciudad'
@@ -197,6 +261,17 @@ export function SettingsBusinessPage() {
                   />
                 ))}
               </datalist>
+              <span className="text-xs text-slate-500">
+                Datos geográficos:{' '}
+                <a
+                  className="underline hover:text-slate-700"
+                  href="https://www.geonames.org/"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  GeoNames
+                </a>
+              </span>
             </label>
           )}
         </div>
