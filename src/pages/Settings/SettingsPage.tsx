@@ -1,5 +1,6 @@
 import {
   BadgeCheck,
+  Bell,
   Building2,
   ChevronRight,
   Stethoscope,
@@ -36,6 +37,12 @@ const settingsLinks = [
     href: '/settings/diagnostics',
     icon: Stethoscope,
     label: 'Diagnóstico local',
+  },
+  {
+    description: 'Activa o desactiva los avisos proactivos del Copiloto y el horario silencioso.',
+    href: '/settings/notifications',
+    icon: Bell,
+    label: 'Notificaciones',
   },
 ]
 

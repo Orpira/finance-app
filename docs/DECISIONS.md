@@ -82,3 +82,11 @@ Format used: one ADR per section with Context, Decision, Status and Consequences
 - Canonical record: [ADR-033-ADDITIONALS-INCOME-NOT-PROFIT.md](adr/ADR-033-ADDITIONALS-INCOME-NOT-PROFIT.md).
 - Decision: Income is principal plus Additions; real Profit is principal; net Profit, Saving and Season Goal are principal minus expenses; general balance retains Additions and explicit adjustment impact. Net movement/cutoff balances retain Additions because they represent cash balance rather than Profit.
 - Consequences: consumers choose `getStoredIncomeValue` for Income or `getStoredIncomePrincipalValue` for Profit. `totalIncome` remains a non-authoritative legacy field, no Dexie migration or historical rewrite is performed, and insufficient currency evidence fails closed.
+
+## ADR-034: Copilot proactive notifications scope
+
+- Status: accepted; Fase 1 implemented on 2026-08-30 (`src/notifications/`).
+- Canonical record: [ADR-034-Copilot-Proactive-Notifications.md](adr/ADR-034-Copilot-Proactive-Notifications.md).
+- Context: the Copilot can detect relevant situations (goal risk, unusual expenses, income drops, season closing, agenda actions, data inconsistencies) without the user asking first, but no architectural decision defined when a detected insight is allowed to become a proactive notification.
+- Decision: every candidate notification must pass through a mandatory `Notification Policy Engine` (relevance, priority P0–P3, confidence ≥ 0.70, user preferences, deduplication via `dedupKey`, frequency caps, cooldown, revalidation against current state, expiration, privacy) before it can be shown; the Copilot itself never emits a notification directly. `Insight ≠ Notification`. The Copilot may detect, explain and recommend, but a notification can never execute a financial action automatically, and `P1` notifications must always carry an associated action.
+- Consequences: introduces a new `Notification Policy Engine` and local notification state/repository (IndexedDB) that any future proactive-notification feature must go through; implementation is staged (Fase 1 deterministic season/agenda events, Fase 2 financial insights, Fase 3 complex Copilot-detected relationships) and this ADR does not itself require immediate implementation of any phase.

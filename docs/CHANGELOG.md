@@ -195,6 +195,33 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Added
 
+- **Notificaciones proactivas del Copiloto — Fase 1 (ADR-034)**: nueva
+  infraestructura local-first (`src/notifications/`) con un
+  `NotificationPolicyEngine` puro y obligatorio entre cualquier insight y su
+  entrega — relevancia, prioridad P0–P3, confianza mínima, deduplicación por
+  `dedupKey`, cooldown, límites de frecuencia diarios, horario silencioso y
+  revalidación antes de notificar. Ninguna regla emite notificaciones
+  directamente. Cuatro reglas deterministas de Fase 1, todas reutilizando los
+  cálculos existentes sin duplicarlos: fin de temporada próximo y Meta en
+  riesgo/alcanzada (`earningPeriodService`), y citas de Agenda pasadas sin
+  completar (`appointmentService`, sin duplicar los recordatorios de
+  `reminderService`). Nueva tabla Dexie `notifications` (schema v32,
+  intencionalmente fuera de backup/export, igual que `licenses` o
+  `conversationMemories`) y preferencia `notificationPreferences` en
+  `AppSettings` (compatible sin migración: instalaciones existentes reciben los
+  valores por defecto vía el mismo patrón de fusión que `showUnreportedIncome`).
+  UI mínima: campana con badge de no leídas en `AppLayout`, Centro de
+  notificaciones (`/notifications`) y preferencias en
+  `/settings/notifications` (interruptor general, categorías, horario
+  silencioso). El Copiloto conversacional funciona igual con las notificaciones
+  desactivadas. Fase 1 no incluye push OS/Capacitor (reutilizable después vía
+  `reminderService`), P0 crítico (sin fuente real todavía) ni Fases 2–3
+  (insights financieros vía LLM). Gates: 217 archivos / 2.377 PASS / 1 `todo`
+  (48 tests nuevos), lint y TypeScript verdes, build Vite correcto. La
+  validación PWA interactiva quedó bloqueada por el mismo gate de licencia con
+  404 en local ya documentado en este changelog; se verificó en su lugar que
+  las rutas nuevas responden 200 y no producen errores de consola propios del
+  bundle. Ver `docs/adr/ADR-034-Copilot-Proactive-Notifications.md`.
 - **Consulta de divisas desde Más**: añade una opción y pantalla propias que
   permiten indicar importe y moneda base y presentan cuatro conversiones
   deduplicadas, priorizando la moneda secundaria.

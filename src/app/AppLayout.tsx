@@ -16,6 +16,8 @@ import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert
 import { FloatingCreateMenu } from '../components/layout/FloatingCreateMenu'
 import { ServiceCompletionAlert } from '../components/ServiceCompletionAlert'
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
+import { NotificationBell } from '../notifications/components/NotificationBell'
+import { runNotificationEvaluation } from '../notifications/notificationEvaluationRunner'
 import {
   getDelayUntilNextDailyBackupCheck,
   runAutomaticDriveBackupIfNeeded,
@@ -78,6 +80,10 @@ let earningPeriodCheckStarted = false
 let runtimeIntegrityCheckStarted = false
 let automationOutboxStarted = false
 let deviceProvisioningStarted = false
+let notificationEvaluationStarted = false
+let notificationEvaluationIntervalId: number | null = null
+
+const NOTIFICATION_EVALUATION_INTERVAL_MS = 30 * 60 * 1000
 
 function runAutomaticBackupCheck() {
   runAutomaticDriveBackupIfNeeded().catch((error) => {
@@ -114,6 +120,7 @@ export function AppLayout() {
 
   useEffect(() => {
     let startedAutomaticBackupOnThisMount = false
+    let startedNotificationEvaluationOnThisMount = false
 
     function syncLayoutSettings(settings: { theme: ThemeMode; usageMode: UsageMode }) {
       setTheme(settings.theme)
@@ -185,6 +192,22 @@ export function AppLayout() {
       initializeAutomationOutbox()
     }
 
+    function triggerNotificationEvaluation() {
+      runNotificationEvaluation().catch((error) => {
+        console.warn('No se pudo evaluar notificaciones proactivas del Copiloto.', error)
+      })
+    }
+
+    if (!notificationEvaluationStarted) {
+      notificationEvaluationStarted = true
+      startedNotificationEvaluationOnThisMount = true
+      triggerNotificationEvaluation()
+      notificationEvaluationIntervalId = window.setInterval(
+        triggerNotificationEvaluation,
+        NOTIFICATION_EVALUATION_INTERVAL_MS,
+      )
+    }
+
     function handleVisibilityChange() {
       if (
         document.visibilityState !== 'hidden' &&
@@ -195,11 +218,24 @@ export function AppLayout() {
 
       runAutomaticBackupCheck()
       scheduleNextAutomaticBackupCheck()
+
+      if (document.visibilityState === 'visible') {
+        triggerNotificationEvaluation()
+      }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
+      if (startedNotificationEvaluationOnThisMount) {
+        notificationEvaluationStarted = false
+
+        if (notificationEvaluationIntervalId !== null) {
+          window.clearInterval(notificationEvaluationIntervalId)
+          notificationEvaluationIntervalId = null
+        }
+      }
+
       if (startedAutomaticBackupOnThisMount) {
         automaticBackupCheckStarted = false
 
@@ -273,6 +309,7 @@ export function AppLayout() {
             {Capacitor.isNativePlatform() ? 'Aplicación Android' : 'Web / PWA'}
           </p>
           <div className="flex items-center gap-2">
+            <NotificationBell />
             <button
               aria-label={themeLabel}
               className="inline-flex size-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-950"
@@ -294,6 +331,7 @@ export function AppLayout() {
         <div className="flex items-center justify-between gap-3 py-3 md:hidden">
           <p className="text-sm font-semibold text-slate-900 dark:text-white">Private Balance</p>
           <div className="flex items-center gap-2">
+            <NotificationBell />
             <button
               aria-label={themeLabel}
               className="inline-flex size-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"

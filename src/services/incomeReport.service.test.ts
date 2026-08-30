@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ServiceIncome } from '../types/service'
 import type { AppSettings } from '../types/settings'
+import { DEFAULT_NOTIFICATION_PREFERENCES } from '../notifications/notificationDefaults'
 import { createDefaultOnboardingState } from '../utils/onboarding'
 
 const servicesTable = {
@@ -75,6 +76,7 @@ function baseSettings(overrides: Partial<AppSettings> = {}): AppSettings {
     googleDriveConnected: false,
     closedLocationSeasons: [],
     reopenedLocationSeasons: [],
+    notificationPreferences: DEFAULT_NOTIFICATION_PREFERENCES,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,

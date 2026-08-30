@@ -20,6 +20,7 @@ import IncomeDetailPage from '../pages/Income/IncomeDetailPage'
 import IncomePendingReportPage from '../pages/Income/IncomePendingReportPage'
 import InsightDashboardPage from '../pages/Insights/InsightDashboardPage'
 import MorePage from '../pages/More/MorePage'
+import NotificationCenterPage from '../pages/Notifications/NotificationCenterPage'
 import MovementsPage from '../pages/Movements/MovementsPage'
 import ReportPreviewPage from '../pages/Reports/ReportPreviewPage'
 import ReportsPage from '../pages/Reports/ReportsPage'
@@ -28,6 +29,7 @@ import SettingsBusinessPage from '../pages/Settings/SettingsBusinessPage'
 import SettingsPage from '../pages/Settings/SettingsPage'
 import SettingsSecurityPage from '../pages/Settings/SettingsSecurityPage'
 import SettingsLicensePage from '../pages/Settings/SettingsLicensePage'
+import SettingsNotificationsPage from '../pages/Settings/SettingsNotificationsPage'
 import SettingsDiagnosticsPage from '../pages/Settings/SettingsDiagnosticsPage'
 import CommunicationChannelsPage from '../pages/Settings/CommunicationChannelsPage'
 import AIExecutionInspectorPage from '../pages/Debug/AIExecutionInspectorPage'
@@ -91,6 +93,7 @@ export function RouterProvider() {
             <Route path="temporadas" element={<UsageModeGuard allowed={['professional']}><SeasonsPage /></UsageModeGuard>} />
             <Route path="settings/backup" element={<SettingsBackupPage />} />
             <Route path="settings/business" element={<SettingsBusinessPage />} />
+            <Route path="settings/notifications" element={<SettingsNotificationsPage />} />
             <Route path="settings/security" element={<SettingsSecurityPage />} />
             <Route path="settings/license" element={<SettingsLicensePage />} />
             <Route path="settings/diagnostics" element={<SettingsDiagnosticsPage />} />
@@ -99,6 +102,7 @@ export function RouterProvider() {
             <Route path="currency-converter" element={<CurrencyQuotePage />} />
             <Route path="more" element={<MorePage />} />
             <Route path="conversation" element={<ConversationPage />} />
+            <Route path="notifications" element={<NotificationCenterPage />} />
             <Route path="debug" element={<DevOnlyGuard><DebugPage /></DevOnlyGuard>} />
             <Route path="debug/ai-execution-inspector" element={<DevOnlyGuard><AIExecutionInspectorPage /></DevOnlyGuard>} />
             <Route path="debug/ai-developer-playground" element={<DevOnlyGuard><AIDeveloperPlaygroundPage /></DevOnlyGuard>} />

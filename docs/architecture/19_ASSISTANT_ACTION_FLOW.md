@@ -2,6 +2,8 @@
 
 Ver [ADR-031](../adr/ADR-031-Assistant-Action-Flow-Implementation.md) (por qué se implementó así) y [ADR-030](../adr/ADR-030-Intelligent-Assistant-Platform.md) (visión). Este documento describe la arquitectura **tal como quedó implementada**, en `src/intelligence/assistant/`.
 
+Para cuándo un insight detectado por el Copiloto puede convertirse en una notificación proactiva (fuera del flujo conversacional descrito aquí), ver [ADR-034](../adr/ADR-034-Copilot-Proactive-Notifications.md) y su implementación Fase 1 en `src/notifications/`.
+
 ## 1. Arquitectura del flujo conversacional
 
 ```

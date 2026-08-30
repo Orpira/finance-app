@@ -36,6 +36,8 @@ import {
   detectTimeZone,
 } from '../utils/onboarding'
 import { migrateSeasonPlanningV31 } from './migrations/v31SeasonPlanning'
+import type { CopilotNotification } from '../notifications/types'
+import { DEFAULT_NOTIFICATION_PREFERENCES } from '../notifications/notificationDefaults'
 
 export const DEFAULT_SETTINGS_ID = 'app'
 
@@ -75,6 +77,7 @@ export function createDefaultSettings(): AppSettings {
     googleDriveLastBackupStatus: undefined,
     closedLocationSeasons: [],
     reopenedLocationSeasons: [],
+    notificationPreferences: DEFAULT_NOTIFICATION_PREFERENCES,
     createdAt: now,
     updatedAt: now,
   }
@@ -111,6 +114,7 @@ export class FinanceDB extends Dexie {
   >
   incomeAdditionals!: Table<IncomeAdditional, number>
   financialGoals!: Table<FinancialGoal, FinancialGoal['id']>
+  notifications!: Table<CopilotNotification, CopilotNotification['id']>
 
   constructor() {
     super('finance-app')
@@ -874,6 +878,38 @@ export class FinanceDB extends Dexie {
       })
       .upgrade(migrateSeasonPlanningV31)
 
+    // ADR-034: local-only store for Copilot proactive notifications. Deliberately excluded
+    // from exportDatabaseSnapshot/backupService (generated app state, not user financial data —
+    // same treatment as licenses/deviceIdentity/knowledge* below).
+    this.version(32).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt',
+      expenses:
+        '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods:
+        '++id,status,startDate,endDate,plannedEndDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+      communicationChannels: 'id,type,provider,status,updatedAt',
+      deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+      conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+      knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+      knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+      financialSnapshots:
+        'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+      knowledgeSnapshots:
+        'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+      incomeAdditionals: '++id,incomeId,createdAt',
+      financialGoals: 'id,type,status,startDate,endDate,updatedAt',
+      notifications: 'id,dedupKey,priority,status,createdAt,expiresAt',
+    })
+
     this.financialSnapshots.hook('updating', () => {
       throw new Error('SNAPSHOT_PERSISTENCE_APPEND_ONLY')
     })
@@ -915,6 +951,7 @@ export async function resetDatabase() {
       db.communicationChannels,
       db.incomeAdditionals,
       db.financialGoals,
+      db.notifications,
     ],
     async () => {
       await Promise.all([
@@ -929,6 +966,7 @@ export async function resetDatabase() {
         db.communicationChannels.clear(),
         db.incomeAdditionals.clear(),
         db.financialGoals.clear(),
+        db.notifications.clear(),
       ])
 
       await db.settings.put(createDefaultSettings())

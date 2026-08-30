@@ -1,4 +1,5 @@
 import type { IncomeCalculationMethod, WorkedTimeUnit } from '../catalogs/incomeCalculationMethods'
+import type { NotificationPreferences } from '../notifications/types'
 import type { OnboardingState } from './onboarding'
 
 export type CurrencyCode =
@@ -100,6 +101,7 @@ export interface AppSettings {
   googleDriveLastBackupStatus?: string
   closedLocationSeasons: ClosedLocationSeason[]
   reopenedLocationSeasons: ReopenedLocationSeason[]
+  notificationPreferences: NotificationPreferences
   createdAt: string
   updatedAt: string
 }
