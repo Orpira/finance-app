@@ -10,7 +10,7 @@ export async function buildSeasonGoalAchievedCandidate(): Promise<NotificationCa
 
   return {
     type: 'SEASON_GOAL_ACHIEVED',
-    priority: 'P3',
+    priority: 'P2',
     source: 'goal',
     title: 'Meta de temporada alcanzada',
     message: `Has alcanzado la Meta de temporada de ${snapshot.period.name}.`,

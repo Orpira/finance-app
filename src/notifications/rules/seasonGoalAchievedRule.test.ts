@@ -33,12 +33,12 @@ describe('buildSeasonGoalAchievedCandidate', () => {
     expect(await buildSeasonGoalAchievedCandidate()).toBeNull()
   })
 
-  it('genera un candidato P3 cuando la meta se alcanza o supera', async () => {
+  it('genera un candidato P2 cuando la meta se alcanza o supera', async () => {
     getActiveEarningPeriod.mockResolvedValue(activePeriod())
     getSeasonStatistics.mockResolvedValue({ realGain: 1200, expenses: 0, netGain: 1200 })
 
     const candidate = await buildSeasonGoalAchievedCandidate()
-    expect(candidate?.priority).toBe('P3')
+    expect(candidate?.priority).toBe('P2')
     expect(candidate?.dedupKey).toBe('season-goal-achieved:1')
   })
 })
