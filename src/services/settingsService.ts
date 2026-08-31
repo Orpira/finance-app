@@ -59,10 +59,19 @@ function normalizeSettings(settings: AppSettings): AppSettings {
   const pinHash = typeof settings.pinHash === 'string' && settings.pinHash.length > 0
     ? settings.pinHash
     : undefined
+  const defaults = createDefaultSettings()
 
   return {
-    ...createDefaultSettings(),
+    ...defaults,
     ...settings,
+    // Merge por campo: un registro persistido de antes de que existiera una preferencia nueva
+    // (p. ej. las de entrega Android de Fase 1.5) no debe heredar `undefined` para ese campo —
+    // debe recibir su propio valor por defecto en vez de que el spread superficial de arriba
+    // reemplace todo el objeto notificationPreferences.
+    notificationPreferences: {
+      ...defaults.notificationPreferences,
+      ...settings.notificationPreferences,
+    },
     id: DEFAULT_SETTINGS_ID,
     usageMode,
     userType: toLegacyUserType(usageMode),

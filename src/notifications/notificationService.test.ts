@@ -41,6 +41,10 @@ function createFakeRepository(initial: CopilotNotification[] = []): Notification
     async countNonCriticalSince() {
       return [...rows.values()].filter((row) => row.status !== 'suppressed' && row.priority !== 'P0').length
     },
+    async updateDelivery(id, delivery) {
+      const existing = rows.get(id)
+      if (existing) rows.set(id, { ...existing, delivery })
+    },
   }
 }
 

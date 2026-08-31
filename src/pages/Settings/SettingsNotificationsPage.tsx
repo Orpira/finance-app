@@ -1,12 +1,50 @@
+import { Capacitor, type PermissionState } from '@capacitor/core'
 import { Save } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 
 import { PageHeader } from '../../components/layout/PageHeader'
+import {
+  checkAndroidNotificationPermission,
+  requestAndroidNotificationPermission,
+} from '../../notifications/delivery/androidPermissions'
 import { getSettings, updateSettings } from '../../services/settingsService'
 import type { NotificationPreferences } from '../../notifications/types'
 import type { AppSettings } from '../../types/settings'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+const ANDROID_TOGGLES: Array<{
+  key: keyof Pick<
+    NotificationPreferences,
+    | 'androidNotificationsEnabled'
+    | 'androidActionRequiredEnabled'
+    | 'androidFinancialInsightsEnabled'
+    | 'androidSummaryEnabled'
+  >
+  label: string
+  description: string
+}> = [
+  {
+    key: 'androidNotificationsEnabled',
+    label: 'Permitir notificaciones nativas',
+    description: 'Interruptor general del canal Android. Sin esto, el Copiloto solo avisa dentro de la app.',
+  },
+  {
+    key: 'androidActionRequiredEnabled',
+    label: 'Acciones que requieren atención',
+    description: 'Situaciones críticas o que requieren una decisión tuya (P0/P1).',
+  },
+  {
+    key: 'androidFinancialInsightsEnabled',
+    label: 'Insights financieros',
+    description: 'Observaciones relevantes que hoy solo ves en el Centro de notificaciones.',
+  },
+  {
+    key: 'androidSummaryEnabled',
+    label: 'Resúmenes',
+    description: 'Resúmenes periódicos como notificación nativa, además de en la app.',
+  },
+]
 
 const TOGGLES: Array<{
   key: keyof Pick<
@@ -53,12 +91,16 @@ const TOGGLES: Array<{
   },
 ]
 
+const isAndroidPlatform = Capacitor.getPlatform() === 'android'
+
 export function SettingsNotificationsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [androidPermission, setAndroidPermission] = useState<PermissionState | null>(null)
 
   useEffect(() => {
     getSettings().then(setSettings)
+    if (isAndroidPlatform) checkAndroidNotificationPermission().then(setAndroidPermission)
   }, [])
 
   function updatePreferences(updates: Partial<NotificationPreferences>) {
@@ -68,6 +110,14 @@ export function SettingsNotificationsPage() {
         : current,
     )
     setSaveStatus('idle')
+  }
+
+  async function handleAndroidNotificationsToggle(enabled: boolean) {
+    updatePreferences({ androidNotificationsEnabled: enabled })
+    if (enabled && isAndroidPlatform) {
+      const result = await requestAndroidNotificationPermission()
+      setAndroidPermission(result)
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -116,6 +166,50 @@ export function SettingsNotificationsPage() {
               </span>
             </label>
           ))}
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-3 border-t border-slate-200 pt-5">
+          <legend className="px-1 text-sm font-medium text-slate-700">Notificaciones de Android</legend>
+
+          {isAndroidPlatform ? (
+            <>
+              {androidPermission === 'denied' ? (
+                <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                  Las notificaciones de Android están desactivadas en los permisos del dispositivo.
+                </p>
+              ) : null}
+
+              {ANDROID_TOGGLES.map((toggle) => (
+                <label className="flex items-start gap-3" key={toggle.key}>
+                  <input
+                    checked={preferences[toggle.key]}
+                    className="mt-1 size-4 accent-emerald-700"
+                    disabled={toggle.key !== 'androidNotificationsEnabled' && !preferences.androidNotificationsEnabled}
+                    onChange={(event) =>
+                      toggle.key === 'androidNotificationsEnabled'
+                        ? handleAndroidNotificationsToggle(event.target.checked)
+                        : updatePreferences({ [toggle.key]: event.target.checked })
+                    }
+                    type="checkbox"
+                  />
+                  <span className="flex flex-col gap-1">
+                    <span className="text-sm font-medium text-slate-700">{toggle.label}</span>
+                    <span className="text-sm text-slate-500">{toggle.description}</span>
+                  </span>
+                </label>
+              ))}
+
+              <p className="text-sm text-slate-500">
+                La opción &quot;Mostrar información financiera&quot; de arriba también controla qué se
+                muestra en la notificación de Android cuando la pantalla está bloqueada.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">
+              Las notificaciones nativas de Android están disponibles solo en la app instalada en tu
+              dispositivo.
+            </p>
+          )}
         </fieldset>
 
         <fieldset className="flex flex-col gap-3 border-t border-slate-200 pt-5">

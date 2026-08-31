@@ -40,6 +40,22 @@ export interface NotificationAction {
   destination: string
 }
 
+/** Fase 1.5 — superficies por las que una CopilotNotification puede entregarse. */
+export type NotificationChannel = 'in_app' | 'android'
+
+export type AndroidDeliveryStatus = 'delivered' | 'permission_denied' | 'failed' | 'not_requested'
+
+export interface NotificationDeliveryState {
+  inApp?: {
+    deliveredAt?: string
+  }
+  android?: {
+    deliveredAt?: string
+    nativeId?: number
+    status?: AndroidDeliveryStatus
+  }
+}
+
 /**
  * A reason to possibly notify the user. Produced by rules (season, agenda, ...).
  * Never delivered directly — always evaluated by the NotificationPolicyEngine first.
@@ -82,6 +98,8 @@ export interface CopilotNotification {
   status: NotificationStatus
   privacy: NotificationPrivacy
   metadata?: Record<string, unknown>
+  /** Estado de entrega por canal (Fase 1.5). No confundir con `status`, que es funcional (read/acted/...). */
+  delivery?: NotificationDeliveryState
 }
 
 export type NotificationDecision =
@@ -99,6 +117,11 @@ export interface NotificationPreferences {
   quietHoursEnabled: boolean
   quietHoursStart: string
   quietHoursEnd: string
+  /** Fase 1.5 — interruptor general de entrega nativa Android (P0/P1 por defecto). */
+  androidNotificationsEnabled: boolean
+  androidActionRequiredEnabled: boolean
+  androidFinancialInsightsEnabled: boolean
+  androidSummaryEnabled: boolean
 }
 
 /** Everything the Policy Engine needs besides the candidate. Assembled by NotificationService. */

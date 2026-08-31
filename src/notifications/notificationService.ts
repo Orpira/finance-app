@@ -1,6 +1,10 @@
-import { getSettings } from '../services/settingsService'
+import {
+  createNotificationDeliveryService,
+  type NotificationDeliveryService,
+} from './delivery/NotificationDeliveryService'
 import { DEFAULT_NOTIFICATION_PREFERENCES } from './notificationDefaults'
 import { DEFAULT_COOLDOWN_MS, NOTIFICATION_COOLDOWNS } from './notificationLimits'
+import { getStoredNotificationPreferences } from './notificationPreferencesStore'
 import { evaluateNotificationCandidate } from './notificationPolicyEngine'
 import { createDexieNotificationRepository, type NotificationRepository } from './notificationRepository'
 import type {
@@ -21,14 +25,15 @@ export interface NotificationServiceDeps {
   repository?: NotificationRepository
   getPreferences?: () => Promise<NotificationPreferences>
   now?: () => Date
+  deliveryService?: NotificationDeliveryService
 }
 
 export function createNotificationService(deps: NotificationServiceDeps = {}) {
   const repository = deps.repository ?? createDexieNotificationRepository()
-  const getPreferences =
-    deps.getPreferences ??
-    (async () => (await getSettings()).notificationPreferences ?? DEFAULT_NOTIFICATION_PREFERENCES)
+  const getPreferences = deps.getPreferences ?? getStoredNotificationPreferences
   const now = deps.now ?? (() => new Date())
+  const deliveryService =
+    deps.deliveryService ?? createNotificationDeliveryService({ repository, getPreferences })
 
   async function sweepExpired(currentTime: Date) {
     const all = await repository.list()
@@ -69,6 +74,11 @@ export function createNotificationService(deps: NotificationServiceDeps = {}) {
 
     if (decision.decision === 'deliver') {
       await repository.create(decision.notification)
+      try {
+        await deliveryService.deliver(decision.notification)
+      } catch (error) {
+        console.warn('[copilot-notifications] fallo en la entrega multicanal.', error)
+      }
     } else {
       console.info(`[copilot-notifications] ${decision.decision}: ${candidate.type} (${decision.reason})`)
     }

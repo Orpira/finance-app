@@ -1,5 +1,10 @@
 import { db } from '../database/db'
-import type { CopilotNotification, NotificationPriority, NotificationStatus } from './types'
+import type {
+  CopilotNotification,
+  NotificationDeliveryState,
+  NotificationPriority,
+  NotificationStatus,
+} from './types'
 
 export interface NotificationRepository {
   create(notification: CopilotNotification): Promise<void>
@@ -10,6 +15,8 @@ export interface NotificationRepository {
   setStatus(id: string, status: NotificationStatus): Promise<void>
   countByPrioritySince(priority: NotificationPriority, since: Date): Promise<number>
   countNonCriticalSince(since: Date): Promise<number>
+  /** Fase 1.5 — reemplaza el estado de entrega multicanal (una sola escritura por notificación). */
+  updateDelivery(id: string, delivery: NotificationDeliveryState): Promise<void>
 }
 
 const UNRESOLVED_STATUSES: NotificationStatus[] = ['new', 'seen', 'read']
@@ -72,6 +79,10 @@ export function createDexieNotificationRepository(
       return all.filter(
         (notification) => notification.priority !== 'P0' && notification.status !== 'suppressed',
       ).length
+    },
+
+    async updateDelivery(id, delivery) {
+      await database.notifications.update(id, { delivery })
     },
   }
 }

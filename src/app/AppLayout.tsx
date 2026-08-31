@@ -10,13 +10,14 @@ import {
 } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { AppointmentReminderAlert } from '../components/AppointmentReminderAlert'
 import { FloatingCreateMenu } from '../components/layout/FloatingCreateMenu'
 import { ServiceCompletionAlert } from '../components/ServiceCompletionAlert'
 import { ServiceTimeAlert } from '../components/ServiceTimeAlert'
 import { NotificationBell } from '../notifications/components/NotificationBell'
+import { registerAndroidNotificationTapListener } from '../notifications/delivery/androidNotificationListener'
 import { runNotificationEvaluation } from '../notifications/notificationEvaluationRunner'
 import {
   getDelayUntilNextDailyBackupCheck,
@@ -82,6 +83,7 @@ let automationOutboxStarted = false
 let deviceProvisioningStarted = false
 let notificationEvaluationStarted = false
 let notificationEvaluationIntervalId: number | null = null
+let androidNotificationListenerStarted = false
 
 const NOTIFICATION_EVALUATION_INTERVAL_MS = 30 * 60 * 1000
 
@@ -104,6 +106,7 @@ function scheduleNextAutomaticBackupCheck() {
 
 export function AppLayout() {
   const location = useLocation()
+  const navigate = useNavigate()
   const [theme, setTheme] = useState<ThemeMode>('system')
   const [usageMode, setUsageMode] = useState<UsageMode>('professional')
   const [licenseType, setLicenseType] = useState<LicenseType | null>(null)
@@ -121,6 +124,8 @@ export function AppLayout() {
   useEffect(() => {
     let startedAutomaticBackupOnThisMount = false
     let startedNotificationEvaluationOnThisMount = false
+    let startedAndroidNotificationListenerOnThisMount = false
+    let androidNotificationListenerCleanup: (() => void) | null = null
 
     function syncLayoutSettings(settings: { theme: ThemeMode; usageMode: UsageMode }) {
       setTheme(settings.theme)
@@ -226,7 +231,25 @@ export function AppLayout() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
+    if (!androidNotificationListenerStarted) {
+      androidNotificationListenerStarted = true
+      startedAndroidNotificationListenerOnThisMount = true
+      registerAndroidNotificationTapListener((destination) => navigate(destination))
+        .then((cleanup) => {
+          androidNotificationListenerCleanup = cleanup
+        })
+        .catch((error) => {
+          console.warn('No se pudo registrar el listener de notificaciones Android del Copiloto.', error)
+        })
+    }
+
     return () => {
+      if (startedAndroidNotificationListenerOnThisMount) {
+        androidNotificationListenerStarted = false
+        androidNotificationListenerCleanup?.()
+        androidNotificationListenerCleanup = null
+      }
+
       if (startedNotificationEvaluationOnThisMount) {
         notificationEvaluationStarted = false
 
@@ -249,6 +272,8 @@ export function AppLayout() {
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
 
     }
+    // navigate de react-router-dom es estable entre renders; no se re-suscribe al listener nativo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function toggleTheme() {

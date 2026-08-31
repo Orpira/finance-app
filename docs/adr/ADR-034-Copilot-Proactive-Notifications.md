@@ -1172,6 +1172,107 @@ La implementación se considerará conforme con este ADR cuando:
 
 ---
 
+## 34. Fase 1.5 — Entrega nativa Android
+
+La Fase 1 (secciones 1-33) implementó el pipeline completo hasta el Centro de notificaciones y la
+campana in-app. La Fase 1.5 añade una segunda superficie de entrega — notificación nativa Android —
+sin tocar ninguna de las decisiones que este ADR ya fija: el `NotificationPolicyEngine` sigue siendo
+la única autoridad sobre si una situación merece notificarse.
+
+### 34.1 Decisión de tecnología
+
+Se usa **`@capacitor/local-notifications`** como único canal Android, reutilizando la misma librería
+que Agenda ya usa para recordatorios de citas (`src/services/reminderService.ts`).
+
+Razones:
+
+* Local-first: no requiere servidor ni conectividad.
+* Ya está integrada en el proyecto — no se añade una segunda dependencia nativa.
+* Privacidad: el contenido nunca sale del dispositivo.
+* Suficiente para el alcance actual (P0/P1); no se necesita FCM/push remoto para notificar algo
+  que la propia app ya decidió y persistió localmente.
+
+Explícitamente **fuera de alcance**: Firebase Cloud Messaging, push remoto, Supabase, cualquier
+backend de notificaciones, WorkManager, o inteligencia en segundo plano.
+
+### 34.2 Arquitectura
+
+```text
+NotificationCandidate
+        ↓
+NotificationPolicyEngine        (sin cambios — única autoridad)
+        ↓
+CopilotNotification
+        ↓
+NotificationDeliveryService     (nuevo — determina canales autorizados y entrega, no re-evalúa reglas)
+        ↓
+   ┌────────────────┬────────────────┐
+   ↓                                 ↓
+InAppNotificationDelivery     AndroidNotificationDelivery
+(Centro + campana,            (@capacitor/local-notifications,
+ Dexie sigue siendo            canales `copilot-critical` / `copilot-important`)
+ la fuente de verdad)
+```
+
+Una `CopilotNotification` puede tener presencia en dos canales (`delivery.inApp`, `delivery.android`)
+pero sigue siendo un único registro — el `dedupKey`, el cooldown y los límites de frecuencia siguen
+operando sobre la notificación lógica, nunca sobre el canal.
+
+### 34.3 Política de canales
+
+| Prioridad | Canales por defecto | Preferencia que lo habilita |
+|---|---|---|
+| P0 — crítica | in-app + Android | `androidNotificationsEnabled` (P0 no puede desactivarse individualmente) |
+| P1 — acción requerida | in-app + Android | `androidNotificationsEnabled` + `androidActionRequiredEnabled` |
+| P2 — insight relevante | solo in-app | preparado tras `androidFinancialInsightsEnabled` (OFF por defecto) |
+| P3 — informativa | solo in-app | preparado tras `androidSummaryEnabled` (OFF por defecto) |
+
+Centralizado en `src/notifications/delivery/notificationChannelPolicy.ts` — ningún otro componente
+decide esto.
+
+### 34.4 Permisos
+
+* Se **comprueba** (`checkPermissions`) antes de cada entrega Android; nunca se **solicita** desde
+  ese flujo en segundo plano.
+* La solicitud (`requestPermissions`) solo ocurre desde una interacción explícita del usuario en
+  Configuración → Notificaciones → "Permitir notificaciones nativas".
+* Permiso `denied`: no se reintenta automáticamente, no se lanza excepción, las notificaciones
+  in-app continúan funcionando con normalidad, y Configuración muestra un aviso informativo.
+
+### 34.5 Privacidad
+
+Con `showFinancialDetailsExternally = false` (valor por defecto) o `notification.privacy = 'private'`,
+el contenido Android es genérico ("Private Balance — Una situación requiere tu atención. Toca para
+revisar." o equivalente para no-P0) y nunca incluye importes, saldos, porcentajes ni descripciones de
+operaciones. El detalle real solo aparece si el usuario activó el flag explícitamente y el tipo de
+notificación lo permite.
+
+### 34.6 Deep-link y estado `acted`
+
+Al tocar una notificación Android se valida `action.destination` contra un allowlist de rutas
+internas (`src/notifications/delivery/notificationDestination.ts` — rechaza `javascript:`, `data:`,
+URLs externas y rutas protocol-relative) y se navega dentro de la app. La notificación pasa a
+`status: 'acted'` mediante el mismo `NotificationService.markActed()` que ya usa el Centro — nunca se
+crea un segundo registro. Tocar la notificación **nunca** ejecuta una acción financiera por sí solo.
+
+### 34.7 Límite explícito
+
+Local Notification ≠ inteligencia en segundo plano. Con la app completamente cerrada, JavaScript no
+puede detectar un insight nuevo (p. ej. una Meta que acaba de entrar en riesgo); eso solo se evalúa
+cuando la app está activa o vuelve a primer plano. Sí pueden llegar con la app cerrada los eventos que
+ya se programaron nativamente con antelación (p. ej. una fecha de fin de temporada ya conocida), pero
+la Fase 1.5 no introduce scheduling complejo de este tipo — solo entrega, en el momento de la decisión,
+los eventos que el Policy Engine ya autorizó.
+
+### 34.8 Hoja de ruta
+
+* **Fase 1** — Notificaciones in-app (Centro + campana).
+* **Fase 1.5** — Entrega nativa Android para P0/P1 (esta sección).
+* **Fase 2** — Insights financieros avanzados.
+* **Fase 3** — Copiloto con inteligencia más compleja / LLM.
+
+---
+
 ## Resultado
 
 Este ADR formaliza por primera vez el alcance de las notificaciones proactivas del Copiloto de Private Balance.
@@ -1179,3 +1280,6 @@ Este ADR formaliza por primera vez el alcance de las notificaciones proactivas d
 La existencia de este ADR **no implica que todas las capacidades descritas deban implementarse inmediatamente**.
 
 Define la frontera arquitectónica que cualquier implementación presente o futura deberá respetar.
+
+La Fase 1.5 (sección 34) extiende la entrega a un canal nativo Android sin alterar ninguna de las
+decisiones de política fijadas en las secciones 1-33.

@@ -11,4 +11,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   quietHoursEnabled: true,
   quietHoursStart: '22:00',
   quietHoursEnd: '08:00',
+  androidNotificationsEnabled: true,
+  androidActionRequiredEnabled: true,
+  androidFinancialInsightsEnabled: false,
+  androidSummaryEnabled: false,
 }

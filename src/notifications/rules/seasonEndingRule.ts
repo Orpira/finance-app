@@ -7,7 +7,9 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 export function daysRemaining(period: Pick<EarningPeriod, 'plannedEndDate'>, now: Date): number | undefined {
   if (!period.plannedEndDate) return undefined
-  const end = new Date(`${period.plannedEndDate}T23:59:59`).getTime()
+  // plannedEndDate se persiste como ISO completo ("...T23:59:59.999Z", ver earningPeriodService.ts);
+  // slice(0, 10) evita concatenar una hora sobre un timestamp que ya la incluye.
+  const end = new Date(`${period.plannedEndDate.slice(0, 10)}T23:59:59`).getTime()
   return Math.ceil((end - now.getTime()) / MS_PER_DAY)
 }
 

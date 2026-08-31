@@ -45,6 +45,19 @@ describe('buildSeasonEndingCandidate', () => {
     expect(candidate?.action?.destination).toBe('/temporadas/1')
   })
 
+  it('genera un candidato P1 cuando plannedEndDate es un ISO completo (formato real de earningPeriodService)', async () => {
+    getActiveEarningPeriod.mockResolvedValue({
+      id: 1,
+      status: 'active',
+      name: 'Verano',
+      plannedEndDate: '2026-09-04T23:59:59.999Z',
+    })
+
+    const candidate = await buildSeasonEndingCandidate(NOW)
+    expect(candidate?.priority).toBe('P1')
+    expect(await candidate?.revalidate?.()).toBe(true)
+  })
+
   it('revalidate() devuelve false si la temporada ya no está activa', async () => {
     getActiveEarningPeriod.mockResolvedValueOnce({
       id: 1,
