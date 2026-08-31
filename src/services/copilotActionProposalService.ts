@@ -4,6 +4,7 @@ import type { ServiceIncome } from '../types/service'
 import type { CurrencyCode } from '../types/settings'
 import { getPendingIncomes } from './incomeReport.service'
 import { createFinancialCopilotService } from './financialCopilotService'
+import { getLocalDateKey } from '../utils/currency'
 
 export type CopilotActionPreparation =
   | { readonly kind: 'no-action' }
@@ -19,29 +20,34 @@ function normalize(value: string): string {
   return value.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
+// La fecha de "hoy" para el copiloto es siempre la calendario LOCAL
+// (getLocalDateKey), nunca UTC: `now` aquí es el reloj real del
+// dispositivo, y usar componentes/serialización UTC desplaza "este mes"/
+// "esta semana" un día hacia el mes o semana anterior en husos UTC+ durante
+// las horas cercanas a medianoche (mismo defecto que getTodayInputDate).
 function dateKey(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  return getLocalDateKey(date)
 }
 
 function currentMonthRange(now: Date) {
   return {
-    start: dateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))),
-    end: dateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))),
+    start: dateKey(new Date(now.getFullYear(), now.getMonth(), 1)),
+    end: dateKey(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
   }
 }
 
 function resolveReportRange(text: string, now: Date) {
   if (/esta semana|semana actual/.test(text)) {
     const start = new Date(now)
-    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7))
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7))
     return { start: dateKey(start), end: dateKey(now) }
   }
   const mentionedMonth = Object.entries(MONTHS).find(([name]) => new RegExp(`\\b${name}\\b`).test(text))?.[1]
   if (mentionedMonth !== undefined) {
-    const year = mentionedMonth > now.getUTCMonth() ? now.getUTCFullYear() - 1 : now.getUTCFullYear()
+    const year = mentionedMonth > now.getMonth() ? now.getFullYear() - 1 : now.getFullYear()
     return {
-      start: dateKey(new Date(Date.UTC(year, mentionedMonth, 1))),
-      end: dateKey(new Date(Date.UTC(year, mentionedMonth + 1, 0))),
+      start: dateKey(new Date(year, mentionedMonth, 1)),
+      end: dateKey(new Date(year, mentionedMonth + 1, 0)),
     }
   }
   return currentMonthRange(now)
@@ -54,8 +60,8 @@ function resolveMentionedDate(text: string, now: Date): string | null {
   if (match === null) return null
   const month = MONTHS[match[2]]
   if (month === undefined) return null
-  const year = month > now.getUTCMonth() ? now.getUTCFullYear() - 1 : now.getUTCFullYear()
-  return dateKey(new Date(Date.UTC(year, month, Number(match[1]))))
+  const year = month > now.getMonth() ? now.getFullYear() - 1 : now.getFullYear()
+  return dateKey(new Date(year, month, Number(match[1])))
 }
 
 function resolveAmount(text: string): number | null {

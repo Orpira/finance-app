@@ -10,16 +10,35 @@ export function formatCurrency(amount: number, currency: CurrencyCode) {
   }).format(amount)
 }
 
+/**
+ * Fecha calendario LOCAL (no UTC) en formato YYYY-MM-DD — la fecha de
+ * negocio canónica de Private Balance para ingresos, egresos, citas y
+ * temporadas. Un movimiento registrado a las 00:47 hora local pertenece al
+ * día local en que ocurrió, aunque su instante UTC equivalente todavía
+ * corresponda al día anterior (p.ej. 01/09 00:47 en Madrid = 31/08 22:47
+ * UTC). `date.toISOString().slice(0, 10)` desplaza un día hacia atrás
+ * cualquier hora local posterior a medianoche en husos UTC+; esta función
+ * deriva la fecha solo de los componentes locales del `Date`, nunca de su
+ * representación UTC, y por eso es DST-safe sin offsets manuales.
+ */
+export function getLocalDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
 export function getTodayInputDate() {
-  return new Date().toISOString().slice(0, 10)
+  return getLocalDateKey(new Date())
 }
 
 export function getCurrentMonthRange() {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth()
-  const from = new Date(year, month, 1).toISOString().slice(0, 10)
-  const to = new Date(year, month + 1, 0).toISOString().slice(0, 10)
+  const from = getLocalDateKey(new Date(year, month, 1))
+  const to = getLocalDateKey(new Date(year, month + 1, 0))
 
   return { from, to }
 }
@@ -34,8 +53,8 @@ export function getCurrentWeekRange() {
   sunday.setDate(monday.getDate() + 6)
 
   return {
-    from: monday.toISOString().slice(0, 10),
-    to: sunday.toISOString().slice(0, 10),
+    from: getLocalDateKey(monday),
+    to: getLocalDateKey(sunday),
   }
 }
 
@@ -55,8 +74,8 @@ export function getLastDaysRange(days: number) {
   fromDate.setDate(now.getDate() - (days - 1))
 
   return {
-    from: fromDate.toISOString().slice(0, 10),
-    to: now.toISOString().slice(0, 10),
+    from: getLocalDateKey(fromDate),
+    to: getLocalDateKey(now),
   }
 }
 

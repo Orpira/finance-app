@@ -2,7 +2,7 @@ import {
   getLatestExchangeRate,
   saveExchangeRate,
 } from './exchangeRateService'
-import { EUR_COP_DEFAULT_RATE } from '../utils/currency'
+import { EUR_COP_DEFAULT_RATE, getTodayInputDate } from '../utils/currency'
 import type { CurrencyCode } from '../types/settings'
 
 const FRANKFURTER_API_BASE_URL = 'https://api.frankfurter.dev/v2/rate'
@@ -121,7 +121,7 @@ export async function resolveExchangeRate(
         baseCurrency,
         targetCurrency,
         rate,
-        date: date ?? new Date().toISOString().slice(0, 10),
+        date: date ?? getTodayInputDate(),
         source: 'api',
       })
 

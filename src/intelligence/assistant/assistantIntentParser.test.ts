@@ -113,3 +113,9 @@ describe('parseAssistantIntent', () => {
     expect(result.fields.currency).toBe('USD')
   })
 })
+
+// La cobertura del bug P0 ("Hoy" cerca de medianoche debe resolver al día
+// LOCAL, no al UTC) vive en test/localDateKey.test.ts en vez de aquí:
+// manipular `process.env.TZ` requiere tipos de Node, y src/ solo declara
+// tipos de `vite/client` (tsconfig.app.json) — igual que el resto de tests
+// de zona horaria del repo (ver test/intentResolver.test.ts).

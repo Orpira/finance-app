@@ -62,4 +62,27 @@ describe('copilotActionProposalService', () => {
     expect(july.proposal.fields).toEqual(expect.objectContaining({ periodStart: '2026-07-01', periodEnd: '2026-07-31' }))
     expect(week.proposal.fields).toEqual(expect.objectContaining({ periodStart: '2026-08-03', periodEnd: '2026-08-05' }))
   })
+
+  it('"este mes" a las 00:47 hora local resuelve septiembre, no agosto (P0 fecha local, cobertura adicional al Copiloto)', async () => {
+    // now = 2026-08-31T22:47:00.000Z = 2026-09-01T00:47 en Europe/Madrid
+    // (CEST, UTC+2). Antes de la corrección, currentMonthRange usaba
+    // getUTCFullYear/getUTCMonth + Date.UTC y devolvía agosto.
+    const originalTz = process.env.TZ
+    process.env.TZ = 'Europe/Madrid'
+    try {
+      const service = createCopilotActionProposalService({
+        now: () => new Date('2026-08-31T22:47:00.000Z'),
+        loadSnapshot: vi.fn().mockResolvedValue({
+          currency: 'EUR', currentMonth: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },
+        }),
+      })
+      const result = await service.prepare('Prepara un PDF de este mes', { defaultCurrency: 'EUR' })
+      if (result.kind !== 'proposal' || result.proposal.kind !== 'generate_report') throw new Error('expected report')
+      expect(result.proposal.fields).toEqual(
+        expect.objectContaining({ periodStart: '2026-09-01', periodEnd: '2026-09-30' }),
+      )
+    } finally {
+      process.env.TZ = originalTz
+    }
+  })
 })

@@ -5,6 +5,7 @@ import type {
   ExpenseProposalFields,
   IncomeProposalFields,
 } from './assistantProposalContracts'
+import { getLocalDateKey } from '../../utils/currency'
 
 /**
  * Interpretación determinista y 100% local de los tres intents de acción del
@@ -127,8 +128,12 @@ function extractExpenseCategory(rawText: string): string | null {
   return category.length > 0 ? category.charAt(0).toUpperCase() + category.slice(1) : null
 }
 
+// "hoy"/"ayer"/"mañana" en el chat del Asistente deben resolverse contra el
+// calendario LOCAL del dispositivo, nunca UTC: un mensaje enviado a las
+// 00:47 hora local sigue siendo "hoy" aunque el instante UTC equivalente
+// corresponda todavía al día anterior (mismo defecto que getTodayInputDate).
 function toIsoDate(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  return getLocalDateKey(date)
 }
 
 function addDays(date: Date, days: number): Date {
