@@ -32,7 +32,7 @@ import {
 } from '../../utils/appointmentReminders'
 import { formatCurrency } from '../../utils/currency'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
-import { getDurationDisplay } from '../../utils/serviceDuration'
+import { getIncomeDurationDisplay } from '../../utils/serviceDuration'
 import { isReported } from '../../catalogs/reportStatuses'
 
 // Agenda no muestra cronómetros ni cuentas regresivas: los avisos de tiempo
@@ -315,10 +315,14 @@ export function AgendaPage() {
             ) : (
               <ul className="divide-y divide-slate-200">
                 {selectedAppointments.map((appointment) => {
+                  const isHourlyWorkday = appointment.incomeCalculationMethod === 'hourly_workday'
                   const hasTimerStarted = Boolean(appointment.timerStartedAt)
                   const scheduledStartTime = new Date(appointment.dateTime).getTime()
                   const isAvailable = now.getTime() >= scheduledStartTime
+                  // "Jornada por horas" no usa cronómetro (D-011): no existe un
+                  // paso de "Iniciar servicio" que pueda quedar retrasado.
                   const isDelayed =
+                    !isHourlyWorkday &&
                     !hasTimerStarted &&
                     !appointment.completed &&
                     now.getTime() > scheduledStartTime
@@ -354,11 +358,8 @@ export function AgendaPage() {
                           </p>
                           <p className="mt-1 text-sm text-slate-500">
                             {getTimeFromDateTime(appointment.dateTime)} ·{' '}
-                            {getDurationDisplay(
-                              appointment.duration,
-                              appointment.durationLabel,
-                            )}{' '}
-                            previstos ·{' '}
+                            {getIncomeDurationDisplay(appointment)}{' '}
+                            {isHourlyWorkday ? 'previstas' : 'previstos'} ·{' '}
                             {formatCurrency(
                               appointment.expectedAmount,
                               appointment.currency as CurrencyCode,
@@ -463,7 +464,21 @@ export function AgendaPage() {
 
                       {!appointment.completed && !isClosedSeason && !appointmentIsReported && (
                         <div className="flex flex-wrap gap-2">
-                          {hasTimerStarted ? (
+                          {isHourlyWorkday ? (
+                            // "Jornada por horas" no usa cronómetro (D-011): se
+                            // registra el ingreso directamente con las horas
+                            // tecleadas al agendar/editar la cita, sin pasar por
+                            // "Iniciar servicio".
+                            <button
+                              className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                              disabled={!isAvailable || isProcessing}
+                              onClick={() => handleCompleteAppointment(appointment)}
+                              type="button"
+                            >
+                              <Check className="size-4" aria-hidden="true" />
+                              Servicio realizado
+                            </button>
+                          ) : hasTimerStarted ? (
                             <button
                               className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                               disabled={isProcessing}

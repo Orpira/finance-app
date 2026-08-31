@@ -148,6 +148,25 @@ describe('disponibilidad de agenda', () => {
   })
 })
 
+describe('updateAppointment — inmutabilidad del método de cálculo', () => {
+  it('el método de cálculo con el que se agendó la cita no cambia al editarla (AG-CALC-008)', async () => {
+    const id = await createAppointment(
+      appointment({ incomeCalculationMethod: 'hourly_workday', workedTime: 2, workedTimeUnit: 'hours' }),
+    )
+
+    await updateAppointment(id, {
+      // Un envío indebido (bug de UI, o el usuario cambió Configuración entre
+      // medio) nunca debe reinterpretar una cita ya agendada.
+      incomeCalculationMethod: 'service_duration',
+      workedTime: 3,
+    })
+
+    await expect(getAppointmentById(id)).resolves.toEqual(
+      expect.objectContaining({ incomeCalculationMethod: 'hourly_workday', workedTime: 3 }),
+    )
+  })
+})
+
 describe('updateAppointment', () => {
   it('persiste el tipo de pago al crear y editar una cita', async () => {
     const id = await createAppointment(appointment({ paymentType: 'cash' }))
@@ -243,6 +262,27 @@ describe('claimAppointmentCompletion', () => {
     expect(result).toBeNull()
     await expect(getAppointmentById(id)).resolves.toEqual(
       expect.objectContaining({ completed: false }),
+    )
+  })
+
+  it('"Jornada por horas" no exige timerStartedAt: se puede reclamar sin haber iniciado un cronómetro (D-011)', async () => {
+    const id = await createAppointment(
+      appointment({
+        dateTime: '2026-08-24T15:00',
+        incomeCalculationMethod: 'hourly_workday',
+        workedTime: 2,
+        workedTimeUnit: 'hours',
+      }),
+    )
+
+    const result = await claimAppointmentCompletion(id, {
+      timerStoppedAt: '2026-08-24T15:00:00.000Z',
+      actualDuration: 0,
+    })
+
+    expect(result).not.toBeNull()
+    await expect(getAppointmentById(id)).resolves.toEqual(
+      expect.objectContaining({ completed: true }),
     )
   })
 

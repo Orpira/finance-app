@@ -117,9 +117,15 @@ export async function updateAppointment(
     assertReportStatusUpdateIsAllowed(currentAppointment, settings.usageMode, updates)
     assertReportedRecordUpdateIsAllowed(currentAppointment, updates)
 
+    // El método de cálculo es inmutable una vez creada la cita (igual que en
+    // incomeService.ts, PB-IS-0007 sección 9): editar Configuración o la cita
+    // nunca debe reinterpretar con qué método se agendó.
+    const safeUpdates: UpdateAppointmentInput = { ...updates }
+    delete safeUpdates.incomeCalculationMethod
+
     const updatedAppointment = normalizeReportStatus({
       ...currentAppointment,
-      ...updates,
+      ...safeUpdates,
     }) as Appointment
     const scheduleChanged =
       updatedAppointment.dateTime !== currentAppointment.dateTime ||
@@ -200,8 +206,12 @@ export async function claimAppointmentCompletion(
       return null
     }
 
-    if (!currentAppointment.timerStartedAt) {
-      // "Servicio realizado" nunca crea un servicio nuevo.
+    // "Jornada por horas" no usa cronómetro (D-011/PB-IS-0007): no exige
+    // haber pulsado "Iniciar servicio" para poder reclamar la finalización.
+    // "Servicio por tiempo" conserva la regla original: sin cronómetro
+    // iniciado, "Servicio realizado" nunca crea un ingreso nuevo.
+    const method = currentAppointment.incomeCalculationMethod ?? 'service_duration'
+    if (method === 'service_duration' && !currentAppointment.timerStartedAt) {
       return null
     }
 

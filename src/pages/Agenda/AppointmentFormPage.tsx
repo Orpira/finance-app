@@ -17,13 +17,13 @@ import type {
   AppointmentReminder,
   AppointmentReminderUnit,
 } from '../../types/appointment'
-import type { AppSettings } from '../../types/settings'
+import type { AppSettings, CurrencyCode } from '../../types/settings'
 import {
   createDefaultAppointmentReminders,
   createEmptyReminder,
   hasInvalidReminders,
 } from '../../utils/appointmentReminders'
-import { getTodayInputDate } from '../../utils/currency'
+import { formatCurrency, getTodayInputDate, roundMoney } from '../../utils/currency'
 import { getActiveEarningPeriod, isEarningPeriodClosed } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import {
@@ -39,6 +39,9 @@ import {
 import { paymentTypes } from '../../utils/paymentTypes'
 import { isReported } from '../../catalogs/reportStatuses'
 import { useDialog } from '../../components/dialogs/useDialog'
+import type { IncomeCalculationMethod } from '../../catalogs/incomeCalculationMethods'
+import { shouldCollectPaymentTypeAtRegistration } from '../../catalogs/incomeCalculationMethods'
+import { runIncomeCalculation } from '../../utils/incomeCalculation/incomeCalculatorRegistry'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'timeConflict'
 type SeasonActionStatus = 'idle' | 'reopening' | 'reopened' | 'error'
@@ -109,6 +112,7 @@ export function AppointmentFormPage() {
   const [duration, setDuration] = useState(0)
   const [durationLabel, setDurationLabel] =
     useState<ServiceDurationLabel | ''>('')
+  const [workedTime, setWorkedTime] = useState(0)
   const [expectedAmount, setExpectedAmount] = useState(120)
   const [paymentType, setPaymentType] = useState(paymentTypes[0].value)
   const [notes, setNotes] = useState('')
@@ -126,6 +130,46 @@ export function AppointmentFormPage() {
   const isSelectedScheduleInPast = isScheduleInPast(date, time, now)
   const hasReminderErrors = hasInvalidReminders(reminders)
   const pageTitle = isEditing ? 'Editar cita' : 'Nueva cita'
+
+  // Fuente única de verdad del método de cálculo: la misma que usa
+  // IncomePage.tsx. Una cita nueva toma el método vigente en Configuración;
+  // una cita existente conserva el snapshot con el que se agendó (nunca se
+  // reinterpreta si Configuración cambia después) — igual regla que
+  // ServiceIncome.incomeCalculationMethod (PB-IS-0007).
+  const registrationMethod: IncomeCalculationMethod = editingAppointment
+    ? editingAppointment.incomeCalculationMethod ?? 'service_duration'
+    : settings?.incomeCalculationMethod ?? 'service_duration'
+  const usesHourlyWorkday = registrationMethod === 'hourly_workday'
+  const usesServiceDuration = !usesHourlyWorkday
+  const collectsPaymentType = shouldCollectPaymentTypeAtRegistration(registrationMethod)
+  // Igual que en IncomePage.tsx: el valor por hora no se edita en el
+  // formulario, se autocompleta desde Configuración y queda fijo como
+  // snapshot de la cita al guardarla.
+  const hourlyRateApplied = editingAppointment?.hourlyRateApplied ?? settings?.hourlyRate ?? 0
+  const hourlyCalculation = useMemo(() => {
+    if (!usesHourlyWorkday) {
+      return { realGain: 0 }
+    }
+
+    try {
+      return runIncomeCalculation('hourly_workday', {
+        totalAmount: 0,
+        percentage: 0,
+        usageMode: 'professional',
+        incomeType: 'ingreso',
+        workedTime,
+        workedTimeUnit: 'hours',
+        hourlyRate: hourlyRateApplied,
+      })
+    } catch {
+      // Entrada incompleta durante la edición en vivo (tiempo trabajado o
+      // valor por hora aún en cero). La validación real ocurre en handleSubmit.
+      return { realGain: 0 }
+    }
+  }, [hourlyRateApplied, usesHourlyWorkday, workedTime])
+  const principalAmount = usesHourlyWorkday
+    ? hourlyCalculation.realGain
+    : expectedAmount
   const isCurrentLocationClosed =
     !isEditing &&
     isLocationSeasonClosed(settings ?? {}, settings?.closedLocationSeasons)
@@ -203,6 +247,7 @@ export function AppointmentFormPage() {
           ? appointment.durationLabel
           : getNumericDurationLabel(appointment.duration) ?? '',
       )
+      setWorkedTime(appointment.workedTime ?? 0)
       setExpectedAmount(appointment.expectedAmount)
       setPaymentType(appointment.paymentType ?? paymentTypes[0].value)
       setNotes(appointment.notes ?? '')
@@ -313,7 +358,22 @@ export function AppointmentFormPage() {
       return
     }
 
-    if (!durationLabel || isSelectedScheduleInPast || hasReminderErrors) {
+    if (usesServiceDuration && !durationLabel) {
+      setSaveStatus('error')
+      return
+    }
+
+    if (usesHourlyWorkday && (!workedTime || workedTime <= 0)) {
+      setSaveStatus('error')
+      return
+    }
+
+    if (usesHourlyWorkday && (!hourlyRateApplied || hourlyRateApplied <= 0)) {
+      setSaveStatus('error')
+      return
+    }
+
+    if (isSelectedScheduleInPast || hasReminderErrors) {
       setSaveStatus('error')
       return
     }
@@ -336,12 +396,24 @@ export function AppointmentFormPage() {
 
     const input = {
       dateTime: `${date}T${time}`,
-      duration,
-      durationLabel,
-      expectedAmount,
+      // "Jornada por horas" no persiste duration/durationLabel en minutos: el
+      // tiempo trabajado real vive en workedTime/workedTimeUnit (igual que
+      // ServiceIncome). duration se sigue derivando en minutos únicamente
+      // para la disponibilidad de la agenda (colisión de horarios).
+      duration: usesHourlyWorkday ? Math.round(workedTime * 60) : duration,
+      durationLabel: usesHourlyWorkday ? undefined : durationLabel,
+      expectedAmount: usesHourlyWorkday
+        ? roundMoney(hourlyCalculation.realGain)
+        : expectedAmount,
       currency:
         editingAppointment?.currency ?? currentSettings.defaultCurrency,
-      paymentType,
+      paymentType: collectsPaymentType ? paymentType : undefined,
+      // Snapshot inmutable: appointmentService.ts descarta este campo en las
+      // ediciones (igual que incomeService.ts con los ingresos).
+      incomeCalculationMethod: registrationMethod,
+      workedTime: usesHourlyWorkday ? workedTime : undefined,
+      workedTimeUnit: usesHourlyWorkday ? ('hours' as const) : undefined,
+      hourlyRateApplied: usesHourlyWorkday ? hourlyRateApplied : undefined,
       country: editingAppointment?.country ?? currentSettings.country,
       city: editingAppointment?.city ?? currentSettings.city,
       notes: notes.trim(),
@@ -511,41 +583,85 @@ export function AppointmentFormPage() {
           </label>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ServiceDurationSelect
-            onChange={handleDurationChange}
-            value={durationLabel}
-          />
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">Valor</span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              min={0}
-              onChange={(event) => setExpectedAmount(Number(event.target.value))}
-              step="0.01"
-              type="number"
-              value={expectedAmount}
+        {usesServiceDuration ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ServiceDurationSelect
+              onChange={handleDurationChange}
+              value={durationLabel}
             />
-          </label>
-        </div>
 
-        <label className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-slate-700">
-            Tipo de pago
-          </span>
-          <select
-            className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-            onChange={(event) => setPaymentType(event.target.value)}
-            value={paymentType}
-          >
-            {paymentTypes.map((type) => (
-              <option key={type.value} value={type.value}>
-                {type.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">Valor</span>
+              <input
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                min={0}
+                onChange={(event) => setExpectedAmount(Number(event.target.value))}
+                step="0.01"
+                type="number"
+                value={expectedAmount}
+              />
+            </label>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                Duración (Horas)
+              </span>
+              <div className="flex items-center gap-3">
+                <input
+                  className="h-11 flex-1 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  min={0}
+                  onChange={(event) => {
+                    setWorkedTime(Number(event.target.value))
+                    setSaveStatus('idle')
+                  }}
+                  step="0.25"
+                  type="number"
+                  value={workedTime}
+                />
+                <span className="text-sm font-medium text-slate-500">
+                  Horas
+                </span>
+              </div>
+            </label>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                Valor
+              </span>
+              <p className="h-11 flex items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-base font-semibold text-slate-950">
+                {formatCurrency(
+                  hourlyCalculation.realGain,
+                  (editingAppointment?.currency ??
+                    settings.defaultCurrency) as CurrencyCode,
+                )}
+              </p>
+              <span className="text-xs text-slate-500">
+                Horas × valor por hora configurado en Ajustes del negocio.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {collectsPaymentType && (
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-slate-700">
+              Tipo de pago
+            </span>
+            <select
+              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              onChange={(event) => setPaymentType(event.target.value)}
+              value={paymentType}
+            >
+              {paymentTypes.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <label className="flex flex-col gap-2">
           <span className="text-sm font-medium text-slate-700">Notas</span>
@@ -663,8 +779,12 @@ export function AppointmentFormPage() {
           >
             {saveStatus === 'saved' && 'Cita guardada'}
             {saveStatus === 'error' &&
-              (!durationLabel
+              (usesServiceDuration && !durationLabel
                 ? 'Selecciona una duración'
+                : usesHourlyWorkday && (!workedTime || workedTime <= 0)
+                ? 'Ingresa la duración en horas'
+                : usesHourlyWorkday && (!hourlyRateApplied || hourlyRateApplied <= 0)
+                ? 'Configura el valor por hora en Ajustes del negocio'
                 : isSelectedScheduleInPast
                 ? 'Selecciona una fecha y hora actual o futura'
                 : hasReminderErrors
@@ -686,8 +806,11 @@ export function AppointmentFormPage() {
               disabled={
                 saveStatus === 'saving' ||
                 isCurrentLocationClosed ||
-                !durationLabel ||
-                expectedAmount <= 0 ||
+                (usesServiceDuration
+                  ? !durationLabel || expectedAmount <= 0
+                  : workedTime <= 0 ||
+                    hourlyRateApplied <= 0 ||
+                    principalAmount <= 0) ||
                 isSelectedScheduleInPast ||
                 hasReminderErrors
               }
