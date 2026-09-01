@@ -106,6 +106,22 @@ export function getEarningPeriodById(id: number) {
   return db.earningPeriods.get(id)
 }
 
+/**
+ * La temporada inmediatamente anterior a `period` (por startDate), sin
+ * importar su status. Se usa para comparativas de Inicio ("vs. temporada
+ * anterior"): la temporada activa es la unidad temporal principal en modo
+ * profesional, así que la comparación debe ser temporada-contra-temporada,
+ * nunca mes-contra-mes.
+ */
+export async function getPreviousEarningPeriod(
+  period: Pick<EarningPeriod, 'id' | 'startDate'>,
+) {
+  const periods = await listEarningPeriods() // ya ordenadas desc por startDate
+  return periods.find(
+    (candidate) => candidate.id !== period.id && candidate.startDate < period.startDate,
+  )
+}
+
 export async function getActiveEarningPeriod() {
   const active = await db.earningPeriods.where('status').equals('active').toArray()
   return active.sort((a, b) => b.startDate.localeCompare(a.startDate))[0]

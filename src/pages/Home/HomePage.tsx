@@ -43,7 +43,7 @@ import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
 import { calculateFinancialTotals, recordBelongsToEarningPeriod, sumIncomeAdditionalsValue } from '../../utils/financeStats'
 import { getIncomeCompactLabel } from '../../utils/incomeTypes'
-import { getActiveEarningPeriod, getSeasonGoalProgress, getSeasonStatistics, type SeasonStatistics } from '../../services/earningPeriodService'
+import { getActiveEarningPeriod, getPreviousEarningPeriod, getSeasonGoalProgress, getSeasonStatistics, listSeasonRecords, type SeasonStatistics } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { FinancialGoal } from '../../types/financialGoal'
 import { financialGoalService } from '../../services/financialGoalService'
@@ -120,13 +120,27 @@ function monthRange(offset: number) {
   }
 }
 
-function Variation({ current, previous }: { current: number; previous: number }) {
+function Variation({
+  current,
+  previous,
+  scope = 'month',
+}: {
+  current: number
+  previous: number
+  // 'month': modo Personal, compara contra el mes calendario anterior.
+  // 'season': modo profesional, compara contra la temporada anterior (la
+  // temporada activa es la unidad temporal principal, puede abarcar varios
+  // meses — nunca se compara contra "el mes anterior").
+  scope?: 'month' | 'season'
+}) {
+  const referenceLabel = scope === 'month' ? 'mes anterior' : 'temporada anterior'
+
   if (previous <= 0) {
     return (
       <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
         {previous === 0 && current > 0
-          ? 'Nueva actividad este mes'
-          : 'Sin datos el mes anterior'}
+          ? `Nueva actividad ${scope === 'month' ? 'este mes' : 'esta temporada'}`
+          : `Sin datos ${scope === 'month' ? 'el' : 'la'} ${referenceLabel}`}
       </span>
     )
   }
@@ -143,7 +157,7 @@ function Variation({ current, previous }: { current: number; previous: number })
           : 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
       ].join(' ')}
     >
-      {formatted} vs. mes anterior
+      {formatted} vs. {referenceLabel}
     </span>
   )
 }
@@ -154,6 +168,19 @@ export function HomePage() {
   const [currentExpenses, setCurrentExpenses] = useState<Expense[]>([])
   const [previousIncomes, setPreviousIncomes] = useState<ServiceIncome[]>([])
   const [previousExpenses, setPreviousExpenses] = useState<Expense[]>([])
+  // Fuente canónica de "movimientos de la temporada activa" (misma que usa
+  // Meta de temporada vía getSeasonStatistics/listSeasonRecords): sin
+  // recorte por mes calendario. Alimenta únicamente las tarjetas de Resumen
+  // financiero en modo profesional; currentIncomes/currentExpenses (arriba)
+  // siguen siendo mensuales sin cambios, porque también alimentan el
+  // snapshot 'home.current-month' y los insights "este mes" del Copiloto.
+  const [seasonIncomes, setSeasonIncomes] = useState<ServiceIncome[]>([])
+  const [seasonExpenses, setSeasonExpenses] = useState<Expense[]>([])
+  // Comparativa "vs. temporada anterior" en modo profesional (nunca "vs.
+  // mes anterior": la temporada activa puede abarcar varios meses, así que
+  // la comparación debe ser temporada-contra-temporada).
+  const [previousSeasonIncomes, setPreviousSeasonIncomes] = useState<ServiceIncome[]>([])
+  const [previousSeasonExpenses, setPreviousSeasonExpenses] = useState<Expense[]>([])
   const [activePeriod, setActivePeriod] = useState<EarningPeriod | null>(null)
   const [activePeriodStats, setActivePeriodStats] = useState<SeasonStatistics | null>(null)
   const [promotedCurrentSummary, setPromotedCurrentSummary] = useState<{
@@ -219,6 +246,7 @@ export function HomePage() {
 
     async function loadDashboard(nextSettings?: AppSettings) {
       const resolvedSettings = nextSettings ?? await getSettings()
+      const isBasicUser = isBasicMode(resolvedSettings)
       const [
         period,
         incomes,
@@ -238,11 +266,19 @@ export function HomePage() {
         listExpenses(),
         financialGoalService.list(),
       ])
-      const periodStats = period?.id ? await getSeasonStatistics(period.id) : null
+      const [periodStats, seasonRecords, previousPeriod] = await Promise.all([
+        period?.id ? getSeasonStatistics(period.id) : Promise.resolve(null),
+        // Profesional únicamente: Personal no usa temporadas (Requisito
+        // "modo Personal" — no introducir dependencia de temporada ahí).
+        !isBasicUser && period?.id ? listSeasonRecords(period.id) : Promise.resolve(null),
+        !isBasicUser && period ? getPreviousEarningPeriod(period) : Promise.resolve(undefined),
+      ])
+      const previousSeasonRecords = !isBasicUser && previousPeriod?.id
+        ? await listSeasonRecords(previousPeriod.id)
+        : null
 
       if (!mounted) return
 
-      const isBasicUser = isBasicMode(resolvedSettings)
       const modeIncomes = incomes.filter((item) =>
         recordBelongsToUsageMode(item, resolvedSettings.usageMode),
       )
@@ -267,6 +303,18 @@ export function HomePage() {
       const contextualExpenses = isBasicUser
         ? modeExpenses
         : modeExpenses.filter(belongsToActivePeriod)
+      const seasonModeIncomes = (seasonRecords?.incomes ?? []).filter((item) =>
+        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
+      )
+      const seasonModeExpenses = (seasonRecords?.expenses ?? []).filter((item) =>
+        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
+      )
+      const previousSeasonModeIncomes = (previousSeasonRecords?.incomes ?? []).filter((item) =>
+        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
+      )
+      const previousSeasonModeExpenses = (previousSeasonRecords?.expenses ?? []).filter((item) =>
+        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
+      )
       setSettings(resolvedSettings)
       const explicitInstant = new Date().toISOString() as UtcInstant
       setSnapshotTime({
@@ -279,6 +327,10 @@ export function HomePage() {
       setActivePeriodStats(periodStats)
       setCurrentIncomes(contextualIncomes)
       setCurrentExpenses(contextualExpenses)
+      setSeasonIncomes(seasonModeIncomes)
+      setSeasonExpenses(seasonModeExpenses)
+      setPreviousSeasonIncomes(previousSeasonModeIncomes)
+      setPreviousSeasonExpenses(previousSeasonModeExpenses)
       // Para variación mensual, el mes anterior no debe limitarse a la temporada activa actual.
       // De lo contrario, una temporada cerrada del mes anterior queda fuera y se muestra "sin datos".
       setPreviousIncomes(oldModeIncomes)
@@ -400,21 +452,43 @@ export function HomePage() {
 
   const totals = useMemo(() => {
     if (!settings) return null
+    // Las tarjetas de Resumen financiero (Ganancia/Ingresos/Egresos/
+    // Adicionales) usan el scope de TEMPORADA ACTIVA en modo profesional
+    // (mismo universo de movimientos que Meta de temporada), no el mes
+    // calendario: una temporada activa que atraviesa varios meses no debe
+    // perder sus acumulados al cambiar de mes. La comparativa ("previous")
+    // sigue la misma unidad: temporada anterior en profesional, mes
+    // anterior en Personal — nunca se mezclan las dos unidades.
+    const isBasicUser = isBasicMode(settings)
+    const summaryIncomes = isBasicUser ? currentIncomes : seasonIncomes
+    const summaryExpenses = isBasicUser ? currentExpenses : seasonExpenses
+    const comparisonIncomes = isBasicUser ? previousIncomes : previousSeasonIncomes
+    const comparisonExpenses = isBasicUser ? previousExpenses : previousSeasonExpenses
     return {
       current: calculateFinancialTotals(
-        currentIncomes,
-        currentExpenses,
+        summaryIncomes,
+        summaryExpenses,
         settings.defaultCurrency,
         settings.secondaryCurrency,
       ),
       previous: calculateFinancialTotals(
-        previousIncomes,
-        previousExpenses,
+        comparisonIncomes,
+        comparisonExpenses,
         settings.defaultCurrency,
         settings.secondaryCurrency,
       ),
     }
-  }, [currentExpenses, currentIncomes, previousExpenses, previousIncomes, settings])
+  }, [
+    currentExpenses,
+    currentIncomes,
+    previousExpenses,
+    previousIncomes,
+    previousSeasonExpenses,
+    previousSeasonIncomes,
+    seasonExpenses,
+    seasonIncomes,
+    settings,
+  ])
 
   if (!settings || !totals || !balanceSummary || !financialCopilot) {
     return <section className="flex min-h-[60dvh] items-center justify-center text-sm text-slate-500">Cargando...</section>
@@ -438,8 +512,15 @@ export function HomePage() {
     },
     settings.showUnreportedIncome,
   )
-  const currentAdditionalsTotal = sumIncomeAdditionalsValue(currentIncomes, settings.defaultCurrency)
-  const previousAdditionalsTotal = sumIncomeAdditionalsValue(previousIncomes, settings.defaultCurrency)
+  const isBasicUser = isBasicMode(settings)
+  const currentAdditionalsTotal = sumIncomeAdditionalsValue(
+    isBasicUser ? currentIncomes : seasonIncomes,
+    settings.defaultCurrency,
+  )
+  const previousAdditionalsTotal = sumIncomeAdditionalsValue(
+    isBasicUser ? previousIncomes : previousSeasonIncomes,
+    settings.defaultCurrency,
+  )
 
   const cards = [
     {
@@ -497,7 +578,9 @@ export function HomePage() {
           <div>
             <p className="text-sm font-medium text-emerald-300">{settings.businessName || 'Private Balance'}</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">Inicio</h1>
-            <p className="mt-2 text-sm text-slate-300">Resumen financiero del mes actual</p>
+            <p className="mt-2 text-sm text-slate-300">
+              {isBasicUser ? 'Resumen financiero del mes actual' : 'Resumen financiero de la temporada activa'}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {!isBasicMode(settings) && (
@@ -529,7 +612,7 @@ export function HomePage() {
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900" key={label}>
             <div className="flex items-center justify-between gap-3">
               <span className={`flex size-11 items-center justify-center rounded-xl ${tone}`}><Icon className="size-5" aria-hidden="true" /></span>
-              <Variation current={value} previous={previous} />
+              <Variation current={value} previous={previous} scope={isBasicUser ? 'month' : 'season'} />
             </div>
             <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
             <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
