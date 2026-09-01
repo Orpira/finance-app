@@ -5,4 +5,5 @@ export const QUICK_SUGGESTIONS = [
   'Ver resumen semanal',
   'Ingresos sin reportar',
   'Comparar este mes con el anterior',
+  'Comparar esta temporada con la anterior',
 ] as const

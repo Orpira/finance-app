@@ -5,6 +5,7 @@ import type { ActivationDecision } from './activationContracts'
 export type FinancialDirectResponseBuilderId =
   | 'financial-transactions-summary'
   | 'financial-balance-summary'
+  | 'financial-insights-season-comparison'
   | 'financial-generic-success'
   | 'financial-direct-incomplete-payload'
   | 'financial-direct-unavailable'
@@ -385,6 +386,89 @@ export function buildFinancialBalanceDirectResponseText(input: {
   return `${lead} ingresos por ${formatAmount(incomeTotal, currencyCode)}, egresos por ${formatAmount(expenseTotal, currencyCode)} y un balance neto de ${formatAmount(netBalance, currencyCode)}.`
 }
 
+function readSections(value: unknown): readonly JsonRecord[] | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const sections = value.sections
+  return Array.isArray(sections) ? sections.filter(isRecord) : null
+}
+
+function findSectionRows(sections: readonly JsonRecord[], sectionId: string): readonly JsonRecord[] {
+  const section = sections.find((candidate) => candidate.sectionId === sectionId)
+  const rows = section?.rows
+  return Array.isArray(rows) ? rows.filter(isRecord) : []
+}
+
+function readNonEmptyString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : fallback
+}
+
+/**
+ * Transforma el `output` real de `financial_insights` (secciones
+ * 'current-season-insights'/'previous-season-insights'/'season-comparison',
+ * ya calculadas por insightsTool.ts vía getSeasonStatistics — nunca
+ * recalcula) en la frase "temporada activa vs. temporada anterior". La
+ * temporada activa es la unidad temporal principal en modo profesional
+ * (misma convención que Inicio, HomePage.tsx): nunca compara contra el mes
+ * calendario.
+ */
+export function buildFinancialInsightsSeasonComparisonDirectResponseText(input: {
+  readonly output: AIToolJsonValue
+}): string | null {
+  const sections = readSections(input.output)
+  if (sections === null) {
+    return null
+  }
+
+  const currentSeasonRows = findSectionRows(sections, 'current-season-insights')
+  if (currentSeasonRows.length === 0) {
+    return 'No hay una temporada activa para comparar.'
+  }
+
+  const comparisonRows = findSectionRows(sections, 'season-comparison')
+  if (comparisonRows.length === 0) {
+    const currentSeasonName = readNonEmptyString(currentSeasonRows[0]?.seasonName, 'Tu temporada activa')
+    return `${currentSeasonName} es tu primera temporada — todavía no hay una temporada anterior con la que comparar.`
+  }
+
+  const row = comparisonRows[0]
+  const currentGain = row.currentRealGain
+  const previousGain = row.previousRealGain
+
+  if (!isFiniteNumber(currentGain) || !isFiniteNumber(previousGain)) {
+    return null
+  }
+
+  const currentSeasonName = readNonEmptyString(row.currentSeasonName, 'la temporada activa')
+  const previousSeasonName = readNonEmptyString(row.previousSeasonName, 'la temporada anterior')
+  const currencyCode = typeof row.currentCurrencyCode === 'string' ? row.currentCurrencyCode : undefined
+  const lead = `En ${currentSeasonName} llevas ${formatAmount(currentGain, currencyCode)} de ganancia, frente a ${formatAmount(previousGain, currencyCode)} en ${previousSeasonName}`
+
+  if (previousGain <= 0) {
+    return previousGain === 0 && currentGain > 0
+      ? `${lead} — sin actividad previa para calcular una variación.`
+      : `${lead}.`
+  }
+
+  const change = ((currentGain - previousGain) / previousGain) * 100
+  const formattedChange = `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`
+  return `${lead} — una variación de ${formattedChange}.`
+}
+
+function requestsSeasonComparison(
+  toolArguments: Readonly<Record<string, AIToolJsonValue>> | undefined,
+): boolean {
+  const filters = toolArguments?.filters
+  if (!isRecord(filters)) {
+    return false
+  }
+
+  const sections = filters.sections
+  return Array.isArray(sections) && sections.includes('season-comparison')
+}
+
 const SAFE_UNAVAILABLE_TEXT = 'No pude completar tu consulta financiera en este momento. Intenta nuevamente en unos segundos.'
 
 /**
@@ -429,6 +513,18 @@ export function buildFinancialDirectResponseText(input: {
     return text === null
       ? { text: SAFE_UNAVAILABLE_TEXT, builderId: 'financial-direct-incomplete-payload' }
       : { text, builderId: 'financial-balance-summary' }
+  }
+
+  // Solo cuando la petición fue explícitamente de comparación de temporada
+  // (ver deterministicIntentResolver.ts, patrón "temporada"): las consultas
+  // genéricas de 'financial_insights' ("dame un resumen", "tendencia") sin
+  // ese filtro explícito conservan el mensaje genérico de abajo, sin cambiar
+  // su comportamiento existente.
+  if (toolId === 'financial_insights' && requestsSeasonComparison(input.decision.toolArguments)) {
+    const text = buildFinancialInsightsSeasonComparisonDirectResponseText({ output: step.output })
+    return text === null
+      ? { text: SAFE_UNAVAILABLE_TEXT, builderId: 'financial-direct-incomplete-payload' }
+      : { text, builderId: 'financial-insights-season-comparison' }
   }
 
   return { text: 'Consulté la información financiera solicitada.', builderId: 'financial-generic-success' }

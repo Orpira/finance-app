@@ -144,6 +144,31 @@ describe('Intent Resolver (PB-IS-014.1)', () => {
     expect(result.resolution.tools[0].arguments).toEqual({ format: 'json' })
   })
 
+  it('temporada: "comparar esta temporada con la anterior" enruta a financial_insights pidiendo season-comparison', async () => {
+    const resolver = createDeterministicIntentResolver()
+    const result = await resolver.resolve(createRequest('Comparar esta temporada con la anterior'))
+    expect(result.kind).toBe('success')
+    if (result.kind !== 'success') {
+      throw new Error('Expected success result')
+    }
+    expect(result.resolution.detectedIntent).toBe('insights')
+    expect(result.resolution.tools[0].toolId).toBe('financial_insights')
+    expect(result.resolution.tools[0].arguments).toEqual({
+      format: 'json',
+      filters: { sections: ['current-season-insights', 'previous-season-insights', 'season-comparison'] },
+    })
+  })
+
+  it('temporada tiene prioridad sobre las palabras clave de transacciones (mismo mensaje puede mencionar "ingresos")', async () => {
+    const resolver = createDeterministicIntentResolver()
+    const result = await resolver.resolve(createRequest('Compara mis ingresos de esta temporada con la anterior'))
+    expect(result.kind).toBe('success')
+    if (result.kind !== 'success') {
+      throw new Error('Expected success result')
+    }
+    expect(result.resolution.tools[0].toolId).toBe('financial_insights')
+  })
+
   it('intención desconocida', async () => {
     const resolver = createDeterministicIntentResolver()
     const result = await resolver.resolve(createRequest('hola, solo estoy probando'))

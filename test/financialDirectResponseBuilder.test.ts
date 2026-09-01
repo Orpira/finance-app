@@ -4,6 +4,7 @@ import type { ActivationDecision } from '../src/intelligence/ai-conversation/pro
 import {
   buildFinancialBalanceDirectResponseText,
   buildFinancialDirectResponseText,
+  buildFinancialInsightsSeasonComparisonDirectResponseText,
   buildFinancialTransactionsDirectResponseText,
 } from '../src/intelligence/ai-conversation/provider-orchestration/financialDirectResponseBuilder'
 import { createPromptContextBuilder } from '../src/intelligence/prompt-context-builder'
@@ -227,6 +228,71 @@ describe('Financial Balance Direct Response Builder (PB-IS-016.1-R1)', () => {
   })
 })
 
+function seasonSections(input: {
+  readonly currentSeasonRows?: unknown[]
+  readonly comparisonRows?: unknown[]
+}) {
+  return {
+    sections: [
+      { sectionId: 'current-season-insights', rows: input.currentSeasonRows ?? [] },
+      { sectionId: 'previous-season-insights', rows: [] },
+      { sectionId: 'season-comparison', rows: input.comparisonRows ?? [] },
+    ],
+  }
+}
+
+describe('Financial Insights Season Comparison Direct Response Builder', () => {
+  it('temporada activa vs. anterior: combina ganancia actual, anterior y variación en una frase natural', () => {
+    const text = buildFinancialInsightsSeasonComparisonDirectResponseText({
+      output: seasonSections({
+        currentSeasonRows: [{ seasonName: 'Temporada B' }],
+        comparisonRows: [{
+          currentSeasonName: 'Temporada B', currentRealGain: 150, currentCurrencyCode: 'GBP',
+          previousSeasonName: 'Temporada A', previousRealGain: 100,
+        }],
+      }),
+    })
+
+    expect(text).toBe('En Temporada B llevas 150,00 GBP de ganancia, frente a 100,00 GBP en Temporada A — una variación de +50.0%.')
+  })
+
+  it('variación negativa: el signo se refleja correctamente', () => {
+    const text = buildFinancialInsightsSeasonComparisonDirectResponseText({
+      output: seasonSections({
+        currentSeasonRows: [{ seasonName: 'Temporada B' }],
+        comparisonRows: [{
+          currentSeasonName: 'Temporada B', currentRealGain: 50, currentCurrencyCode: 'GBP',
+          previousSeasonName: 'Temporada A', previousRealGain: 100,
+        }],
+      }),
+    })
+
+    expect(text).toBe('En Temporada B llevas 50,00 GBP de ganancia, frente a 100,00 GBP en Temporada A — una variación de -50.0%.')
+  })
+
+  it('sin temporada anterior: primera temporada de la cuenta, sin dividir por cero', () => {
+    const text = buildFinancialInsightsSeasonComparisonDirectResponseText({
+      output: seasonSections({ currentSeasonRows: [{ seasonName: 'Temporada Única' }], comparisonRows: [] }),
+    })
+
+    expect(text).toBe('Temporada Única es tu primera temporada — todavía no hay una temporada anterior con la que comparar.')
+  })
+
+  it('sin temporada activa: mensaje claro, no null ni undefined', () => {
+    const text = buildFinancialInsightsSeasonComparisonDirectResponseText({
+      output: seasonSections({ currentSeasonRows: [] }),
+    })
+
+    expect(text).toBe('No hay una temporada activa para comparar.')
+  })
+
+  it('payload incompleto: sin sections devuelve null', () => {
+    const text = buildFinancialInsightsSeasonComparisonDirectResponseText({ output: { foo: 'bar' } })
+
+    expect(text).toBeNull()
+  })
+})
+
 function createResponseFixture(input: {
   readonly toolId: string
   readonly output: unknown
@@ -342,5 +408,48 @@ describe('Financial Direct Response dispatcher (PB-IS-016.1-R1)', () => {
 
     expect(outcome.builderId).toBe('financial-transactions-summary')
     expect(outcome.text).toBe('Hoy tus ingresos suman 1.250,00 EUR.')
+  })
+
+  it('financial_insights con filters.sections=season-comparison: delega en el builder de temporada', () => {
+    const response = createResponseFixture({
+      toolId: 'financial_insights',
+      output: {
+        sections: [
+          { sectionId: 'current-season-insights', rows: [{ seasonName: 'Temporada B' }] },
+          {
+            sectionId: 'season-comparison',
+            rows: [{
+              currentSeasonName: 'Temporada B', currentRealGain: 150, currentCurrencyCode: 'GBP',
+              previousSeasonName: 'Temporada A', previousRealGain: 100,
+            }],
+          },
+        ],
+      },
+    })
+    const outcome = buildFinancialDirectResponseText({
+      decision: createDecision({
+        toolId: 'financial_insights',
+        intent: 'insights',
+        toolArguments: { filters: { sections: ['current-season-insights', 'previous-season-insights', 'season-comparison'] } },
+      }),
+      userMessage: 'Comparar esta temporada con la anterior',
+      response,
+      now: () => TODAY,
+    })
+
+    expect(outcome.builderId).toBe('financial-insights-season-comparison')
+    expect(outcome.text).toBe('En Temporada B llevas 150,00 GBP de ganancia, frente a 100,00 GBP en Temporada A — una variación de +50.0%.')
+  })
+
+  it('financial_insights SIN filters.sections (p.ej. "dame un resumen"): conserva el mensaje genérico existente, sin cambiar su comportamiento', () => {
+    const response = createResponseFixture({ toolId: 'financial_insights', output: { insight: 'ahorro estable' } })
+    const outcome = buildFinancialDirectResponseText({
+      decision: createDecision({ toolId: 'financial_insights', intent: 'insights' }),
+      userMessage: 'Dame un resumen de tendencia',
+      response,
+      now: () => TODAY,
+    })
+
+    expect(outcome.builderId).toBe('financial-generic-success')
   })
 })

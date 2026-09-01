@@ -55,7 +55,7 @@ function createQuickActionController() {
 }
 
 describe('ConversationController - Quick Actions', () => {
-  it('mantiene la matriz de seis sugerencias auditadas', () => {
+  it('mantiene la matriz de siete sugerencias auditadas', () => {
     expect(QUICK_SUGGESTIONS).toEqual([
       'Registrar un ingreso',
       'Registrar un gasto',
@@ -63,6 +63,7 @@ describe('ConversationController - Quick Actions', () => {
       'Ver resumen semanal',
       'Ingresos sin reportar',
       'Comparar este mes con el anterior',
+      'Comparar esta temporada con la anterior',
     ])
   })
 
@@ -101,5 +102,15 @@ describe('ConversationController - Quick Actions', () => {
     expect(assistantMessage?.sections?.explanation).toBeTruthy()
     expect(controller.getState().context?.lastResult?.intent).toBe(intent)
     expect(pipeline.generateAssistantMessage).not.toHaveBeenCalled()
+  })
+
+  it('"Comparar esta temporada con la anterior" NO se resuelve con los cálculos locales mensuales: cae al pipeline completo (financial_insights/season-comparison)', async () => {
+    const { controller, pipeline } = createQuickActionController()
+
+    await controller.sendMessage('Comparar esta temporada con la anterior')
+
+    expect(pipeline.generateAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ userMessage: 'Comparar esta temporada con la anterior' }),
+    )
   })
 })

@@ -328,6 +328,35 @@ function resolveFromMessage(message: string, requestedAt: string): {
     }
   }
 
+  // "temporada" tiene prioridad sobre TRANSACTIONS_KEYWORD_PATTERN: un
+  // mensaje como "compara mis ingresos de esta temporada con la anterior"
+  // contiene "ingresos", pero la temporada activa es la unidad temporal
+  // principal en modo profesional (nunca el mes calendario) — la petición
+  // de comparación de temporada debe resolverse contra
+  // insightsTool.ts/season-comparison, no como un listado de transacciones
+  // con `filters.period` (imposible de derivar por aritmética de fechas:
+  // los límites de una temporada no son de calendario, requieren consultar
+  // getActiveEarningPeriod/listClosedEarningPeriods, algo que la Tool ya
+  // hace y este resolver — deliberadamente puro, sin acceso a base de
+  // datos — no debe duplicar).
+  if (/\btemporada/.test(normalized)) {
+    return {
+      detectedIntent: 'insights',
+      confidence: 0.8,
+      tool: {
+        toolId: 'financial_insights',
+        arguments: {
+          format: 'json',
+          filters: {
+            sections: ['current-season-insights', 'previous-season-insights', 'season-comparison'],
+          },
+        },
+      },
+      reasoning: 'Matched deterministic season comparison keyword ("temporada").',
+      semantics: noSemantics,
+    }
+  }
+
   if (TRANSACTIONS_KEYWORD_PATTERN.test(normalized)) {
     const period = resolveTemporalPeriod(normalized, requestedAt)
     const kinds = resolveTransactionKinds(normalized)
