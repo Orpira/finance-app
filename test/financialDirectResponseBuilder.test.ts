@@ -270,6 +270,20 @@ describe('Financial Insights Season Comparison Direct Response Builder', () => {
     expect(text).toBe('En Temporada B llevas 50,00 GBP de ganancia, frente a 100,00 GBP en Temporada A — una variación de -50.0%.')
   })
 
+  it('monedas distintas: muestra cada importe en su moneda y omite una variación inválida', () => {
+    const text = buildFinancialInsightsSeasonComparisonDirectResponseText({
+      output: seasonSections({
+        currentSeasonRows: [{ seasonName: 'Swansea 01/07/2026' }],
+        comparisonRows: [{
+          currentSeasonName: 'Swansea 01/07/2026', currentRealGain: 8302, currentCurrencyCode: 'GBP',
+          previousSeasonName: 'Periodo 1', previousRealGain: 3389, previousCurrencyCode: 'EUR',
+        }],
+      }),
+    })
+
+    expect(text).toBe('En Swansea 01/07/2026 llevas 8.302,00 GBP de ganancia, frente a 3.389,00 EUR en Periodo 1 — las temporadas usan monedas distintas, por lo que no se calcula una variación.')
+  })
+
   it('sin temporada anterior: primera temporada de la cuenta, sin dividir por cero', () => {
     const text = buildFinancialInsightsSeasonComparisonDirectResponseText({
       output: seasonSections({ currentSeasonRows: [{ seasonName: 'Temporada Única' }], comparisonRows: [] }),

@@ -15,6 +15,9 @@ import {
   validateMockConversationResponse,
   validateMockConversationalRenderRules,
 } from './mockConversationalRendererValidator'
+import {
+  buildFinancialInsightsSeasonComparisonDirectResponseText,
+} from '../ai-conversation/provider-orchestration/financialDirectResponseBuilder'
 
 function normalizeToolId(value: string): string {
   return value.trim().toLowerCase()
@@ -91,6 +94,13 @@ function renderReports(step: ConversationResponseStepSuccessBlock): string {
 }
 
 function renderInsights(step: ConversationResponseStepSuccessBlock): string {
+  const seasonComparison = buildFinancialInsightsSeasonComparisonDirectResponseText({
+    output: step.output,
+  })
+  if (seasonComparison !== null) {
+    return seasonComparison
+  }
+
   const output = toOutputRecord(step.output)
   const summary = output === null ? null : toOutputRecord(output.summary)
   const rowCount = summary === null ? null : summary.rowCount

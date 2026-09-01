@@ -444,7 +444,14 @@ export function buildFinancialInsightsSeasonComparisonDirectResponseText(input: 
   const currentSeasonName = readNonEmptyString(row.currentSeasonName, 'la temporada activa')
   const previousSeasonName = readNonEmptyString(row.previousSeasonName, 'la temporada anterior')
   const currencyCode = typeof row.currentCurrencyCode === 'string' ? row.currentCurrencyCode : undefined
-  const lead = `En ${currentSeasonName} llevas ${formatAmount(currentGain, currencyCode)} de ganancia, frente a ${formatAmount(previousGain, currencyCode)} en ${previousSeasonName}`
+  const previousCurrencyCode = typeof row.previousCurrencyCode === 'string'
+    ? row.previousCurrencyCode
+    : currencyCode
+  const lead = `En ${currentSeasonName} llevas ${formatAmount(currentGain, currencyCode)} de ganancia, frente a ${formatAmount(previousGain, previousCurrencyCode)} en ${previousSeasonName}`
+
+  if (currencyCode !== undefined && previousCurrencyCode !== undefined && currencyCode !== previousCurrencyCode) {
+    return `${lead} — las temporadas usan monedas distintas, por lo que no se calcula una variación.`
+  }
 
   if (previousGain <= 0) {
     return previousGain === 0 && currentGain > 0

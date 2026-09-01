@@ -214,6 +214,43 @@ describe('Mock Conversational Renderer (PB-IS-013.7)', () => {
     expect(result.message.text).toBe('Se generaron 6 insights financieros.')
   })
 
+  it('render Insights muestra la comparación de temporada activa y cerrada', () => {
+    const renderer = createMockConversationalRenderer()
+    const response = createResponseFromExecution(createExecutionResult({
+      toolId: 'financial_insights',
+      output: {
+        summary: { rowCount: 3 },
+        sections: [
+          {
+            sectionId: 'current-season-insights',
+            rows: [{ seasonName: 'Temporada activa' }],
+          },
+          {
+            sectionId: 'season-comparison',
+            rows: [{
+              currentSeasonName: 'Temporada activa',
+              currentRealGain: 70,
+              currentCurrencyCode: 'EUR',
+              previousSeasonName: 'Temporada cerrada',
+              previousRealGain: 100,
+            }],
+          },
+        ],
+      },
+    }))
+
+    const result = renderer.render(response)
+    expect(result.kind).toBe('success')
+    if (result.kind !== 'success') {
+      throw new Error('Expected successful render')
+    }
+
+    expect(result.message.text).toContain('Temporada activa')
+    expect(result.message.text).toContain('Temporada cerrada')
+    expect(result.message.text).toContain('-30.0%')
+    expect(result.message.text).not.toContain('Se generaron 3 insights financieros.')
+  })
+
   it('render Error', () => {
     const renderer = createMockConversationalRenderer()
     const response = createResponseFromExecution(createExecutionResult({
