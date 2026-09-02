@@ -54,7 +54,7 @@ export function SeasonStep({ currentStep, onNext, onBack }: SeasonStepProps) {
     <OnboardingLayout
       backDisabled={isSaving}
       currentStep={currentStep}
-      description="La fecha prevista es informativa; la temporada solo se cerrará cuando tú lo indiques."
+      description="Una temporada es el período durante el que vas a controlar tu actividad y tus resultados. Por ejemplo: verano 2026 o enero–marzo."
       footer={
         <button
           className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white disabled:bg-slate-300"
@@ -80,9 +80,12 @@ export function SeasonStep({ currentStep, onNext, onBack }: SeasonStepProps) {
           </label>
           <label className="grid gap-1.5">
             <span className="text-sm font-medium">Finalización prevista</span>
-            <input className="h-11 min-w-0 rounded-md border border-slate-300 px-2 dark:border-slate-700 dark:bg-slate-950" min={startDate} onChange={(event) => setPlannedEndDate(event.target.value)} required type="date" value={plannedEndDate} />
+            <input aria-describedby="onboarding-planned-end-help" className="h-11 min-w-0 rounded-md border border-slate-300 px-2 dark:border-slate-700 dark:bg-slate-950" min={startDate} onChange={(event) => setPlannedEndDate(event.target.value)} required type="date" value={plannedEndDate} />
           </label>
         </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400" id="onboarding-planned-end-help">
+          La fecha prevista es informativa; la temporada solo se cerrará cuando tú lo indiques.
+        </p>
         <label className="grid gap-1.5">
           <span className="text-sm font-medium">Meta económica</span>
           <input className="h-11 rounded-md border border-slate-300 px-3 dark:border-slate-700 dark:bg-slate-950" min="0.01" onChange={(event) => setEconomicGoal(event.target.value)} required step="0.01" type="number" value={economicGoal} />

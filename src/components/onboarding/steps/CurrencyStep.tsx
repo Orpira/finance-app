@@ -34,7 +34,7 @@ export function CurrencyStep({ currentStep, onNext, onBack }: CurrencyStepProps)
     <OnboardingLayout
       backDisabled={isSaving}
       currentStep={currentStep}
-      description="Se usará de forma predeterminada en importes, temporadas y reportes."
+      description="Se usará de forma predeterminada en tus importes y reportes."
       footer={
         <button className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white disabled:bg-slate-300" disabled={isSaving} form="onboarding-currency-form" type="submit">
           {isSaving ? 'Guardando...' : 'Continuar'}

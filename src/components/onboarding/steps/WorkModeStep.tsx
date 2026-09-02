@@ -14,6 +14,11 @@ interface WorkModeStepProps {
   onBack?: () => void
 }
 
+const METHOD_DESCRIPTIONS: Record<IncomeCalculationMethod, string> = {
+  service_duration: 'Registra la duración y el cobro de cada servicio.',
+  hourly_workday: 'Tu ingreso se calcula solo: horas × tarifa.',
+}
+
 export function WorkModeStep({ currentStep, onNext, onBack }: WorkModeStepProps) {
   const [method, setMethod] = useState<IncomeCalculationMethod | null>(null)
   const [hourlyRate, setHourlyRate] = useState('')
@@ -79,7 +84,7 @@ export function WorkModeStep({ currentStep, onNext, onBack }: WorkModeStepProps)
             return (
               <label
                 className={[
-                  'flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border p-3 text-center',
+                  'flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border p-3 text-center',
                   method === code
                     ? 'border-emerald-600 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100'
                     : 'border-slate-200 dark:border-slate-700',
@@ -95,6 +100,9 @@ export function WorkModeStep({ currentStep, onNext, onBack }: WorkModeStepProps)
                   type="radio"
                 />
                 <span className="text-sm font-semibold">{label}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {METHOD_DESCRIPTIONS[code]}
+                </span>
               </label>
             )
           })}
