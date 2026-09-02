@@ -34,7 +34,8 @@ Este directorio contiene la documentación oficial del proyecto. La fuente canó
 - [product/APPOINTMENT_SERVICE_LIFECYCLE.md](product/APPOINTMENT_SERVICE_LIFECYCLE.md) - Inicio temporal, finalización idempotente y eliminación de cronómetros visibles en Agenda, con cobertura y pendientes E2E.
 - [product/SEASON_GOAL_FINANCIAL_CORRECTION_2026.md](product/SEASON_GOAL_FINANCIAL_CORRECTION_2026.md) - Decisión, implementación, pruebas y validación pendiente de PB-META-001 a PB-META-006.
 - [adr/ADR-032-SEASON-GOAL-REALIZED-NET-RESULT.md](adr/ADR-032-SEASON-GOAL-REALIZED-NET-RESULT.md) - Regla normativa del porcentaje, resultado realizado y progreso de Meta de temporada.
-- [adr/ADR-033-ADDITIONALS-INCOME-NOT-PROFIT.md](adr/ADR-033-ADDITIONALS-INCOME-NOT-PROFIT.md) - Separa Adicionales en Ingresos y balance general, excluyéndolos de Ganancia, Ahorro y Meta.
+- [adr/ADR-033-ADDITIONALS-INCOME-NOT-PROFIT.md](adr/ADR-033-ADDITIONALS-INCOME-NOT-PROFIT.md) - Separa Adicionales en Ingresos y balance general, excluyéndolos de Ganancia, Ahorro y Meta. Superseded en parte por ADR-035.
+- [adr/ADR-035-INCOME-EXCLUDES-ADDITIONALS.md](adr/ADR-035-INCOME-EXCLUDES-ADDITIONALS.md) - Ingresos pasa a ser solo el principal (excluye Adicionales); Adicionales queda como magnitud independiente y reportable; separa Total recibido de Balance general neto.
 - [product/configurable-reports.md](product/configurable-reports.md) - Flujo configurable de reportes y formatos soportados.
 - [handoff/MILESTONE_9A_MANIFEST.md](handoff/MILESTONE_9A_MANIFEST.md) y [handoff/MILESTONE_9B_MANIFEST.md](handoff/MILESTONE_9B_MANIFEST.md) - Manifiestos históricos de entrega de los hitos 9A y 9B.
 - [architecture/24_LOCAL_DIAGNOSTICS.md](architecture/24_LOCAL_DIAGNOSTICS.md) - Diagnóstico local y exportación segura para soporte.

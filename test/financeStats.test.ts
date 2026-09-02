@@ -103,7 +103,7 @@ describe('getStoredIncomeValue', () => {
 })
 
 describe('calculateFinancialTotals', () => {
-  it('suma Adicionales en Ingresos pero los excluye de Ganancia', async () => {
+  it('ADR-035: Ingresos = solo principal, Adicionales quedan aparte y Ganancia los excluye', async () => {
     const { calculateFinancialTotals } = await import('../src/utils/financeStats')
     const totals = calculateFinancialTotals(
       [income()],
@@ -123,9 +123,101 @@ describe('calculateFinancialTotals', () => {
       'COP',
     )
 
-    expect(totals.primaryIncome).toBe(70)
+    expect(totals.primaryIncome).toBe(50)
+    expect(totals.primaryAdditionals).toBe(20)
     expect(totals.primaryGain).toBe(50)
     expect(totals.primaryNet).toBe(40)
+  })
+
+  it('caso de referencia: ingreso base 80, adicional 10, egreso 10 -> Ingresos 80, Adicionales 10, Ganancia 70', async () => {
+    const { calculateFinancialTotals } = await import('../src/utils/financeStats')
+    const totals = calculateFinancialTotals(
+      [income({
+        totalAmount: 80,
+        realGain: 80,
+        eurValue: 80,
+        copValue: 344000,
+        baseCurrencyValue: 80,
+        secondaryCurrencyValue: 344000,
+        additionalsTotal: 10,
+      })],
+      [{
+        type: 'gasto',
+        date: '2026-01-01',
+        category: 'General',
+        amount: 10,
+        currency: 'EUR',
+        eurValue: 10,
+        copValue: 43000,
+        baseCurrency: 'EUR',
+        baseCurrencyValue: 10,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }],
+      'EUR',
+      'COP',
+    )
+
+    expect(totals.primaryIncome).toBe(80)
+    expect(totals.primaryAdditionals).toBe(10)
+    expect(totals.primaryExpenses).toBe(10)
+    expect(totals.primaryNet).toBe(70)
+  })
+
+  it('caso sin egresos: ingreso base 80, adicional 10, egresos 0 -> Ganancia 80', async () => {
+    const { calculateFinancialTotals } = await import('../src/utils/financeStats')
+    const totals = calculateFinancialTotals(
+      [income({
+        totalAmount: 80,
+        realGain: 80,
+        eurValue: 80,
+        copValue: 344000,
+        baseCurrencyValue: 80,
+        secondaryCurrencyValue: 344000,
+        additionalsTotal: 10,
+      })],
+      [],
+      'EUR',
+      'COP',
+    )
+
+    expect(totals.primaryIncome).toBe(80)
+    expect(totals.primaryAdditionals).toBe(10)
+    expect(totals.primaryExpenses).toBe(0)
+    expect(totals.primaryNet).toBe(80)
+  })
+
+  it('caso sin adicionales: ingreso base 80, adicional 0, egreso 10 -> Ganancia 70', async () => {
+    const { calculateFinancialTotals } = await import('../src/utils/financeStats')
+    const totals = calculateFinancialTotals(
+      [income({
+        totalAmount: 80,
+        realGain: 80,
+        eurValue: 80,
+        copValue: 344000,
+        baseCurrencyValue: 80,
+        secondaryCurrencyValue: 344000,
+        additionalsTotal: 0,
+      })],
+      [{
+        type: 'gasto',
+        date: '2026-01-01',
+        category: 'General',
+        amount: 10,
+        currency: 'EUR',
+        eurValue: 10,
+        copValue: 43000,
+        baseCurrency: 'EUR',
+        baseCurrencyValue: 10,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }],
+      'EUR',
+      'COP',
+    )
+
+    expect(totals.primaryIncome).toBe(80)
+    expect(totals.primaryAdditionals).toBe(0)
+    expect(totals.primaryExpenses).toBe(10)
+    expect(totals.primaryNet).toBe(70)
   })
 })
 

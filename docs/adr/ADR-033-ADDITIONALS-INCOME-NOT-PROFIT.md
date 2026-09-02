@@ -1,6 +1,8 @@
 # ADR-033 - Adicionales cuentan como Ingresos, no como Ganancia
 
-**Estado:** Accepted
+**Estado:** Superseded in part by [ADR-035](./ADR-035-INCOME-EXCLUDES-ADDITIONALS.md) — la definicion
+de "Ingresos" cambio a solo principal (`P`); la exclusion de Adicionales de
+Ganancia/Ahorro/Meta permanece vigente.
 **Fecha:** 2026-08-28
 **Autorizacion:** explicita del propietario
 

@@ -116,14 +116,16 @@
   al crearlo como después. Solo el campo `additionalsTotal` se mantiene al
   día al agregar/quitar un Adicional; el resto del registro (incluidos los
   valores convertidos a otras monedas) nunca se recalcula por esa causa. Los
-  Adicionales se suman exclusivamente a métricas de **Ingresos** y balance
-  general (Inicio, reportes, exportaciones y consultas), en el punto central
-  `getStoredIncomeValue` (`src/utils/financeStats.ts`) — nunca dentro del
-  registro individual ni de una métrica de Ganancia. Ganancia real usa solo el
+  Adicionales son una magnitud independiente y reportable; NO se suman a
+  Ingresos ni a Ganancia (ADR-035). Solo se agregan a Total recibido
+  (`P + A`, sin egresos) y, junto con egresos e impacto de ajustes, al
+  Balance general neto, en el punto central
+  `getStoredIncomeValue` (`src/utils/financeStats.ts`) — nunca dentro
+  del registro individual. Ganancia real usa solo el
   principal; Ganancia neta, Ahorro y Meta usan principal menos egresos. No son
   un movimiento financiero independiente: se eliminan en cascada si se borra
   el ingreso al que pertenecen (a diferencia de los ajustes, que bloquean ese
-  borrado). Ver ADR-033.
+  borrado). Ver ADR-035 (sustituye la definición de Ingresos de ADR-033).
 - "Jornada por horas" tampoco captura ni persiste ningún porcentaje de
   temporada (`percentage`/`earningPercentage` quedan en `0`): ese % no aplica
   a este método bajo ninguna circunstancia.

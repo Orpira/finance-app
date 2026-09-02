@@ -41,7 +41,7 @@ import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
-import { calculateFinancialTotals, recordBelongsToEarningPeriod, sumIncomeAdditionalsValue } from '../../utils/financeStats'
+import { calculateFinancialTotals, recordBelongsToEarningPeriod } from '../../utils/financeStats'
 import { getIncomeCompactLabel } from '../../utils/incomeTypes'
 import { getActiveEarningPeriod, getPreviousEarningPeriod, getSeasonGoalProgress, getSeasonStatistics, listSeasonRecords, type SeasonStatistics } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
@@ -513,19 +513,13 @@ export function HomePage() {
     settings.showUnreportedIncome,
   )
   const isBasicUser = isBasicMode(settings)
-  const currentAdditionalsTotal = sumIncomeAdditionalsValue(
-    isBasicUser ? currentIncomes : seasonIncomes,
-    settings.defaultCurrency,
-  )
-  const previousAdditionalsTotal = sumIncomeAdditionalsValue(
-    isBasicUser ? previousIncomes : previousSeasonIncomes,
-    settings.defaultCurrency,
-  )
+  const summaryScopeLabel = isBasicUser ? 'del mes' : 'de la temporada'
 
   const cards = [
     {
       icon: TrendingUp,
       label: isBasicMode(settings) ? 'Balance' : 'Ganancia',
+      description: 'Ingresos − egresos',
       value: totals.current.primaryNet,
       previous: totals.previous.primaryNet,
       sensitive: true,
@@ -534,6 +528,7 @@ export function HomePage() {
     {
       icon: PlusCircle,
       label: 'Ingresos',
+      description: `Ingresos base ${summaryScopeLabel}`,
       value: totals.current.primaryIncome,
       previous: totals.previous.primaryIncome,
       sensitive: true,
@@ -542,25 +537,25 @@ export function HomePage() {
     {
       icon: MinusCircle,
       label: 'Egresos',
+      description: `Gastos ${summaryScopeLabel}`,
       value: totals.current.primaryExpenses,
       previous: totals.previous.primaryExpenses,
       sensitive: true,
       tone: 'text-rose-700 bg-rose-100 dark:bg-rose-950 dark:text-rose-300',
     },
-   
     ...(!isBasicMode(settings)
       ? [
           {
             icon: Sparkles,
             label: 'Adicionales',
-            value: currentAdditionalsTotal,
-            previous: previousAdditionalsTotal,
+            description: 'Extras · No incluidos en Ganancia',
+            value: totals.current.primaryAdditionals,
+            previous: totals.previous.primaryAdditionals,
             sensitive: true,
             tone: 'text-amber-700 bg-amber-100 dark:bg-amber-950 dark:text-amber-300',
           },
         ]
       : []),
-       
   ]
   const seasonGoalProgress =
     activePeriod && activePeriodStats
@@ -608,7 +603,7 @@ export function HomePage() {
       <section className="order-2" aria-labelledby="financial-summary-title">
         <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200" id="financial-summary-title">{HOME_SECTION_ORDER[1]}</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {cards.map(({ icon: Icon, label, previous, sensitive, tone, value }) => (
+        {cards.map(({ icon: Icon, label, description, previous, sensitive, tone, value }) => (
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900" key={label}>
             <div className="flex items-center justify-between gap-3">
               <span className={`flex size-11 items-center justify-center rounded-xl ${tone}`}><Icon className="size-5" aria-hidden="true" /></span>
@@ -618,6 +613,7 @@ export function HomePage() {
             <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
               <SensitiveAmount hidden={sensitive && hidden} value={formatCurrency(value, settings.defaultCurrency)} />
             </p>
+            <p className="mt-1 truncate text-xs text-slate-400 dark:text-slate-500">{description}</p>
           </article>
         ))}
         </div>

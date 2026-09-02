@@ -117,14 +117,18 @@ Los Adicionales **no** son un input del motor de cálculo ni se suman a `realGai
 
 ```mermaid
 flowchart LR
-    G["ServiceIncome.realGain (solo trabajo, inmutable ante Adicionales)"] --> H["getStoredIncomeValue()"]
+    G["ServiceIncome.realGain (solo trabajo, inmutable ante Adicionales)"] --> K["getStoredIncomePrincipalValue()"]
+    K --> J["Ingresos · Ganancia · Ahorro · Meta"]
+    G --> H["getStoredIncomeValue()"]
     I["ServiceIncome.additionalsTotal"] -->|"convertido proporcionalmente"| H
-    H --> J["Ingresos · Balance general · Reportes · Exportaciones"]
-    G --> K["getStoredIncomePrincipalValue()"]
-    K --> L["Ganancia · Ahorro · Meta"]
+    H --> M["Total recibido (P + A)"]
+    M --> N["Balance general neto = Total recibido - Egresos + Impacto por ajustes"]
 ```
 
-`getStoredIncomeValue` (`src/utils/financeStats.ts`) es el único punto donde
-ambos se suman, exclusivamente para Ingresos y balance general. Ganancia usa
-`getStoredIncomePrincipalValue`; el resultado combinado nunca se persiste sobre
-el ingreso individual. Ver ADR-033.
+`getStoredIncomePrincipalValue` (`src/utils/financeStats.ts`) es la lectura de
+Ingresos **y** de Ganancia (ADR-035). `getStoredIncomeValue` (principal +
+Adicionales) es la lectura de "Total recibido"; combinada con egresos e
+impacto de ajustes en `buildBalanceReport` pasa a ser "Balance general neto"
+(nombre propio, nunca la misma etiqueta que "Total recibido"); el
+resultado combinado nunca se persiste sobre el ingreso individual. Ver
+ADR-035 (sustituye la definición de Ingresos de ADR-033).

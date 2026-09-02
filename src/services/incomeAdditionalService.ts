@@ -27,9 +27,9 @@ async function assertIncomeAcceptsAdditionals(incomeId: number) {
  * (realGain, totalAmount, eurValue/copValue/etc.) nunca se toca desde acá:
  * refleja exclusivamente el trabajo realizado (servicio u horas), calculado
  * una sola vez al crear/editar el ingreso. Los Adicionales viven aparte y
- * solo se suman en métricas de Ingresos y balance general
- * (`getStoredIncomeValue`, `src/utils/financeStats.ts`), nunca dentro del
- * registro individual ni de una métrica de Ganancia.
+ * solo se suman en "total recibido"/balance general
+ * (`getStoredIncomeValue`, `src/utils/financeStats.ts`), nunca en Ingresos
+ * ni en Ganancia (ADR-035).
  */
 async function recalculateAdditionalsTotal(incomeId: number) {
   const additionals = await db.incomeAdditionals

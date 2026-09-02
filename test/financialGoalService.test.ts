@@ -59,7 +59,7 @@ describe('calculateFinancialGoalProgress', () => {
     expect(progress.remainingAmount).toBe(0)
   })
 
-  it('suma Adicionales a la meta de Ingresos, pero no a la meta de Ahorro', () => {
+  it('ADR-035: la meta de Ingresos excluye Adicionales, igual que la meta de Ahorro', () => {
     const incomes = [{ ...income(50), additionalsTotal: 20 }]
     const expenses = [expense(10)]
 
@@ -77,7 +77,7 @@ describe('calculateFinancialGoalProgress', () => {
     )
 
     expect(saving.currentAmount).toBe(40)
-    expect(incomeTarget.currentAmount).toBe(70)
+    expect(incomeTarget.currentAmount).toBe(50)
   })
 })
 

@@ -19,9 +19,10 @@ export const weekdayNames = [
 /**
  * Valor almacenado del ingreso PRINCIPAL (servicio u horas) ya convertido a
  * `currency`, sin Adicionales — exactamente lo que quedó calculado al crear
- * o editar el ingreso. `getStoredIncomeValue` lo usa para métricas de Ingresos
- * y balance general; las métricas de Ganancia consumen directamente
- * `getStoredIncomePrincipalValue`.
+ * o editar el ingreso. Desde ADR-035, tanto la métrica de Ingresos como la
+ * de Ganancia consumen `getStoredIncomePrincipalValue`; `getStoredIncomeValue`
+ * (principal + Adicionales) queda reservado para "total recibido"/balance
+ * general.
  */
 function getStoredBaseIncomeValue(income: ServiceIncome, currency: CurrencyCode) {
   if (income.baseCurrency === currency && income.baseCurrencyValue !== undefined) {
@@ -93,13 +94,14 @@ export function getStoredAdditionalsValue(
 }
 
 /**
- * Valor total para métricas de INGRESOS y balance general: importe principal
- * + Adicionales. Las métricas de Ganancia usan
- * `getStoredIncomePrincipalValue`, porque un Adicional es ingreso pero no
- * ganancia por el servicio prestado. El registro del
- * ingreso en sí (`realGain`/`totalAmount`) nunca incluye Adicionales — esta
- * función es el único punto donde ambos se suman y el resultado nunca se
- * persiste sobre el ingreso individual.
+ * Valor total recibido (importe principal + Adicionales), usado solo para
+ * "total recibido"/balance general y flujo de caja completo (ADR-035):
+ * NUNCA para la métrica de Ingresos ni de Ganancia. Ingresos usa
+ * `getStoredIncomePrincipalValue` (igual que Ganancia); esta función queda
+ * para reportes/exportaciones que deban mostrar el importe realmente
+ * cobrado. El registro del ingreso en sí (`realGain`/`totalAmount`) nunca
+ * incluye Adicionales — esta función es el único punto donde ambos se suman
+ * y el resultado nunca se persiste sobre el ingreso individual.
  */
 export function getStoredIncomeValue(
   income: ServiceIncome,
@@ -234,12 +236,14 @@ export function calculateFinancialTotals(
   secondaryCurrency: CurrencyCode,
 ) {
   const serviceIncomes = incomes.filter(isServiceIncome)
+  // ADR-035: "Ingresos" = solo principal (P). Los Adicionales son una
+  // magnitud aparte (ver sumIncomeAdditionalsValue) y nunca se suman aquí.
   const primaryIncome = incomes.reduce(
-    (total, income) => total + getStoredIncomeValue(income, primaryCurrency),
+    (total, income) => total + getStoredIncomePrincipalValue(income, primaryCurrency),
     0,
   )
   const secondaryIncome = incomes.reduce(
-    (total, income) => total + getStoredIncomeValue(income, secondaryCurrency),
+    (total, income) => total + getStoredIncomePrincipalValue(income, secondaryCurrency),
     0,
   )
   const primaryGain = incomes.reduce(
@@ -252,6 +256,8 @@ export function calculateFinancialTotals(
       total + getStoredIncomePrincipalValue(income, secondaryCurrency),
     0,
   )
+  const primaryAdditionals = sumIncomeAdditionalsValue(incomes, primaryCurrency)
+  const secondaryAdditionals = sumIncomeAdditionalsValue(incomes, secondaryCurrency)
   const primaryExpenses = expenses.reduce(
     (total, expense) => total + getStoredExpenseValue(expense, primaryCurrency),
     0,
@@ -265,6 +271,8 @@ export function calculateFinancialTotals(
   return {
     primaryIncome: roundMoney(primaryIncome),
     secondaryIncome: roundMoney(secondaryIncome),
+    primaryAdditionals,
+    secondaryAdditionals,
     primaryGain: roundMoney(primaryGain),
     secondaryGain: roundMoney(secondaryGain),
     primaryExpenses: roundMoney(primaryExpenses),
