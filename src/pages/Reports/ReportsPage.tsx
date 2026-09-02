@@ -975,7 +975,7 @@ export function ReportsPage() {
       <div class="summary">
         <div><span>Total ingresos brutos</span><strong>${escapeHtml(formatCurrency(balanceReport.incomeGrossTotal, primaryCurrency))}</strong></div>
         <div><span>Total egresos</span><strong>${escapeHtml(formatCurrency(balanceReport.expenseTotal, primaryCurrency))}</strong></div>
-        <div><span>Ganancia real / neta</span><strong>${escapeHtml(formatCurrency(balanceReport.netProfit, primaryCurrency))}</strong></div>
+        <div><span>Resultado de la temporada</span><strong>${escapeHtml(formatCurrency(balanceReport.netProfit, primaryCurrency))}</strong></div>
         <div><span>Balance general</span><strong>${escapeHtml(formatCurrency(balanceReport.generalBalance, primaryCurrency))}</strong></div>
       </div>
       ${buildGroupedTotalsTable('Ingresos por tipo', balanceReport.incomesByType)}
@@ -1017,7 +1017,7 @@ export function ReportsPage() {
       'Resumen general',
       `- Total ingresos brutos: ${formatCurrency(balanceReport.incomeGrossTotal, primaryCurrency)}`,
       `- Total egresos: ${formatCurrency(balanceReport.expenseTotal, primaryCurrency)}`,
-      `- Ganancia real / neta: ${formatCurrency(balanceReport.netProfit, primaryCurrency)}`,
+      `- Resultado de la temporada: ${formatCurrency(balanceReport.netProfit, primaryCurrency)}`,
       `- Balance general: ${formatCurrency(balanceReport.generalBalance, primaryCurrency)}`,
       '',
       'Ingresos por tipo',

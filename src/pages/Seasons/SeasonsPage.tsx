@@ -219,7 +219,7 @@ export function SeasonsPage() {
           {activeStats && <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               ['Ingresos brutos', activeStats.grossIncome], ['Ganancia real', activeStats.realGain],
-              ['Egresos', activeStats.expenses], ['Ganancia neta', activeStats.netGain],
+              ['Egresos', activeStats.expenses], ['Resultado de la temporada', activeStats.netGain],
             ].map(([label, value]) => <div className="rounded-lg bg-white/80 p-3 dark:bg-slate-900/60" key={String(label)}><p className="text-xs text-slate-500">{label}</p><p className="mt-1 font-semibold">{formatCurrency(Number(value), active.baseCurrency ?? 'EUR')}</p></div>)}
           </div>}
           <button className="mt-5 inline-flex h-11 items-center gap-2 rounded-md border border-red-300 bg-white px-4 text-sm font-semibold text-red-700" onClick={finishSeason} type="button"><LockKeyhole className="size-4" /> Finalizar temporada</button>

@@ -46,7 +46,7 @@ export function SeasonDetailPage() {
   const country = countries.find((item) => item.value === (period.countryCode ?? period.country))?.label ?? period.country
   const cards = [
     ['Ingresos brutos', stats.grossIncome], ['Ganancia real', stats.realGain], ['Egresos', stats.expenses],
-    ['Ajustes', stats.adjustments], ['Ganancia neta', stats.netGain], ['Mejor día', stats.bestDay?.amount ?? 0],
+    ['Ajustes', stats.adjustments], ['Resultado de la temporada', stats.netGain], ['Mejor día', stats.bestDay?.amount ?? 0],
   ]
   const goalProgress = getSeasonGoalProgress(period, {
     netIncome: stats.realGain,

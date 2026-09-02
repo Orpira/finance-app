@@ -194,7 +194,7 @@ export function FullSummaryPage() {
         <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium text-slate-500">
-              Ganancia neta
+              Resultado de la temporada
             </p>
             <CircleDollarSign
               className="size-5 text-emerald-700"
@@ -205,7 +205,7 @@ export function FullSummaryPage() {
             <SensitiveAmount hidden={hidden} value={formatCurrency(netProfit, primaryCurrency)} />
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            ganancia real menos gastos
+            Ingresos menos egresos
           </p>
         </article>
 

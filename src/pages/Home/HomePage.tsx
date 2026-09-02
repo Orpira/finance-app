@@ -452,8 +452,8 @@ export function HomePage() {
 
   const totals = useMemo(() => {
     if (!settings) return null
-    // Las tarjetas de Resumen financiero (Ganancia/Ingresos/Egresos/
-    // Adicionales) usan el scope de TEMPORADA ACTIVA en modo profesional
+    // Las tarjetas de Resumen financiero (Resultado de la temporada/Ingresos/
+    // Egresos/Adicionales) usan el scope de TEMPORADA ACTIVA en modo profesional
     // (mismo universo de movimientos que Meta de temporada), no el mes
     // calendario: una temporada activa que atraviesa varios meses no debe
     // perder sus acumulados al cambiar de mes. La comparativa ("previous")
@@ -518,7 +518,7 @@ export function HomePage() {
   const cards = [
     {
       icon: TrendingUp,
-      label: isBasicMode(settings) ? 'Balance' : 'Ganancia',
+      label: isBasicMode(settings) ? 'Balance' : 'Resultado de la temporada',
       description: 'Ingresos − egresos',
       value: totals.current.primaryNet,
       previous: totals.previous.primaryNet,
@@ -548,7 +548,7 @@ export function HomePage() {
           {
             icon: Sparkles,
             label: 'Adicionales',
-            description: 'Extras · No incluidos en Ganancia',
+            description: 'Extras · No incluidos en el resultado',
             value: totals.current.primaryAdditionals,
             previous: totals.previous.primaryAdditionals,
             sensitive: true,

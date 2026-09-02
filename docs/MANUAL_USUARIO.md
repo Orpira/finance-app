@@ -137,9 +137,9 @@ Un Adicional es un importe positivo que complementa el ingreso principal (por ej
 - Al **editar** un ingreso ya guardado, la sección "Adicionales" siempre está disponible: podés añadir o eliminar adicionales en cualquier momento (mientras el ingreso no esté reportado ni pertenezca a una temporada cerrada). También hay un acceso directo "Adicional" en el listado de `Ingresos`.
 - Al abrir el **detalle** de un ingreso profesional, incluso desde `Actividad reciente` de Inicio, se muestran por separado la descripción y el importe de cada Adicional existente.
 - El total de Adicionales de cada ingreso se muestra por separado en su tarjeta
-  del listado. En `Inicio`, la tarjeta **Ingresos** los incluye y la tarjeta
-  **Adicionales** los desglosa; no deben sumarse otra vez entre tarjetas. La
-  tarjeta **Ganancia** los excluye.
+  del listado. En `Inicio`, la tarjeta **Ingresos** muestra solo el principal y la
+  tarjeta **Adicionales** los desglosa aparte; no deben sumarse otra vez entre
+  tarjetas. La tarjeta **Resultado de la temporada** los excluye.
 
 El sistema calculará automáticamente:
 
@@ -183,9 +183,9 @@ La agenda permite administrar servicios futuros y convertir citas en ingresos:
 
 El `Dashboard` muestra un resumen mensual con:
 
-- ingresos totales, incluidos los Adicionales
+- ingresos totales (solo principal, sin Adicionales)
 - gastos totales
-- ganancia neta, sin Adicionales
+- resultado de la temporada (ingresos menos egresos), sin Adicionales
 - número de servicios
 - minutos trabajados
 

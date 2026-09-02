@@ -35,7 +35,7 @@ y `E` los gastos:
 ```text
 Ingresos = P            (antes P + A)
 Adicionales = A         (magnitud independiente, sin cambios)
-Ganancia / Resultado de actividad = P - E   (sin cambios respecto a ADR-033)
+Resultado de la temportada = P - E   (antes rotulado "Ganancia"; formula sin cambios respecto a ADR-033)
 Total recibido = P + A   (solo entradas monetarias; nunca descuenta egresos)
 ```
 
@@ -113,9 +113,21 @@ sin definir: es un campo real y nombrado en el dominio.
 |---|---|---|---|---|
 | Ingresos | `P` | No | No | No |
 | Adicionales | `A` | — | No | No |
-| Ganancia / Resultado de actividad | `P - E` | No | Si | No |
+| Resultado de la temporada (antes "Ganancia") | `P - E` | No | Si | No |
 | Total recibido | `P + A` | Si | No | No |
 | Balance general neto | `(P + A) - E + J` | Si | Si | Si |
+
+## Addendum 2026-09-03 — Renombre UX de "Ganancia" a "Resultado de la temporada"
+
+La etiqueta visible "Ganancia" (tarjeta de Inicio, Resumen completo, Balance
+por temporadas/general) pasa a "Resultado de la temporada" para comunicar
+explicitamente que Adicionales quedan fuera del calculo. La formula no
+cambia (`P - E`). Nombres tecnicos internos (`primaryGain`, `realGain`,
+`netProfit`, `netGain`) se mantienen sin cambios: son identificadores de
+codigo, no texto mostrado al usuario. "Ganancia real" (=`P`, sin restar
+egresos, ej. `SeasonStatistics.realGain`) es una metrica distinta —
+equivale numericamente a Ingresos— y queda pendiente de revision aparte, no
+se renombra en este addendum.
 
 ## Evidencia
 
