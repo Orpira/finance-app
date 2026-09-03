@@ -70,7 +70,7 @@ export function FloatingCreateMenu({ usageMode }: { usageMode: UsageMode }) {
         aria-controls={menuId}
         aria-expanded={isOpen}
         aria-label={isOpen ? 'Cerrar menú de creación' : 'Crear nuevo'}
-        className="inline-flex size-12 items-center justify-center rounded-full bg-emerald-700 text-white shadow-lg transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-950"
+        className="inline-flex size-12 items-center justify-center rounded-full border border-slate-200 bg-white text-emerald-700 shadow-lg transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-emerald-300 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-950"
         onClick={() => setIsOpen((current) => !current)}
         ref={triggerRef}
         title={isOpen ? 'Cerrar menú de creación' : 'Crear nuevo'}
