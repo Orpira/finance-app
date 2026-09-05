@@ -995,7 +995,64 @@ export class FinanceDB extends Dexie {
     })
 
     this.version(35).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt,personalCategoryId',
       expenses: '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode,personalCategoryId',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods:
+        '++id,status,startDate,endDate,plannedEndDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+      communicationChannels: 'id,type,provider,status,updatedAt',
+      deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+      conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+      knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+      knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+      financialSnapshots:
+        'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+      knowledgeSnapshots:
+        'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+      incomeAdditionals: '++id,incomeId,createdAt',
+      financialGoals: 'id,type,status,startDate,endDate,updatedAt',
+      notifications: 'id,dedupKey,priority,status,createdAt,expiresAt',
+      personalIncomeCategories: 'id,normalizedName,usageMode,isArchived,createdAt,updatedAt,name',
+      personalExpenseCategories: 'id,normalizedName,usageMode,isArchived,createdAt,updatedAt,name',
+    })
+
+    // v35 originally omitted the pre-existing stores from its schema declaration.
+    // v36 repairs databases that already migrated through that faulty version.
+    this.version(36).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt,personalCategoryId',
+      expenses: '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode,personalCategoryId',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods:
+        '++id,status,startDate,endDate,plannedEndDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+      communicationChannels: 'id,type,provider,status,updatedAt',
+      deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+      conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+      knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+      knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+      financialSnapshots:
+        'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+      knowledgeSnapshots:
+        'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+      incomeAdditionals: '++id,incomeId,createdAt',
+      financialGoals: 'id,type,status,startDate,endDate,updatedAt',
+      notifications: 'id,dedupKey,priority,status,createdAt,expiresAt',
+      personalIncomeCategories: 'id,normalizedName,usageMode,isArchived,createdAt,updatedAt,name',
       personalExpenseCategories: 'id,normalizedName,usageMode,isArchived,createdAt,updatedAt,name',
     })
 
