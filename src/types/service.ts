@@ -17,6 +17,12 @@ export type ServiceTimerStatus =
 export interface ServiceIncome {
   id?: number;
 
+  /** Optional user-defined label. Valid only for Personal (`basic`) incomes. */
+  personalName?: string;
+
+  /** Optional category for Personal (`basic`) incomes. */
+  personalCategoryId?: string;
+
   createdAt?: string;
 
   status?: ServiceIncomeStatus;

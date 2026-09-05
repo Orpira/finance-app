@@ -15,6 +15,7 @@ import {
   normalizeReportStatus,
 } from '../catalogs/reportStatuses'
 import { assertReportStatusUpdateIsAllowed } from '../utils/reportStatus'
+import { resolveActiveUsageMode } from '../utils/usageMode'
 import { getSettings } from './settingsService'
 
 export interface AppointmentListOptions extends DateRangeListOptions {
@@ -114,7 +115,7 @@ export async function updateAppointment(
     const currentAppointment = await db.appointments.get(id)
     if (!currentAppointment) throw new Error('La cita que intentas modificar no existe.')
     await assertRecordIsMutable(currentAppointment)
-    assertReportStatusUpdateIsAllowed(currentAppointment, settings.usageMode, updates)
+    assertReportStatusUpdateIsAllowed(currentAppointment, resolveActiveUsageMode(settings), updates)
     assertReportedRecordUpdateIsAllowed(currentAppointment, updates)
 
     // El método de cálculo es inmutable una vez creada la cita (igual que en

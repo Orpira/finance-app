@@ -18,6 +18,8 @@ import type { PersistedKnowledgeDocument } from '../types/persistedKnowledgeDocu
 import type { PersistedFinancialSnapshot } from '../types/persistedFinancialSnapshot'
 import type { PersistedKnowledgeSnapshot } from '../types/persistedKnowledgeSnapshot'
 import type { FinancialGoal } from '../types/financialGoal'
+import type { PersonalIncomeCategory } from '../types/personalIncomeCategory'
+import type { PersonalExpenseCategory } from '../types/personalExpenseCategory'
 import {
   resolveRecordUsageMode,
   resolveUsageMode,
@@ -25,9 +27,15 @@ import {
 } from '../utils/usageMode'
 import { assertAllExpenseAdjustmentsAreValid } from '../utils/expenseAdjustments'
 import { assertAllIncomeAdditionalsAreValid } from '../utils/incomeAdditionals'
+import { assertPersonalIncomeCategoriesAreValid } from '../utils/personalIncomeCategoryImport'
+import { buildNormalizedPersonalIncomeCategoryName } from '../utils/personalIncomeCategoryName'
+import { assertPersonalExpenseCategoriesAreValid } from '../utils/personalExpenseCategoryImport'
+import { buildNormalizedPersonalExpenseCategoryName } from '../utils/personalExpenseCategoryName'
 import { getIncomeType, normalizeAdjustmentIncome } from '../utils/incomeTypes'
 import { getNumericDurationLabel } from '../utils/serviceDuration'
 import { normalizeReportStatus } from '../catalogs/reportStatuses'
+import { normalizePersonalIncomeName } from '../utils/personalIncomeName'
+import { normalizePersonalExpenseName } from '../utils/personalExpenseName'
 import {
   createCompletedOnboardingState,
   createDefaultOnboardingState,
@@ -115,6 +123,8 @@ export class FinanceDB extends Dexie {
   incomeAdditionals!: Table<IncomeAdditional, number>
   financialGoals!: Table<FinancialGoal, FinancialGoal['id']>
   notifications!: Table<CopilotNotification, CopilotNotification['id']>
+  personalIncomeCategories!: Table<PersonalIncomeCategory, PersonalIncomeCategory['id']>
+  personalExpenseCategories!: Table<PersonalExpenseCategory, PersonalExpenseCategory['id']>
 
   constructor() {
     super('finance-app')
@@ -910,6 +920,85 @@ export class FinanceDB extends Dexie {
       notifications: 'id,dedupKey,priority,status,createdAt,expiresAt',
     })
 
+    this.version(33)
+      .stores({
+        services:
+          '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt',
+        expenses:
+          '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+        appointments:
+          '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+        cutoffReports:
+          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+        earningPeriods:
+          '++id,status,startDate,endDate,plannedEndDate,countryCode,city',
+        licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+        automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+        communicationChannels: 'id,type,provider,status,updatedAt',
+        deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+        conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+        knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+        knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+        financialSnapshots:
+          'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+        knowledgeSnapshots:
+          'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+        incomeAdditionals: '++id,incomeId,createdAt',
+        financialGoals: 'id,type,status,startDate,endDate,updatedAt',
+        notifications: 'id,dedupKey,priority,status,createdAt,expiresAt',
+      })
+      .upgrade(async (transaction) => {
+        const settings = await transaction.table<AppSettings, AppSettings['id']>('settings').get(DEFAULT_SETTINGS_ID)
+        const configuredMode = resolveUsageMode(settings)
+        if (configuredMode === 'hybrid') return
+
+        await Promise.all([
+          transaction.table<ServiceIncome, number>('services').toCollection().modify((income) => {
+            if (income.usageMode === 'basic') delete income.paymentType
+          }),
+          transaction.table<FinancialGoal, string>('financialGoals').toCollection().modify((goal) => {
+            if (goal.usageMode === undefined) Object.assign(goal, { usageMode: configuredMode })
+          }),
+        ])
+      })
+
+    this.version(34).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt,personalCategoryId',
+      expenses:
+        '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods:
+        '++id,status,startDate,endDate,plannedEndDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+      communicationChannels: 'id,type,provider,status,updatedAt',
+      deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+      conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+      knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+      knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+      financialSnapshots:
+        'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+      knowledgeSnapshots:
+        'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+      incomeAdditionals: '++id,incomeId,createdAt',
+      financialGoals: 'id,type,status,startDate,endDate,updatedAt',
+      notifications: 'id,dedupKey,priority,status,createdAt,expiresAt',
+      personalIncomeCategories: 'id,normalizedName,usageMode,isArchived,createdAt,updatedAt,name',
+    })
+
+    this.version(35).stores({
+      expenses: '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode,personalCategoryId',
+      personalExpenseCategories: 'id,normalizedName,usageMode,isArchived,createdAt,updatedAt,name',
+    })
+
     this.financialSnapshots.hook('updating', () => {
       throw new Error('SNAPSHOT_PERSISTENCE_APPEND_ONLY')
     })
@@ -952,6 +1041,8 @@ export async function resetDatabase() {
       db.incomeAdditionals,
       db.financialGoals,
       db.notifications,
+      db.personalIncomeCategories,
+      db.personalExpenseCategories,
     ],
     async () => {
       await Promise.all([
@@ -967,6 +1058,8 @@ export async function resetDatabase() {
         db.incomeAdditionals.clear(),
         db.financialGoals.clear(),
         db.notifications.clear(),
+        db.personalIncomeCategories.clear(),
+        db.personalExpenseCategories.clear(),
       ])
 
       await db.settings.put(createDefaultSettings())
@@ -986,6 +1079,8 @@ export async function exportDatabaseSnapshot() {
     communicationChannels,
     incomeAdditionals,
     financialGoals,
+    personalIncomeCategories,
+    personalExpenseCategories,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -998,6 +1093,8 @@ export async function exportDatabaseSnapshot() {
       db.communicationChannels.toArray(),
       db.incomeAdditionals.toArray(),
       db.financialGoals.toArray(),
+      db.personalIncomeCategories.toArray(),
+      db.personalExpenseCategories.toArray(),
     ])
 
   return {
@@ -1011,6 +1108,8 @@ export async function exportDatabaseSnapshot() {
     communicationChannels,
     incomeAdditionals,
     financialGoals,
+    personalIncomeCategories,
+    personalExpenseCategories,
     exportedAt: new Date().toISOString(),
   }
 }
@@ -1018,24 +1117,109 @@ export async function exportDatabaseSnapshot() {
 export type DatabaseSnapshot = Awaited<ReturnType<typeof exportDatabaseSnapshot>>
 
 export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
-  const normalizedServices = (snapshot.services ?? []).map((income) =>
-    normalizeAdjustmentIncome({
+  const importedSettings = snapshot.settings?.[0]
+  const importedUsageMode = resolveUsageMode(importedSettings)
+  const normalizedServices = (snapshot.services ?? []).map((income) => {
+    const incomeUsageMode = income.usageMode ?? (
+      importedUsageMode === 'hybrid' ? resolveRecordUsageMode(income) : importedUsageMode
+    )
+    // An empty string is never a real reference: normalize it away before any
+    // validation so it can never be mistaken for an orphan category id.
+    const referencedPersonalCategoryId = income.personalCategoryId === ''
+      ? undefined
+      : income.personalCategoryId
+    if (incomeUsageMode === 'professional' && income.personalName !== undefined) {
+      throw new Error('PERSONAL_INCOME_NAME_NOT_ALLOWED_FOR_PROFESSIONAL')
+    }
+    if (incomeUsageMode === 'professional' && referencedPersonalCategoryId !== undefined) {
+      throw new Error('PERSONAL_INCOME_CATEGORY_NOT_ALLOWED_FOR_PROFESSIONAL')
+    }
+    return normalizeAdjustmentIncome({
       ...normalizeReportStatus(income),
       type: getIncomeType(income),
-      usageMode: resolveRecordUsageMode(income),
+      usageMode: incomeUsageMode,
+      personalName: incomeUsageMode === 'basic'
+        ? normalizePersonalIncomeName(income.personalName)
+        : undefined,
+      personalCategoryId: incomeUsageMode === 'basic' ? referencedPersonalCategoryId : undefined,
+      ...(incomeUsageMode === 'basic'
+        ? { paymentType: undefined }
+        : {}),
       updatedAt: income.updatedAt ?? income.createdAt ?? new Date().toISOString(),
-    }),
-  )
-  const normalizedExpenses = (snapshot.expenses ?? []).map((expense) => ({
-    ...normalizeReportStatus(expense),
+    })
+  })
+  const normalizedExpenses = (snapshot.expenses ?? []).map((expense) => {
+    const {
+      reportStatusCode,
+      reportStatusLabel,
+      reportedAt,
+      reportReference,
+      reportNotes,
+      ...financialExpense
+    } = expense as Expense & { reportReference?: unknown; reportNotes?: unknown }
+    void reportStatusCode
+    void reportStatusLabel
+    void reportedAt
+    void reportReference
+    void reportNotes
+    const expenseUsageMode = resolveRecordUsageMode(expense)
+    const referencedPersonalCategoryId = expense.personalCategoryId === ''
+      ? undefined
+      : expense.personalCategoryId
+    if (expenseUsageMode === 'professional' && expense.personalName !== undefined) {
+      throw new Error('PERSONAL_EXPENSE_NAME_NOT_ALLOWED_FOR_PROFESSIONAL')
+    }
+    if (expenseUsageMode === 'professional' && referencedPersonalCategoryId !== undefined) {
+      throw new Error('PERSONAL_EXPENSE_CATEGORY_NOT_ALLOWED_FOR_PROFESSIONAL')
+    }
+    return {
+    ...financialExpense,
     type: expense.type ?? 'gasto',
     createdAt: expense.createdAt ?? `${expense.date}T00:00:00`,
-    usageMode: resolveRecordUsageMode(expense),
-  }))
+    usageMode: expenseUsageMode,
+    personalName: expenseUsageMode === 'basic'
+      ? normalizePersonalExpenseName(expense.personalName)
+      : undefined,
+    personalCategoryId: expenseUsageMode === 'basic' ? referencedPersonalCategoryId : undefined,
+    }
+  })
+  const normalizedFinancialGoals = (snapshot.financialGoals ?? []).map((goal) => {
+    const rawUsageMode = (goal as unknown as { usageMode?: string }).usageMode
+    if (rawUsageMode === 'hybrid') {
+      throw new Error('FINANCIAL_GOAL_INVALID_USAGE_MODE')
+    }
+    if (goal.usageMode !== undefined) return goal
+    return importedUsageMode === 'hybrid' ? goal : { ...goal, usageMode: importedUsageMode }
+  })
+  const rawPersonalIncomeCategories = snapshot.personalIncomeCategories ?? []
+  const rawPersonalExpenseCategories = snapshot.personalExpenseCategories ?? []
 
   // Validate before clearing local data: an invalid backup must never partially restore.
   assertAllExpenseAdjustmentsAreValid(normalizedServices, normalizedExpenses)
   assertAllIncomeAdditionalsAreValid(normalizedServices, snapshot.incomeAdditionals ?? [])
+  assertPersonalIncomeCategoriesAreValid(rawPersonalIncomeCategories, normalizedServices)
+  assertPersonalExpenseCategoriesAreValid(rawPersonalExpenseCategories, normalizedExpenses)
+
+  const normalizedPersonalIncomeCategories: PersonalIncomeCategory[] = rawPersonalIncomeCategories.map((category) => ({
+    ...category,
+    name: category.name.trim().replace(/\s+/g, ' '),
+    // Never trust a backup-provided normalizedName even when it matches: it is
+    // always recomputed canonically, matching what assertPersonalIncomeCategoriesAreValid checked.
+    normalizedName: buildNormalizedPersonalIncomeCategoryName(category.name),
+    isArchived: Boolean(category.isArchived),
+    usageMode: 'basic' as const,
+    createdAt: category.createdAt ?? new Date().toISOString(),
+    updatedAt: category.updatedAt ?? category.createdAt ?? new Date().toISOString(),
+  }))
+  const normalizedPersonalExpenseCategories: PersonalExpenseCategory[] = rawPersonalExpenseCategories.map((category) => ({
+    ...category,
+    name: category.name.trim().replace(/\s+/g, ' '),
+    normalizedName: buildNormalizedPersonalExpenseCategoryName(category.name),
+    isArchived: Boolean(category.isArchived),
+    usageMode: 'basic' as const,
+    createdAt: category.createdAt ?? new Date().toISOString(),
+    updatedAt: category.updatedAt ?? category.createdAt ?? new Date().toISOString(),
+  }))
 
   await db.transaction(
     'rw',
@@ -1051,6 +1235,8 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
       db.communicationChannels,
       db.incomeAdditionals,
       db.financialGoals,
+      db.personalIncomeCategories,
+      db.personalExpenseCategories,
     ],
     async () => {
       await Promise.all([
@@ -1065,6 +1251,8 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.communicationChannels.clear(),
         db.incomeAdditionals.clear(),
         db.financialGoals.clear(),
+        db.personalIncomeCategories.clear(),
+        db.personalExpenseCategories.clear(),
       ])
 
       await Promise.all([
@@ -1095,7 +1283,9 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.earningPeriods.bulkPut(snapshot.earningPeriods ?? []),
         db.communicationChannels.bulkPut(snapshot.communicationChannels ?? []),
         db.incomeAdditionals.bulkPut(snapshot.incomeAdditionals ?? []),
-        db.financialGoals.bulkPut(snapshot.financialGoals ?? []),
+        db.financialGoals.bulkPut(normalizedFinancialGoals),
+        db.personalIncomeCategories.bulkPut(normalizedPersonalIncomeCategories),
+        db.personalExpenseCategories.bulkPut(normalizedPersonalExpenseCategories),
       ])
 
       if (!snapshot.settings?.length) {

@@ -14,7 +14,8 @@ import { PageHeader } from '../../components/layout/PageHeader'
 import { getCurrentLicense } from '../../services/licenseService'
 import { getSettings } from '../../services/settingsService'
 import type { LicenseType } from '../../types/license'
-import type { UsageMode } from '../../types/settings'
+import type { AppSettings } from '../../types/settings'
+import { resolveActiveUsageMode } from '../../utils/usageMode'
 
 const moreSections = [
   {
@@ -76,16 +77,16 @@ const moreSections = [
 ]
 
 export function MorePage() {
-  const [usageMode, setUsageMode] = useState<UsageMode>('professional')
+  const [usageMode, setUsageMode] = useState<'basic' | 'professional'>('professional')
   const [licenseType, setLicenseType] = useState<LicenseType | null>(null)
 
   useEffect(() => {
-    getSettings().then((settings) => setUsageMode(settings.usageMode))
+    getSettings().then((settings) => setUsageMode(resolveActiveUsageMode(settings)))
     getCurrentLicense().then((license) => setLicenseType(license?.licenseType ?? null))
 
     function handleSettingsChanged(event: Event) {
       setUsageMode(
-        (event as CustomEvent<{ usageMode: UsageMode }>).detail.usageMode,
+        resolveActiveUsageMode((event as CustomEvent<AppSettings>).detail),
       )
     }
 

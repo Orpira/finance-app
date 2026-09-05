@@ -12,7 +12,7 @@ import { getStoredIncomeValue } from '../utils/financeStats'
 import { roundMoney } from '../utils/currency'
 import { getEffectiveFinancialDuration } from '../utils/serviceDuration'
 import { isServiceIncome } from '../utils/incomeTypes'
-import { recordBelongsToUsageMode } from '../utils/usageMode'
+import { recordBelongsToUsageMode, resolveActiveUsageMode } from '../utils/usageMode'
 import type { ServiceIncome } from '../types/service'
 import type { CurrencyCode } from '../types/settings'
 
@@ -40,6 +40,12 @@ export interface IncomeDateGroup {
 
 /** Un ingreso pendiente sin reportar por más de este número de días entra en el conteo de vencidos. */
 export const PENDING_INCOME_OVERDUE_AFTER_DAYS = 7
+
+const REPORTING_DISABLED_MESSAGE = 'El reporte de ingresos está desactivado.'
+
+function assertIncomeReportingEnabled(showUnreportedIncome: boolean) {
+  if (!showUnreportedIncome) throw new Error(REPORTING_DISABLED_MESSAGE)
+}
 
 export function getIncomeDurationTotalMinutes(
   incomes: readonly ServiceIncome[],
@@ -119,7 +125,8 @@ export async function markIncomeAsReported(
   const settings = await getSettings()
   const income = await getIncomeOrThrow(id)
 
-  assertCanMarkAsReported(income, settings.usageMode)
+  assertIncomeReportingEnabled(settings.showUnreportedIncome)
+  assertCanMarkAsReported(income, resolveActiveUsageMode(settings))
 
   return updateServiceIncome(id, applyReportFields(markAsReported(income, input)))
 }
@@ -128,7 +135,8 @@ export async function markIncomeAsPending(id: number) {
   const settings = await getSettings()
   const income = await getIncomeOrThrow(id)
 
-  assertCanMarkAsReported(income, settings.usageMode)
+  assertIncomeReportingEnabled(settings.showUnreportedIncome)
+  assertCanMarkAsReported(income, resolveActiveUsageMode(settings))
 
   return updateServiceIncome(id, applyReportFields(markAsPending(income)))
 }
@@ -137,18 +145,40 @@ export async function markMultipleIncomesAsReported(
   ids: number[],
   input: MarkIncomeAsReportedInput = {},
 ): Promise<BulkMarkIncomesAsReportedResult> {
+  const validationFailures: Array<{ id: number; error: string }> = []
+  for (const id of ids) {
+    try {
+      const settings = await getSettings()
+      assertIncomeReportingEnabled(settings.showUnreportedIncome)
+      assertCanMarkAsReported(await getIncomeOrThrow(id), resolveActiveUsageMode(settings))
+    } catch (error: unknown) {
+      validationFailures.push({
+        id,
+        error: error instanceof Error ? error.message : 'No se pudo marcar como reportado.',
+      })
+    }
+  }
+
+  // Validate the complete batch before the first write: an unknown or
+  // ineligible id must not leave a partially reported selection.
+  if (validationFailures.length > 0) {
+    const invalidIds = new Set(validationFailures.map(({ id }) => id))
+    return {
+      succeeded: [],
+      failed: ids.map((id) => invalidIds.has(id)
+        ? validationFailures.find((failure) => failure.id === id)!
+        : { id, error: 'El lote no se modificó porque contenía registros no reportables.' }),
+    }
+  }
+
   const succeeded: number[] = []
   const failed: Array<{ id: number; error: string }> = []
-
   for (const id of ids) {
     try {
       await markIncomeAsReported(id, input)
       succeeded.push(id)
     } catch (error: unknown) {
-      failed.push({
-        id,
-        error: error instanceof Error ? error.message : 'No se pudo marcar como reportado.',
-      })
+      failed.push({ id, error: error instanceof Error ? error.message : 'No se pudo marcar como reportado.' })
     }
   }
 
@@ -169,11 +199,13 @@ export async function getPendingIncomes(): Promise<ServiceIncome[]> {
     db.services.toArray(),
   ])
 
+  if (!settings.showUnreportedIncome) return []
+
   return incomes
     .filter(
       (income) =>
-        recordBelongsToUsageMode(income, settings.usageMode) &&
-        canMarkAsReported(income, settings.usageMode) &&
+        recordBelongsToUsageMode(income, resolveActiveUsageMode(settings)) &&
+        canMarkAsReported(income, resolveActiveUsageMode(settings)) &&
         income.reportStatusCode !== 'reported' &&
         activePeriod?.id !== undefined &&
         (income.earningPeriodId === activePeriod.id ||

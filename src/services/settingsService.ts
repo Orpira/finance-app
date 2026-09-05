@@ -3,8 +3,8 @@ import {
   createDefaultSettings,
   db,
 } from '../database/db'
-import type { AppSettings } from '../types/settings'
-import { resolveUsageMode, toLegacyUserType } from '../utils/usageMode'
+import type { ActiveContext, AppSettings } from '../types/settings'
+import { isHybridMode, resolveUsageMode, toLegacyUserType } from '../utils/usageMode'
 
 const SETTINGS_STORAGE_KEY = 'finance-app:settings'
 
@@ -187,4 +187,66 @@ export function disablePin() {
     pinEnabled: false,
     pinHash: undefined,
   })
+}
+
+/**
+ * Switches the workspace a Híbrido installation is currently viewing.
+ * Unlike `usageMode` itself, this is meant to be changed freely and often —
+ * it is not gated by `onboarding.completed` the way `updateSettings({ usageMode })`
+ * is, since selecting Personal/Profesional is a normal, everyday action once
+ * Híbrido is enabled, not a one-time setup choice.
+ */
+/**
+ * Activates Híbrido for an existing basic/professional installation, without
+ * reinstalling. Only ever touches `usageMode`/`activeContext` — it never
+ * moves, converts, duplicates or reinterprets a single existing record:
+ * whichever workspace matches the installation's previous mode keeps every
+ * record exactly as it was (still tagged 'basic' or 'professional', same as
+ * before), and the other workspace simply starts with none, since nothing
+ * was ever written to it. There is intentionally no inverse
+ * (`hybrid` -> `basic`/`professional`) yet: downgrading could leave data
+ * from the deactivated workspace invisible and needs its own design.
+ */
+export async function activateHybridMode() {
+  const currentSettings = await getSettings()
+
+  if (isHybridMode(currentSettings)) {
+    return currentSettings
+  }
+
+  const previousMode = resolveUsageMode(currentSettings)
+
+  if (previousMode !== 'basic' && previousMode !== 'professional') {
+    throw new Error('El modo de uso actual no admite activar el uso Híbrido.')
+  }
+
+  const nextSettings: AppSettings = {
+    ...currentSettings,
+    usageMode: 'hybrid',
+    activeContext: previousMode,
+    userType: toLegacyUserType('hybrid'),
+    updatedAt: new Date().toISOString(),
+  }
+
+  await db.transaction('rw', [db.settings, db.financialGoals], async () => {
+    const goals = await db.financialGoals.toArray()
+    await db.financialGoals.bulkPut(goals.map((goal) => ({ ...goal, usageMode: previousMode })))
+    await db.settings.put(nextSettings)
+  })
+  syncSettingsToLocalStorage(nextSettings)
+  applyTheme(nextSettings.theme)
+  notifySettingsChange(nextSettings)
+  return nextSettings
+}
+
+export async function setActiveContext(activeContext: ActiveContext) {
+  const currentSettings = await getSettings()
+
+  if (!isHybridMode(currentSettings)) {
+    throw new Error(
+      'Solo se puede cambiar de espacio en instalaciones con modo Híbrido.',
+    )
+  }
+
+  return updateSettings({ activeContext })
 }

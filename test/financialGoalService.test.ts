@@ -16,6 +16,7 @@ const baseGoal: FinancialGoal = {
   startDate: '2026-08-01',
   endDate: '2026-08-31',
   status: 'active',
+  usageMode: 'professional',
   createdAt: '2026-08-02T10:00:00.000Z',
   updatedAt: '2026-08-02T10:00:00.000Z',
 }
@@ -94,6 +95,7 @@ describe('createFinancialGoalService', () => {
       repository,
       now: () => new Date('2026-08-02T10:00:00.000Z'),
       createId: () => 'goal-created',
+      getActiveUsageMode: async () => 'basic',
     })
 
     const created = await service.create({
@@ -101,10 +103,27 @@ describe('createFinancialGoalService', () => {
       period: 'monthly', startDate: '2026-08-01', endDate: '2026-08-31',
     })
     expect(created.status).toBe('active')
+    expect(created.usageMode).toBe('basic')
     await service.update(created.id, { targetAmount: 350 })
     expect((await service.pause(created.id)).status).toBe('paused')
     expect((await service.cancel(created.id)).status).toBe('cancelled')
     expect(repository.add).toHaveBeenCalledOnce()
+  })
+
+  it('lista únicamente las metas del contexto solicitado', async () => {
+    const goals: FinancialGoal[] = [
+      { ...baseGoal, id: 'basic-goal', usageMode: 'basic' },
+      { ...baseGoal, id: 'professional-goal', usageMode: 'professional' },
+    ]
+    const service = createFinancialGoalService({
+      repository: {
+        add: vi.fn(), put: vi.fn(), get: vi.fn(),
+        toArray: vi.fn(async () => goals),
+      },
+    })
+
+    expect(await service.list('basic')).toEqual([goals[0]])
+    expect(await service.list('professional')).toEqual([goals[1]])
   })
 
   it('falla cerrado antes de persistir un objetivo inválido', async () => {

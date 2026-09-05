@@ -55,12 +55,49 @@ describe('income report presentation', () => {
     })
 
     expect(html.match(/data-income-id=/g)).toHaveLength(2)
-    expect(html).toContain('Servicio #1')
-    expect(html).toContain('Ajuste #2')
+    expect(html).toContain('Ingreso #1')
+    expect(html).toContain('Ingreso #2')
     expect(html).not.toContain('<th>Duración</th>')
+    expect(html).not.toContain('<th>Tipo de pago</th>')
+    expect(html).not.toContain('Tipo de pago')
     expect(html).toContain('35,00 €')
     expect(text).not.toContain('Total duración')
+    expect(text).not.toContain('Tipo de pago')
     expect(text).toContain('Subtotal fecha: 35,00 €')
+  })
+
+  it('muestra y escapa el nombre Personal sin alterar el fallback histórico', () => {
+    const options = {
+      incomes: [
+        income({ id: 1, usageMode: 'basic', personalName: 'Nómina de otoño <script>' }),
+        income({ id: 2, usageMode: 'basic', personalName: undefined }),
+      ],
+      primaryCurrency: 'EUR' as const,
+      usageMode: 'basic' as const,
+    }
+
+    const html = buildIncomeDateTableHtml(options)
+    const text = buildIncomeDateText(options)
+
+    expect(html).toContain('Nómina de otoño &lt;script&gt;')
+    expect(html).not.toContain('Nómina de otoño <script>')
+    expect(html).toContain('Ingreso #2')
+    expect(text).toContain('Nómina de otoño <script>')
+    expect(text).toContain('Ingreso #2')
+  })
+
+  it('shows the payment type column for Profesional records', () => {
+    const options = {
+      incomes: [income({ paymentType: 'cash' })],
+      primaryCurrency: 'EUR' as const,
+      usageMode: 'professional' as const,
+    }
+
+    const html = buildIncomeDateTableHtml(options)
+    const text = buildIncomeDateText(options)
+
+    expect(html).toContain('<th>Tipo de pago</th>')
+    expect(text).toContain('Tipo de pago:')
   })
 
   it('uses the same normalized professional duration in HTML and text', () => {

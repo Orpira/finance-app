@@ -3,12 +3,14 @@ import { type FormEvent, useState } from 'react'
 import { saveInitialSeasonDraft } from '../../../services/onboardingService'
 import { getTodayInputDate } from '../../../utils/currency'
 import { resolveOnboardingEarningPercentage } from '../../../utils/onboarding'
+import { HybridWorkspaceBanner } from '../HybridWorkspaceBanner'
 import { OnboardingLayout } from '../OnboardingLayout'
 
 interface SeasonStepProps {
   currentStep: number
   onNext: () => void
   onBack?: () => void
+  showHybridBanner?: boolean
 }
 
 function defaultPlannedEndDate() {
@@ -17,7 +19,7 @@ function defaultPlannedEndDate() {
   return date.toLocaleDateString('en-CA')
 }
 
-export function SeasonStep({ currentStep, onNext, onBack }: SeasonStepProps) {
+export function SeasonStep({ currentStep, onNext, onBack, showHybridBanner }: SeasonStepProps) {
   const [name, setName] = useState('Primera temporada')
   const [startDate, setStartDate] = useState(getTodayInputDate())
   const [plannedEndDate, setPlannedEndDate] = useState(defaultPlannedEndDate)
@@ -68,6 +70,7 @@ export function SeasonStep({ currentStep, onNext, onBack }: SeasonStepProps) {
       onBack={onBack}
       title="Primera temporada"
     >
+      {showHybridBanner && <HybridWorkspaceBanner />}
       <form className="grid gap-4 text-left" id="onboarding-season-form" onSubmit={handleSubmit}>
         <label className="grid gap-1.5">
           <span className="text-sm font-medium">Nombre de la temporada</span>

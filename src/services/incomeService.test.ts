@@ -21,6 +21,10 @@ const incomeAdditionalsTable = {
   where: vi.fn(),
 }
 
+const personalIncomeCategoriesTable = {
+  get: vi.fn(),
+}
+
 const transactionMock = vi.fn(async (_mode: unknown, _tables: unknown, callback: () => unknown) =>
   callback(),
 )
@@ -32,6 +36,7 @@ vi.mock('../database/db', () => ({
     automationOutbox: {},
     earningPeriods: {},
     incomeAdditionals: incomeAdditionalsTable,
+    personalIncomeCategories: personalIncomeCategoriesTable,
     transaction: (...args: unknown[]) =>
       transactionMock(...(args as [unknown, unknown, () => unknown])),
   },
@@ -97,6 +102,151 @@ beforeEach(() => {
 })
 
 describe('createServiceIncome', () => {
+  it('normaliza y persiste el nombre de un ingreso Personal', async () => {
+    getSettingsMock.mockResolvedValue(basicSettings())
+    await createServiceIncome(baseIncomeInput({ personalName: '  Nómina   septiembre  ' }))
+    expect(servicesTable.add).toHaveBeenCalledWith(
+      expect.objectContaining({ personalName: 'Nómina septiembre', usageMode: 'basic' }),
+    )
+  })
+
+  it('no persiste nombres vacíos ni nombres enviados en Profesional', async () => {
+    getSettingsMock.mockResolvedValue(basicSettings())
+    await createServiceIncome(baseIncomeInput({ personalName: '   ' }))
+    expect(servicesTable.add).toHaveBeenLastCalledWith(
+      expect.objectContaining({ personalName: undefined }),
+    )
+
+    getSettingsMock.mockResolvedValue(professionalSettings())
+    getActiveEarningPeriodMock.mockResolvedValue({ id: 7, startDate: '2026-01-01', percentage: 50 })
+    await createServiceIncome(baseIncomeInput({ personalName: 'No permitido' }))
+    expect(servicesTable.add).toHaveBeenLastCalledWith(
+      expect.objectContaining({ personalName: undefined, usageMode: 'professional' }),
+    )
+  })
+
+  describe('categoría de ingreso personal', () => {
+    const personalCategory = { id: 'pic-1', name: 'Nómina', normalizedName: 'nomina', usageMode: 'basic', isArchived: false }
+
+    it('permite una categoría personal válida y activa en básico, y persiste personalCategoryId', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+      personalIncomeCategoriesTable.get.mockResolvedValue(personalCategory)
+
+      await createServiceIncome(baseIncomeInput({ personalCategoryId: 'pic-1' }))
+
+      expect(servicesTable.add).toHaveBeenCalledWith(
+        expect.objectContaining({ personalCategoryId: 'pic-1', usageMode: 'basic' }),
+      )
+    })
+
+    it('rechaza una categoría inexistente', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+      personalIncomeCategoriesTable.get.mockResolvedValue(undefined)
+
+      await expect(
+        createServiceIncome(baseIncomeInput({ personalCategoryId: 'no-existe' })),
+      ).rejects.toThrow('La categoría de ingreso personal no es válida.')
+    })
+
+    it('rechaza una categoría archivada', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+      personalIncomeCategoriesTable.get.mockResolvedValue({ ...personalCategory, isArchived: true })
+
+      await expect(
+        createServiceIncome(baseIncomeInput({ personalCategoryId: 'pic-1' })),
+      ).rejects.toThrow('La categoría de ingreso personal no es válida.')
+    })
+
+    it('rechaza una categoría con usageMode distinto de "basic"', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+      personalIncomeCategoriesTable.get.mockResolvedValue({ ...personalCategory, usageMode: 'professional' })
+
+      await expect(
+        createServiceIncome(baseIncomeInput({ personalCategoryId: 'pic-1' })),
+      ).rejects.toThrow('La categoría de ingreso personal no es válida.')
+    })
+
+    it('rechaza personalCategoryId en profesional y no persiste el valor', async () => {
+      getSettingsMock.mockResolvedValue(professionalSettings())
+      getActiveEarningPeriodMock.mockResolvedValue({ id: 7, startDate: '2026-01-01', percentage: 50 })
+
+      await expect(
+        createServiceIncome(baseIncomeInput({ personalCategoryId: 'pic-1' })),
+      ).rejects.toThrow('PERSONAL_INCOME_CATEGORY_NOT_ALLOWED_FOR_PROFESSIONAL')
+    })
+
+    it('no consulta categorías personales en profesional cuando no se envía personalCategoryId', async () => {
+      getSettingsMock.mockResolvedValue(professionalSettings())
+      getActiveEarningPeriodMock.mockResolvedValue({ id: 7, startDate: '2026-01-01', percentage: 50 })
+
+      await createServiceIncome(baseIncomeInput())
+
+      expect(personalIncomeCategoriesTable.get).not.toHaveBeenCalled()
+    })
+
+    it('en híbrido, permite la categoría personal con contexto activo Personal', async () => {
+      getSettingsMock.mockResolvedValue({ usageMode: 'hybrid', activeContext: 'basic' })
+      personalIncomeCategoriesTable.get.mockResolvedValue(personalCategory)
+
+      await createServiceIncome(baseIncomeInput({ personalCategoryId: 'pic-1' }))
+
+      expect(servicesTable.add).toHaveBeenCalledWith(
+        expect.objectContaining({ personalCategoryId: 'pic-1', usageMode: 'basic' }),
+      )
+    })
+
+    it('en híbrido, no permite la categoría personal con contexto activo Profesional', async () => {
+      getSettingsMock.mockResolvedValue({ usageMode: 'hybrid', activeContext: 'professional' })
+      getActiveEarningPeriodMock.mockResolvedValue({ id: 7, startDate: '2026-01-01', percentage: 50 })
+
+      await expect(
+        createServiceIncome(baseIncomeInput({ personalCategoryId: 'pic-1' })),
+      ).rejects.toThrow('PERSONAL_INCOME_CATEGORY_NOT_ALLOWED_FOR_PROFESSIONAL')
+    })
+
+    it('normaliza "" a ausencia y no consulta la categoría', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+
+      await createServiceIncome(baseIncomeInput({ personalCategoryId: '' }))
+
+      expect(personalIncomeCategoriesTable.get).not.toHaveBeenCalled()
+      expect(servicesTable.add).toHaveBeenCalledWith(
+        expect.objectContaining({ personalCategoryId: undefined }),
+      )
+    })
+
+    it('normaliza un string de solo espacios a ausencia', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+
+      await createServiceIncome(baseIncomeInput({ personalCategoryId: '   ' }))
+
+      expect(personalIncomeCategoriesTable.get).not.toHaveBeenCalled()
+      expect(servicesTable.add).toHaveBeenCalledWith(
+        expect.objectContaining({ personalCategoryId: undefined }),
+      )
+    })
+
+    it('recorta espacios de un ID válido antes de consultarlo', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+      personalIncomeCategoriesTable.get.mockResolvedValue(personalCategory)
+
+      await createServiceIncome(baseIncomeInput({ personalCategoryId: '  pic-1  ' }))
+
+      expect(personalIncomeCategoriesTable.get).toHaveBeenCalledWith('pic-1')
+      expect(servicesTable.add).toHaveBeenCalledWith(
+        expect.objectContaining({ personalCategoryId: 'pic-1' }),
+      )
+    })
+
+    it('rechaza un personalCategoryId de tipo distinto de string', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+
+      await expect(
+        createServiceIncome(baseIncomeInput({ personalCategoryId: 123 as unknown as string })),
+      ).rejects.toThrow('PERSONAL_INCOME_CATEGORY_INVALID_ID')
+      expect(personalIncomeCategoriesTable.get).not.toHaveBeenCalled()
+    })
+  })
   it('persiste incomeCalculationMethod="service_duration" por defecto cuando el input no lo especifica', async () => {
     getSettingsMock.mockResolvedValue(basicSettings())
 
@@ -116,7 +266,7 @@ describe('createServiceIncome', () => {
     expect(persisted.incomeCalculationMethod).toBe('hourly_workday')
   })
 
-  it('persiste "cash" por defecto en una jornada por horas cuando el input no trae tipo de pago', async () => {
+  it('no persiste tipo de pago en Personal aunque el input no lo traiga', async () => {
     getSettingsMock.mockResolvedValue(basicSettings())
 
     await createServiceIncome(baseIncomeInput({
@@ -127,12 +277,12 @@ describe('createServiceIncome', () => {
     expect(servicesTable.add).toHaveBeenCalledWith(
       expect.objectContaining({
         incomeCalculationMethod: 'hourly_workday',
-        paymentType: 'cash',
+        paymentType: undefined,
       }),
     )
   })
 
-  it('respeta el tipo de pago explícito del input en una jornada por horas', async () => {
+  it('descarta el tipo de pago explícito en Personal', async () => {
     getSettingsMock.mockResolvedValue(basicSettings())
 
     await createServiceIncome(baseIncomeInput({
@@ -143,12 +293,12 @@ describe('createServiceIncome', () => {
     expect(servicesTable.add).toHaveBeenCalledWith(
       expect.objectContaining({
         incomeCalculationMethod: 'hourly_workday',
-        paymentType: 'transfer',
+        paymentType: undefined,
       }),
     )
   })
 
-  it('conserva el tipo de pago en un servicio por tiempo', async () => {
+  it('no persiste tipo de pago en un servicio Personal', async () => {
     getSettingsMock.mockResolvedValue(basicSettings())
 
     await createServiceIncome(baseIncomeInput({
@@ -159,7 +309,7 @@ describe('createServiceIncome', () => {
     expect(servicesTable.add).toHaveBeenCalledWith(
       expect.objectContaining({
         incomeCalculationMethod: 'service_duration',
-        paymentType: 'cash',
+        paymentType: undefined,
       }),
     )
   })
@@ -223,6 +373,128 @@ describe('createServiceIncome', () => {
 })
 
 describe('updateServiceIncome', () => {
+  it('permite modificar y eliminar únicamente el nombre Personal sin cambiar el ID', async () => {
+    getSettingsMock.mockResolvedValue(basicSettings())
+    const current: ServiceIncome = { id: 1, ...baseIncomeInput({ usageMode: 'basic', personalName: 'Anterior' }) }
+    servicesTable.get.mockResolvedValue(current)
+    servicesTable.toArray.mockResolvedValue([current])
+    expensesTable.toArray.mockResolvedValue([])
+
+    const renamed = await updateServiceIncome(1, { personalName: '  Nueva   nómina ' })
+    expect(renamed).toEqual(expect.objectContaining({ id: 1, personalName: 'Nueva nómina', totalAmount: 100 }))
+
+    const cleared = await updateServiceIncome(1, { personalName: '   ' })
+    expect(cleared.personalName).toBeUndefined()
+  })
+  describe('categoría de ingreso personal (updateServiceIncome)', () => {
+    const archivedCategory = { id: 'pic-1', name: 'Nómina', normalizedName: 'nomina', usageMode: 'basic', isArchived: true }
+    const activeCategory = { id: 'pic-2', name: 'Reembolsos', normalizedName: 'reembolsos', usageMode: 'basic', isArchived: false }
+
+    it('permite retirar una categoría previamente asignada', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+      const current: ServiceIncome = { id: 1, ...baseIncomeInput({ usageMode: 'basic', personalCategoryId: 'pic-1' }) }
+      servicesTable.get.mockResolvedValue(current)
+      servicesTable.toArray.mockResolvedValue([current])
+      expensesTable.toArray.mockResolvedValue([])
+
+      const result = await updateServiceIncome(1, { personalCategoryId: '' })
+
+      expect(result.personalCategoryId).toBeUndefined()
+      expect(personalIncomeCategoriesTable.get).not.toHaveBeenCalled()
+    })
+
+    it('normaliza un personalCategoryId de solo espacios como ausencia al editar', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+      const current: ServiceIncome = { id: 1, ...baseIncomeInput({ usageMode: 'basic', personalCategoryId: 'pic-1' }) }
+      servicesTable.get.mockResolvedValue(current)
+      servicesTable.toArray.mockResolvedValue([current])
+      expensesTable.toArray.mockResolvedValue([])
+
+      const result = await updateServiceIncome(1, { personalCategoryId: '   ' })
+
+      expect(result.personalCategoryId).toBeUndefined()
+      expect(personalIncomeCategoriesTable.get).not.toHaveBeenCalled()
+    })
+
+    it('permite conservar una categoría ya asignada aunque se haya archivado desde entonces', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+      const current: ServiceIncome = { id: 1, ...baseIncomeInput({ usageMode: 'basic', personalCategoryId: 'pic-1' }) }
+      servicesTable.get.mockResolvedValue(current)
+      servicesTable.toArray.mockResolvedValue([current])
+      expensesTable.toArray.mockResolvedValue([])
+      personalIncomeCategoriesTable.get.mockResolvedValue(archivedCategory)
+
+      const result = await updateServiceIncome(1, { personalCategoryId: 'pic-1' })
+
+      expect(result.personalCategoryId).toBe('pic-1')
+    })
+
+    it('rechaza asignar una categoría archivada distinta a la que ya tenía', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+      const current: ServiceIncome = { id: 1, ...baseIncomeInput({ usageMode: 'basic', personalCategoryId: 'pic-2' }) }
+      servicesTable.get.mockResolvedValue(current)
+      servicesTable.toArray.mockResolvedValue([current])
+      expensesTable.toArray.mockResolvedValue([])
+      personalIncomeCategoriesTable.get.mockResolvedValue(archivedCategory)
+
+      await expect(
+        updateServiceIncome(1, { personalCategoryId: 'pic-1' }),
+      ).rejects.toThrow('La categoría de ingreso personal no es válida.')
+    })
+
+    it('permite asignar una categoría válida y activa distinta a la actual', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+      const current: ServiceIncome = { id: 1, ...baseIncomeInput({ usageMode: 'basic', personalCategoryId: undefined }) }
+      servicesTable.get.mockResolvedValue(current)
+      servicesTable.toArray.mockResolvedValue([current])
+      expensesTable.toArray.mockResolvedValue([])
+      personalIncomeCategoriesTable.get.mockResolvedValue(activeCategory)
+
+      const result = await updateServiceIncome(1, { personalCategoryId: 'pic-2' })
+
+      expect(result.personalCategoryId).toBe('pic-2')
+    })
+
+    it('rechaza una categoría inexistente al editar', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+      const current: ServiceIncome = { id: 1, ...baseIncomeInput({ usageMode: 'basic' }) }
+      servicesTable.get.mockResolvedValue(current)
+      servicesTable.toArray.mockResolvedValue([current])
+      expensesTable.toArray.mockResolvedValue([])
+      personalIncomeCategoriesTable.get.mockResolvedValue(undefined)
+
+      await expect(
+        updateServiceIncome(1, { personalCategoryId: 'no-existe' }),
+      ).rejects.toThrow('La categoría de ingreso personal no es válida.')
+    })
+
+    it('rechaza un personalCategoryId de tipo distinto de string al editar', async () => {
+      getSettingsMock.mockResolvedValue(basicSettings())
+      const current: ServiceIncome = { id: 1, ...baseIncomeInput({ usageMode: 'basic' }) }
+      servicesTable.get.mockResolvedValue(current)
+      servicesTable.toArray.mockResolvedValue([current])
+      expensesTable.toArray.mockResolvedValue([])
+
+      await expect(
+        updateServiceIncome(1, { personalCategoryId: 123 as unknown as string }),
+      ).rejects.toThrow('PERSONAL_INCOME_CATEGORY_INVALID_ID')
+    })
+
+    it('en profesional, ignora personalCategoryId defensivamente y no lo persiste', async () => {
+      getSettingsMock.mockResolvedValue(professionalSettings())
+      const current: ServiceIncome = { id: 1, ...baseIncomeInput({ usageMode: 'professional', earningPeriodId: 7 }) }
+      servicesTable.get.mockResolvedValue(current)
+      servicesTable.toArray.mockResolvedValue([current])
+      expensesTable.toArray.mockResolvedValue([])
+      getEarningPeriodByIdMock.mockResolvedValue({ id: 7, startDate: '2026-01-01T00:00:00.000Z' })
+
+      const result = await updateServiceIncome(1, { personalCategoryId: 'pic-1' })
+
+      expect(result.personalCategoryId).toBeUndefined()
+      expect(personalIncomeCategoriesTable.get).not.toHaveBeenCalled()
+    })
+  })
+
   it('ignora un incomeCalculationMethod distinto en los updates (inmutable tras la creación)', async () => {
     getSettingsMock.mockResolvedValue(basicSettings())
     const current: ServiceIncome = {
@@ -247,17 +519,20 @@ describe('updateServiceIncome', () => {
   })
 
   it('permite modificar el tipo de pago al editar una jornada por horas', async () => {
-    getSettingsMock.mockResolvedValue(basicSettings())
+    getSettingsMock.mockResolvedValue(professionalSettings())
     const current: ServiceIncome = {
       id: 1,
       ...baseIncomeInput({
         incomeCalculationMethod: 'hourly_workday',
         paymentType: 'cash',
+        usageMode: 'professional',
+        earningPeriodId: 7,
       }),
     }
     servicesTable.get.mockResolvedValue(current)
     servicesTable.toArray.mockResolvedValue([current])
     expensesTable.toArray.mockResolvedValue([])
+    getEarningPeriodByIdMock.mockResolvedValue({ id: 7, startDate: '2026-01-01T00:00:00.000Z' })
 
     const result = await updateServiceIncome(1, { paymentType: 'transfer' })
 
@@ -268,17 +543,20 @@ describe('updateServiceIncome', () => {
   })
 
   it('conserva el tipo de pago de una jornada si la edición no lo vuelve a enviar', async () => {
-    getSettingsMock.mockResolvedValue(basicSettings())
+    getSettingsMock.mockResolvedValue(professionalSettings())
     const current: ServiceIncome = {
       id: 1,
       ...baseIncomeInput({
         incomeCalculationMethod: 'hourly_workday',
         paymentType: 'cash',
+        usageMode: 'professional',
+        earningPeriodId: 7,
       }),
     }
     servicesTable.get.mockResolvedValue(current)
     servicesTable.toArray.mockResolvedValue([current])
     expensesTable.toArray.mockResolvedValue([])
+    getEarningPeriodByIdMock.mockResolvedValue({ id: 7, startDate: '2026-01-01T00:00:00.000Z' })
 
     const result = await updateServiceIncome(1, { totalAmount: 200 })
 
@@ -351,7 +629,7 @@ describe('updateServiceIncome', () => {
     expect(servicesTable.put).not.toHaveBeenCalled()
   })
 
-  it('conserva el tipo de pago si la edición de un servicio no vuelve a capturarlo', async () => {
+  it('limpia el tipo de pago histórico de un servicio Personal al editarlo', async () => {
     getSettingsMock.mockResolvedValue(basicSettings())
     const current: ServiceIncome = {
       id: 1,
@@ -367,9 +645,9 @@ describe('updateServiceIncome', () => {
 
     const result = await updateServiceIncome(1, { paymentType: undefined, totalAmount: 200 })
 
-    expect(result.paymentType).toBe('cash')
+    expect(result.paymentType).toBeUndefined()
     expect(servicesTable.put).toHaveBeenCalledWith(
-      expect.objectContaining({ paymentType: 'cash' }),
+      expect.objectContaining({ paymentType: undefined }),
     )
   })
 

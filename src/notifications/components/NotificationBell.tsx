@@ -28,11 +28,16 @@ export function NotificationBell({ className }: NotificationBellProps) {
     refresh()
     const intervalId = window.setInterval(refresh, 60_000)
     window.addEventListener('finance-app:notifications-changed', refresh)
+    // Cambiar de espacio en una instalación Híbrida oculta/revela
+    // notificaciones exclusivas de Profesional (ver notificationVisibility.ts):
+    // el contador debe reflejarlo de inmediato, no esperar al poll de 60s.
+    window.addEventListener('finance-app:settings-changed', refresh)
 
     return () => {
       cancelled = true
       window.clearInterval(intervalId)
       window.removeEventListener('finance-app:notifications-changed', refresh)
+      window.removeEventListener('finance-app:settings-changed', refresh)
     }
   }, [])
 

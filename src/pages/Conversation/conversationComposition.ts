@@ -26,6 +26,7 @@ import {
   validateAIProvider,
 } from '../../intelligence/ai-provider/aiProvider'
 import { getSettings } from '../../services/settingsService'
+import { resolveActiveUsageMode } from '../../utils/usageMode'
 import { createLocalFinancialCopilotQueryHandler } from '../../services/financialCopilotService'
 import { createCopilotActionProposalService } from '../../services/copilotActionProposalService'
 import {
@@ -323,7 +324,7 @@ export function createConversationControllerDependencies(
     },
     async getAssistantContext() {
       const settings = await getSettings()
-      return { defaultCurrency: settings.defaultCurrency, usageMode: settings.usageMode }
+      return { defaultCurrency: settings.defaultCurrency, usageMode: resolveActiveUsageMode(settings) }
     },
     pipeline: {
       async generateAssistantMessage(input): Promise<

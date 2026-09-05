@@ -75,12 +75,12 @@ describe('canMarkAsReported', () => {
     expect(canMarkAsReported(serviceIncome({ type: 'otro' }), 'professional')).toBe(false)
   })
 
-  it('rejects a service income when the current usage mode is basic', () => {
-    expect(canMarkAsReported(serviceIncome({ usageMode: 'basic' }), 'basic')).toBe(false)
+  it('allows a service income when the current usage mode is basic', () => {
+    expect(canMarkAsReported(serviceIncome({ usageMode: 'basic' }), 'basic')).toBe(true)
   })
 
-  it('allows a basic-mode expense but rejects an expense adjustment', () => {
-    expect(canMarkAsReported(expenseRecord(), 'basic')).toBe(true)
+  it('rejects both regular and adjustment expenses in basic mode', () => {
+    expect(canMarkAsReported(expenseRecord(), 'basic')).toBe(false)
     expect(canMarkAsReported(expenseRecord({ type: 'ajuste' }), 'basic')).toBe(false)
   })
 })

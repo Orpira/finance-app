@@ -70,17 +70,22 @@ export function setOnboardingStep(currentStep: number) {
 
 export async function configureOnboardingUsageMode(usageMode: UsageMode) {
   const settings = await getSettings()
+  // Híbrido sigue el mismo recorrido de configuración que Profesional
+  // (temporada, porcentaje, etc.) durante el onboarding; el usuario elige
+  // libremente el espacio activo después, desde el selector Personal/Profesional.
+  const followsProfessionalOnboarding =
+    usageMode === 'professional' || usageMode === 'hybrid'
 
   return updateSettings(
     {
       onboarding: {
         ...settings.onboarding,
-        initialSeason:
-          usageMode === 'professional'
-            ? settings.onboarding.initialSeason
-            : undefined,
+        initialSeason: followsProfessionalOnboarding
+          ? settings.onboarding.initialSeason
+          : undefined,
       },
       usageMode,
+      ...(usageMode === 'hybrid' ? { activeContext: 'professional' as const } : {}),
     },
     { allowUsageModeChange: true },
   )

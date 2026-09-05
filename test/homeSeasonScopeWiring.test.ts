@@ -43,6 +43,8 @@ describe('HomePage.tsx — scope de temporada activa (regresión de código fuen
     // seasonIncomes/seasonExpenses quedan siempre en [] y summaryIncomes/
     // summaryExpenses caen al branch mensual (currentIncomes/currentExpenses).
     expect(source).toContain('!isBasicUser && period?.id ? listSeasonRecords(period.id)')
+    expect(source).toContain('!isBasicUser && activePeriod && activePeriodStats')
+    expect(source).toContain('{!isBasicUser && seasonGoalProgress && activePeriod && (')
   })
 
   it('el header de Inicio distingue el texto según el modo, en vez de anunciar siempre "mes actual"', () => {

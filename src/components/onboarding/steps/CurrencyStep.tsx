@@ -3,15 +3,17 @@ import { type FormEvent, useState } from 'react'
 import { configureOnboardingCurrency } from '../../../services/onboardingService'
 import type { CurrencyCode } from '../../../types/settings'
 import { currencies } from '../../../utils/countries'
+import { HybridWorkspaceBanner } from '../HybridWorkspaceBanner'
 import { OnboardingLayout } from '../OnboardingLayout'
 
 interface CurrencyStepProps {
   currentStep: number
   onNext: () => void
   onBack?: () => void
+  showHybridBanner?: boolean
 }
 
-export function CurrencyStep({ currentStep, onNext, onBack }: CurrencyStepProps) {
+export function CurrencyStep({ currentStep, onNext, onBack, showHybridBanner }: CurrencyStepProps) {
   const [currency, setCurrency] = useState<CurrencyCode>('EUR')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
@@ -43,6 +45,7 @@ export function CurrencyStep({ currentStep, onNext, onBack }: CurrencyStepProps)
       onBack={onBack}
       title="Moneda principal"
     >
+      {showHybridBanner && <HybridWorkspaceBanner />}
       <form id="onboarding-currency-form" onSubmit={handleSubmit}>
         <label className="grid gap-2 text-left">
           <span className="text-sm font-medium">Moneda de trabajo</span>

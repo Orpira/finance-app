@@ -6,9 +6,15 @@ export type ExpenseType = 'gasto' | 'ajuste'
 export interface Expense {
   id?: number;
 
+  /** Optional user-defined label. Valid only for Personal (`basic`) expenses. */
+  personalName?: string;
+
   type: ExpenseType;
 
   usageMode?: UsageMode;
+
+  /** Personal-only metadata resolved against personalExpenseCategories. */
+  personalCategoryId?: string;
 
   date: string;
 

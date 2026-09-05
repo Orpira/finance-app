@@ -23,6 +23,19 @@ function income(overrides: Partial<ServiceIncome> & { id: number; date: string; 
   }
 }
 
+function expense(overrides: Partial<Expense> & { id: number; date: string; eurValue: number }): Expense {
+  return {
+    type: 'gasto',
+    category: 'Otros',
+    amount: overrides.eurValue,
+    currency: 'EUR',
+    copValue: 0,
+    createdAt: `${overrides.date}T00:00:00.000Z`,
+    usageMode: 'professional',
+    ...overrides,
+  }
+}
+
 function settings(): AppSettings {
   return {
     id: 'app',
@@ -63,6 +76,7 @@ function baseRequest(overrides: Partial<FinancialTransactionInput> = {}): Financ
 function createUseCase(input: {
   readonly incomes: readonly ServiceIncome[]
   readonly expenses?: readonly Expense[]
+  readonly settings?: AppSettings
   readonly listServiceIncomes?: (options: ServiceIncomeListOptions) => Promise<readonly ServiceIncome[]>
 }) {
   const listServiceIncomes = input.listServiceIncomes
@@ -79,7 +93,7 @@ function createUseCase(input: {
 
   return {
     useCase: createTransactionsToolUseCase({
-      getSettings: async () => settings(),
+      getSettings: async () => input.settings ?? settings(),
       listServiceIncomes: listServiceIncomes as unknown as typeof import('../src/services/incomeService').listServiceIncomes,
       listExpenses: listExpenses as unknown as typeof import('../src/services/expenseService').listExpenses,
     }),
@@ -105,6 +119,38 @@ describe('financial_transactions tool — orden y seleccion (PB-IS-015.5-R2)', (
         '2026-07-20', '2026-07-10', '2026-07-01',
       ])
     }
+  })
+
+  it('identifica el ingreso Personal por su nombre y conserva la etiqueta Profesional', async () => {
+    const personal = createUseCase({
+      incomes: [income({ id: 1, date: '2026-07-01', eurValue: 100, usageMode: 'basic', personalName: 'Nómina julio' })],
+      settings: { ...settings(), usageMode: 'basic' },
+    })
+    const professional = createUseCase({
+      incomes: [income({ id: 2, date: '2026-07-02', eurValue: 200, notes: 'Cliente habitual' })],
+    })
+
+    const personalResult = await personal.useCase.execute(baseRequest({ filters: { kinds: ['income'] } }))
+    const professionalResult = await professional.useCase.execute(baseRequest({ filters: { kinds: ['income'] } }))
+    expect(personalResult.kind === 'success' && personalResult.output.items[0]?.label).toBe('Nómina julio')
+    expect(professionalResult.kind === 'success' && professionalResult.output.items[0]?.label).toBe('Cliente habitual')
+  })
+
+  it('identifica el egreso Personal por su nombre y conserva la etiqueta Profesional', async () => {
+    const personal = createUseCase({
+      incomes: [],
+      expenses: [expense({ id: 1, date: '2026-07-01', eurValue: 50, usageMode: 'basic', personalName: 'Compra supermercado' })],
+      settings: { ...settings(), usageMode: 'basic' },
+    })
+    const professional = createUseCase({
+      incomes: [],
+      expenses: [expense({ id: 2, date: '2026-07-02', eurValue: 80, notes: 'Proveedor habitual' })],
+    })
+
+    const personalResult = await personal.useCase.execute(baseRequest({ filters: { kinds: ['expense'] } }))
+    const professionalResult = await professional.useCase.execute(baseRequest({ filters: { kinds: ['expense'] } }))
+    expect(personalResult.kind === 'success' && personalResult.output.items[0]?.label).toBe('Compra supermercado')
+    expect(professionalResult.kind === 'success' && professionalResult.output.items[0]?.label).toBe('Proveedor habitual')
   })
 
   it('reutiliza el mismo newestFirst que usa /income para la fecha por defecto (desc)', async () => {

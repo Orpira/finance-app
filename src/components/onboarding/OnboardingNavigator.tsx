@@ -71,7 +71,10 @@ export function OnboardingNavigator({ currentStep, onAdvance }: OnboardingNaviga
       case 'season':
         return 2
       case 'currency':
-        return usageMode === 'professional' ? 3 : 1
+        // Híbrido sigue el mismo recorrido de configuración que Profesional
+        // (temporada, porcentaje, etc.); el usuario elige el espacio activo
+        // después, desde el selector Personal/Profesional.
+        return usageMode === 'professional' || usageMode === 'hybrid' ? 3 : 1
       case 'security':
         return 4
       case 'finish':
@@ -89,16 +92,18 @@ export function OnboardingNavigator({ currentStep, onAdvance }: OnboardingNaviga
     return <UsageStep currentStep={currentStep} onBack={onBack} onNext={(step) => goToStep(step)} />
   }
 
+  const showHybridBanner = usageMode === 'hybrid'
+
   if (stepId === 'work-mode') {
-    return <WorkModeStep currentStep={currentStep} onBack={onBack} onNext={() => goToStep(3)} />
+    return <WorkModeStep currentStep={currentStep} onBack={onBack} onNext={() => goToStep(3)} showHybridBanner={showHybridBanner} />
   }
 
   if (stepId === 'season') {
-    return <SeasonStep currentStep={currentStep} onBack={onBack} onNext={() => goToStep(4)} />
+    return <SeasonStep currentStep={currentStep} onBack={onBack} onNext={() => goToStep(4)} showHybridBanner={showHybridBanner} />
   }
 
   if (stepId === 'currency') {
-    return <CurrencyStep currentStep={currentStep} onBack={onBack} onNext={() => goToStep(5)} />
+    return <CurrencyStep currentStep={currentStep} onBack={onBack} onNext={() => goToStep(5)} showHybridBanner={showHybridBanner} />
   }
 
   if (stepId === 'security') {

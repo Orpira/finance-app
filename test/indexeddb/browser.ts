@@ -7,6 +7,7 @@ import {
   importDatabaseSnapshot,
   resetDatabase,
 } from '../../src/database/db'
+import type { DatabaseSnapshot } from '../../src/database/db'
 import { createAIConversationService } from '../../src/intelligence/ai-conversation/service'
 import { FinancialSnapshotRepository } from '../../src/intelligence/financial-snapshot/financialSnapshotRepository'
 import { canonicalizeValidatedSnapshotCandidate } from '../../src/intelligence/financial-snapshot/snapshotCanonicalizer'
@@ -32,6 +33,15 @@ import {
   getSeasonStatistics,
 } from '../../src/services/earningPeriodService'
 import { deleteServiceIncome, updateServiceIncome } from '../../src/services/incomeService'
+import {
+  archivePersonalIncomeCategory,
+  countIncomeReferencesForCategory,
+  createPersonalIncomeCategory,
+  deletePersonalIncomeCategory,
+  listPersonalIncomeCategories,
+  reactivatePersonalIncomeCategory,
+  renamePersonalIncomeCategory,
+} from '../../src/services/personalIncomeCategoryService'
 import { getSettings, updateSettings } from '../../src/services/settingsService'
 import { getOnboardingState, setOnboardingStep } from '../../src/services/onboardingService'
 import { groupIncomesByDate } from '../../src/services/incomeReport.service'
@@ -258,6 +268,121 @@ async function sealedKnowledge(
 async function run() {
   await Dexie.delete(databaseName)
 
+  const legacyV32 = new Dexie(databaseName)
+  legacyV32.version(32).stores({
+    services: '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt',
+    expenses: '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+    appointments: '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+    settings: 'id',
+    exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+    cutoffReports: '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+    earningPeriods: '++id,status,startDate,endDate,plannedEndDate,countryCode,city',
+    licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+    automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+    communicationChannels: 'id,type,provider,status,updatedAt',
+    deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+    conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+    knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+    knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+    financialSnapshots: 'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+    knowledgeSnapshots: 'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+    incomeAdditionals: '++id,incomeId,createdAt',
+    financialGoals: 'id,type,status,startDate,endDate,updatedAt',
+    notifications: 'id,dedupKey,priority,status,createdAt,expiresAt',
+  })
+  await legacyV32.open()
+  await legacyV32.table('settings').put({ id: 'app', usageMode: 'basic' })
+  await legacyV32.table('services').bulkPut([
+    { id: 3201, date: '2026-08-01', totalAmount: 100, usageMode: 'basic', paymentType: 'cash' },
+    { id: 3202, date: '2026-08-02', totalAmount: 250, usageMode: 'basic' },
+  ])
+  await legacyV32.table('financialGoals').put({
+    id: 'goal:v32:basic', type: 'saving', name: 'Meta histórica', targetAmount: 500,
+    currency: 'EUR', period: 'monthly', startDate: '2026-08-01', status: 'active',
+    createdAt: at, updatedAt: at,
+  })
+  legacyV32.close()
+
+  let database = new FinanceDB()
+  await database.open()
+  assert(database.verno === 35, 'physical migration upgrades a Personal profile from v32 to v35')
+  const migratedBasicIncome = await database.services.get(3201)
+  assert(migratedBasicIncome?.paymentType === undefined, 'v33 removes paymentType from historical Personal income')
+  assert(migratedBasicIncome?.totalAmount === 100, 'v33 preserves the Personal income amount and id')
+  assert((await database.financialGoals.get('goal:v32:basic'))?.usageMode === 'basic', 'v33 classifies an unscoped Personal goal as basic')
+  database.close()
+  await Dexie.delete(databaseName)
+
+  const legacyV33 = new Dexie(databaseName)
+  legacyV33.version(33).stores({
+    services:
+      '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt',
+    expenses:
+      '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode',
+    appointments:
+      '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+    settings: 'id',
+    exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+    cutoffReports:
+      '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+    earningPeriods:
+      '++id,status,startDate,endDate,plannedEndDate,countryCode,city',
+    licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+    automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+    communicationChannels: 'id,type,provider,status,updatedAt',
+    deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+    conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+    knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+    knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+    financialSnapshots:
+      'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+    knowledgeSnapshots:
+      'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+    incomeAdditionals: '++id,incomeId,createdAt',
+    financialGoals: 'id,type,status,startDate,endDate,updatedAt',
+    notifications: 'id,dedupKey,priority,status,createdAt,expiresAt',
+  })
+  await legacyV33.open()
+  await legacyV33.table('settings').put({ id: 'app', usageMode: 'basic' })
+  const v33Income = {
+    id: 3301,
+    date: '2026-07-15',
+    totalAmount: 180,
+    currency: 'EUR',
+    usageMode: 'basic',
+    personalName: 'Freelance diseño',
+    realGain: 180,
+    eurValue: 180,
+    copValue: 0,
+    percentage: 0,
+    duration: 0,
+  }
+  await legacyV33.table('services').add(v33Income)
+  legacyV33.close()
+
+  database = new FinanceDB()
+  await database.open()
+  assert(database.verno === 35, 'physical migration upgrades from v33 to v35')
+  assert(database.tables.some((table) => table.name === 'personalIncomeCategories'), 'v33 to v35 migration preserves personalIncomeCategories')
+  assert(database.tables.some((table) => table.name === 'personalExpenseCategories'), 'v35 migration creates personalExpenseCategories')
+  const migratedV33Income = await database.services.get(3301)
+  assert(migratedV33Income?.id === v33Income.id, 'v33 to v34 migration preserves the income id')
+  assert(migratedV33Income?.totalAmount === v33Income.totalAmount, 'v33 to v34 migration preserves the income amount')
+  assert(migratedV33Income?.date === v33Income.date, 'v33 to v34 migration preserves the income date')
+  assert(migratedV33Income?.usageMode === 'basic', 'v33 to v34 migration preserves the income usage context')
+  assert(migratedV33Income?.personalName === v33Income.personalName, 'v33 to v34 migration preserves the Personal income name')
+  assert(migratedV33Income?.currency === v33Income.currency, 'v33 to v34 migration preserves other financial fields (currency)')
+  assert(migratedV33Income?.eurValue === v33Income.eurValue, 'v33 to v34 migration preserves other financial fields (eurValue)')
+  database.close()
+
+  database = new FinanceDB()
+  await database.open()
+  assert(database.verno === 35, 'v33 to v35 migration keeps schema v35 after close and reopen')
+  const reopenedV33Income = await database.services.get(3301)
+  assert(reopenedV33Income?.totalAmount === v33Income.totalAmount, 'v33 to v34 migration keeps income data after close and reopen')
+  database.close()
+  await Dexie.delete(databaseName)
+
   const legacyV25 = new Dexie(databaseName)
   legacyV25.version(25).stores({
     services:
@@ -309,9 +434,9 @@ async function run() {
   await legacyV25.table('conversationMemories').add(v25ConversationMemory)
   legacyV25.close()
 
-  let database = new FinanceDB()
+  database = new FinanceDB()
   await database.open()
-  assert(database.verno === 31, 'physical migration upgrades from v25 to v31')
+  assert(database.verno === 35, 'physical migration upgrades from v25 to v35')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration preserves v25 conversationMemories table')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v25 base')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v25 base')
@@ -380,7 +505,7 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 31, 'physical migration upgrades from v24 to v31')
+  assert(database.verno === 35, 'physical migration upgrades from v24 to v35')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration keeps conversationMemories from v24 base')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v24 base')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v24 base')
@@ -412,7 +537,7 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 31, 'physical migration opens schema v31')
+  assert(database.verno === 35, 'physical migration opens schema v35')
   assert(database.tables.some((table) => table.name === 'financialSnapshots'), 'migration creates financialSnapshots')
   assert(database.tables.some((table) => table.name === 'knowledgeSnapshots'), 'migration creates knowledgeSnapshots')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'migration creates conversationMemories')
@@ -431,6 +556,21 @@ async function run() {
   assert(database.tables.some((table) => table.name === 'incomeAdditionals'), 'v29 migration creates the incomeAdditionals table')
   assert(database.tables.some((table) => table.name === 'financialGoals'), 'v30 migration creates the financialGoals table')
   assert(database.earningPeriods.schema.idxByName.plannedEndDate !== undefined, 'v31 migration adds the plannedEndDate index')
+
+  assert(database.tables.some((table) => table.name === 'personalIncomeCategories'), 'v34 migration creates the personalIncomeCategories table')
+  assert(database.personalIncomeCategories.schema.primKey.name === 'id', 'personalIncomeCategories declares id as primary key')
+  assert(database.personalIncomeCategories.schema.idxByName.normalizedName !== undefined, 'personalIncomeCategories declares a normalizedName index')
+  assert(database.personalIncomeCategories.schema.idxByName.usageMode !== undefined, 'personalIncomeCategories declares a usageMode index')
+  assert(database.personalIncomeCategories.schema.idxByName.isArchived !== undefined, 'personalIncomeCategories declares an isArchived index')
+  assert(database.personalIncomeCategories.schema.idxByName.createdAt !== undefined, 'personalIncomeCategories declares a createdAt index')
+  assert(database.personalIncomeCategories.schema.idxByName.updatedAt !== undefined, 'personalIncomeCategories declares an updatedAt index')
+  assert(database.personalIncomeCategories.schema.idxByName.name !== undefined, 'personalIncomeCategories declares a name index')
+  assert(database.services.schema.idxByName.personalCategoryId !== undefined, 'v34 migration adds a personalCategoryId index on services')
+  assert(database.personalExpenseCategories.schema.primKey.name === 'id', 'personalExpenseCategories declares id as primary key')
+  assert(database.personalExpenseCategories.schema.idxByName.normalizedName !== undefined, 'personalExpenseCategories declares a normalizedName index')
+  assert(database.personalExpenseCategories.schema.idxByName.usageMode !== undefined, 'personalExpenseCategories declares a usageMode index')
+  assert(database.personalExpenseCategories.schema.idxByName.isArchived !== undefined, 'personalExpenseCategories declares an isArchived index')
+  assert(database.expenses.schema.idxByName.personalCategoryId !== undefined, 'v35 migration adds a personalCategoryId index on expenses')
 
   const financialGoal = {
     id: 'goal:migration:001',
@@ -517,6 +657,71 @@ async function run() {
     settings: [legacyBackupSettings as AppSettings],
   })
   assert((await database.settings.get('app'))?.showUnreportedIncome === true, 'importDatabaseSnapshot defaults legacy backups to showing unreported income')
+
+  const servicesBeforeInvalidPersonalNameImport = await database.services.toArray()
+  const firstImportedService = snapshotWithAdditionals.services[0]
+  assert(firstImportedService !== undefined, 'personal-name import fixtures include an income')
+  await expectReject(
+    () => importDatabaseSnapshot({
+      ...snapshotWithAdditionals,
+      services: [
+        { ...firstImportedService, usageMode: 'basic', personalName: 'x'.repeat(81) },
+        ...snapshotWithAdditionals.services.slice(1),
+      ],
+    }),
+    'importDatabaseSnapshot rejects an overlong Personal income name before clearing local data',
+  )
+  deepEqual(
+    await database.services.toArray(),
+    servicesBeforeInvalidPersonalNameImport,
+    'a rejected Personal income name import leaves pre-existing incomes intact',
+  )
+  await expectReject(
+    () => importDatabaseSnapshot({
+      ...snapshotWithAdditionals,
+      services: [
+        { ...firstImportedService, usageMode: 'professional', personalName: 'Nombre manipulado' },
+        ...snapshotWithAdditionals.services.slice(1),
+      ],
+    }),
+    'importDatabaseSnapshot rejects a personalName injected into a Professional income',
+  )
+  deepEqual(
+    await database.services.toArray(),
+    servicesBeforeInvalidPersonalNameImport,
+    'a rejected Professional personalName import leaves pre-existing incomes intact',
+  )
+
+  const expensesBeforeInvalidPersonalNameImport = await database.expenses.toArray()
+  const personalNameExpenseFixture: Expense = {
+    id: 9001, type: 'gasto', date: '2026-09-05', category: 'Otros',
+    amount: 20, currency: 'EUR', eurValue: 20, copValue: 88_000,
+    createdAt: '2026-09-05T00:00:00.000Z',
+  }
+  await expectReject(
+    () => importDatabaseSnapshot({
+      ...snapshotWithAdditionals,
+      expenses: [{ ...personalNameExpenseFixture, usageMode: 'basic', personalName: 'x'.repeat(81) }],
+    }),
+    'importDatabaseSnapshot rejects an overlong Personal expense name before clearing local data',
+  )
+  deepEqual(
+    await database.expenses.toArray(),
+    expensesBeforeInvalidPersonalNameImport,
+    'a rejected Personal expense name import leaves pre-existing expenses intact',
+  )
+  await expectReject(
+    () => importDatabaseSnapshot({
+      ...snapshotWithAdditionals,
+      expenses: [{ ...personalNameExpenseFixture, usageMode: 'professional', personalName: 'Nombre manipulado' }],
+    }),
+    'importDatabaseSnapshot rejects a personalName injected into a Professional expense',
+  )
+  deepEqual(
+    await database.expenses.toArray(),
+    expensesBeforeInvalidPersonalNameImport,
+    'a rejected Professional expense personalName import leaves pre-existing expenses intact',
+  )
 
   await expectReject(
     () =>
@@ -1211,6 +1416,321 @@ async function run() {
     'full IndexedDB reopen preserves report records, order, totals and durations',
   )
   reopenedReportDatabase.close()
+  await Dexie.delete(databaseName)
+
+  // ---- Bloque 6.3: personalIncomeCategories physical CRUD ----
+  await db.open()
+
+  const createdCategory = await createPersonalIncomeCategory({ name: '  Nómina   mensual  ' })
+  assert(createdCategory.name === 'Nómina mensual', 'creates a personal income category with a normalized name')
+  const persistedCategory = await db.personalIncomeCategories.get(createdCategory.id)
+  assert(persistedCategory?.normalizedName === 'nomina mensual', 'physically persists the canonical normalizedName')
+  assert(persistedCategory?.usageMode === 'basic', 'a created category is always scoped to usageMode basic')
+  assert(persistedCategory?.isArchived === false, 'a created category starts active')
+
+  const activeCategoriesAfterCreate = await listPersonalIncomeCategories({ archived: 'active' })
+  assert(
+    activeCategoriesAfterCreate.some((item) => item.id === createdCategory.id),
+    'lists the created category among active categories',
+  )
+
+  await expectReject(
+    () => createPersonalIncomeCategory({ name: '  NÓMINA   MENSUAL  ' }),
+    'rejects an exact-equivalent duplicate name (case, spacing and accents ignored)',
+  )
+
+  const renamedCategory = await renamePersonalIncomeCategory(createdCategory.id, 'Nómina')
+  assert(renamedCategory.name === 'Nómina', 'renames a category')
+  const renamedPersisted = await db.personalIncomeCategories.get(createdCategory.id)
+  assert(
+    renamedPersisted?.name === 'Nómina' && renamedPersisted?.normalizedName === 'nomina',
+    'the rename persists physically in IndexedDB',
+  )
+
+  db.close()
+  await db.open()
+  const categoryAfterReopen = await db.personalIncomeCategories.get(createdCategory.id)
+  assert(categoryAfterReopen?.name === 'Nómina', 'a renamed category survives close and reopen')
+
+  const otherCategory = await createPersonalIncomeCategory({ name: 'Reembolsos' })
+  await expectReject(
+    () => renamePersonalIncomeCategory(otherCategory.id, 'nomina'),
+    'rejects renaming into a normalized duplicate of another category',
+  )
+
+  await archivePersonalIncomeCategory(createdCategory.id)
+  assert((await db.personalIncomeCategories.get(createdCategory.id))?.isArchived === true, 'archives a category')
+
+  await reactivatePersonalIncomeCategory(createdCategory.id)
+  assert((await db.personalIncomeCategories.get(createdCategory.id))?.isArchived === false, 'reactivates an archived category')
+
+  const linkedIncomeId = await db.services.add({
+    date: '2026-09-01', duration: 0, totalAmount: 100, currency: 'EUR',
+    percentage: 0, realGain: 100, eurValue: 100, copValue: 0, exchangeRateUsed: 1,
+    usageMode: 'basic', personalCategoryId: createdCategory.id,
+  })
+  assert(
+    (await db.services.get(linkedIncomeId))?.personalCategoryId === createdCategory.id,
+    'assigns a category to a Personal income',
+  )
+  assert(
+    (await countIncomeReferencesForCategory(createdCategory.id)) === 1,
+    'counts income references for a category',
+  )
+
+  await expectReject(
+    () => deletePersonalIncomeCategory(createdCategory.id),
+    'blocks deleting a category while it has income references',
+  )
+  assert(
+    (await db.personalIncomeCategories.get(createdCategory.id)) !== undefined,
+    'a blocked deletion leaves the category intact',
+  )
+
+  await db.services.where('id').equals(linkedIncomeId).modify((income) => {
+    delete income.personalCategoryId
+  })
+  assert(
+    (await db.services.get(linkedIncomeId))?.personalCategoryId === undefined,
+    'removes the category reference from the income',
+  )
+
+  await deletePersonalIncomeCategory(createdCategory.id)
+  assert((await db.personalIncomeCategories.get(createdCategory.id)) === undefined, 'deletes a category once it has no references')
+  await deletePersonalIncomeCategory(otherCategory.id)
+
+  db.close()
+  await db.open()
+  assert((await db.personalIncomeCategories.count()) === 0, 'category deletion persists after close and reopen')
+  await db.services.delete(linkedIncomeId)
+
+  // ---- Bloque 6.3: backup validation, referential integrity and fail-closed atomicity ----
+  const backupCategory = await createPersonalIncomeCategory({ name: 'Consultoría' })
+  const backupIncomeId = await db.services.add({
+    date: '2026-09-02', duration: 0, totalAmount: 200, currency: 'EUR',
+    percentage: 0, realGain: 200, eurValue: 200, copValue: 0, exchangeRateUsed: 1,
+    usageMode: 'basic', personalCategoryId: backupCategory.id,
+  })
+  const unusedCategory = await createPersonalIncomeCategory({ name: 'Bonos' })
+  const baseSnapshot = await exportDatabaseSnapshot()
+  assert(
+    baseSnapshot.personalIncomeCategories.some((item) => item.id === backupCategory.id),
+    'exportDatabaseSnapshot includes personalIncomeCategories',
+  )
+
+  async function assertCategoryImportRejectedAndStateIntact(
+    mutate: (snapshot: DatabaseSnapshot) => DatabaseSnapshot,
+    label: string,
+  ) {
+    const servicesBefore = await db.services.toArray()
+    const categoriesBefore = await db.personalIncomeCategories.toArray()
+    const settingsBefore = await db.settings.toArray()
+    await expectReject(() => importDatabaseSnapshot(mutate(structuredClone(baseSnapshot))), label)
+    deepEqual(await db.services.toArray(), servicesBefore, `${label} (services untouched)`)
+    deepEqual(await db.personalIncomeCategories.toArray(), categoriesBefore, `${label} (categories untouched)`)
+    deepEqual(await db.settings.toArray(), settingsBefore, `${label} (settings untouched)`)
+  }
+
+  await assertCategoryImportRejectedAndStateIntact(
+    (snapshot) => ({
+      ...snapshot,
+      personalIncomeCategories: [
+        ...snapshot.personalIncomeCategories,
+        { ...backupCategory, name: 'Duplicado', normalizedName: 'duplicado' },
+      ],
+    }),
+    'importDatabaseSnapshot rejects a duplicate category id (fail-closed)',
+  )
+
+  await assertCategoryImportRejectedAndStateIntact(
+    (snapshot) => ({
+      ...snapshot,
+      personalIncomeCategories: [
+        ...snapshot.personalIncomeCategories,
+        { ...unusedCategory, id: 'pic-exact-duplicate', name: backupCategory.name, normalizedName: backupCategory.normalizedName },
+      ],
+    }),
+    'importDatabaseSnapshot rejects an exact duplicate category name (fail-closed)',
+  )
+
+  await assertCategoryImportRejectedAndStateIntact(
+    (snapshot) => ({
+      ...snapshot,
+      personalIncomeCategories: [
+        ...snapshot.personalIncomeCategories,
+        { ...unusedCategory, id: 'pic-normalized-duplicate', name: 'CONSULTORÍA', normalizedName: undefined as unknown as string },
+      ],
+    }),
+    'importDatabaseSnapshot rejects a normalized duplicate category name (fail-closed)',
+  )
+
+  await assertCategoryImportRejectedAndStateIntact(
+    (snapshot) => ({
+      ...snapshot,
+      personalIncomeCategories: snapshot.personalIncomeCategories.map((item) =>
+        item.id === backupCategory.id ? { ...item, name: '   ' } : item,
+      ),
+    }),
+    'importDatabaseSnapshot rejects an invalid category name (fail-closed)',
+  )
+
+  await assertCategoryImportRejectedAndStateIntact(
+    (snapshot) => ({
+      ...snapshot,
+      personalIncomeCategories: snapshot.personalIncomeCategories.map((item) =>
+        item.id === backupCategory.id ? { ...item, normalizedName: 'no-corresponde-al-nombre' } : item,
+      ),
+    }),
+    'importDatabaseSnapshot rejects a normalizedName that does not match the canonical normalization of name (fail-closed)',
+  )
+
+  await assertCategoryImportRejectedAndStateIntact(
+    (snapshot) => ({
+      ...snapshot,
+      personalIncomeCategories: snapshot.personalIncomeCategories.map((item) =>
+        item.id === backupCategory.id ? { ...item, usageMode: 'professional' as never } : item,
+      ),
+    }),
+    'importDatabaseSnapshot rejects a category with usageMode "professional" (fail-closed)',
+  )
+
+  await assertCategoryImportRejectedAndStateIntact(
+    (snapshot) => ({
+      ...snapshot,
+      personalIncomeCategories: snapshot.personalIncomeCategories.map((item) =>
+        item.id === backupCategory.id ? { ...item, usageMode: 'hybrid' as never } : item,
+      ),
+    }),
+    'importDatabaseSnapshot rejects a category with usageMode "hybrid" (fail-closed)',
+  )
+
+  await assertCategoryImportRejectedAndStateIntact(
+    (snapshot) => ({
+      ...snapshot,
+      personalIncomeCategories: snapshot.personalIncomeCategories.map((item) =>
+        item.id === backupCategory.id ? { ...item, isArchived: 'yes' as never } : item,
+      ),
+    }),
+    'importDatabaseSnapshot rejects an invalid field type on a category (fail-closed)',
+  )
+
+  await assertCategoryImportRejectedAndStateIntact(
+    (snapshot) => ({
+      ...snapshot,
+      personalIncomeCategories: [],
+    }),
+    'importDatabaseSnapshot rejects an orphaned personalCategoryId reference (fail-closed)',
+  )
+
+  await assertCategoryImportRejectedAndStateIntact(
+    (snapshot) => ({
+      ...snapshot,
+      services: snapshot.services.map((service) =>
+        service.id === backupIncomeId ? { ...service, usageMode: 'professional' as const } : service,
+      ),
+    }),
+    'importDatabaseSnapshot rejects a personalCategoryId on a Professional income (fail-closed)',
+  )
+
+  const activeCategoriesBeforeValidImport = await db.personalIncomeCategories.toArray()
+  const servicesBeforeValidImport = await db.services.toArray()
+  await importDatabaseSnapshot(structuredClone(baseSnapshot))
+  deepEqual(
+    (await db.personalIncomeCategories.toArray()).sort((a, b) => a.id.localeCompare(b.id)),
+    activeCategoriesBeforeValidImport.sort((a, b) => a.id.localeCompare(b.id)),
+    'importDatabaseSnapshot restores a valid backup with categories',
+  )
+  assert(
+    (await db.services.get(backupIncomeId))?.personalCategoryId === backupCategory.id,
+    'importDatabaseSnapshot restores the income-to-category reference',
+  )
+  deepEqual(
+    (await db.services.toArray()).map((item) => item.id).sort(),
+    servicesBeforeValidImport.map((item) => item.id).sort(),
+    'a valid category import does not lose or duplicate incomes',
+  )
+
+  const legacyBackupWithoutCategories = structuredClone(baseSnapshot) as Partial<DatabaseSnapshot>
+  delete legacyBackupWithoutCategories.personalIncomeCategories
+  await importDatabaseSnapshot({
+    ...(legacyBackupWithoutCategories as DatabaseSnapshot),
+    services: baseSnapshot.services.map((service) =>
+      service.id === backupIncomeId ? { ...service, personalCategoryId: undefined } : service,
+    ),
+  })
+  assert(
+    (await db.personalIncomeCategories.count()) === 0,
+    'importDatabaseSnapshot accepts a legacy backup without a categories collection and without references',
+  )
+
+  await importDatabaseSnapshot({
+    ...structuredClone(baseSnapshot),
+    personalIncomeCategories: [],
+    services: baseSnapshot.services.map((service) =>
+      service.id === backupIncomeId ? { ...service, personalCategoryId: undefined } : service,
+    ),
+  })
+  assert(
+    (await db.personalIncomeCategories.count()) === 0,
+    'importDatabaseSnapshot accepts an empty categories collection without references',
+  )
+
+  await importDatabaseSnapshot({
+    ...structuredClone(baseSnapshot),
+    services: baseSnapshot.services.map((service) =>
+      service.id === backupIncomeId ? { ...service, personalCategoryId: undefined } : service,
+    ),
+  })
+  assert(
+    (await db.personalIncomeCategories.toArray()).some((item) => item.id === unusedCategory.id),
+    'importDatabaseSnapshot accepts valid categories that are not referenced by any income',
+  )
+
+  await db.services.update(backupIncomeId, { personalCategoryId: backupCategory.id })
+  const archivedBackupCategory = await archivePersonalIncomeCategory(backupCategory.id)
+  const snapshotWithArchivedReference = await exportDatabaseSnapshot()
+  assert(
+    snapshotWithArchivedReference.services.find((service) => service.id === backupIncomeId)?.personalCategoryId
+      === backupCategory.id,
+    'the archived-category reference fixture is set up correctly before export',
+  )
+  await importDatabaseSnapshot(structuredClone(snapshotWithArchivedReference))
+  assert(
+    (await db.personalIncomeCategories.get(archivedBackupCategory.id))?.isArchived === true,
+    'importDatabaseSnapshot accepts a reference to an archived category as a valid historical assignment',
+  )
+  assert(
+    (await db.services.get(backupIncomeId))?.personalCategoryId === archivedBackupCategory.id,
+    'the historical reference to the archived category is preserved on import',
+  )
+
+  await importDatabaseSnapshot({
+    ...structuredClone(snapshotWithArchivedReference),
+    services: snapshotWithArchivedReference.services.map((service) =>
+      service.id === backupIncomeId ? { ...service, personalCategoryId: '' as unknown as undefined } : service,
+    ),
+  })
+  assert(
+    (await db.services.get(backupIncomeId))?.personalCategoryId === undefined,
+    'importDatabaseSnapshot normalizes an empty-string personalCategoryId as absence, never as a false reference',
+  )
+
+  await importDatabaseSnapshot({
+    ...structuredClone(baseSnapshot),
+    settings: baseSnapshot.settings.map((item) => ({ ...item, usageMode: 'hybrid' as const })),
+  })
+  assert(
+    (await db.personalIncomeCategories.toArray()).every((item) => item.usageMode === 'basic'),
+    'a Hybrid backup keeps categories exclusively scoped to usageMode basic',
+  )
+
+  db.close()
+  await db.open()
+  assert(
+    (await db.services.get(backupIncomeId)) !== undefined,
+    'the restored backup state survives close and reopen',
+  )
+
   await Dexie.delete(databaseName)
 
   await resetDatabase()

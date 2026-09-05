@@ -1,5 +1,4 @@
 import { recordBelongsToUsageMode, type UsageModeRecord } from '../../utils/usageMode'
-import type { UsageMode } from '../../types/settings'
 
 export type MovementFilterType = 'all' | 'income' | 'expense'
 export type MovementReportFilter = 'all' | 'reported' | 'unreported'
@@ -124,7 +123,7 @@ function getMovementPeriodRange(filters: MovementFilters): { from?: string; to?:
  */
 export function scopeRecordsByUsageMode<T extends UsageModeRecord>(
   records: readonly T[],
-  usageMode: UsageMode,
+  usageMode: 'basic' | 'professional',
 ): T[] {
   return records.filter((record) => recordBelongsToUsageMode(record, usageMode))
 }

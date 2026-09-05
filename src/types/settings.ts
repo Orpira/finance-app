@@ -50,7 +50,14 @@ export type CountryCode =
   | 'SK'
 export type RateMode = 'automatic' | 'manual'
 export type ThemeMode = 'system' | 'light' | 'dark'
-export type UsageMode = 'professional' | 'basic'
+export type UsageMode = 'professional' | 'basic' | 'hybrid'
+/**
+ * The workspace a Híbrido installation is currently viewing/writing to.
+ * Meaningless (and left undefined) when `usageMode` is `'professional'` or
+ * `'basic'`, since in those cases the mode itself already determines the
+ * active workspace.
+ */
+export type ActiveContext = 'professional' | 'basic'
 /** @deprecated Compatibility mirror for backups and older app versions. */
 export type UserType = 'primary' | 'basic'
 export type BackupFrequency = 'daily'
@@ -84,6 +91,7 @@ export interface AppSettings {
   workedTimeUnit: WorkedTimeUnit
   rateMode: RateMode
   usageMode: UsageMode
+  activeContext?: ActiveContext
   userType: UserType
   theme: ThemeMode
   showUnreportedIncome: boolean

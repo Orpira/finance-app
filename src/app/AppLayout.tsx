@@ -31,8 +31,10 @@ import { getRuntimeIntegrityStatus } from '../services/playIntegrityService'
 import { initializeReminderNotifications } from '../services/reminderService'
 import { applyTheme, getSettings, updateSettings } from '../services/settingsService'
 import type { LicenseType } from '../types/license'
-import type { ThemeMode, UsageMode } from '../types/settings'
-import { usesProfessionalAgenda } from '../utils/usageMode'
+import type { AppSettings, ThemeMode } from '../types/settings'
+import { isDataEntryFormRoute } from '../utils/formRoutes'
+import { isHybridMode, isProfessionalMode, resolveActiveUsageMode, usesProfessionalAgenda } from '../utils/usageMode'
+import { UsageContextSwitcher } from '../components/layout/UsageContextSwitcher'
 
 interface NavItem {
   label: string
@@ -108,18 +110,20 @@ export function AppLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const [theme, setTheme] = useState<ThemeMode>('system')
-  const [usageMode, setUsageMode] = useState<UsageMode>('professional')
+  const [activeUsageMode, setActiveUsageMode] = useState<'basic' | 'professional'>('professional')
+  const [isHybrid, setIsHybrid] = useState(false)
   const [licenseType, setLicenseType] = useState<LicenseType | null>(null)
   const [isDarkTheme, setIsDarkTheme] = useState(() =>
     document.documentElement.classList.contains('dark'),
   )
-  const moreSectionPaths = usageMode === 'basic'
+  const moreSectionPaths = activeUsageMode === 'basic'
     ? ['/more', '/temporadas', '/currency-converter', '/settings', '/debug']
     : ['/more', '/temporadas', '/reports', '/currency-converter', '/settings', '/debug']
   const isMoreSection = moreSectionPaths.some(
     (path) =>
       location.pathname === path || location.pathname.startsWith(`${path}/`),
   )
+  const showUsageContextSwitcher = isHybrid && !isDataEntryFormRoute(location.pathname)
 
   useEffect(() => {
     let startedAutomaticBackupOnThisMount = false
@@ -127,9 +131,10 @@ export function AppLayout() {
     let startedAndroidNotificationListenerOnThisMount = false
     let androidNotificationListenerCleanup: (() => void) | null = null
 
-    function syncLayoutSettings(settings: { theme: ThemeMode; usageMode: UsageMode }) {
+    function syncLayoutSettings(settings: AppSettings) {
       setTheme(settings.theme)
-      setUsageMode(settings.usageMode)
+      setActiveUsageMode(resolveActiveUsageMode(settings))
+      setIsHybrid(isHybridMode(settings))
       setIsDarkTheme(document.documentElement.classList.contains('dark'))
     }
 
@@ -160,7 +165,7 @@ export function AppLayout() {
       })
 
     function handleSettingsChanged(event: Event) {
-      syncLayoutSettings((event as CustomEvent<{ theme: ThemeMode; usageMode: UsageMode }>).detail)
+      syncLayoutSettings((event as CustomEvent<AppSettings>).detail)
     }
 
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
@@ -298,7 +303,7 @@ export function AppLayout() {
 
   const ThemeIcon = isDarkTheme ? Sun : Moon
   const themeLabel = isDarkTheme ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'
-  const visibleNavItems = (usageMode === 'basic' ? basicNavItems : navItems).filter(
+  const visibleNavItems = (activeUsageMode === 'basic' ? basicNavItems : navItems).filter(
     (item) => !(item.hiddenForTrial && licenseType === 'trial'),
   )
 
@@ -306,6 +311,13 @@ export function AppLayout() {
     <div className="min-h-dvh bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950 md:block">
         <p className="px-3 text-lg font-semibold text-slate-950 dark:text-white">Private Balance</p>
+        {showUsageContextSwitcher && (
+          <UsageContextSwitcher
+            activeContext={activeUsageMode}
+            className="mx-3 mt-3"
+            onSwitched={() => navigate('/')}
+          />
+        )}
         <div className="mb-6" />
         <nav aria-label="Navegación principal de escritorio">
           <ul className="grid gap-1">
@@ -356,6 +368,12 @@ export function AppLayout() {
         <div className="flex items-center justify-between gap-3 py-3 md:hidden">
           <p className="text-sm font-semibold text-slate-900 dark:text-white">Private Balance</p>
           <div className="flex items-center gap-2">
+            {showUsageContextSwitcher && (
+              <UsageContextSwitcher
+                activeContext={activeUsageMode}
+                onSwitched={() => navigate('/')}
+              />
+            )}
             <NotificationBell />
             <button
               aria-label={themeLabel}
@@ -368,14 +386,15 @@ export function AppLayout() {
             </button>
           </div>
         </div>
-        <Outlet key={usageMode} />
+        <Outlet key={activeUsageMode} />
       </main>
 
-      <FloatingCreateMenu usageMode={usageMode} />
+      <FloatingCreateMenu usageMode={activeUsageMode} />
 
-      {usesProfessionalAgenda({ usageMode }) && <AppointmentReminderAlert />}
-      {usesProfessionalAgenda({ usageMode }) && <ServiceTimeAlert />}
-      <ServiceCompletionAlert />
+      {usesProfessionalAgenda({ usageMode: activeUsageMode }) && <AppointmentReminderAlert />}
+      {usesProfessionalAgenda({ usageMode: activeUsageMode }) && <ServiceTimeAlert />}
+      {/* Los timers de servicio son exclusivamente profesionales (service_duration): en Híbrido, un timer iniciado en Profesional no debe disparar la alarma tras cambiar a Personal. */}
+      {isProfessionalMode({ usageMode: activeUsageMode }) && <ServiceCompletionAlert />}
 
       <nav
         aria-label="Navegación principal"

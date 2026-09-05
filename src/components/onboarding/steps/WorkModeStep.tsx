@@ -6,12 +6,14 @@ import {
   type IncomeCalculationMethod,
 } from '../../../catalogs/incomeCalculationMethods'
 import { configureOnboardingIncomeCalculationMethod } from '../../../services/onboardingService'
+import { HybridWorkspaceBanner } from '../HybridWorkspaceBanner'
 import { OnboardingLayout } from '../OnboardingLayout'
 
 interface WorkModeStepProps {
   currentStep: number
   onNext: () => void
   onBack?: () => void
+  showHybridBanner?: boolean
 }
 
 const METHOD_DESCRIPTIONS: Record<IncomeCalculationMethod, string> = {
@@ -19,7 +21,7 @@ const METHOD_DESCRIPTIONS: Record<IncomeCalculationMethod, string> = {
   hourly_workday: 'Tu ingreso se calcula solo: horas × tarifa.',
 }
 
-export function WorkModeStep({ currentStep, onNext, onBack }: WorkModeStepProps) {
+export function WorkModeStep({ currentStep, onNext, onBack, showHybridBanner }: WorkModeStepProps) {
   const [method, setMethod] = useState<IncomeCalculationMethod | null>(null)
   const [hourlyRate, setHourlyRate] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -71,6 +73,7 @@ export function WorkModeStep({ currentStep, onNext, onBack }: WorkModeStepProps)
       onBack={onBack}
       title="Método de cálculo del ingreso"
     >
+      {showHybridBanner && <HybridWorkspaceBanner />}
       <form
         className="grid gap-4"
         id="onboarding-income-method-form"

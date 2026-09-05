@@ -63,6 +63,25 @@ describe('ConversationController - flujo de propuestas del Asistente', () => {
     expect(controller.getState().messages.at(-1)?.proposal?.kind).toBe('generate_report')
   })
 
+  it('muestra el rechazo por capacidad sin llamar al pipeline de consulta', async () => {
+    interpretAssistantMessageMock.mockReturnValue({
+      kind: 'capability-denied',
+      safeMessage: 'La agenda solo está disponible en el espacio Profesional.',
+    })
+    const pipeline = { generateAssistantMessage: vi.fn() }
+    const controller = createConversationController({
+      pipeline,
+      getAssistantContext: async () => ({ defaultCurrency: 'EUR', usageMode: 'basic' }),
+    })
+
+    await controller.sendMessage('Tengo una cita mañana a las 3pm')
+
+    const state = controller.getState()
+    expect(pipeline.generateAssistantMessage).not.toHaveBeenCalled()
+    expect(state.status).toBe('error')
+    expect(state.messages.at(-1)?.text).toContain('Profesional')
+  })
+
   it('sigue el camino de consulta existente cuando no hay acción detectada', async () => {
     interpretAssistantMessageMock.mockReturnValue({ kind: 'no-action' })
     const pipeline = {

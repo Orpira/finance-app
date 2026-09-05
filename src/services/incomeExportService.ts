@@ -7,7 +7,7 @@ import { getStoredIncomeValue } from '../utils/financeStats'
 import { getIncomePaymentTypeLabel, getIncomeTypeLabel } from '../utils/incomeTypes'
 import { canMarkAsReported, getRecordReportBadge } from '../utils/reportStatus'
 import type { ServiceIncome } from '../types/service'
-import type { CurrencyCode, UsageMode } from '../types/settings'
+import type { CurrencyCode } from '../types/settings'
 
 export interface IncomeExportRow {
   id: number | string
@@ -28,7 +28,9 @@ export interface IncomeExportRow {
 
 export type ShareTextFileResult = 'success' | 'cancelled'
 
-const EXPORT_COLUMNS: Array<{ key: keyof IncomeExportRow; header: string }> = [
+type ExportColumn = { key: keyof IncomeExportRow; header: string }
+
+const BASE_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'id', header: 'ID' },
   { key: 'description', header: 'Ingreso' },
   { key: 'type', header: 'Tipo' },
@@ -44,6 +46,20 @@ const EXPORT_COLUMNS: Array<{ key: keyof IncomeExportRow; header: string }> = [
   { key: 'amount', header: 'Monto' },
   { key: 'currency', header: 'Moneda' },
 ]
+
+/**
+ * Personal no captura tipo de pago (Bloque 3, modos de uso): la columna no
+ * debe aparecer en absoluto en sus exportaciones, no solo mostrarse vacía.
+ */
+function getExportColumns(usageMode: 'basic' | 'professional'): ExportColumn[] {
+  if (usageMode === 'basic') {
+    return BASE_EXPORT_COLUMNS
+      .filter((column) => column.key !== 'paymentType')
+      .map((column) => column.key === 'description' ? { ...column, header: 'Nombre' } : column)
+  }
+
+  return BASE_EXPORT_COLUMNS
+}
 
 function formatDateTime(value?: string) {
   if (!value) {
@@ -62,7 +78,7 @@ function formatDateTime(value?: string) {
 export function buildIncomeExportRows(
   incomes: ServiceIncome[],
   currency: CurrencyCode,
-  usageMode: UsageMode,
+  usageMode: 'basic' | 'professional',
 ): IncomeExportRow[] {
   return incomes.map((income) => {
     const badge = getRecordReportBadge(income)
@@ -78,7 +94,7 @@ export function buildIncomeExportRows(
       reportedAt: isReportable && badge.isReported ? formatDateTime(badge.reportedAt) : '',
       reportReference: isReportable ? badge.reportReference ?? '' : '',
       reportNotes: isReportable ? badge.reportNotes ?? '' : '',
-      paymentType: getIncomePaymentTypeLabel(income),
+      paymentType: usageMode === 'basic' ? '' : getIncomePaymentTypeLabel(income),
       country: income.country ?? '',
       city: income.city ?? '',
       amount: getStoredIncomeValue(income, currency),
@@ -97,10 +113,14 @@ function escapeCsvValue(value: unknown) {
   return stringValue
 }
 
-export function buildIncomeCsv(rows: IncomeExportRow[]) {
-  const header = EXPORT_COLUMNS.map((column) => escapeCsvValue(column.header)).join(',')
+export function buildIncomeCsv(
+  rows: IncomeExportRow[],
+  usageMode: 'basic' | 'professional',
+) {
+  const columns = getExportColumns(usageMode)
+  const header = columns.map((column) => escapeCsvValue(column.header)).join(',')
   const lines = rows.map((row) =>
-    EXPORT_COLUMNS.map((column) => escapeCsvValue(row[column.key])).join(','),
+    columns.map((column) => escapeCsvValue(row[column.key])).join(','),
   )
 
   // El BOM UTF-8 evita que Excel rompa los acentos al abrir el CSV directamente.
@@ -124,12 +144,16 @@ function xmlCell(value: unknown, type: 'String' | 'Number' = 'String') {
  * librerías como 'xlsx'/'exceljs' (ambas con vulnerabilidades altas conocidas en npm).
  * Excel, LibreOffice y Google Sheets lo abren de forma nativa.
  */
-export function buildIncomeSpreadsheetXml(rows: IncomeExportRow[]) {
-  const headerRow = `<Row>${EXPORT_COLUMNS.map((column) => xmlCell(column.header)).join('')}</Row>`
+export function buildIncomeSpreadsheetXml(
+  rows: IncomeExportRow[],
+  usageMode: 'basic' | 'professional',
+) {
+  const columns = getExportColumns(usageMode)
+  const headerRow = `<Row>${columns.map((column) => xmlCell(column.header)).join('')}</Row>`
   const dataRows = rows
     .map(
       (row) =>
-        `<Row>${EXPORT_COLUMNS.map((column) =>
+        `<Row>${columns.map((column) =>
           xmlCell(row[column.key], column.key === 'amount' ? 'Number' : 'String'),
         ).join('')}</Row>`,
     )
@@ -214,11 +238,11 @@ function isShareCancelled(error: unknown) {
 export async function shareIncomesAsCsv(
   incomes: ServiceIncome[],
   currency: CurrencyCode,
-  usageMode: UsageMode,
+  usageMode: 'basic' | 'professional',
   fileName: string,
 ) {
   const rows = buildIncomeExportRows(incomes, currency, usageMode)
-  const csv = buildIncomeCsv(rows)
+  const csv = buildIncomeCsv(rows, usageMode)
 
   return shareTextFile(
     csv,
@@ -231,11 +255,11 @@ export async function shareIncomesAsCsv(
 export async function shareIncomesAsExcel(
   incomes: ServiceIncome[],
   currency: CurrencyCode,
-  usageMode: UsageMode,
+  usageMode: 'basic' | 'professional',
   fileName: string,
 ) {
   const rows = buildIncomeExportRows(incomes, currency, usageMode)
-  const xml = buildIncomeSpreadsheetXml(rows)
+  const xml = buildIncomeSpreadsheetXml(rows, usageMode)
 
   return shareTextFile(
     xml,

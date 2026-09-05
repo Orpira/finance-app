@@ -6,8 +6,10 @@ import type {
 } from '../types/financialGoal'
 import type { ServiceIncome } from '../types/service'
 import type { CurrencyCode } from '../types/settings'
+import { getSettings } from './settingsService'
 import { roundMoney } from '../utils/currency'
 import { calculateFinancialTotals } from '../utils/financeStats'
+import { financialGoalBelongsToUsageMode, resolveActiveUsageMode } from '../utils/usageMode'
 
 export type CreateFinancialGoalInput = Pick<
   FinancialGoal,
@@ -85,10 +87,12 @@ export function createFinancialGoalService(input: {
   readonly repository?: FinancialGoalRepository
   readonly now?: () => Date
   readonly createId?: () => string
+  readonly getActiveUsageMode?: () => Promise<'basic' | 'professional'>
 } = {}) {
   const repository = input.repository ?? db.financialGoals
   const now = input.now ?? (() => new Date())
   const createId = input.createId ?? (() => crypto.randomUUID())
+  const getActiveUsageMode = input.getActiveUsageMode ?? (async () => resolveActiveUsageMode(await getSettings()))
 
   async function requireGoal(id: string): Promise<FinancialGoal> {
     const goal = await repository.get(id)
@@ -105,6 +109,7 @@ export function createFinancialGoalService(input: {
         name: values.name.trim(),
         id: createId(),
         status: 'active',
+        usageMode: await getActiveUsageMode(),
         createdAt: timestamp,
         updatedAt: timestamp,
       }
@@ -118,8 +123,12 @@ export function createFinancialGoalService(input: {
       await repository.put(updated)
       return updated
     },
-    async list(): Promise<FinancialGoal[]> {
-      return (await repository.toArray()).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    async list(usageMode?: 'basic' | 'professional'): Promise<FinancialGoal[]> {
+      const goals = await repository.toArray()
+      const visibleGoals = usageMode === undefined
+        ? goals
+        : goals.filter((goal) => financialGoalBelongsToUsageMode(goal, usageMode))
+      return visibleGoals.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     },
     async setStatus(id: string, status: FinancialGoal['status']): Promise<FinancialGoal> {
       const updated = { ...(await requireGoal(id)), status, updatedAt: now().toISOString() }

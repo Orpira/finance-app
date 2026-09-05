@@ -13,6 +13,8 @@ import type { IncomeAdditional } from '../types/incomeAdditional'
 import type { ServiceIncome } from '../types/service'
 import type { CommunicationChannel } from '../types/communicationChannel'
 import type { FinancialGoal } from '../types/financialGoal'
+import type { PersonalIncomeCategory } from '../types/personalIncomeCategory'
+import type { PersonalExpenseCategory } from '../types/personalExpenseCategory'
 import { downloadText } from '../utils/download'
 import {
   decryptJsonPayload,
@@ -42,6 +44,8 @@ export interface BackupData {
   communicationChannels?: CommunicationChannel[]
   incomeAdditionals?: IncomeAdditional[]
   financialGoals?: FinancialGoal[]
+  personalIncomeCategories?: PersonalIncomeCategory[]
+  personalExpenseCategories?: PersonalExpenseCategory[]
 }
 
 export interface EncryptedBackupFile {
@@ -199,18 +203,39 @@ export async function importBackup(file: File) {
 }
 
 export function backupDataToSnapshot(backupData: BackupData): DatabaseSnapshot {
+  const usageMode = backupData.settings.usageMode
+  const services = (backupData.services ?? []).map((income) => {
+    const incomeUsageMode = income.usageMode ?? (usageMode === 'hybrid' ? undefined : usageMode)
+    return incomeUsageMode === 'basic'
+      ? { ...income, usageMode: incomeUsageMode, paymentType: undefined }
+      : incomeUsageMode === undefined
+        ? income
+        : { ...income, usageMode: incomeUsageMode }
+  })
+  const financialGoals = (backupData.financialGoals ?? []).map((goal) => {
+    const rawUsageMode = (goal as unknown as { usageMode?: string }).usageMode
+    if (rawUsageMode === 'hybrid') {
+      throw new Error('FINANCIAL_GOAL_INVALID_USAGE_MODE')
+    }
+    return goal.usageMode === undefined && usageMode !== 'hybrid'
+      ? { ...goal, usageMode }
+      : goal
+  })
+
   return {
     appointments: backupData.appointments ?? [],
     exchangeRates: backupData.exchangeRates ?? [],
     expenses: backupData.expenses ?? [],
     exportedAt: backupData.generatedAt,
-    services: backupData.services ?? [],
+    services,
     settings: backupData.settings ? [backupData.settings] : [],
     cutoffReports: backupData.cutoffReports ?? [],
     earningPeriods: backupData.earningPeriods ?? [],
     communicationChannels: backupData.communicationChannels ?? [],
     incomeAdditionals: backupData.incomeAdditionals ?? [],
-    financialGoals: backupData.financialGoals ?? [],
+    financialGoals,
+    personalIncomeCategories: backupData.personalIncomeCategories ?? [],
+    personalExpenseCategories: backupData.personalExpenseCategories ?? [],
   }
 }
 
@@ -226,6 +251,8 @@ export async function generateBackupData(): Promise<BackupData> {
     communicationChannels,
     incomeAdditionals,
     financialGoals,
+    personalIncomeCategories,
+    personalExpenseCategories,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -238,6 +265,8 @@ export async function generateBackupData(): Promise<BackupData> {
       db.communicationChannels.toArray(),
       db.incomeAdditionals.toArray(),
       db.financialGoals.toArray(),
+      db.personalIncomeCategories.toArray(),
+      db.personalExpenseCategories.toArray(),
     ])
 
   return {
@@ -254,6 +283,8 @@ export async function generateBackupData(): Promise<BackupData> {
     communicationChannels,
     incomeAdditionals,
     financialGoals,
+    personalIncomeCategories,
+    personalExpenseCategories,
   }
 }
 

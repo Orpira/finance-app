@@ -22,8 +22,12 @@ import {
   isBasicMode,
   recordBelongsToUsageMode,
   requiresSeason,
+  resolveActiveUsageMode,
 } from '../../utils/usageMode'
 import { isReported } from '../../catalogs/reportStatuses'
+import { getIncomeCategoryBadgeLabel, getIncomeDisplayName } from '../../utils/activityLabels'
+import { listPersonalIncomeCategories } from '../../services/personalIncomeCategoryService'
+import type { PersonalIncomeCategory } from '../../types/personalIncomeCategory'
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(
@@ -80,6 +84,7 @@ export function IncomeDetailPage() {
   const [additionals, setAdditionals] = useState<IncomeAdditional[]>([])
   const [canEdit, setCanEdit] = useState(false)
   const [isBasicUser, setIsBasicUser] = useState(false)
+  const [personalCategories, setPersonalCategories] = useState<PersonalIncomeCategory[]>([])
 
   useEffect(() => {
     let mounted = true
@@ -100,7 +105,7 @@ export function IncomeDetailPage() {
 
       if (
         !currentIncome ||
-        !recordBelongsToUsageMode(currentIncome, settings.usageMode)
+        !recordBelongsToUsageMode(currentIncome, resolveActiveUsageMode(settings))
       ) {
         setIncome(null)
         return
@@ -117,12 +122,18 @@ export function IncomeDetailPage() {
           ))
       if (!mounted) return
 
+      const currentPersonalCategories = isBasicMode(settings)
+        ? await listPersonalIncomeCategories({ archived: 'all' })
+        : []
+      if (!mounted) return
+
       setIncome(currentIncome)
       setIsBasicUser(isBasicMode(settings))
+      setPersonalCategories(currentPersonalCategories)
       setAdditionals(currentAdditionals)
       setAdjustments(
         currentAdjustments.filter((adjustment) =>
-          recordBelongsToUsageMode(adjustment, settings.usageMode),
+          recordBelongsToUsageMode(adjustment, resolveActiveUsageMode(settings)),
         ),
       )
       setCanEdit(!closed && !isReported(currentIncome))
@@ -150,7 +161,7 @@ export function IncomeDetailPage() {
         backLabel="Ingresos"
         backTo="/income"
         eyebrow={getIncomeTypeLabel(income)}
-        title={`${getIncomeTypeLabel(income)} #${income.id}`}
+        title={getIncomeDisplayName(income)}
       >
         {canEdit && (
           <Link className="inline-flex h-11 items-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700" to={`/income/${income.id}/editar`}>
@@ -158,6 +169,15 @@ export function IncomeDetailPage() {
           </Link>
         )}
       </PageHeader>
+
+      {(() => {
+        const categoryBadge = getIncomeCategoryBadgeLabel(income, personalCategories)
+        return categoryBadge ? (
+          <span className="inline-flex w-fit rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+            {categoryBadge}
+          </span>
+        ) : null
+      })()}
 
       <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3">
         <div><p className="text-xs font-semibold uppercase text-slate-500">Valor original</p><p className="mt-1 text-xl font-semibold"><SensitiveAmount hidden={hidden} value={formatCurrency(income.totalAmount, income.currency as CurrencyCode)} /></p></div>

@@ -6,7 +6,7 @@ import { getIncomePaymentTypeLabel, getIncomeTypeLabel, isServiceIncome } from '
 import { canMarkAsReported, getRecordReportBadge } from '../utils/reportStatus'
 import { getIncomeDurationDisplay } from '../utils/serviceDuration'
 import type { ServiceIncome } from '../types/service'
-import type { CurrencyCode, UsageMode } from '../types/settings'
+import type { CurrencyCode } from '../types/settings'
 import {
   formatIncomeDurationSubtotal,
   getIncomeDurationTotalMinutes,
@@ -15,7 +15,7 @@ import {
 export interface IncomeReportPresentationOptions {
   incomes: readonly ServiceIncome[]
   primaryCurrency: CurrencyCode
-  usageMode: UsageMode
+  usageMode: 'basic' | 'professional'
   adjustmentCounts?: ReadonlyMap<number, number>
   dateTotal?: number
   totalDurationMinutes?: number
@@ -59,7 +59,7 @@ function convertedAmount(income: ServiceIncome, currency: CurrencyCode) {
 
 function recordMetadata(
   income: ServiceIncome,
-  usageMode: UsageMode,
+  usageMode: 'basic' | 'professional',
   adjustmentCounts: ReadonlyMap<number, number>,
 ) {
   const isBasic = usageMode === 'basic'
@@ -120,7 +120,7 @@ export function buildIncomeDateTableHtml(
           <span class="record-meta">${escapeHtml(metadata.items.join(' · '))}</span>
         </td>
         <td>${escapeHtml(getIncomeTypeLabel(income))}</td>
-        <td>${escapeHtml(getIncomePaymentTypeLabel(income))}</td>
+        ${!isBasic ? `<td>${escapeHtml(getIncomePaymentTypeLabel(income))}</td>` : ''}
         <td>${escapeHtml(countryLabel(income.country))}</td>
         <td>${escapeHtml(income.city || 'Sin ciudad')}</td>
         ${!isBasic ? `<td>${isServiceIncome(income) ? escapeHtml(getIncomeDurationDisplay(income)) : 'No aplica'}</td>` : ''}
@@ -136,7 +136,7 @@ export function buildIncomeDateTableHtml(
       <thead><tr>
         <th class="income-name">Registro</th>
         <th>Tipo</th>
-        <th>Tipo de pago</th>
+        ${!isBasic ? '<th>Tipo de pago</th>' : ''}
         <th>País</th>
         <th>Ciudad</th>
         ${!isBasic ? '<th>Duración</th>' : ''}
@@ -145,7 +145,7 @@ export function buildIncomeDateTableHtml(
       </tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr>
-        <td colspan="${isBasic ? 6 : 7}">Subtotal fecha${!isBasic ? ` · ${formatIncomeDurationSubtotal(duration)}` : ''}</td>
+        <td colspan="${isBasic ? 5 : 7}">Subtotal fecha${!isBasic ? ` · ${formatIncomeDurationSubtotal(duration)}` : ''}</td>
         <td class="amount">${escapeHtml(formatCurrency(dateTotal, primaryCurrency))}</td>
       </tr></tfoot>
     </table>
@@ -174,7 +174,7 @@ export function buildIncomeDateText(options: IncomeReportPresentationOptions) {
     return [
       `- ${getIncomeDisplayName(income)}`,
       `Clase: ${getIncomeTypeLabel(income)}`,
-      `Tipo de pago: ${getIncomePaymentTypeLabel(income)}`,
+      !isBasic ? `Tipo de pago: ${getIncomePaymentTypeLabel(income)}` : '',
       `País: ${countryLabel(income.country)}`,
       `Ciudad: ${income.city || 'Sin ciudad'}`,
       !isBasic

@@ -121,4 +121,26 @@ describe('NotificationCenterPage', () => {
     await waitFor(() => expect(service.markActed).toHaveBeenCalledWith('n1'))
     expect(notifyNotificationsChanged).toHaveBeenCalled()
   })
+
+  it('refresca al cambiar de contexto y elimina el listener al desmontar', async () => {
+    service.listNotifications
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([notification({ status: 'read' })])
+
+    const { unmount } = render(
+      <MemoryRouter>
+        <NotificationCenterPage />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(service.listNotifications).toHaveBeenCalledTimes(2))
+    window.dispatchEvent(new Event('finance-app:settings-changed'))
+    await screen.findByText('Meta de temporada alcanzada')
+    expect(service.listNotifications).toHaveBeenCalledTimes(3)
+
+    unmount()
+    window.dispatchEvent(new Event('finance-app:settings-changed'))
+    expect(service.listNotifications).toHaveBeenCalledTimes(3)
+  })
 })

@@ -19,10 +19,15 @@ import {
 import { getSettings } from '../../services/settingsService'
 import { listExpenses } from '../../services/expenseService'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
+import {
+  listPersonalIncomeCategories,
+  PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT,
+} from '../../services/personalIncomeCategoryService'
 import type { ServiceIncome, ServiceIncomeStatus } from '../../types/service'
 import type { Expense } from '../../types/expense'
+import type { PersonalIncomeCategory } from '../../types/personalIncomeCategory'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
-import { getIncomeDisplayName } from '../../utils/activityLabels'
+import { getIncomeCategoryBadgeLabel, getIncomeDisplayName } from '../../utils/activityLabels'
 import { formatCurrency } from '../../utils/currency'
 import { getFinancialListEmptyReason } from '../../utils/financialListEmptyState'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
@@ -31,6 +36,7 @@ import {
   isBasicMode,
   recordBelongsToUsageMode,
   requiresSeason,
+  resolveActiveUsageMode,
 } from '../../utils/usageMode'
 import { getIncomePaymentTypeLabel, getIncomeTypeLabel, isServiceIncome } from '../../utils/incomeTypes'
 import { canMarkAsReported, formatReportStatusMeta, getRecordReportBadge } from '../../utils/reportStatus'
@@ -100,7 +106,7 @@ function filterIncomesByMode(
 ) {
   return incomes.filter(
     (income) =>
-      recordBelongsToUsageMode(income, settings.usageMode) &&
+      recordBelongsToUsageMode(income, resolveActiveUsageMode(settings)) &&
       (isBasicMode(settings) ||
         (activePeriodId !== undefined &&
           (income.earningPeriodId === activePeriodId ||
@@ -113,7 +119,7 @@ function filterAdjustmentsByMode(expenses: Expense[], settings: AppSettings) {
     (expense) =>
       expense.type === 'ajuste' &&
       expense.relatedIncomeId !== undefined &&
-      recordBelongsToUsageMode(expense, settings.usageMode),
+      recordBelongsToUsageMode(expense, resolveActiveUsageMode(settings)),
   )
 }
 
@@ -121,6 +127,7 @@ export function IncomeListPage() {
   const { alert, confirm } = useDialog()
   const { hidden } = useSensitiveValues()
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
+  const [personalCategories, setPersonalCategories] = useState<PersonalIncomeCategory[]>([])
   const [relatedAdjustments, setRelatedAdjustments] = useState<Expense[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [activePeriodId, setActivePeriodId] = useState<number>()
@@ -177,7 +184,7 @@ export function IncomeListPage() {
           (income) =>
             income.id !== undefined &&
             settings &&
-            canMarkAsReported(income, settings.usageMode) &&
+            canMarkAsReported(income, resolveActiveUsageMode(settings)) &&
             !getRecordReportBadge(income).isReported,
         )
         .map((income) => income.id as number),
@@ -204,6 +211,12 @@ export function IncomeListPage() {
   useEffect(() => {
     let isMounted = true
 
+    async function loadPersonalCategories(currentSettings: AppSettings) {
+      return isBasicMode(currentSettings)
+        ? listPersonalIncomeCategories({ archived: 'all' })
+        : []
+    }
+
     async function loadInitialData() {
       const [currentIncomes, currentExpenses, currentSettings, activePeriod] = await Promise.all([
         listServiceIncomes({ newestFirst: true }),
@@ -211,6 +224,7 @@ export function IncomeListPage() {
         getSettings(),
         getActiveEarningPeriod(),
       ])
+      const currentPersonalCategories = await loadPersonalCategories(currentSettings)
 
       if (!isMounted) {
         return
@@ -220,6 +234,7 @@ export function IncomeListPage() {
       setSettings(currentSettings)
       setActivePeriodId(activePeriod?.id)
       setRelatedAdjustments(filterAdjustmentsByMode(currentExpenses, currentSettings))
+      setPersonalCategories(currentPersonalCategories)
       setIsLoading(false)
     }
 
@@ -227,10 +242,11 @@ export function IncomeListPage() {
 
     async function handleSettingsChanged(event: Event) {
       const nextSettings = (event as CustomEvent<AppSettings>).detail
-      const [currentIncomes, currentExpenses, activePeriod] = await Promise.all([
+      const [currentIncomes, currentExpenses, activePeriod, currentPersonalCategories] = await Promise.all([
         listServiceIncomes({ newestFirst: true }),
         listExpenses({ newestFirst: true }),
         getActiveEarningPeriod(),
+        loadPersonalCategories(nextSettings),
       ])
 
       if (!isMounted) {
@@ -242,20 +258,31 @@ export function IncomeListPage() {
       setActivePeriodId(nextActivePeriodId)
       setIncomes(filterIncomesByMode(currentIncomes, nextSettings, nextActivePeriodId))
       setRelatedAdjustments(filterAdjustmentsByMode(currentExpenses, nextSettings))
+      setPersonalCategories(currentPersonalCategories)
       setSelectedIncomeIds(new Set())
       setIncomePage(1)
     }
 
+    async function handlePersonalIncomeCategoriesChanged() {
+      const currentSettings = await getSettings()
+      const currentPersonalCategories = await loadPersonalCategories(currentSettings)
+      if (isMounted) {
+        setPersonalCategories(currentPersonalCategories)
+      }
+    }
+
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
+    window.addEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, handlePersonalIncomeCategoriesChanged)
 
     return () => {
       isMounted = false
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
+      window.removeEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, handlePersonalIncomeCategoriesChanged)
     }
   }, [])
 
   function handleRequestMarkAsReported(income: ServiceIncome) {
-    if (!income.id || !settings || !canMarkAsReported(income, settings.usageMode)) {
+    if (!income.id || !settings || !canMarkAsReported(income, resolveActiveUsageMode(settings))) {
       return
     }
 
@@ -292,7 +319,7 @@ export function IncomeListPage() {
   }
 
   async function handleReturnToPending(income: ServiceIncome) {
-    if (!income.id || !settings || !canMarkAsReported(income, settings.usageMode)) {
+    if (!income.id || !settings || !canMarkAsReported(income, resolveActiveUsageMode(settings))) {
       return
     }
 
@@ -508,7 +535,7 @@ export function IncomeListPage() {
                 const reportBadge = getRecordReportBadge(income)
                 const reportMeta = formatReportStatusMeta(income)
                 const canReport = Boolean(
-                  settings && canMarkAsReported(income, settings.usageMode),
+                  settings && canMarkAsReported(income, resolveActiveUsageMode(settings)),
                 )
                 const isSelectable = income.id !== undefined && canReport && !reportBadge.isReported
                 const isSelected = income.id !== undefined && selectedIncomeIds.has(income.id)
@@ -544,6 +571,14 @@ export function IncomeListPage() {
                               {getIncomeTypeLabel(income)}
                             </span>
                           )}
+                          {(() => {
+                            const categoryBadge = getIncomeCategoryBadgeLabel(income, personalCategories)
+                            return categoryBadge ? (
+                              <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                                {categoryBadge}
+                              </span>
+                            ) : null
+                          })()}
                           {incomeAdjustments.length > 0 && (
                             <span className="inline-flex rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-800">
                               Afectado por ajuste · {incomeAdjustments.length}{' '}

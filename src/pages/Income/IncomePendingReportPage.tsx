@@ -15,6 +15,7 @@ import {
 import type { ServiceIncome } from '../../types/service'
 import { formatCurrency } from '../../utils/currency'
 import { getStoredIncomeValue } from '../../utils/financeStats'
+import { getIncomeDisplayName } from '../../utils/activityLabels'
 
 function formatShortDate(date: string) {
   return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${date}T00:00`))
@@ -136,7 +137,7 @@ export function IncomePendingReportPage() {
                   {group.incomes.map((income) => (
                     <li className="flex items-center justify-between gap-3 px-4 py-2 text-sm" key={income.id}>
                       <span className="text-slate-700 dark:text-slate-200">
-                        Servicio #{income.id} · {income.reportStatusCode === 'unreviewed' ? 'Sin revisar' : 'Pendiente'}
+                        {getIncomeDisplayName(income)} · {income.reportStatusCode === 'unreviewed' ? 'Sin revisar' : 'Pendiente'}
                       </span>
                       <span className="font-semibold text-slate-950 dark:text-white">
                         <SensitiveAmount

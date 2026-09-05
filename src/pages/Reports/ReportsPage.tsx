@@ -25,7 +25,11 @@ import type { EarningPeriod } from '../../types/earningPeriod'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
-import { isBasicMode, recordBelongsToUsageMode } from '../../utils/usageMode'
+import {
+  isBasicMode,
+  recordBelongsToUsageMode,
+  resolveActiveUsageMode,
+} from '../../utils/usageMode'
 import { getExpenseDisplayName, getIncomeDisplayName } from '../../utils/activityLabels'
 import {
   formatCurrency,
@@ -240,7 +244,7 @@ export function ReportsPage() {
   const [seasons, setSeasons] = useState<EarningPeriod[]>([])
   const [selectedSeason, setSelectedSeason] = useState<string>('ALL')
   const isBasicUser = isBasicMode(settings ?? undefined)
-  const activeUsageMode = settings?.usageMode ?? 'professional'
+  const activeUsageMode = resolveActiveUsageMode(settings ?? undefined)
   const reportCards = useMemo(() => getReportCards(isBasicUser), [isBasicUser])
 
   useEffect(() => {
@@ -277,23 +281,23 @@ export function ReportsPage() {
         setSettings(currentSettings)
         setPeriodIncomes(
           currentIncomes.filter((income) =>
-            recordBelongsToUsageMode(income, currentSettings.usageMode),
+            recordBelongsToUsageMode(income, resolveActiveUsageMode(currentSettings)),
           ),
         )
         setPeriodExpenses(
           currentExpenses.filter((expense) =>
-            recordBelongsToUsageMode(expense, currentSettings.usageMode),
+            recordBelongsToUsageMode(expense, resolveActiveUsageMode(currentSettings)),
           ),
         )
         setTraceIncomes(
           allIncomes.filter((income) =>
-            recordBelongsToUsageMode(income, currentSettings.usageMode),
+            recordBelongsToUsageMode(income, resolveActiveUsageMode(currentSettings)),
           ),
         )
         setTraceExpenses(
           allExpenses.filter(
             (expense) =>
-              recordBelongsToUsageMode(expense, currentSettings.usageMode),
+              recordBelongsToUsageMode(expense, resolveActiveUsageMode(currentSettings)),
           ),
         )
         setSeasons(currentSeasons)
@@ -431,12 +435,9 @@ export function ReportsPage() {
         const matchesSeason =
           selectedSeason === 'ALL' ||
           recordBelongsToEarningPeriod(expense, Number(selectedSeason))
-        const badge = getRecordReportBadge(expense)
-        const matchesStatus = selectedReportStatus === 'ALL' ||
-          (selectedReportStatus === 'reported' ? badge.isReported : !badge.isReported)
-        return matchesCountry && matchesCity && matchesCategory && matchesSeason && matchesStatus
+        return matchesCountry && matchesCity && matchesCategory && matchesSeason
       }),
-    [periodExpenses, selectedCategory, selectedCity, selectedCountry, selectedReportStatus, selectedSeason],
+    [periodExpenses, selectedCategory, selectedCity, selectedCountry, selectedSeason],
   )
 
   const balanceReport = useMemo(() => {
@@ -469,7 +470,7 @@ export function ReportsPage() {
       incomes: traceIncomes,
       expenses: traceExpenses,
       currency: selectedSeasonRecord.baseCurrency ?? settings.defaultCurrency,
-      usageMode: settings.usageMode,
+      usageMode: resolveActiveUsageMode(settings),
       earningPeriodId: selectedSeasonRecord.id,
     })
 
@@ -816,7 +817,6 @@ export function ReportsPage() {
             <td>${escapeHtml(getExpenseDisplayName(expense))}</td>
             <td>${escapeHtml(expense.category)}</td>
             <td>${relatedIncome ? escapeHtml(getIncomeDisplayName(relatedIncome)) : expense.relatedIncomeId ? `Ingreso #${expense.relatedIncomeId}` : 'No aplica'}</td>
-            ${isBasicUser ? `<td>${canMarkAsReported(expense, activeUsageMode) ? getRecordReportBadge(expense).label : 'No aplica'}</td>` : ''}
             <td class="amount">${escapeHtml(formatCurrency(amount, primaryCurrency))}</td>
           </tr>
         `
@@ -830,7 +830,6 @@ export function ReportsPage() {
             <th>Gasto</th>
             <th>Categoría</th>
             <th>Ingreso relacionado</th>
-            ${isBasicUser ? '<th>Estado operativo</th>' : ''}
             <th class="amount">Valor</th>
           </tr>
         </thead>
@@ -838,7 +837,6 @@ export function ReportsPage() {
         <tfoot>
           <tr>
             <td colspan="3">Total</td>
-            ${isBasicUser ? '<td></td>' : ''}
             <td class="amount">${escapeHtml(formatCurrency(totalAmount, primaryCurrency))}</td>
           </tr>
         </tfoot>
@@ -862,9 +860,6 @@ export function ReportsPage() {
           `- ${getExpenseDisplayName(expense)}`,
           `Categoría: ${expense.category}`,
           `Ingreso relacionado: ${relatedIncome ? getIncomeDisplayName(relatedIncome) : expense.relatedIncomeId ? `Ingreso #${expense.relatedIncomeId}` : 'No aplica'}`,
-          isBasicUser
-            ? `Estado operativo: ${canMarkAsReported(expense, activeUsageMode) ? getRecordReportBadge(expense).label : 'No aplica'}`
-            : '',
           `Valor: ${formatCurrency(amount, primaryCurrency)}`,
         ].filter(Boolean).join(' | ')
       })

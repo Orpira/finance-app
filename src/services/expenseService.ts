@@ -4,7 +4,11 @@ import type { Expense } from '../types/expense'
 import type { CountryCode } from '../types/settings'
 import { assertRecordIsMutable, getActiveEarningPeriod } from './earningPeriodService'
 import { getSettings } from './settingsService'
-import { recordBelongsToUsageMode, requiresSeason } from '../utils/usageMode'
+import {
+  recordBelongsToUsageMode,
+  requiresSeason,
+  resolveActiveUsageMode,
+} from '../utils/usageMode'
 import {
   assertExpenseAdjustmentIsValid,
   calculateAdjustmentCapacity,
@@ -14,12 +18,16 @@ import {
   enqueueAutomationEvent,
   scheduleAutomationOutboxFlush,
 } from './automationOutboxService'
-import {
-  assertRecordIsNotReported,
-  assertReportedRecordUpdateIsAllowed,
-  normalizeReportStatus,
-} from '../catalogs/reportStatuses'
 import { assertReportStatusUpdateIsAllowed } from '../utils/reportStatus'
+import { normalizePersonalExpenseName } from '../utils/personalExpenseName'
+
+const REPORT_FIELDS = ['reportStatusCode', 'reportStatusLabel', 'reportedAt', 'reportReference', 'reportNotes'] as const
+
+function withoutReportFields<T extends object>(record: T): T {
+  const clean = { ...record } as T & Record<string, unknown>
+  REPORT_FIELDS.forEach((field) => delete clean[field])
+  return clean
+}
 
 export interface ExpenseListOptions extends DateRangeListOptions {
   category?: string
@@ -33,6 +41,31 @@ export type CreateExpenseInput = Omit<Expense, 'id' | 'createdAt'> & {
 }
 export type UpdateExpenseInput = Partial<CreateExpenseInput>
 
+function normalizePersonalCategoryIdInput(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value !== 'string') {
+    throw new Error('PERSONAL_EXPENSE_CATEGORY_INVALID_ID')
+  }
+  const trimmed = value.trim()
+  return trimmed === '' ? undefined : trimmed
+}
+
+async function assertPersonalExpenseCategoryAssignment(
+  categoryId: string | undefined,
+  usageMode: 'basic' | 'professional',
+  existingCategoryId?: string,
+) {
+  if (!categoryId) return
+  if (usageMode !== 'basic') {
+    throw new Error('PERSONAL_EXPENSE_CATEGORY_NOT_ALLOWED_FOR_PROFESSIONAL')
+  }
+  const category = await db.personalExpenseCategories.get(categoryId)
+  const isSameAsBefore = categoryId === existingCategoryId
+  if (!category || category.usageMode !== 'basic' || (category.isArchived && !isSameAsBefore)) {
+    throw new Error('La categoría de egreso personal no es válida.')
+  }
+}
+
 function formatLocalDateTime(date: Date) {
   const year = String(date.getFullYear())
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -45,6 +78,16 @@ function formatLocalDateTime(date: Date) {
 
 export async function createExpense(input: CreateExpenseInput) {
   const settings = await getSettings()
+  const activeUsageMode = resolveActiveUsageMode(settings)
+  assertReportStatusUpdateIsAllowed(
+    input as Expense,
+    activeUsageMode,
+    input,
+  )
+  const normalizedPersonalCategoryId = normalizePersonalCategoryIdInput(input.personalCategoryId)
+  if (activeUsageMode === 'professional' && normalizedPersonalCategoryId !== undefined) {
+    throw new Error('PERSONAL_EXPENSE_CATEGORY_NOT_ALLOWED_FOR_PROFESSIONAL')
+  }
   const period =
     requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
 
@@ -54,9 +97,13 @@ export async function createExpense(input: CreateExpenseInput) {
 
   const createdAt = input.createdAt ?? formatLocalDateTime(new Date())
 
-  const expense: Expense = normalizeReportStatus({
-    usageMode: settings.usageMode,
+  const expense: Expense = withoutReportFields({
+    usageMode: activeUsageMode,
     ...input,
+    personalName: activeUsageMode === 'basic'
+      ? normalizePersonalExpenseName(input.personalName)
+      : undefined,
+    personalCategoryId: activeUsageMode === 'basic' ? normalizedPersonalCategoryId : undefined,
     createdAt,
     earningPeriodId: period?.id,
     seasonPeriodId: period?.id,
@@ -66,7 +113,12 @@ export async function createExpense(input: CreateExpenseInput) {
     db.expenses,
     db.services,
     db.automationOutbox,
+    db.personalExpenseCategories,
   ], async () => {
+    await assertPersonalExpenseCategoryAssignment(
+      expense.personalCategoryId,
+      activeUsageMode,
+    )
     const [incomes, expenses] = await Promise.all([
       db.services.toArray(),
       db.expenses.toArray(),
@@ -87,7 +139,7 @@ export async function createExpense(input: CreateExpenseInput) {
 
 export async function getExpenseById(id: number) {
   const expense = await db.expenses.get(id)
-  return expense ? normalizeReportStatus(expense) : expense
+  return expense ? withoutReportFields(expense) : expense
 }
 
 export async function listExpenses(options: ExpenseListOptions = {}) {
@@ -122,7 +174,7 @@ export async function listExpenses(options: ExpenseListOptions = {}) {
     filtered = filtered.filter((expense) => expense.earningPeriodId === earningPeriodId)
   }
   
-  return filtered.map((item) => normalizeReportStatus(item))
+  return filtered.map((item) => withoutReportFields(item))
 }
 
 export async function updateExpense(id: number, updates: UpdateExpenseInput) {
@@ -130,25 +182,41 @@ export async function updateExpense(id: number, updates: UpdateExpenseInput) {
   const currentExpense = await db.expenses.get(id)
   if (
     !currentExpense ||
-    !recordBelongsToUsageMode(currentExpense, settings.usageMode)
+    !recordBelongsToUsageMode(currentExpense, resolveActiveUsageMode(settings))
   ) {
     throw new Error('Este egreso pertenece a otro modo de uso.')
   }
-  assertReportStatusUpdateIsAllowed(currentExpense, settings.usageMode, updates)
-  assertReportedRecordUpdateIsAllowed(currentExpense, updates)
+  assertReportStatusUpdateIsAllowed(currentExpense, resolveActiveUsageMode(settings), updates)
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentExpense)
   }
-  return db.transaction('rw', [db.expenses, db.services], async () => {
+  return db.transaction('rw', [db.expenses, db.services, db.personalExpenseCategories], async () => {
     const latestExpense = await db.expenses.get(id)
     if (!latestExpense) throw new Error('El egreso que intentas modificar no existe.')
-    assertReportStatusUpdateIsAllowed(latestExpense, settings.usageMode, updates)
-    assertReportedRecordUpdateIsAllowed(latestExpense, updates)
-
-    const updatedExpense: Expense = normalizeReportStatus({
+    assertReportStatusUpdateIsAllowed(latestExpense, resolveActiveUsageMode(settings), updates)
+    const safeUpdates: UpdateExpenseInput = { ...updates }
+    if (Object.hasOwn(updates, 'personalName')) {
+      safeUpdates.personalName = resolveActiveUsageMode(settings) === 'basic'
+        ? normalizePersonalExpenseName(updates.personalName)
+        : latestExpense.personalName
+    }
+    if (Object.hasOwn(updates, 'personalCategoryId')) {
+      const normalizedCategoryId = normalizePersonalCategoryIdInput(updates.personalCategoryId)
+      if (resolveActiveUsageMode(settings) !== 'basic') {
+        safeUpdates.personalCategoryId = undefined
+      } else {
+        await assertPersonalExpenseCategoryAssignment(
+          normalizedCategoryId,
+          resolveActiveUsageMode(settings),
+          latestExpense.personalCategoryId,
+        )
+        safeUpdates.personalCategoryId = normalizedCategoryId
+      }
+    }
+    const updatedExpense: Expense = withoutReportFields({
       ...latestExpense,
-      ...updates,
-      usageMode: latestExpense.usageMode ?? settings.usageMode,
+      ...safeUpdates,
+      usageMode: latestExpense.usageMode ?? resolveActiveUsageMode(settings),
     })
     const [incomes, expenses] = await Promise.all([
       db.services.toArray(),
@@ -186,16 +254,14 @@ export async function deleteExpense(id: number) {
   const currentExpense = await db.expenses.get(id)
   if (
     !currentExpense ||
-    !recordBelongsToUsageMode(currentExpense, settings.usageMode)
+    !recordBelongsToUsageMode(currentExpense, resolveActiveUsageMode(settings))
   ) {
     throw new Error('Este egreso pertenece a otro modo de uso.')
   }
-  assertRecordIsNotReported(currentExpense)
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentExpense)
   }
   return db.transaction('rw', db.expenses, async () => {
-    assertRecordIsNotReported(await db.expenses.get(id))
     return db.expenses.delete(id)
   })
 }

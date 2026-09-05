@@ -42,7 +42,7 @@ import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
 import { calculateFinancialTotals, recordBelongsToEarningPeriod } from '../../utils/financeStats'
-import { getIncomeCompactLabel } from '../../utils/incomeTypes'
+import { getExpenseDisplayName, getIncomeDisplayName } from '../../utils/activityLabels'
 import { getActiveEarningPeriod, getPreviousEarningPeriod, getSeasonGoalProgress, getSeasonStatistics, listSeasonRecords, type SeasonStatistics } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { FinancialGoal } from '../../types/financialGoal'
@@ -62,6 +62,8 @@ import {
   isBasicMode,
   recordBelongsToUsageMode,
   requiresSeason,
+  resolveActiveUsageMode,
+  resolveRecordUsageMode,
 } from '../../utils/usageMode'
 
 function formatShortDateTime(value: string) {
@@ -87,7 +89,7 @@ function buildRecentMovements(incomes: ServiceIncome[], expenses: Expense[]): Re
     key: `income-${income.id}`,
     kind: 'ingreso',
     date: income.date,
-    label: getIncomeCompactLabel(income),
+    label: getIncomeDisplayName(income),
     amount: income.totalAmount,
     currency: income.currency,
     href: `/income/${income.id}`,
@@ -96,7 +98,11 @@ function buildRecentMovements(incomes: ServiceIncome[], expenses: Expense[]): Re
     key: `expense-${expense.id}`,
     kind: 'gasto',
     date: expense.date,
-    label: expense.category,
+    // Profesional conserva la categoría; Personal identifica el egreso por
+    // su nombre libre o el fallback "Egreso #ID".
+    label: resolveRecordUsageMode(expense) === 'basic'
+      ? getExpenseDisplayName(expense)
+      : expense.category,
     amount: expense.amount,
     currency: expense.currency,
     href: `/expenses/${expense.id}/editar`,
@@ -247,6 +253,7 @@ export function HomePage() {
     async function loadDashboard(nextSettings?: AppSettings) {
       const resolvedSettings = nextSettings ?? await getSettings()
       const isBasicUser = isBasicMode(resolvedSettings)
+      const activeUsageMode = resolveActiveUsageMode(resolvedSettings)
       const [
         period,
         incomes,
@@ -264,7 +271,7 @@ export function HomePage() {
         listExpenses(previous),
         listServiceIncomes(),
         listExpenses(),
-        financialGoalService.list(),
+        financialGoalService.list(activeUsageMode),
       ])
       const [periodStats, seasonRecords, previousPeriod] = await Promise.all([
         period?.id ? getSeasonStatistics(period.id) : Promise.resolve(null),
@@ -280,16 +287,16 @@ export function HomePage() {
       if (!mounted) return
 
       const modeIncomes = incomes.filter((item) =>
-        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
+        recordBelongsToUsageMode(item, activeUsageMode),
       )
       const modeExpenses = expenses.filter((item) =>
-        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
+        recordBelongsToUsageMode(item, activeUsageMode),
       )
       const oldModeIncomes = oldIncomes.filter((item) =>
-        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
+        recordBelongsToUsageMode(item, activeUsageMode),
       )
       const oldModeExpenses = oldExpenses.filter((item) =>
-        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
+        recordBelongsToUsageMode(item, activeUsageMode),
       )
       const belongsToActivePeriod = (item: {
         earningPeriodId?: number
@@ -304,16 +311,16 @@ export function HomePage() {
         ? modeExpenses
         : modeExpenses.filter(belongsToActivePeriod)
       const seasonModeIncomes = (seasonRecords?.incomes ?? []).filter((item) =>
-        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
+        recordBelongsToUsageMode(item, activeUsageMode),
       )
       const seasonModeExpenses = (seasonRecords?.expenses ?? []).filter((item) =>
-        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
+        recordBelongsToUsageMode(item, activeUsageMode),
       )
       const previousSeasonModeIncomes = (previousSeasonRecords?.incomes ?? []).filter((item) =>
-        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
+        recordBelongsToUsageMode(item, activeUsageMode),
       )
       const previousSeasonModeExpenses = (previousSeasonRecords?.expenses ?? []).filter((item) =>
-        recordBelongsToUsageMode(item, resolvedSettings.usageMode),
+        recordBelongsToUsageMode(item, activeUsageMode),
       )
       setSettings(resolvedSettings)
       const explicitInstant = new Date().toISOString() as UtcInstant
@@ -336,8 +343,8 @@ export function HomePage() {
       setPreviousIncomes(oldModeIncomes)
       setPreviousExpenses(oldModeExpenses)
       setHasMovementHistory(
-        hasRecordsForUsageMode(allIncomes, resolvedSettings.usageMode) ||
-          hasRecordsForUsageMode(allExpenses, resolvedSettings.usageMode),
+        hasRecordsForUsageMode(allIncomes, activeUsageMode) ||
+          hasRecordsForUsageMode(allExpenses, activeUsageMode),
       )
       setFinancialGoals(goals)
     }
@@ -368,7 +375,7 @@ export function HomePage() {
             incomes: currentIncomes,
             expenses: currentExpenses,
             currency: settings.defaultCurrency,
-            usageMode: settings.usageMode,
+            usageMode: resolveActiveUsageMode(settings),
             earningPeriodId: isBasicMode(settings) ? undefined : activePeriod?.id,
             scope: 'home.current-month',
             ...(snapshotTime === null
@@ -391,7 +398,7 @@ export function HomePage() {
         incomes: previousIncomes,
         expenses: previousExpenses,
         currency: settings.defaultCurrency,
-        usageMode: settings.usageMode,
+        usageMode: resolveActiveUsageMode(settings),
         scope: 'home.previous-month',
       }),
     }
@@ -405,7 +412,7 @@ export function HomePage() {
       incomes: currentIncomes,
       expenses: currentExpenses,
       currency: settings.defaultCurrency,
-      usageMode: settings.usageMode,
+      usageMode: resolveActiveUsageMode(settings),
       earningPeriodId: isBasicMode(settings) ? undefined : activePeriod?.id,
       scope: 'home.current-month',
       snapshotShadow: {
@@ -442,7 +449,8 @@ export function HomePage() {
   }, [currentExpenses, currentIncomes, financialGoals, pendingIncomeSummary, previousExpenses, previousIncomes, settings, upcomingAppointments])
 
   async function refreshFinancialGoals() {
-    setFinancialGoals(await financialGoalService.list())
+    if (!settings) return
+    setFinancialGoals(await financialGoalService.list(resolveActiveUsageMode(settings)))
   }
 
   const recentMovements = useMemo(
@@ -558,7 +566,7 @@ export function HomePage() {
       : []),
   ]
   const seasonGoalProgress =
-    activePeriod && activePeriodStats
+    !isBasicUser && activePeriod && activePeriodStats
       ? getSeasonGoalProgress(activePeriod, {
           netIncome: activePeriodStats.realGain,
           expenses: activePeriodStats.expenses,
@@ -619,7 +627,7 @@ export function HomePage() {
         </div>
       </section>
 
-      {seasonGoalProgress && activePeriod && (
+      {!isBasicUser && seasonGoalProgress && activePeriod && (
         <div className="order-3">
           <SeasonGoalCard
             currency={(activePeriod.baseCurrency ?? settings.defaultCurrency) as CurrencyCode}
@@ -660,22 +668,25 @@ export function HomePage() {
         </div>
       </section>
 
-      <section aria-labelledby="today-priorities-title" className="order-1">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200" id="today-priorities-title">
-            <ListChecks className="size-5 text-amber-700 dark:text-amber-300" aria-hidden="true" />
-            {HOME_SECTION_ORDER[0]}
-          </h2>
-          {homeCopilotPresentation.todayPriorities.length > 0 ? <ul className="mt-3 grid gap-3">
-            {homeCopilotPresentation.todayPriorities.slice(0, 1).map((priority) => (
-              <li className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/40" key={priority.id}>
-                <span className="text-sm font-medium text-amber-950 dark:text-amber-100">{priority.message}</span>
-                <Link className="shrink-0 text-xs font-semibold text-amber-800 hover:text-amber-950 dark:text-amber-200" to={priority.action.to}>
-                  {priority.action.label}
-                </Link>
-              </li>
-            ))}
-          </ul> : <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">No hay asuntos urgentes para hoy.</p>}
-      </section>
+      {/* Siempre vacía en Personal (solo agenda/pendientes profesionales la alimentan), así que se oculta en vez de mostrarla vacía. */}
+      {!isBasicMode(settings) && (
+        <section aria-labelledby="today-priorities-title" className="order-1">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200" id="today-priorities-title">
+              <ListChecks className="size-5 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+              {HOME_SECTION_ORDER[0]}
+            </h2>
+            {homeCopilotPresentation.todayPriorities.length > 0 ? <ul className="mt-3 grid gap-3">
+              {homeCopilotPresentation.todayPriorities.slice(0, 1).map((priority) => (
+                <li className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/40" key={priority.id}>
+                  <span className="text-sm font-medium text-amber-950 dark:text-amber-100">{priority.message}</span>
+                  <Link className="shrink-0 text-xs font-semibold text-amber-800 hover:text-amber-950 dark:text-amber-200" to={priority.action.to}>
+                    {priority.action.label}
+                  </Link>
+                </li>
+              ))}
+            </ul> : <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">No hay asuntos urgentes para hoy.</p>}
+        </section>
+      )}
 
       <div className="contents">
         {!isBasicMode(settings) && (

@@ -87,21 +87,52 @@ describe('buildIncomeCsv', () => {
       'EUR',
       'professional',
     )
-    const csv = buildIncomeCsv(rows)
+    const csv = buildIncomeCsv(rows, 'professional')
 
     expect(csv).toContain('Fecha de ingreso')
     expect(csv).toContain('Referencia')
     expect(csv).toContain('"nota, con ""comillas"""')
+  })
+
+  it('omits the payment type column entirely for Personal exports', () => {
+    const rows = buildIncomeExportRows([income({ usageMode: 'basic', personalName: 'Nómina septiembre', paymentType: 'cash' })], 'EUR', 'basic')
+    const csv = buildIncomeCsv(rows, 'basic')
+
+    expect(csv).not.toContain('Tipo de pago')
+    expect(csv).toContain('Nombre')
+    expect(csv).toContain('Nómina septiembre')
+  })
+
+  it('includes the payment type column for Profesional exports', () => {
+    const rows = buildIncomeExportRows([income({ paymentType: 'cash' })], 'EUR', 'professional')
+    const csv = buildIncomeCsv(rows, 'professional')
+
+    expect(csv).toContain('Tipo de pago')
   })
 })
 
 describe('buildIncomeSpreadsheetXml', () => {
   it('produces a valid SpreadsheetML document with one row per income', () => {
     const rows = buildIncomeExportRows([income(), income({ id: 2, date: '2026-01-06' })], 'EUR', 'professional')
-    const xml = buildIncomeSpreadsheetXml(rows)
+    const xml = buildIncomeSpreadsheetXml(rows, 'professional')
 
     expect(xml).toContain('<?xml version="1.0"?>')
     expect(xml).toContain('urn:schemas-microsoft-com:office:spreadsheet')
     expect(xml.match(/<Row>/g)?.length).toBe(rows.length + 1)
+  })
+
+  it('omits the payment type column entirely for Personal exports', () => {
+    const rows = buildIncomeExportRows([income({ paymentType: 'cash' })], 'EUR', 'basic')
+    const xml = buildIncomeSpreadsheetXml(rows, 'basic')
+
+    expect(xml).not.toContain('Tipo de pago')
+  })
+})
+
+describe('buildIncomeExportRows — Personal', () => {
+  it('never carries a payment type value for Personal, even if the record has one', () => {
+    const rows = buildIncomeExportRows([income({ paymentType: 'cash' })], 'EUR', 'basic')
+
+    expect(rows[0].paymentType).toBe('')
   })
 })

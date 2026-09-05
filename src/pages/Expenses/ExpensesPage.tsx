@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react'
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -17,9 +17,16 @@ import {
   getExpenseById,
   updateExpense,
 } from '../../services/expenseService'
+import {
+  createPersonalExpenseCategory,
+  getPersonalExpenseCategoryById,
+  listPersonalExpenseCategories,
+  normalizePersonalExpenseCategoryName,
+} from '../../services/personalExpenseCategoryService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import type { ExpenseType } from '../../types/expense'
+import type { PersonalExpenseCategory } from '../../types/personalExpenseCategory'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import {
@@ -33,13 +40,14 @@ import { getActiveEarningPeriod, isEarningPeriodClosed } from '../../services/ea
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { AdjustmentCapacity } from '../../utils/expenseAdjustments'
 import { ADJUSTMENT_LIMIT_ERROR } from '../../utils/expenseAdjustments'
+import { MAX_PERSONAL_EXPENSE_NAME_LENGTH } from '../../utils/personalExpenseName'
 import {
   isBasicMode,
   recordBelongsToUsageMode,
   requiresSeason,
+  resolveActiveUsageMode,
 } from '../../utils/usageMode'
 import { isServiceIncome } from '../../utils/incomeTypes'
-import { isReported } from '../../catalogs/reportStatuses'
 import { useDialog } from '../../components/dialogs/useDialog'
 
 type SaveStatus = 'idle' | 'saving' | 'error'
@@ -67,7 +75,7 @@ function formatRateUpdatedAt(value: string) {
 }
 
 export function ExpensesPage() {
-  const { alert } = useDialog()
+  const { alert, prompt } = useDialog()
   const { hidden: sensitiveValuesHidden } = useSensitiveValues()
   const { expenseId } = useParams()
   const navigate = useNavigate()
@@ -86,6 +94,10 @@ export function ExpensesPage() {
   const [crossIncome, setCrossIncome] = useState<CrossIncomeChoice>('no')
   const [relatedIncomeId, setRelatedIncomeId] = useState('')
   const [notes, setNotes] = useState('')
+  const [personalName, setPersonalName] = useState('')
+  const [personalCategoryId, setPersonalCategoryId] = useState('')
+  const [personalCategoryOptions, setPersonalCategoryOptions] = useState<PersonalExpenseCategory[]>([])
+  const [assignedArchivedCategory, setAssignedArchivedCategory] = useState<PersonalExpenseCategory | null>(null)
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [exchangeRate, setExchangeRate] = useState(EUR_COP_DEFAULT_RATE)
   const [exchangeRateSource, setExchangeRateSource] =
@@ -138,6 +150,9 @@ export function ExpensesPage() {
       }
 
       setSettings(currentSettings)
+      if (isBasicMode(currentSettings)) {
+        setPersonalCategoryOptions(await listPersonalExpenseCategories({ archived: 'active' }))
+      }
       setCurrency(
         (!isBasicMode(currentSettings) && currentPeriod?.baseCurrency
           ? currentPeriod.baseCurrency
@@ -148,7 +163,7 @@ export function ExpensesPage() {
       }
       setIncomes(
         currentIncomes.filter((income) =>
-          recordBelongsToUsageMode(income, currentSettings.usageMode),
+          recordBelongsToUsageMode(income, resolveActiveUsageMode(currentSettings)),
         ),
       )
       setActivePeriod(currentPeriod ?? null)
@@ -181,23 +196,13 @@ export function ExpensesPage() {
       if (
         !recordBelongsToUsageMode(
           currentExpense,
-          currentSettings.usageMode,
+          resolveActiveUsageMode(currentSettings),
         )
       ) {
         await alert({
           type: 'warning',
           title: 'Egreso no disponible',
           message: 'Este egreso pertenece a otro modo de uso.',
-        })
-        navigate('/expenses', { replace: true })
-        return
-      }
-
-      if (isReported(currentExpense)) {
-        await alert({
-          type: 'info',
-          title: 'Egreso reportado',
-          message: 'Este egreso ya fue reportado y solo puede consultarse.',
         })
         navigate('/expenses', { replace: true })
         return
@@ -243,6 +248,14 @@ export function ExpensesPage() {
           : '',
       )
       setNotes(currentExpense.notes ?? '')
+      setPersonalName(currentExpense.personalName ?? '')
+      setPersonalCategoryId(currentExpense.personalCategoryId ?? '')
+      if (isBasicMode(currentSettings) && currentExpense.personalCategoryId) {
+        const assignedCategory = await getPersonalExpenseCategoryById(currentExpense.personalCategoryId)
+        if (assignedCategory?.isArchived) {
+          setAssignedArchivedCategory(assignedCategory)
+        }
+      }
 
       if (currentExpense.exchangeRateBaseToSecondary) {
         setExchangeRate(currentExpense.exchangeRateBaseToSecondary)
@@ -255,6 +268,52 @@ export function ExpensesPage() {
       isMounted = false
     }
   }, [alert, navigate, parsedExpenseId])
+
+  const personalCategorySelectOptions = useMemo(() => {
+    if (
+      assignedArchivedCategory === null ||
+      personalCategoryOptions.some((categoryOption) => categoryOption.id === assignedArchivedCategory.id)
+    ) {
+      return personalCategoryOptions
+    }
+    return [...personalCategoryOptions, assignedArchivedCategory].sort((left, right) =>
+      left.name.localeCompare(right.name, 'es'),
+    )
+  }, [assignedArchivedCategory, personalCategoryOptions])
+
+  async function handleQuickCreatePersonalCategory() {
+    const name = await prompt({
+      title: 'Nueva categoría',
+      message: 'Escribe el nombre de la nueva categoría de egreso personal.',
+      placeholder: 'Ej. Alimentación, vivienda, salud',
+      confirmLabel: 'Crear',
+      validate: (value) => {
+        try {
+          normalizePersonalExpenseCategoryName(value)
+          return undefined
+        } catch (error) {
+          return error instanceof Error ? error.message : 'Nombre inválido.'
+        }
+      },
+    })
+
+    if (!name) return
+
+    try {
+      const created = await createPersonalExpenseCategory({ name })
+      setPersonalCategoryOptions((current) =>
+        [...current, created].sort((left, right) => left.name.localeCompare(right.name, 'es')),
+      )
+      setPersonalCategoryId(created.id)
+      setValidationError('')
+    } catch (error) {
+      await alert({
+        type: 'error',
+        title: 'No se pudo crear la categoría',
+        message: error instanceof Error ? error.message : 'La categoría no se pudo crear.',
+      })
+    }
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -416,6 +475,8 @@ export function ExpensesPage() {
         createdAt: isEditing ? expenseCreatedAt ?? now.toISOString() : undefined,
         country: expenseCountry ?? settings.country,
         city: isBasicUser ? undefined : expenseCity ?? settings.city,
+        ...(isBasicUser ? { personalName } : {}),
+        ...(isBasicUser ? { personalCategoryId: personalCategoryId || undefined } : {}),
       }
 
       if (isEditing && parsedExpenseId) {
@@ -483,6 +544,62 @@ export function ExpensesPage() {
         className="flex flex-col gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
         onSubmit={handleSubmit}
       >
+        {isBasicUser && (
+          <div className="flex flex-col gap-4">
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-slate-700">Nombre del egreso</span>
+            <input
+              aria-describedby="personal-expense-name-help"
+              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              maxLength={MAX_PERSONAL_EXPENSE_NAME_LENGTH}
+              onChange={(event) => {
+                setPersonalName(event.target.value)
+                setValidationError('')
+              }}
+              placeholder="Ej. Alquiler, supermercado o electricidad"
+              type="text"
+              value={personalName}
+            />
+            <span className="flex justify-between gap-3 text-xs text-slate-500" id="personal-expense-name-help">
+              <span>Opcional. Utiliza un nombre que te permita reconocer este egreso.</span>
+              <span aria-label={`${personalName.length} de ${MAX_PERSONAL_EXPENSE_NAME_LENGTH} caracteres`}>
+                {personalName.length}/{MAX_PERSONAL_EXPENSE_NAME_LENGTH}
+              </span>
+            </span>
+          </label>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-sm font-medium text-slate-700" htmlFor="personal-expense-category">
+                Categoría
+              </label>
+              <button
+                className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+                onClick={handleQuickCreatePersonalCategory}
+                type="button"
+              >
+                <Plus className="size-3.5" aria-hidden="true" />
+                Nueva categoría
+              </button>
+            </div>
+            <select
+              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              id="personal-expense-category"
+              onChange={(event) => {
+                setPersonalCategoryId(event.target.value)
+                setValidationError('')
+              }}
+              value={personalCategoryId}
+            >
+              <option value="">Sin categoría</option>
+              {personalCategorySelectOptions.map((categoryOption) => (
+                <option key={categoryOption.id} value={categoryOption.id}>
+                  {categoryOption.isArchived ? `${categoryOption.name} · Archivada` : categoryOption.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          </div>
+        )}
         {!isBasicUser && <fieldset className="flex flex-col gap-2">
           <legend className="text-sm font-medium text-slate-700">
             Tipo de egreso

@@ -15,8 +15,13 @@ import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
+import {
+  listPersonalIncomeCategories,
+  PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT,
+} from '../../services/personalIncomeCategoryService'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
+import { isBasicMode, resolveActiveUsageMode } from '../../utils/usageMode'
 import ExpenseListPage from '../Expenses/ExpenseListPage'
 import IncomeListPage from '../Income/IncomeListPage'
 import { MovementCreateSheet } from './MovementCreateSheet'
@@ -95,22 +100,29 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
   useEffect(() => {
     let cancelled = false
 
-    Promise.all([
-      listServiceIncomes({ newestFirst: true }),
-      listExpenses({ newestFirst: true }),
-      getSettings(),
-    ])
-      .then(([incomes, expenses, settings]) => {
+    async function loadMovements() {
+      try {
+        const [incomes, expenses, settings] = await Promise.all([
+          listServiceIncomes({ newestFirst: true }),
+          listExpenses({ newestFirst: true }),
+          getSettings(),
+        ])
+        const personalCategories = isBasicMode(settings)
+          ? await listPersonalIncomeCategories({ archived: 'all' })
+          : []
         if (cancelled) return
-        const scopedIncomes = scopeRecordsByUsageMode(incomes, settings.usageMode)
-        const scopedExpenses = scopeRecordsByUsageMode(expenses, settings.usageMode)
-        setMovements(toUnifiedMovements(scopedIncomes, scopedExpenses))
+        const activeUsageMode = resolveActiveUsageMode(settings)
+        const scopedIncomes = scopeRecordsByUsageMode(incomes, activeUsageMode)
+        const scopedExpenses = scopeRecordsByUsageMode(expenses, activeUsageMode)
+        setMovements(toUnifiedMovements(scopedIncomes, scopedExpenses, personalCategories))
         setShowUnreportedIncome(settings.showUnreportedIncome)
-      })
-      .catch((error) => {
+      } catch (error) {
         console.warn('No se pudieron cargar los movimientos.', error)
         if (!cancelled) setMovements([])
-      })
+      }
+    }
+
+    void loadMovements()
 
     function handleSettingsChanged(event: Event) {
       if (!cancelled) {
@@ -121,10 +133,12 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
     }
 
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
+    window.addEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, loadMovements)
 
     return () => {
       cancelled = true
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
+      window.removeEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, loadMovements)
     }
   }, [])
 
@@ -267,6 +281,7 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
                     </span>
                     <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
                       {formatDate(movement.date)}
+                      {movement.personalCategoryLabel ? ` · ${movement.personalCategoryLabel}` : ''}
                       {shouldShowMovementReportBadge(showUnreportedIncome, movement.reportBadge)
                         ? ` · ${movement.reportBadge?.label}`
                         : ''}

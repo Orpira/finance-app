@@ -66,6 +66,7 @@ describe('createNotificationService', () => {
     const service = createNotificationService({
       repository,
       getPreferences: async () => DEFAULT_NOTIFICATION_PREFERENCES,
+      getActiveUsageMode: async () => 'professional' as const,
       now: () => new Date('2026-08-30T12:00:00.000Z'),
     })
 
@@ -80,6 +81,7 @@ describe('createNotificationService', () => {
     const service = createNotificationService({
       repository,
       getPreferences: async () => ({ ...DEFAULT_NOTIFICATION_PREFERENCES, copilotNotificationsEnabled: false }),
+      getActiveUsageMode: async () => 'professional' as const,
       now: () => new Date('2026-08-30T12:00:00.000Z'),
     })
 
@@ -97,6 +99,7 @@ describe('createNotificationService', () => {
     const service = createNotificationService({
       repository,
       getPreferences: async () => DEFAULT_NOTIFICATION_PREFERENCES,
+      getActiveUsageMode: async () => 'professional' as const,
       now: () => new Date('2026-08-30T12:00:00.000Z'),
     })
 
@@ -122,6 +125,7 @@ describe('createNotificationService', () => {
     const service = createNotificationService({
       repository,
       getPreferences: async () => DEFAULT_NOTIFICATION_PREFERENCES,
+      getActiveUsageMode: async () => 'professional' as const,
       now: () => new Date('2026-08-30T12:00:00.000Z'),
     })
 
@@ -136,6 +140,7 @@ describe('createNotificationService', () => {
     const service = createNotificationService({
       repository,
       getPreferences: async () => DEFAULT_NOTIFICATION_PREFERENCES,
+      getActiveUsageMode: async () => 'professional' as const,
       now: () => new Date('2026-08-30T12:00:00.000Z'),
     })
 
@@ -149,6 +154,47 @@ describe('createNotificationService', () => {
     expect(repository.rows.get('a')?.status).toBe('acted')
   })
 
+  it('Bloque 3: una notificación profesional (agenda/temporada) no aparece en Personal, pero no se borra', async () => {
+    const repository = createFakeRepository([
+      { id: 'a', type: 'SEASON_ENDING', priority: 'P1', source: 'season', title: 't', message: 'm', dedupKey: 'd1', createdAt: '2026-08-30T10:00:00.000Z', status: 'new', privacy: 'generic' },
+      { id: 'b', type: 'AGENDA_PENDING_ACTION', priority: 'P2', source: 'agenda', title: 't', message: 'm', dedupKey: 'd2', createdAt: '2026-08-30T10:00:00.000Z', status: 'new', privacy: 'generic' },
+    ])
+    const service = createNotificationService({
+      repository,
+      getPreferences: async () => DEFAULT_NOTIFICATION_PREFERENCES,
+      getActiveUsageMode: async () => 'basic' as const,
+      now: () => new Date('2026-08-30T12:00:00.000Z'),
+    })
+
+    expect(await service.listNotifications()).toHaveLength(0)
+    expect(await service.countUnread()).toBe(0)
+    // Sigue existiendo en el repositorio: ocultar no es borrar.
+    expect(repository.rows.size).toBe(2)
+  })
+
+  it('Bloque 3: volver a Profesional recupera las notificaciones vigentes sin recrearlas', async () => {
+    const repository = createFakeRepository([
+      { id: 'a', type: 'SEASON_ENDING', priority: 'P1', source: 'season', title: 't', message: 'm', dedupKey: 'd1', createdAt: '2026-08-30T10:00:00.000Z', status: 'new', privacy: 'generic' },
+    ])
+    const basicService = createNotificationService({
+      repository,
+      getPreferences: async () => DEFAULT_NOTIFICATION_PREFERENCES,
+      getActiveUsageMode: async () => 'basic' as const,
+      now: () => new Date('2026-08-30T12:00:00.000Z'),
+    })
+    const professionalService = createNotificationService({
+      repository,
+      getPreferences: async () => DEFAULT_NOTIFICATION_PREFERENCES,
+      getActiveUsageMode: async () => 'professional' as const,
+      now: () => new Date('2026-08-30T12:00:00.000Z'),
+    })
+
+    expect(await basicService.listNotifications()).toHaveLength(0)
+    const visibleAgain = await professionalService.listNotifications()
+    expect(visibleAgain).toHaveLength(1)
+    expect(visibleAgain[0].id).toBe('a')
+  })
+
   it('dismiss transiciona a dismissed', async () => {
     const repository = createFakeRepository([
       { id: 'a', type: 't', priority: 'P2', source: 'goal', title: 't', message: 'm', dedupKey: 'd1', createdAt: '2026-08-30T10:00:00.000Z', status: 'new', privacy: 'generic' },
@@ -156,6 +202,7 @@ describe('createNotificationService', () => {
     const service = createNotificationService({
       repository,
       getPreferences: async () => DEFAULT_NOTIFICATION_PREFERENCES,
+      getActiveUsageMode: async () => 'professional' as const,
       now: () => new Date('2026-08-30T12:00:00.000Z'),
     })
 

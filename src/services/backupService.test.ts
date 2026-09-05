@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppSettings } from '../types/settings'
+import type { ServiceIncome } from '../types/service'
 
 const servicesTable = { count: vi.fn(), toArray: vi.fn() }
 const expensesTable = { count: vi.fn(), toArray: vi.fn() }
@@ -12,6 +13,8 @@ const communicationChannelsTable = { toArray: vi.fn() }
 const incomeAdditionalsTable = { toArray: vi.fn() }
 const financialGoalsTable = { toArray: vi.fn() }
 const importDatabaseSnapshotMock = vi.fn()
+const personalIncomeCategoriesTable = { toArray: vi.fn() }
+const personalExpenseCategoriesTable = { toArray: vi.fn() }
 
 vi.mock('../database/db', () => ({
   db: {
@@ -24,6 +27,8 @@ vi.mock('../database/db', () => ({
     communicationChannels: communicationChannelsTable,
     incomeAdditionals: incomeAdditionalsTable,
     financialGoals: financialGoalsTable,
+    personalIncomeCategories: personalIncomeCategoriesTable,
+    personalExpenseCategories: personalExpenseCategoriesTable,
   },
   exportDatabaseSnapshot: vi.fn(),
   importDatabaseSnapshot: importDatabaseSnapshotMock,
@@ -60,6 +65,8 @@ beforeEach(() => {
   communicationChannelsTable.toArray.mockResolvedValue([])
   incomeAdditionalsTable.toArray.mockResolvedValue([])
   financialGoalsTable.toArray.mockResolvedValue([])
+  personalIncomeCategoriesTable.toArray.mockResolvedValue([])
+  personalExpenseCategoriesTable.toArray.mockResolvedValue([])
   getSettingsMock.mockResolvedValue(settings())
 })
 
@@ -81,6 +88,61 @@ describe('generateBackupData', () => {
 })
 
 describe('backupDataToSnapshot', () => {
+  it('conserva el nombre Personal y admite backups históricos sin el campo', () => {
+    const namedIncome = {
+      id: 9,
+      date: '2026-09-05',
+      totalAmount: 125,
+      currency: 'EUR',
+      percentage: 100,
+      realGain: 125,
+      usageMode: 'basic',
+      personalName: 'Nómina septiembre',
+    } as ServiceIncome
+    const baseBackup = {
+      version: '2' as const,
+      generatedAt: '2026-09-05T10:00:00.000Z',
+      appName: 'Private Balance' as const,
+      expenses: [], appointments: [], settings: { ...settings(), usageMode: 'basic' as const }, exchangeRates: [],
+    }
+    const historicalIncome = { ...namedIncome }
+    delete historicalIncome.personalName
+
+    expect(backupDataToSnapshot({ ...baseBackup, services: [namedIncome] }).services[0]?.personalName)
+      .toBe('Nómina septiembre')
+    expect(backupDataToSnapshot({ ...baseBackup, services: [historicalIncome] }).services[0])
+      .not.toHaveProperty('personalName')
+  })
+
+  it('conserva el nombre Personal de un egreso y admite backups históricos sin el campo', () => {
+    const namedExpense = {
+      id: 4,
+      type: 'gasto' as const,
+      date: '2026-09-05',
+      category: 'Otros',
+      amount: 50,
+      currency: 'EUR',
+      eurValue: 50,
+      copValue: 200_000,
+      createdAt: '2026-09-05T10:00:00.000Z',
+      usageMode: 'basic' as const,
+      personalName: 'Compra supermercado',
+    }
+    const baseBackup = {
+      version: '2' as const,
+      generatedAt: '2026-09-05T10:00:00.000Z',
+      appName: 'Private Balance' as const,
+      services: [], appointments: [], settings: { ...settings(), usageMode: 'basic' as const }, exchangeRates: [],
+    }
+    const historicalExpense = { ...namedExpense }
+    delete (historicalExpense as { personalName?: string }).personalName
+
+    expect(backupDataToSnapshot({ ...baseBackup, expenses: [namedExpense] }).expenses[0]?.personalName)
+      .toBe('Compra supermercado')
+    expect(backupDataToSnapshot({ ...baseBackup, expenses: [historicalExpense] }).expenses[0])
+      .not.toHaveProperty('personalName')
+  })
+
   it('incluye incomeAdditionals en el snapshot resultante', () => {
     const additional = { id: 1, incomeId: 5, amount: 10, createdAt: '2026-01-01T00:00:00.000Z' }
 

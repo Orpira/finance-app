@@ -1,7 +1,6 @@
 import type { Expense } from '../types/expense'
 import type { Appointment } from '../types/appointment'
 import type { ServiceIncome } from '../types/service'
-import type { UsageMode } from '../types/settings'
 import {
   getReportStatusLabel,
   isReported,
@@ -36,26 +35,17 @@ export function getExpenseTypeCode(record: Expense): ExpenseTypeCode {
   return record.type === 'ajuste' ? 'adjustment' : 'expense'
 }
 
-export function isExpenseRecord(record: ReportableRecord): record is Expense {
-  return getRecordTypeCode(record) === 'expense'
-}
-
-export function canMarkAsReported(record: ReportableRecord, usageMode: UsageMode) {
+export function canMarkAsReported(record: ReportableRecord, usageMode: 'basic' | 'professional') {
   if (!recordBelongsToUsageMode(record, usageMode)) return false
-
-  if (usageMode === 'professional') {
-    return (
-      getRecordTypeCode(record) === 'income' &&
-      getIncomeTypeCode(record as ServiceIncome) === 'service'
-    )
-  }
-
-  return isExpenseRecord(record) && getExpenseTypeCode(record) === 'expense'
+  return (
+    getRecordTypeCode(record) === 'income' &&
+    getIncomeTypeCode(record as ServiceIncome) === 'service'
+  )
 }
 
 export function assertCanMarkAsReported(
   record: ReportableRecord,
-  usageMode: UsageMode,
+  usageMode: 'basic' | 'professional',
 ) {
   if (!canMarkAsReported(record, usageMode)) {
     throw new Error(REPORT_STATUS_NOT_ALLOWED_MESSAGE)
@@ -74,7 +64,7 @@ export function hasReportStatusUpdates(updates: object) {
 
 export function assertReportStatusUpdateIsAllowed(
   record: ReportableRecord,
-  usageMode: UsageMode,
+  usageMode: 'basic' | 'professional',
   updates: object,
 ) {
   if (hasReportStatusUpdates(updates)) {
@@ -84,14 +74,14 @@ export function assertReportStatusUpdateIsAllowed(
 
 export function getReportedCountByUsageMode(
   records: ReportableRecord[],
-  usageMode: UsageMode,
+  usageMode: 'basic' | 'professional',
 ) {
   return records.filter(
     (record) => canMarkAsReported(record, usageMode) && isReported(record),
   ).length
 }
 
-export function toggleReportStatus(record: ReportableRecord, usageMode: UsageMode) {
+export function toggleReportStatus(record: ReportableRecord, usageMode: 'basic' | 'professional') {
   assertCanMarkAsReported(record, usageMode)
   return isReported(record) ? markAsPending(record) : markAsReported(record)
 }

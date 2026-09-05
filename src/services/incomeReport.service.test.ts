@@ -212,6 +212,14 @@ describe('markIncomeAsReported', () => {
       reportNotes: 'nota',
     })
   })
+
+  it('rejects writes when the income reporting experience is disabled', async () => {
+    getSettingsMock.mockResolvedValue(baseSettings({ showUnreportedIncome: false }))
+    servicesTable.get.mockResolvedValue(income())
+
+    await expect(markIncomeAsReported(1)).rejects.toThrow('El reporte de ingresos está desactivado.')
+    expect(updateServiceIncomeMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('markIncomeAsPending', () => {
@@ -238,7 +246,7 @@ describe('markIncomeAsPending', () => {
 })
 
 describe('markMultipleIncomesAsReported', () => {
-  it('marks every valid id and collects failures without aborting the batch', async () => {
+  it('validates every id before writing and aborts an invalid mixed batch', async () => {
     servicesTable.get.mockImplementation(async (id: number) => {
       if (id === 1) return income({ id: 1 })
       if (id === 2) return income({ id: 2, type: 'ajuste' })
@@ -251,9 +259,9 @@ describe('markMultipleIncomesAsReported', () => {
 
     const result = await markMultipleIncomesAsReported([1, 2, 3])
 
-    expect(result.succeeded).toEqual([1])
-    expect(result.failed).toHaveLength(2)
-    expect(result.failed.map((failure) => failure.id).sort()).toEqual([2, 3])
+    expect(result.succeeded).toEqual([])
+    expect(result.failed.map((failure) => failure.id).sort()).toEqual([1, 2, 3])
+    expect(updateServiceIncomeMock).not.toHaveBeenCalled()
   })
 })
 
@@ -314,6 +322,13 @@ describe('getPendingIncomes / getPendingIncomeSummary', () => {
       oldestPendingDate: null,
       overdueCount: 0,
     })
+  })
+
+  it('returns no pending incomes when reporting is disabled', async () => {
+    getSettingsMock.mockResolvedValue(baseSettings({ showUnreportedIncome: false }))
+    servicesTable.toArray.mockResolvedValue([income({ id: 1, reportStatusCode: 'pending' })])
+
+    expect(await getPendingIncomes()).toEqual([])
   })
 
   it('excludes pending incomes that belong to a previous (non-active) season', async () => {

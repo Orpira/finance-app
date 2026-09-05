@@ -10,7 +10,7 @@ import {
 import { validateFinancialParity } from '../utils/financialParityValidator'
 import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
-import type { CurrencyCode, UsageMode } from '../types/settings'
+import type { CurrencyCode } from '../types/settings'
 import {
   runSnapshotShadowMode,
   type SnapshotShadowModeInput,
@@ -34,7 +34,7 @@ interface BuildHomeBalanceSummaryInput {
   readonly incomes: readonly ServiceIncome[]
   readonly expenses: readonly Expense[]
   readonly currency: CurrencyCode
-  readonly usageMode: UsageMode
+  readonly usageMode: 'basic' | 'professional'
   readonly earningPeriodId?: number
   readonly scope: 'home.current-month' | 'home.previous-month'
   readonly snapshotShadow?: {

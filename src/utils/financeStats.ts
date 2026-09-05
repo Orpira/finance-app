@@ -1,6 +1,6 @@
 import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
-import type { CurrencyCode, UsageMode } from '../types/settings'
+import type { CurrencyCode } from '../types/settings'
 import { roundMoney } from './currency'
 import { isAdjustmentIncome, isServiceIncome } from './incomeTypes'
 import { getEffectiveFinancialDuration } from './serviceDuration'
@@ -165,7 +165,7 @@ interface CalculateSeasonFinancialResultInput {
   incomes: readonly ServiceIncome[]
   expenses: readonly Expense[]
   currency: CurrencyCode
-  usageMode: UsageMode
+  usageMode: 'basic' | 'professional'
   earningPeriodId?: number
 }
 

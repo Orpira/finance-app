@@ -20,6 +20,7 @@ import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
 import { getSettings } from '../../services/settingsService'
+import { resolveActiveUsageMode } from '../../utils/usageMode'
 import {
   createInsightDashboardMapper,
 } from './insightDashboardMapper'
@@ -110,7 +111,8 @@ class DefaultFinancialDataReader implements InsightDashboardFinancialDataReader 
       listExpenses({ newestFirst: false }),
     ])
 
-    const effectivePeriodId = settings.usageMode === 'professional'
+    const activeUsageMode = resolveActiveUsageMode(settings)
+    const effectivePeriodId = activeUsageMode === 'professional'
       ? activePeriod?.id
       : undefined
 
@@ -118,12 +120,12 @@ class DefaultFinancialDataReader implements InsightDashboardFinancialDataReader 
       incomes,
       expenses,
       currency: settings.defaultCurrency,
-      usageMode: settings.usageMode,
+      usageMode: activeUsageMode,
       ...(effectivePeriodId === undefined ? {} : { earningPeriodId: effectivePeriodId }),
     })
 
     return {
-      usageMode: settings.usageMode,
+      usageMode: activeUsageMode,
       currency: settings.defaultCurrency,
       incomeTotal: engineResult.balanceReport.incomeGrossTotal,
       expenseTotal: engineResult.balanceReport.expenseTotal,

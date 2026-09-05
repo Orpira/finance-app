@@ -69,4 +69,37 @@ describe('movement financial presentation', () => {
       isUnreviewed: false,
     })).toBe(true)
   })
+
+  it('presenta y permite buscar el nombre Personal sin exponerlo en Profesional', () => {
+    const base = {
+      id: 9, date: '2026-09-05', duration: 0, totalAmount: 100, currency: 'EUR',
+      percentage: 100, realGain: 100, eurValue: 100, copValue: 400_000,
+      exchangeRateUsed: 4_000, type: 'ingreso' as const, personalName: 'Venta del portátil',
+    }
+    expect(toUnifiedMovements([{ ...base, usageMode: 'basic' }], [])[0])
+      .toEqual(expect.objectContaining({ label: 'Venta del portátil', searchText: 'Venta del portátil' }))
+    expect(toUnifiedMovements([{ ...base, usageMode: 'professional' }], [])[0].label)
+      .toBe('Servicio #9')
+  })
+
+  it('presenta y permite buscar el nombre Personal de un egreso sin exponerlo en Profesional', () => {
+    const base = {
+      id: 11, type: 'gasto' as const, date: '2026-09-05', category: 'Otros',
+      amount: 50, currency: 'EUR', eurValue: 50, copValue: 200_000,
+      createdAt: '2026-09-05T10:00:00.000Z', personalName: 'Compra supermercado',
+    }
+    expect(toUnifiedMovements([], [{ ...base, usageMode: 'basic' }])[0])
+      .toEqual(expect.objectContaining({ label: 'Compra supermercado', searchText: 'Compra supermercado' }))
+    expect(toUnifiedMovements([], [{ ...base, usageMode: 'professional' }])[0].label)
+      .toBe('Otros')
+  })
+
+  it('usa el fallback "Egreso #ID" en Personal cuando el egreso histórico no tiene nombre', () => {
+    const expenseWithoutName = {
+      id: 12, type: 'gasto' as const, date: '2026-09-05', category: 'Otros',
+      amount: 50, currency: 'EUR', eurValue: 50, copValue: 200_000,
+      createdAt: '2026-09-05T10:00:00.000Z', usageMode: 'basic' as const,
+    }
+    expect(toUnifiedMovements([], [expenseWithoutName])[0].label).toBe('Egreso #12')
+  })
 })

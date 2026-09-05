@@ -9,7 +9,8 @@ import type { ServiceIncome } from '../../../types/service'
 import type { AppSettings, CurrencyCode } from '../../../types/settings'
 import { getStoredIncomeValue } from '../../../utils/financeStats'
 import { isAdjustmentIncome } from '../../../utils/incomeTypes'
-import { recordBelongsToUsageMode } from '../../../utils/usageMode'
+import { getExpenseDisplayName, getIncomeDisplayName } from '../../../utils/activityLabels'
+import { recordBelongsToUsageMode, resolveActiveUsageMode } from '../../../utils/usageMode'
 import {
   type FinancialTransactionFilters,
   type FinancialTransactionInput,
@@ -188,36 +189,44 @@ function normalizeTransactionArguments(
 function mapIncomeToTransaction(income: ServiceIncome, currency: CurrencyCode): UnifiedTransactionRecord {
   const amount = getStoredIncomeValue(income, currency)
   const kind: FinancialTransactionKind = isAdjustmentIncome(income) ? 'adjustment' : 'income'
+  const usageMode = recordBelongsToUsageMode(income, 'professional') ? 'professional' : 'basic'
 
   return {
     transactionId: `income:${String(income.id ?? `${income.date}:${amount}`)}`,
     recordId: income.id ?? 0,
     kind,
     date: income.date,
-    label: income.notes?.trim() || (kind === 'adjustment' ? 'Ajuste de ingreso' : 'Ingreso'),
+    label: usageMode === 'basic'
+      ? getIncomeDisplayName(income)
+      : income.notes?.trim() || (kind === 'adjustment' ? 'Ajuste de ingreso' : 'Ingreso'),
     amount,
     currencyCode: currency,
     status: income.reportStatusCode === 'reported' ? 'reported' : 'pending',
     category: income.paymentType,
-    usageMode: recordBelongsToUsageMode(income, 'professional') ? 'professional' : 'basic',
+    usageMode,
   }
 }
 
 function mapExpenseToTransaction(expense: Expense, currency: CurrencyCode): UnifiedTransactionRecord {
   const amount = currency === 'COP' ? expense.copValue : expense.eurValue
   const kind: FinancialTransactionKind = expense.type === 'ajuste' ? 'adjustment' : 'expense'
+  const usageMode = recordBelongsToUsageMode(expense, 'professional') ? 'professional' : 'basic'
 
   return {
     transactionId: `expense:${String(expense.id ?? `${expense.date}:${amount}`)}`,
     recordId: expense.id ?? 0,
     kind,
     date: expense.date,
-    label: expense.notes?.trim() || expense.category || (kind === 'adjustment' ? 'Ajuste de egreso' : 'Egreso'),
+    label: usageMode === 'basic'
+      ? getExpenseDisplayName(expense)
+      : expense.notes?.trim() || expense.category || (kind === 'adjustment' ? 'Ajuste de egreso' : 'Egreso'),
     amount,
     currencyCode: currency,
-    status: expense.reportStatusCode === 'reported' ? 'reported' : 'pending',
+    // Report status belongs exclusively to incomes. Expenses use the neutral
+    // transaction status required by this read-only AI contract.
+    status: 'cleared',
     category: expense.category,
-    usageMode: recordBelongsToUsageMode(expense, 'professional') ? 'professional' : 'basic',
+    usageMode,
   }
 }
 
@@ -370,7 +379,7 @@ export function createTransactionsToolUseCase(input: TransactionsToolDependencie
     async execute(request) {
       try {
         const settings: AppSettings = await dependencies.getSettings()
-        const effectiveUsageMode: 'basic' | 'professional' = settings.usageMode
+        const effectiveUsageMode: 'basic' | 'professional' = resolveActiveUsageMode(settings)
         const currency = (request.filters?.currencyCode ?? settings.defaultCurrency) as CurrencyCode
         const period = request.filters?.period
         // Fetch in the same repository order `/income` and `/expenses` request

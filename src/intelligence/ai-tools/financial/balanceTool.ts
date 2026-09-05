@@ -8,7 +8,7 @@ import type { Expense } from '../../../types/expense'
 import type { ServiceIncome } from '../../../types/service'
 import type { AppSettings, CurrencyCode } from '../../../types/settings'
 import { isAdjustmentIncome } from '../../../utils/incomeTypes'
-import { recordBelongsToUsageMode } from '../../../utils/usageMode'
+import { recordBelongsToUsageMode, resolveActiveUsageMode } from '../../../utils/usageMode'
 import {
   type FinancialBalanceFilters,
   type FinancialBalanceInput,
@@ -185,7 +185,7 @@ export function createBalanceToolUseCase(input: BalanceToolDependencies = {}): B
     async execute(request) {
       try {
         const settings: AppSettings = await dependencies.getSettings()
-        const usageMode = request.filters?.usageMode ?? settings.usageMode
+        const usageMode = request.filters?.usageMode ?? resolveActiveUsageMode(settings)
         const currency = (request.filters?.currencyCode ?? settings.defaultCurrency) as CurrencyCode
         const period = request.filters?.period
 

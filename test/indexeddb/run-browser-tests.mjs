@@ -173,7 +173,10 @@ try {
   let commandId = 0
   const evaluate = (expression) => new Promise((resolve, reject) => {
     const id = ++commandId
-    const timeout = setTimeout(() => reject(new Error('Chrome evaluation timeout')), 2000)
+    // Vite may still be transforming the larger browser suite when Chrome's
+    // first evaluation arrives. Keep this above the polling cadence so a slow
+    // cold start is not reported as an IndexedDB failure.
+    const timeout = setTimeout(() => reject(new Error('Chrome evaluation timeout')), 10000)
     const listener = (event) => {
       const message = JSON.parse(event.data)
       if (message.id !== id) return

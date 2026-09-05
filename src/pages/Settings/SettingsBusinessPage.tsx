@@ -25,6 +25,7 @@ import {
   getCityOption,
   getCountryCurrency,
 } from '../../utils/countries'
+import { isProfessionalMode } from '../../utils/usageMode'
 
 const rateModes: Array<{ value: RateMode; label: string }> = [
   { value: 'automatic', label: 'Automático' },
@@ -76,7 +77,7 @@ export function SettingsBusinessPage() {
 
     try {
       const resolvedCity =
-        settings.usageMode === 'professional'
+        isProfessionalMode(settings)
           ? await resolveCityOption(settings.city, settings.country)
           : undefined
       const country = resolvedCity?.country ?? settings.country
@@ -218,7 +219,7 @@ export function SettingsBusinessPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
-              {settings.usageMode === 'professional'
+              {isProfessionalMode(settings)
                 ? 'Nombre del negocio'
                 : 'Nombre o alias (opcional)'}
             </span>
@@ -228,7 +229,7 @@ export function SettingsBusinessPage() {
                 updateLocalSettings({ businessName: event.target.value })
               }
               placeholder={
-                settings.usageMode === 'professional'
+                isProfessionalMode(settings)
                   ? 'Mi negocio'
                   : 'Mi espacio financiero'
               }
@@ -237,7 +238,7 @@ export function SettingsBusinessPage() {
             />
           </label>
 
-          {settings.usageMode === 'professional' && (
+          {isProfessionalMode(settings) && (
             <label className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-700">Ciudad</span>
               <input
@@ -335,7 +336,7 @@ export function SettingsBusinessPage() {
 
         
 
-        {settings.usageMode === 'professional' && (
+        {isProfessionalMode(settings) && (
           <fieldset className="flex flex-col gap-3">
             <legend className="text-sm font-medium text-slate-700">
               Método de cálculo del ingreso
@@ -394,7 +395,7 @@ export function SettingsBusinessPage() {
           </fieldset>
         )}
 
-        {settings.usageMode === 'professional' && (
+        {isProfessionalMode(settings) && (
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">
               Porcentaje de la temporada activa

@@ -9,7 +9,11 @@ import {
   getEarningPeriodById,
 } from './earningPeriodService'
 import { getSettings } from './settingsService'
-import { recordBelongsToUsageMode, requiresSeason } from '../utils/usageMode'
+import {
+  recordBelongsToUsageMode,
+  requiresSeason,
+  resolveActiveUsageMode,
+} from '../utils/usageMode'
 import { assertAllExpenseAdjustmentsAreValid } from '../utils/expenseAdjustments'
 import {
   isAdjustmentIncome,
@@ -28,7 +32,7 @@ import {
   normalizeReportStatus,
 } from '../catalogs/reportStatuses'
 import { assertReportStatusUpdateIsAllowed } from '../utils/reportStatus'
-
+import { normalizePersonalIncomeName } from '../utils/personalIncomeName'
 export type CreateServiceIncomeInput = Omit<ServiceIncome, 'id'>
 export type UpdateServiceIncomeInput = Partial<CreateServiceIncomeInput>
 
@@ -60,6 +64,22 @@ function normalizeIncomeByType<T extends CreateServiceIncomeInput>(input: T): T 
   return normalizeAdjustmentIncome(input)
 }
 
+export const PERSONAL_INCOME_CATEGORY_INVALID_ID_MESSAGE = 'PERSONAL_INCOME_CATEGORY_INVALID_ID'
+
+/**
+ * `''`, whitespace-only and `null` all mean "no category" (undefined), matching
+ * the "retirar categoría" contract. Anything that isn't a string or nullish is
+ * rejected outright: a non-string personalCategoryId can never be a real reference.
+ */
+function normalizePersonalCategoryIdInput(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value !== 'string') {
+    throw new Error(PERSONAL_INCOME_CATEGORY_INVALID_ID_MESSAGE)
+  }
+  const trimmed = value.trim()
+  return trimmed === '' ? undefined : trimmed
+}
+
 function normalizePaymentTypeForMethod<T extends CreateServiceIncomeInput>(input: T): T {
   if (shouldCollectPaymentTypeAtRegistration(input.incomeCalculationMethod ?? 'service_duration')) {
     return input
@@ -72,7 +92,30 @@ function normalizePaymentTypeForMethod<T extends CreateServiceIncomeInput>(input
 
 export async function createServiceIncome(input: CreateServiceIncomeInput) {
   const settings = await getSettings()
-  const normalizedInput = normalizePaymentTypeForMethod(normalizeIncomeByType(input))
+  const activeUsageMode = resolveActiveUsageMode(settings)
+  const normalizedPersonalCategoryId = normalizePersonalCategoryIdInput(input.personalCategoryId)
+  const personalCategoryId = activeUsageMode === 'basic'
+    ? normalizedPersonalCategoryId
+    : undefined
+
+  if (activeUsageMode === 'professional' && normalizedPersonalCategoryId !== undefined) {
+    throw new Error('PERSONAL_INCOME_CATEGORY_NOT_ALLOWED_FOR_PROFESSIONAL')
+  }
+
+  if (personalCategoryId) {
+    const category = await db.personalIncomeCategories.get(personalCategoryId)
+    if (!category || category.isArchived || category.usageMode !== 'basic') {
+      throw new Error('La categoría de ingreso personal no es válida.')
+    }
+  }
+
+  const normalizedInput = normalizePaymentTypeForMethod(normalizeIncomeByType({
+    ...input,
+    personalName: activeUsageMode === 'basic'
+      ? normalizePersonalIncomeName(input.personalName)
+      : undefined,
+    personalCategoryId,
+  }))
   const incomeId = await db.transaction(
     'rw',
     [db.services, db.automationOutbox, db.earningPeriods],
@@ -92,7 +135,10 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
         status: 'PENDIENTE',
         ...normalizedInput,
         type: normalizedInput.type ?? 'ingreso',
-        usageMode: settings.usageMode,
+        usageMode: activeUsageMode,
+        paymentType: activeUsageMode === 'basic'
+          ? undefined
+          : normalizedInput.paymentType,
         earningPeriodId: earningPeriod?.id,
         seasonPeriodId: earningPeriod?.id,
         earningPercentage: isServiceIncome(normalizedInput)
@@ -182,11 +228,11 @@ export async function updateServiceIncome(
   const currentIncome = await db.services.get(id)
   if (
     !currentIncome ||
-    !recordBelongsToUsageMode(currentIncome, settings.usageMode)
+    !recordBelongsToUsageMode(currentIncome, resolveActiveUsageMode(settings))
   ) {
     throw new Error('Este ingreso pertenece a otro modo de uso.')
   }
-  assertReportStatusUpdateIsAllowed(currentIncome, settings.usageMode, updates)
+  assertReportStatusUpdateIsAllowed(currentIncome, resolveActiveUsageMode(settings), updates)
   assertReportedRecordUpdateIsAllowed(currentIncome, updates)
   return db.transaction('rw', [db.services, db.expenses, db.earningPeriods], async () => {
     const [latestIncome, incomes, expenses] = await Promise.all([
@@ -195,10 +241,10 @@ export async function updateServiceIncome(
       db.expenses.toArray(),
     ])
     if (!latestIncome) throw new Error('El ingreso que intentas modificar no existe.')
-    if (!recordBelongsToUsageMode(latestIncome, settings.usageMode)) {
+    if (!recordBelongsToUsageMode(latestIncome, resolveActiveUsageMode(settings))) {
       throw new Error('Este ingreso pertenece a otro modo de uso.')
     }
-    assertReportStatusUpdateIsAllowed(latestIncome, settings.usageMode, updates)
+    assertReportStatusUpdateIsAllowed(latestIncome, resolveActiveUsageMode(settings), updates)
     assertReportedRecordUpdateIsAllowed(latestIncome, updates)
     if (requiresSeason(settings)) {
       await assertRecordIsMutable(latestIncome)
@@ -231,6 +277,29 @@ export async function updateServiceIncome(
     // sección 9): editar Configuración nunca debe alterar ingresos históricos.
     const safeUpdates: UpdateServiceIncomeInput = { ...updates }
     delete safeUpdates.incomeCalculationMethod
+    if (Object.hasOwn(updates, 'personalName')) {
+      safeUpdates.personalName = resolveActiveUsageMode(settings) === 'basic'
+        ? normalizePersonalIncomeName(updates.personalName)
+        : latestIncome.personalName
+    }
+    if (Object.hasOwn(updates, 'personalCategoryId')) {
+      const normalizedCategoryId = normalizePersonalCategoryIdInput(updates.personalCategoryId)
+      if (resolveActiveUsageMode(settings) !== 'basic') {
+        safeUpdates.personalCategoryId = undefined
+      } else if (normalizedCategoryId) {
+        // Keeping the category the income already had is always allowed, even if it
+        // has since been archived (ADR Bloque 6.4 §7): only a *new* assignment of an
+        // archived category is rejected.
+        const isSameAsBefore = normalizedCategoryId === latestIncome.personalCategoryId
+        const category = await db.personalIncomeCategories.get(normalizedCategoryId)
+        if (!category || category.usageMode !== 'basic' || (category.isArchived && !isSameAsBefore)) {
+          throw new Error('La categoría de ingreso personal no es válida.')
+        }
+        safeUpdates.personalCategoryId = normalizedCategoryId
+      } else {
+        safeUpdates.personalCategoryId = undefined
+      }
+    }
     // El tipo de pago se puede modificar al editar, en "Jornada por horas"
     // igual que en "Servicio por tiempo"; si no se envía, se conserva el
     // valor existente en vez de borrarlo.
@@ -242,7 +311,10 @@ export async function updateServiceIncome(
       normalizeReportStatus({
         ...latestIncome,
         ...safeUpdates,
-        usageMode: latestIncome.usageMode ?? settings.usageMode,
+        usageMode: latestIncome.usageMode ?? resolveActiveUsageMode(settings),
+        ...((latestIncome.usageMode ?? resolveActiveUsageMode(settings)) === 'basic'
+          ? { paymentType: undefined }
+          : {}),
         updatedAt: new Date().toISOString(),
       }),
     )
@@ -260,7 +332,7 @@ export async function deleteServiceIncome(id: number) {
   const currentIncome = await db.services.get(id)
   if (
     !currentIncome ||
-    !recordBelongsToUsageMode(currentIncome, settings.usageMode)
+    !recordBelongsToUsageMode(currentIncome, resolveActiveUsageMode(settings))
   ) {
     throw new Error('Este ingreso pertenece a otro modo de uso.')
   }

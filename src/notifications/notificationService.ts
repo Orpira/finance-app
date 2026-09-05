@@ -1,3 +1,5 @@
+import { getSettings } from '../services/settingsService'
+import { resolveActiveUsageMode } from '../utils/usageMode'
 import {
   createNotificationDeliveryService,
   type NotificationDeliveryService,
@@ -6,6 +8,7 @@ import { DEFAULT_NOTIFICATION_PREFERENCES } from './notificationDefaults'
 import { DEFAULT_COOLDOWN_MS, NOTIFICATION_COOLDOWNS } from './notificationLimits'
 import { getStoredNotificationPreferences } from './notificationPreferencesStore'
 import { evaluateNotificationCandidate } from './notificationPolicyEngine'
+import { isNotificationSourceVisibleInContext } from './notificationVisibility'
 import { createDexieNotificationRepository, type NotificationRepository } from './notificationRepository'
 import type {
   CopilotNotification,
@@ -26,6 +29,8 @@ export interface NotificationServiceDeps {
   getPreferences?: () => Promise<NotificationPreferences>
   now?: () => Date
   deliveryService?: NotificationDeliveryService
+  /** Contexto activo para filtrar en lectura las notificaciones exclusivas de Profesional (ver notificationVisibility.ts). */
+  getActiveUsageMode?: () => Promise<'basic' | 'professional'>
 }
 
 export function createNotificationService(deps: NotificationServiceDeps = {}) {
@@ -34,6 +39,8 @@ export function createNotificationService(deps: NotificationServiceDeps = {}) {
   const now = deps.now ?? (() => new Date())
   const deliveryService =
     deps.deliveryService ?? createNotificationDeliveryService({ repository, getPreferences })
+  const getActiveUsageMode =
+    deps.getActiveUsageMode ?? (async () => resolveActiveUsageMode(await getSettings()))
 
   async function sweepExpired(currentTime: Date) {
     const all = await repository.list()
@@ -86,15 +93,22 @@ export function createNotificationService(deps: NotificationServiceDeps = {}) {
     return decision
   }
 
+  async function listVisibleNotifications(): Promise<CopilotNotification[]> {
+    const [all, activeUsageMode] = await Promise.all([repository.list(), getActiveUsageMode()])
+    return all.filter((notification) =>
+      isNotificationSourceVisibleInContext(notification.source, activeUsageMode),
+    )
+  }
+
   async function listNotifications(): Promise<CopilotNotification[]> {
     await sweepExpired(now())
-    return repository.list()
+    return listVisibleNotifications()
   }
 
   async function countUnread(): Promise<number> {
     await sweepExpired(now())
-    const all = await repository.list()
-    return all.filter((notification) => notification.status === 'new').length
+    const visible = await listVisibleNotifications()
+    return visible.filter((notification) => notification.status === 'new').length
   }
 
   async function markSeen(id: string) {

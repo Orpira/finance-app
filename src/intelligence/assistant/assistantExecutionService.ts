@@ -8,6 +8,7 @@ import { financialGoalService } from '../../services/financialGoalService'
 import { exportCopilotPeriodReport } from '../../services/copilotReportExportService'
 import { createDefaultAppointmentReminders } from '../../utils/appointmentReminders'
 import { calculateStoredRealGain } from '../../utils/realGain'
+import { resolveActiveUsageMode } from '../../utils/usageMode'
 import { recordAssistantAudit } from './assistantAuditLog'
 import { assertProposalReadyForExecution } from './assistantExecutionGuard'
 import type { AssistantProposalRecord } from './assistantProposalContracts'
@@ -111,7 +112,7 @@ async function executeByKind(proposal: AssistantProposalRecord): Promise<number 
     const realGain = calculateStoredRealGain({
       totalAmount,
       percentage: 0,
-      usageMode: settings.usageMode,
+      usageMode: resolveActiveUsageMode(settings),
       incomeType: 'otro',
     })
 

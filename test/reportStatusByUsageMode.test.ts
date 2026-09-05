@@ -27,6 +27,11 @@ const professionalHourlyWorkday = {
   incomeCalculationMethod: 'hourly_workday',
 } as ServiceIncome
 
+const basicIncome = {
+  ...professionalService,
+  usageMode: 'basic',
+} as ServiceIncome
+
 const basicExpense = {
   type: 'gasto',
   usageMode: 'basic',
@@ -56,8 +61,9 @@ describe('report status rules by usage mode', () => {
     expect(canMarkAsReported(appointment, 'professional')).toBe(false)
   })
 
-  it('allows only regular expenses in basic mode', () => {
-    expect(canMarkAsReported(basicExpense, 'basic')).toBe(true)
+  it('allows regular incomes and never expenses in basic mode', () => {
+    expect(canMarkAsReported(basicIncome, 'basic')).toBe(true)
+    expect(canMarkAsReported(basicExpense, 'basic')).toBe(false)
     expect(canMarkAsReported(basicAdjustment, 'basic')).toBe(false)
     expect(canMarkAsReported(professionalService, 'basic')).toBe(false)
     expect(canMarkAsReported(appointment, 'basic')).toBe(false)
@@ -73,11 +79,11 @@ describe('report status rules by usage mode', () => {
     ]
 
     expect(getReportedCountByUsageMode(records, 'professional')).toBe(1)
-    expect(getReportedCountByUsageMode(records, 'basic')).toBe(1)
+    expect(getReportedCountByUsageMode([...records, basicIncome], 'basic')).toBe(1)
   })
 
   it('blocks toggling an ineligible record even when called outside the UI', () => {
-    expect(() => toggleReportStatus(basicExpense, 'professional')).toThrow(
+    expect(() => toggleReportStatus(basicExpense, 'basic')).toThrow(
       'Este tipo de registro no se puede marcar como reportado en el modo de uso activo.',
     )
   })

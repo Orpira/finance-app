@@ -1,5 +1,7 @@
 import type { CurrencyCode } from './settings'
 
+export type FinancialGoalUsageMode = 'basic' | 'professional'
+
 export type FinancialGoalType = 'saving' | 'expense_limit' | 'income_target'
 export type FinancialGoalStatus = 'active' | 'completed' | 'paused' | 'cancelled'
 
@@ -13,6 +15,7 @@ export interface FinancialGoal {
   readonly startDate: string
   readonly endDate?: string
   readonly status: FinancialGoalStatus
+  readonly usageMode?: FinancialGoalUsageMode
   readonly createdAt: string
   readonly updatedAt: string
 }

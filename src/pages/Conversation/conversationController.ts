@@ -285,6 +285,21 @@ export function createConversationController(
         return
       }
 
+      if (interpretation.kind === 'capability-denied') {
+        const assistantErrorMessage = createAssistantMessage({
+          id: `conversation:assistant:capability-denied:${turn}`,
+          text: toAssistantErrorMessage(interpretation.safeMessage),
+          createdAt: now(),
+        })
+
+        emit({
+          status: 'error',
+          messages: [...baseMessages, assistantErrorMessage],
+          errorMessage: assistantErrorMessage.text,
+        })
+        return
+      }
+
       if (interpretation.kind === 'proposal') {
         const assistantMessage = createAssistantMessage({
           id: `conversation:assistant:proposal:${turn}`,

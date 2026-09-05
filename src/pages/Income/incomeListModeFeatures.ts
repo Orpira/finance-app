@@ -2,7 +2,7 @@ import type { AppSettings } from '../../types/settings'
 import { isBasicMode } from '../../utils/usageMode'
 
 export function getIncomeListModeFeatures(
-  settings: Pick<AppSettings, 'usageMode' | 'userType'> | null,
+  settings: Pick<AppSettings, 'usageMode' | 'userType' | 'activeContext'> | null,
 ) {
   const professionalFeaturesEnabled = Boolean(
     settings && !isBasicMode(settings),

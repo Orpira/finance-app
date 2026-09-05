@@ -19,7 +19,11 @@ import {
   getStoredExpenseValue,
   getStoredIncomeValue,
 } from '../utils/financeStats'
-import { isBasicMode, recordBelongsToUsageMode } from '../utils/usageMode'
+import {
+  isBasicMode,
+  recordBelongsToUsageMode,
+  resolveActiveUsageMode,
+} from '../utils/usageMode'
 import { listAppointments } from './appointmentService'
 import { getActiveEarningPeriod } from './earningPeriodService'
 import { listExpenses } from './expenseService'
@@ -263,7 +267,7 @@ export function createFinancialCopilotService(
         records: readonly T[],
         restrictToActivePeriod: boolean,
       ) => records.filter((record) => {
-        if (!recordBelongsToUsageMode(record, settings.usageMode)) return false
+        if (!recordBelongsToUsageMode(record, resolveActiveUsageMode(settings))) return false
         if (!restrictToActivePeriod || periodId === undefined) return true
         return record.earningPeriodId === periodId || record.seasonPeriodId === periodId
       })
@@ -278,7 +282,9 @@ export function createFinancialCopilotService(
         previousExpenses: filterMode(previousExpenses, false),
         pendingIncome,
         appointments,
-        financialGoals,
+        financialGoals: financialGoals.filter((goal) =>
+          goal.usageMode === resolveActiveUsageMode(settings),
+        ),
       })
     },
   }

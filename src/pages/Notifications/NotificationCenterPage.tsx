@@ -40,6 +40,13 @@ export function NotificationCenterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    window.addEventListener('finance-app:settings-changed', refresh)
+    return () => window.removeEventListener('finance-app:settings-changed', refresh)
+    // The service is the stable app singleton; this listener must follow the real context event.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function handleDismiss(id: string) {
     await service.dismiss(id)
     notifyNotificationsChanged()

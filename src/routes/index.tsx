@@ -27,7 +27,11 @@ import ReportsPage from '../pages/Reports/ReportsPage'
 import SettingsBackupPage from '../pages/Settings/SettingsBackupPage'
 import SettingsBusinessPage from '../pages/Settings/SettingsBusinessPage'
 import SettingsPage from '../pages/Settings/SettingsPage'
+import SettingsCategoriesPage from '../pages/Settings/SettingsCategoriesPage'
+import SettingsPersonalIncomeCategoriesPage from '../pages/Settings/SettingsPersonalIncomeCategoriesPage'
+import SettingsPersonalExpenseCategoriesPage from '../pages/Settings/SettingsPersonalExpenseCategoriesPage'
 import SettingsSecurityPage from '../pages/Settings/SettingsSecurityPage'
+import SettingsUsageModePage from '../pages/Settings/SettingsUsageModePage'
 import SettingsLicensePage from '../pages/Settings/SettingsLicensePage'
 import SettingsNotificationsPage from '../pages/Settings/SettingsNotificationsPage'
 import SettingsDiagnosticsPage from '../pages/Settings/SettingsDiagnosticsPage'
@@ -94,7 +98,20 @@ export function RouterProvider() {
             <Route path="settings/backup" element={<SettingsBackupPage />} />
             <Route path="settings/business" element={<SettingsBusinessPage />} />
             <Route path="settings/notifications" element={<SettingsNotificationsPage />} />
+            <Route path="settings/usage-mode" element={<SettingsUsageModePage />} />
             <Route path="settings/security" element={<SettingsSecurityPage />} />
+            <Route
+              path="settings/categories"
+              element={<UsageModeGuard allowed={['basic']}><SettingsCategoriesPage /></UsageModeGuard>}
+            />
+            <Route
+              path="settings/personal-income-categories"
+              element={<UsageModeGuard allowed={['basic']}><SettingsPersonalIncomeCategoriesPage /></UsageModeGuard>}
+            />
+            <Route
+              path="settings/personal-expense-categories"
+              element={<UsageModeGuard allowed={['basic']}><SettingsPersonalExpenseCategoriesPage /></UsageModeGuard>}
+            />
             <Route path="settings/license" element={<SettingsLicensePage />} />
             <Route path="settings/diagnostics" element={<SettingsDiagnosticsPage />} />
             <Route path="settings/communication-channels" element={<DevOnlyGuard><CommunicationChannelsPage /></DevOnlyGuard>} />

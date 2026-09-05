@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, House } from 'lucide-react'
+import { BriefcaseBusiness, House, Layers } from 'lucide-react'
 import { useState } from 'react'
 
 import { configureOnboardingUsageMode } from '../../../services/onboardingService'
@@ -26,6 +26,13 @@ const usageOptions = [
     tagline: 'Para controlar tu trabajo y tus ganancias.',
     value: 'professional' as const,
   },
+  {
+    complement: 'Gestiona por separado tus finanzas personales y profesionales, alternando entre ambas cuando quieras.',
+    icon: Layers,
+    label: 'Profesional + Personal',
+    tagline: 'Dos espacios independientes en la misma app.',
+    value: 'hybrid' as const,
+  },
 ]
 
 export function UsageStep({ currentStep, onNext, onBack }: UsageStepProps) {
@@ -43,7 +50,7 @@ export function UsageStep({ currentStep, onNext, onBack }: UsageStepProps) {
     setError('')
     try {
       await configureOnboardingUsageMode(usageMode)
-      onNext(usageMode === 'professional' ? 2 : 4)
+      onNext(usageMode === 'professional' || usageMode === 'hybrid' ? 2 : 4)
     } catch {
       setError('No se pudo guardar tu selección.')
     } finally {
@@ -100,18 +107,6 @@ export function UsageStep({ currentStep, onNext, onBack }: UsageStepProps) {
             </span>
           </label>
         ))}
-        <label className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 text-left opacity-60 dark:border-slate-700 dark:bg-slate-800">
-          <input className="mt-1 size-4" disabled type="radio" />
-          <span>
-            <span className="block text-sm font-semibold">Profesional + Personal</span>
-            <span className="mt-1 block text-xs text-slate-500">
-              Gestiona por separado tus finanzas personales y profesionales.
-            </span>
-            <span className="mt-1 block text-xs font-medium text-slate-400 dark:text-slate-500">
-              Próximamente
-            </span>
-          </span>
-        </label>
       </fieldset>
       <p aria-live="polite" className="min-h-5 text-center text-sm text-red-600">{error}</p>
     </OnboardingLayout>
