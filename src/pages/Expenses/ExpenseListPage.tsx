@@ -16,10 +16,15 @@ import { deleteExpense, listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
+import {
+  listPersonalExpenseCategories,
+  PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT,
+} from '../../services/personalExpenseCategoryService'
 import type { Expense } from '../../types/expense'
+import type { PersonalExpenseCategory } from '../../types/personalExpenseCategory'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
-import { getExpenseDisplayName } from '../../utils/activityLabels'
+import { getExpenseCategoryBadgeLabel, getExpenseDisplayName } from '../../utils/activityLabels'
 import { formatCurrency } from '../../utils/currency'
 import { getFinancialListEmptyReason } from '../../utils/financialListEmptyState'
 import { isLocationSeasonClosed } from '../../utils/locationSeasons'
@@ -67,6 +72,7 @@ export function ExpenseListPage() {
   const { confirm } = useDialog()
   const { hidden } = useSensitiveValues()
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [personalCategories, setPersonalCategories] = useState<PersonalExpenseCategory[]>([])
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [activePeriodId, setActivePeriodId] = useState<number>()
@@ -100,6 +106,12 @@ export function ExpenseListPage() {
   useEffect(() => {
     let isMounted = true
 
+    async function loadPersonalCategories(currentSettings: AppSettings) {
+      return isBasicMode(currentSettings)
+        ? listPersonalExpenseCategories({ archived: 'all' })
+        : []
+    }
+
     async function loadInitialData() {
       const [currentExpenses, currentIncomes, currentSettings, activePeriod] = await Promise.all([
         listExpenses({ newestFirst: true }),
@@ -107,6 +119,7 @@ export function ExpenseListPage() {
         getSettings(),
         getActiveEarningPeriod(),
       ])
+      const currentPersonalCategories = await loadPersonalCategories(currentSettings)
 
       if (!isMounted) {
         return
@@ -120,6 +133,7 @@ export function ExpenseListPage() {
       )
       setSettings(currentSettings)
       setActivePeriodId(activePeriod?.id)
+      setPersonalCategories(currentPersonalCategories)
       setIsLoading(false)
     }
 
@@ -127,10 +141,11 @@ export function ExpenseListPage() {
 
     async function handleSettingsChanged(event: Event) {
       const nextSettings = (event as CustomEvent<AppSettings>).detail
-      const [currentExpenses, currentIncomes, activePeriod] = await Promise.all([
+      const [currentExpenses, currentIncomes, activePeriod, currentPersonalCategories] = await Promise.all([
         listExpenses({ newestFirst: true }),
         listServiceIncomes({ newestFirst: true }),
         getActiveEarningPeriod(),
+        loadPersonalCategories(nextSettings),
       ])
 
       if (!isMounted) {
@@ -142,14 +157,25 @@ export function ExpenseListPage() {
       setActivePeriodId(nextActivePeriodId)
       setExpenses(filterExpensesByMode(currentExpenses, nextSettings, nextActivePeriodId))
       setIncomes(filterIncomesByMode(currentIncomes, nextSettings, nextActivePeriodId))
+      setPersonalCategories(currentPersonalCategories)
       setExpensePage(1)
     }
 
+    async function handlePersonalExpenseCategoriesChanged() {
+      const currentSettings = await getSettings()
+      const currentPersonalCategories = await loadPersonalCategories(currentSettings)
+      if (isMounted) {
+        setPersonalCategories(currentPersonalCategories)
+      }
+    }
+
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
+    window.addEventListener(PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT, handlePersonalExpenseCategoriesChanged)
 
     return () => {
       isMounted = false
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
+      window.removeEventListener(PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT, handlePersonalExpenseCategoriesChanged)
     }
   }, [])
 
@@ -253,8 +279,16 @@ export function ExpenseListPage() {
                           Ajuste
                         </span>
                       )}
-                      <p className="font-medium text-slate-950">
+                      <p className="flex flex-wrap items-center gap-2 font-medium text-slate-950">
                         {getExpenseDisplayName(expense)}
+                        {(() => {
+                          const categoryBadge = getExpenseCategoryBadgeLabel(expense, personalCategories)
+                          return categoryBadge ? (
+                            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                              {categoryBadge}
+                            </span>
+                          ) : null
+                        })()}
                       </p>
                       {expense.type !== 'ajuste' && (
                         <p className="mt-1 text-sm text-slate-500">

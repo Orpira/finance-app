@@ -19,6 +19,10 @@ import {
   listPersonalIncomeCategories,
   PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT,
 } from '../../services/personalIncomeCategoryService'
+import {
+  listPersonalExpenseCategories,
+  PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT,
+} from '../../services/personalExpenseCategoryService'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
 import { isBasicMode, resolveActiveUsageMode } from '../../utils/usageMode'
@@ -107,14 +111,17 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
           listExpenses({ newestFirst: true }),
           getSettings(),
         ])
-        const personalCategories = isBasicMode(settings)
-          ? await listPersonalIncomeCategories({ archived: 'all' })
-          : []
+        const [personalIncomeCategories, personalExpenseCategories] = isBasicMode(settings)
+          ? await Promise.all([
+              listPersonalIncomeCategories({ archived: 'all' }),
+              listPersonalExpenseCategories({ archived: 'all' }),
+            ])
+          : [[], []]
         if (cancelled) return
         const activeUsageMode = resolveActiveUsageMode(settings)
         const scopedIncomes = scopeRecordsByUsageMode(incomes, activeUsageMode)
         const scopedExpenses = scopeRecordsByUsageMode(expenses, activeUsageMode)
-        setMovements(toUnifiedMovements(scopedIncomes, scopedExpenses, personalCategories))
+        setMovements(toUnifiedMovements(scopedIncomes, scopedExpenses, personalIncomeCategories, personalExpenseCategories))
         setShowUnreportedIncome(settings.showUnreportedIncome)
       } catch (error) {
         console.warn('No se pudieron cargar los movimientos.', error)
@@ -134,11 +141,13 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
 
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
     window.addEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, loadMovements)
+    window.addEventListener(PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT, loadMovements)
 
     return () => {
       cancelled = true
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
       window.removeEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, loadMovements)
+      window.removeEventListener(PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT, loadMovements)
     }
   }, [])
 

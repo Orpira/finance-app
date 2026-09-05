@@ -1,5 +1,6 @@
 import type { Appointment } from '../types/appointment'
 import type { Expense } from '../types/expense'
+import type { PersonalExpenseCategory } from '../types/personalExpenseCategory'
 import type { PersonalIncomeCategory } from '../types/personalIncomeCategory'
 import type { ServiceIncome } from '../types/service'
 import { getIncomeTypeLabel } from './incomeTypes'
@@ -98,4 +99,23 @@ export function getExpenseDisplayName(expense: Expense) {
   ]
     .filter(Boolean)
     .join(' · ')
+}
+
+/**
+ * Secondary, discreet badge next to the expense's free-text name — never a
+ * replacement for it. Personal-only: Profesional records never carry a
+ * personalCategoryId, so this is naturally undefined for them.
+ */
+export function getExpenseCategoryBadgeLabel(
+  expense: Pick<Expense, 'personalCategoryId' | 'usageMode' | 'earningPeriodId' | 'seasonPeriodId'>,
+  categories: readonly PersonalExpenseCategory[],
+): string | undefined {
+  if (resolveRecordUsageMode(expense) !== 'basic' || !expense.personalCategoryId) {
+    return undefined
+  }
+
+  const category = categories.find((item) => item.id === expense.personalCategoryId)
+  if (!category) return undefined
+
+  return category.isArchived ? `${category.name} · Archivada` : category.name
 }

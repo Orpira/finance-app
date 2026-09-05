@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { getIncomeCategoryBadgeLabel, getIncomeDisplayName } from '../src/utils/activityLabels'
+import {
+  getExpenseCategoryBadgeLabel,
+  getIncomeCategoryBadgeLabel,
+  getIncomeDisplayName,
+} from '../src/utils/activityLabels'
+import type { Expense } from '../src/types/expense'
+import type { PersonalExpenseCategory } from '../src/types/personalExpenseCategory'
 import type { PersonalIncomeCategory } from '../src/types/personalIncomeCategory'
 import type { ServiceIncome } from '../src/types/service'
 
@@ -24,6 +30,33 @@ function category(overrides: Partial<PersonalIncomeCategory> = {}): PersonalInco
     id: 'pic-1',
     name: 'Nómina',
     normalizedName: 'nomina',
+    usageMode: 'basic',
+    isArchived: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function baseExpense(overrides: Partial<Expense> = {}): Expense {
+  return {
+    type: 'gasto',
+    date: '2026-01-01',
+    category: 'Otros',
+    amount: 20,
+    currency: 'EUR',
+    eurValue: 20,
+    copValue: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function expenseCategory(overrides: Partial<PersonalExpenseCategory> = {}): PersonalExpenseCategory {
+  return {
+    id: 'pec-1',
+    name: 'Alimentación',
+    normalizedName: 'alimentacion',
     usageMode: 'basic',
     isArchived: false,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -62,5 +95,32 @@ describe('getIncomeCategoryBadgeLabel', () => {
     const income = baseIncome({ usageMode: 'basic', personalName: 'Freelance diseño', personalCategoryId: 'pic-1' })
     expect(getIncomeDisplayName(income)).toBe('Freelance diseño')
     expect(getIncomeCategoryBadgeLabel(income, [category()])).toBe('Nómina')
+  })
+})
+
+describe('getExpenseCategoryBadgeLabel', () => {
+  it('devuelve undefined cuando el egreso Personal no tiene categoría', () => {
+    const expense = baseExpense({ usageMode: 'basic', personalName: 'Supermercado' })
+    expect(getExpenseCategoryBadgeLabel(expense, [expenseCategory()])).toBeUndefined()
+  })
+
+  it('devuelve el nombre de la categoría activa asignada', () => {
+    const expense = baseExpense({ usageMode: 'basic', personalCategoryId: 'pec-1' })
+    expect(getExpenseCategoryBadgeLabel(expense, [expenseCategory()])).toBe('Alimentación')
+  })
+
+  it('marca una categoría archivada con el sufijo "· Archivada"', () => {
+    const expense = baseExpense({ usageMode: 'basic', personalCategoryId: 'pec-1' })
+    expect(getExpenseCategoryBadgeLabel(expense, [expenseCategory({ isArchived: true })])).toBe('Alimentación · Archivada')
+  })
+
+  it('nunca se expone en un egreso Profesional, aunque el campo esté presente', () => {
+    const expense = baseExpense({ usageMode: 'professional', personalCategoryId: 'pec-1' })
+    expect(getExpenseCategoryBadgeLabel(expense, [expenseCategory()])).toBeUndefined()
+  })
+
+  it('devuelve undefined si la categoría referenciada no existe en la lista', () => {
+    const expense = baseExpense({ usageMode: 'basic', personalCategoryId: 'pec-inexistente' })
+    expect(getExpenseCategoryBadgeLabel(expense, [expenseCategory()])).toBeUndefined()
   })
 })

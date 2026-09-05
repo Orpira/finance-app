@@ -1,10 +1,16 @@
 import type { Expense } from '../../types/expense'
+import type { PersonalExpenseCategory } from '../../types/personalExpenseCategory'
 import type { PersonalIncomeCategory } from '../../types/personalIncomeCategory'
 import type { ServiceIncome } from '../../types/service'
 import type { CurrencyCode } from '../../types/settings'
 import { getStoredExpenseValue, getStoredIncomePrincipalValue } from '../../utils/financeStats'
 import { getIncomeTypeLabel } from '../../utils/incomeTypes'
-import { getExpenseDisplayName, getIncomeCategoryBadgeLabel, getIncomeDisplayName } from '../../utils/activityLabels'
+import {
+  getExpenseCategoryBadgeLabel,
+  getExpenseDisplayName,
+  getIncomeCategoryBadgeLabel,
+  getIncomeDisplayName,
+} from '../../utils/activityLabels'
 import { getRecordReportBadge } from '../../utils/reportStatus'
 import { resolveRecordUsageMode } from '../../utils/usageMode'
 
@@ -35,6 +41,7 @@ export function toUnifiedMovements(
   incomes: ServiceIncome[],
   expenses: Expense[],
   personalIncomeCategories: readonly PersonalIncomeCategory[] = [],
+  personalExpenseCategories: readonly PersonalExpenseCategory[] = [],
 ): UnifiedMovement[] {
   const incomeMovements: UnifiedMovement[] = incomes.map((income) => ({
     key: `income-${income.id}`,
@@ -67,6 +74,7 @@ export function toUnifiedMovements(
       currency: expense.currency,
       href: `/expenses/${expense.id}/editar`,
       category: expense.category,
+      personalCategoryLabel: getExpenseCategoryBadgeLabel(expense, personalExpenseCategories),
       searchText: [label, expense.notes].filter(Boolean).join(' '),
     }
   })
