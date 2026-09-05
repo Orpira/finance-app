@@ -55,7 +55,17 @@ describe('buildSeasonEndingCandidate', () => {
 
     const candidate = await buildSeasonEndingCandidate(NOW)
     expect(candidate?.priority).toBe('P1')
-    expect(await candidate?.revalidate?.()).toBe(true)
+
+    // revalidate() checks against the real wall clock (new Date()) by design,
+    // not against the injected `now` above — pin it so this stays true
+    // regardless of the date this suite happens to run on.
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    try {
+      expect(await candidate?.revalidate?.()).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('revalidate() devuelve false si la temporada ya no está activa', async () => {
