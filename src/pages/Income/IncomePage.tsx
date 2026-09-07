@@ -27,8 +27,10 @@ import {
   PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT,
 } from '../../services/personalIncomeCategoryService'
 import {
+  createWallet,
   getWalletById,
   listWallets,
+  normalizeWalletName,
   WALLETS_CHANGED_EVENT,
 } from '../../services/walletService'
 import type { Wallet } from '../../types/wallet'
@@ -513,6 +515,41 @@ export function IncomePage() {
       })
     }
   }
+
+  async function handleQuickCreateWallet() {
+    const name = await prompt({
+      title: 'Nueva wallet',
+      message: 'Escribe el nombre de la wallet donde quedará este ingreso.',
+      placeholder: 'Ej. Banco, Casa, Ahorros',
+      confirmLabel: 'Crear',
+      validate: (value) => {
+        try {
+          normalizeWalletName(value)
+          return undefined
+        } catch (error) {
+          return error instanceof Error ? error.message : 'Nombre inválido.'
+        }
+      },
+    })
+
+    if (!name) return
+
+    try {
+      const created = await createWallet({ name })
+      setWalletOptions((current) =>
+        [...current.filter((wallet) => wallet.id !== created.id), created]
+          .sort((left, right) => left.name.localeCompare(right.name, 'es')),
+      )
+      setWalletId(created.id)
+      setSaveError('')
+    } catch (error) {
+      await alert({
+        type: 'error',
+        title: 'No se pudo crear la wallet',
+        message: error instanceof Error ? error.message : 'La wallet no se pudo crear.',
+      })
+    }
+  }
   const isServiceType = isBasicUser || isServiceIncome({ type: incomeType })
   const isAdjustmentType = !isBasicUser && isAdjustmentIncome({ type: incomeType })
   const registrationMethod = editingIncome
@@ -934,9 +971,19 @@ export function IncomePage() {
             </div>
 
             <div className="flex flex-col gap-2 md:col-span-2">
-              <label className="text-sm font-medium text-slate-700" htmlFor="income-wallet">
-                Wallet de destino
-              </label>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-medium text-slate-700" htmlFor="income-wallet">
+                  Wallet de destino
+                </label>
+                <button
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+                  onClick={handleQuickCreateWallet}
+                  type="button"
+                >
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  Nueva Wallet
+                </button>
+              </div>
               <select
                 className="h-11 rounded-md border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                 id="income-wallet"
