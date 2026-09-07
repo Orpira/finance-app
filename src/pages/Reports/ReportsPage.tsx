@@ -21,16 +21,29 @@ import { getSeasonGoalProgress, listEarningPeriods } from '../../services/earnin
 import { buildBalanceReport } from '../../services/balanceReportService'
 import { runFinancialEngineShadowMode } from '../../services/financialEngineShadowMode'
 import { groupReportableIncomesByPaymentType } from '../../services/paymentTypeReportService'
+import { listInternalTransfers } from '../../services/internalTransferService'
+import { getWalletBalance, listWallets } from '../../services/walletService'
+import { listPersonalIncomeCategories } from '../../services/personalIncomeCategoryService'
+import { listPersonalExpenseCategories } from '../../services/personalExpenseCategoryService'
 import type { EarningPeriod } from '../../types/earningPeriod'
 import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
+import type { InternalTransfer } from '../../types/internalTransfer'
+import type { Wallet } from '../../types/wallet'
+import type { PersonalIncomeCategory } from '../../types/personalIncomeCategory'
+import type { PersonalExpenseCategory } from '../../types/personalExpenseCategory'
 import {
   isBasicMode,
   recordBelongsToUsageMode,
   resolveActiveUsageMode,
 } from '../../utils/usageMode'
-import { getExpenseDisplayName, getIncomeDisplayName } from '../../utils/activityLabels'
+import {
+  getExpenseCategoryBadgeLabel,
+  getExpenseDisplayName,
+  getIncomeCategoryBadgeLabel,
+  getIncomeDisplayName,
+} from '../../utils/activityLabels'
 import {
   formatCurrency,
 } from '../../utils/currency'
@@ -61,7 +74,7 @@ import {
   type ReportPeriod,
 } from './reportPeriod'
 
-type ReportKind = 'income' | 'expense' | 'paymentType' | 'balance'
+type ReportKind = 'income' | 'expense' | 'paymentType' | 'balance' | 'wallet'
 
 const periods: Array<{ value: ReportPeriod; label: string }> = [
   { value: 'week', label: 'Semana' },
@@ -101,6 +114,17 @@ function getReportCards(isBasicUser: boolean) {
       kind: 'balance' as const,
       title: isBasicUser ? 'Balance general' : 'Balance por temporadas',
     },
+    // Wallets es exclusivo de Personal (spec §15/§16): esta tarjeta nunca se
+    // ofrece en modo Profesional.
+    ...(isBasicUser
+      ? [
+          {
+            description: 'Saldo por wallet, ingresos y egresos agrupados por categoría, y transferencias internas.',
+            kind: 'wallet' as const,
+            title: 'Reporte de wallets',
+          },
+        ]
+      : []),
   ]
 }
 
@@ -194,6 +218,19 @@ function buildPrintableDocument(title: string, body: string) {
       .income-date-table { min-width: 760px; table-layout: fixed; }
       .income-date-table .income-name { width: 38%; }
       .record-meta { color: #64748b; display: block; font-size: 10px; margin-top: 3px; }
+      .category-detail-group { margin: 8px 0 16px; }
+      .category-detail-heading {
+        align-items: baseline;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-bottom: 0;
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+        padding: 7px 8px;
+      }
+      .category-detail-heading span { color: #64748b; font-size: 11px; }
+      .category-detail-group table { margin-bottom: 0; }
       @media print {
         .income-table-scroll { overflow: visible; }
         .income-date-table { font-size: 9px; min-width: 0; }
@@ -201,6 +238,7 @@ function buildPrintableDocument(title: string, body: string) {
         .income-date-table thead { display: table-header-group; }
         .income-date-table tfoot { display: table-row-group; }
         .income-date-table tr { break-inside: avoid; page-break-inside: avoid; }
+        .category-detail-group { break-inside: avoid; page-break-inside: avoid; }
       }
       .subtotal {
         background: #ecfdf5;
@@ -243,6 +281,11 @@ export function ReportsPage() {
   const [loadError, setLoadError] = useState('')
   const [seasons, setSeasons] = useState<EarningPeriod[]>([])
   const [selectedSeason, setSelectedSeason] = useState<string>('ALL')
+  const [wallets, setWallets] = useState<Wallet[]>([])
+  const [walletBalances, setWalletBalances] = useState<Record<string, number>>({})
+  const [periodTransfers, setPeriodTransfers] = useState<InternalTransfer[]>([])
+  const [personalIncomeCategories, setPersonalIncomeCategories] = useState<PersonalIncomeCategory[]>([])
+  const [personalExpenseCategories, setPersonalExpenseCategories] = useState<PersonalExpenseCategory[]>([])
   const isBasicUser = isBasicMode(settings ?? undefined)
   const activeUsageMode = resolveActiveUsageMode(settings ?? undefined)
   const reportCards = useMemo(() => getReportCards(isBasicUser), [isBasicUser])
@@ -274,11 +317,48 @@ export function ReportsPage() {
             listExpenses({ newestFirst: true }),
           ])
 
+        const [
+          currentWallets,
+          allTransfers,
+          currentPersonalIncomeCategories,
+          currentPersonalExpenseCategories,
+        ] = isBasicMode(currentSettings)
+          ? await Promise.all([
+              listWallets({ archived: 'all' }),
+              listInternalTransfers(),
+              listPersonalIncomeCategories({ archived: 'all' }),
+              listPersonalExpenseCategories({ archived: 'all' }),
+            ])
+          : [[], [], [], []]
+
         if (!isMounted) {
           return
         }
 
         setSettings(currentSettings)
+        setWallets(currentWallets)
+        setPeriodTransfers(
+          allTransfers.filter(
+            (transfer) => (!range.from || transfer.date >= range.from) && (!range.to || transfer.date <= range.to),
+          ),
+        )
+        setPersonalIncomeCategories(currentPersonalIncomeCategories)
+        setPersonalExpenseCategories(currentPersonalExpenseCategories)
+
+        // Saldo actual por wallet (spec §9): siempre derivado del histórico
+        // completo, nunca del rango de fechas del reporte. Se precalcula aquí
+        // porque buildReport() es síncrona.
+        if (currentWallets.length > 0) {
+          const balances = await Promise.all(
+            currentWallets.map((wallet) => getWalletBalance(wallet.id, currentSettings.defaultCurrency)),
+          )
+          if (!isMounted) return
+          setWalletBalances(
+            Object.fromEntries(currentWallets.map((wallet, index) => [wallet.id, balances[index]])),
+          )
+        } else {
+          setWalletBalances({})
+        }
         setPeriodIncomes(
           currentIncomes.filter((income) =>
             recordBelongsToUsageMode(income, resolveActiveUsageMode(currentSettings)),
@@ -873,6 +953,7 @@ export function ReportsPage() {
   function buildGroupedTotalsTable(
     title: string,
     rows: Array<{ label: string; count: number; total: number }>,
+    columnLabel = 'Tipo',
   ) {
     if (rows.length === 0) {
       return `
@@ -901,7 +982,7 @@ export function ReportsPage() {
       <table>
         <thead>
           <tr>
-            <th>Tipo</th>
+            <th>${escapeHtml(columnLabel)}</th>
             <th class="amount">Registros</th>
             <th class="amount">Total</th>
           </tr>
@@ -915,6 +996,101 @@ export function ReportsPage() {
           </tr>
         </tfoot>
       </table>
+    `
+  }
+
+  /**
+   * Personal: agrupa por el nombre que la usuaria le puso a cada registro
+   * (`getIncomeDisplayName`/`getExpenseDisplayName`, ya usado en las tablas de
+   * detalle) en lugar de por "tipo" — un concepto profesional (Servicio/Ajuste)
+   * que en Personal siempre colapsa a un único grupo genérico.
+   */
+  function buildGroupedByNameRows<T>(
+    records: readonly T[],
+    getLabel: (record: T) => string,
+    getValue: (record: T) => number,
+  ) {
+    const grouped = new Map<string, { label: string; count: number; total: number }>()
+
+    for (const record of records) {
+      const label = getLabel(record)
+      const current = grouped.get(label) ?? { label, count: 0, total: 0 }
+      current.count += 1
+      current.total += getValue(record)
+      grouped.set(label, current)
+    }
+
+    return Array.from(grouped.values()).sort((left, right) => left.label.localeCompare(right.label, 'es'))
+  }
+
+  function buildGroupedCategoryDetails<T>(
+    records: readonly T[],
+    getLabel: (record: T) => string,
+    getValue: (record: T) => number,
+    getDetail: (record: T) => { date: string; label: string; note?: string },
+  ) {
+    const grouped = new Map<string, {
+      label: string
+      count: number
+      total: number
+      details: Array<{ date: string; label: string; note?: string; value: number }>
+    }>()
+
+    for (const record of records) {
+      const label = getLabel(record)
+      const detail = getDetail(record)
+      const current = grouped.get(label) ?? { label, count: 0, total: 0, details: [] }
+      const value = getValue(record)
+      current.count += 1
+      current.total += value
+      current.details.push({ ...detail, value })
+      grouped.set(label, current)
+    }
+
+    return Array.from(grouped.values())
+      .map((group) => ({
+        ...group,
+        details: [...group.details].sort((left, right) => left.date.localeCompare(right.date)),
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label, 'es'))
+  }
+
+  function buildGroupedCategoryDetailsTable(
+    title: string,
+    rows: ReturnType<typeof buildGroupedCategoryDetails<ServiceIncome | Expense>>,
+  ) {
+    if (rows.length === 0) {
+      return `
+        <h3>${escapeHtml(title)}</h3>
+        <p class="empty">Sin registros.</p>
+      `
+    }
+
+    return `
+      <h3>${escapeHtml(title)}</h3>
+      ${rows.map((row) => `
+        <div class="category-detail-group">
+          <div class="category-detail-heading">
+            <strong>${escapeHtml(row.label)}</strong>
+            <span>${row.count} registro${row.count === 1 ? '' : 's'} · ${escapeHtml(formatCurrency(row.total, primaryCurrency))}</span>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Fecha</th><th>Registro</th><th>Nota</th><th class="amount">Valor</th></tr>
+            </thead>
+            <tbody>
+              ${row.details.map((detail) => `
+                <tr>
+                  <td>${escapeHtml(detail.date)}</td>
+                  <td>${escapeHtml(detail.label)}</td>
+                  <td>${escapeHtml(detail.note ?? '')}</td>
+                  <td class="amount">${escapeHtml(formatCurrency(detail.value, primaryCurrency))}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `).join('')}
     `
   }
 
@@ -965,6 +1141,13 @@ export function ReportsPage() {
   }
 
   function buildBalanceSectionsHtml() {
+    const incomeGroupedRows = isBasicUser
+      ? buildGroupedByNameRows(incomes, getIncomeDisplayName, (income) => getIncomeValue(income, primaryCurrency))
+      : balanceReport.incomesByType
+    const expenseGroupedRows = isBasicUser
+      ? buildGroupedByNameRows(expenses, getExpenseDisplayName, (expense) => getExpenseValue(expense, primaryCurrency))
+      : balanceReport.expensesByType
+
     return `
       <h2>Resumen general</h2>
       <div class="summary">
@@ -973,8 +1156,8 @@ export function ReportsPage() {
         <div><span>Resultado de la temporada</span><strong>${escapeHtml(formatCurrency(balanceReport.netProfit, primaryCurrency))}</strong></div>
         <div><span>Balance general</span><strong>${escapeHtml(formatCurrency(balanceReport.generalBalance, primaryCurrency))}</strong></div>
       </div>
-      ${buildGroupedTotalsTable('Ingresos por tipo', balanceReport.incomesByType)}
-      ${buildGroupedTotalsTable('Egresos por tipo', balanceReport.expensesByType)}
+      ${buildGroupedTotalsTable(isBasicUser ? 'Ingresos por nombre' : 'Ingresos por tipo', incomeGroupedRows, isBasicUser ? 'Ingreso' : 'Tipo')}
+      ${buildGroupedTotalsTable(isBasicUser ? 'Egresos por nombre' : 'Egresos por tipo', expenseGroupedRows, isBasicUser ? 'Egreso' : 'Tipo')}
       ${buildAdjustmentsSection()}
       <h2>Balance final</h2>
       <div class="subtotal">
@@ -989,14 +1172,20 @@ export function ReportsPage() {
   }
 
   function buildBalanceSectionsText() {
-    const incomeByTypeText = balanceReport.incomesByType.length === 0
-      ? 'Sin registros.'
+    const incomeGroupedRows = isBasicUser
+      ? buildGroupedByNameRows(incomes, getIncomeDisplayName, (income) => getIncomeValue(income, primaryCurrency))
       : balanceReport.incomesByType
+    const expenseGroupedRows = isBasicUser
+      ? buildGroupedByNameRows(expenses, getExpenseDisplayName, (expense) => getExpenseValue(expense, primaryCurrency))
+      : balanceReport.expensesByType
+    const incomeByTypeText = incomeGroupedRows.length === 0
+      ? 'Sin registros.'
+      : incomeGroupedRows
           .map((row) => `${row.label}: ${row.count} | ${formatCurrency(row.total, primaryCurrency)}`)
           .join('\n')
-    const expenseByTypeText = balanceReport.expensesByType.length === 0
+    const expenseByTypeText = expenseGroupedRows.length === 0
       ? 'Sin registros.'
-      : balanceReport.expensesByType
+      : expenseGroupedRows
           .map((row) => `${row.label}: ${row.count} | ${formatCurrency(row.total, primaryCurrency)}`)
           .join('\n')
     const adjustmentsText = balanceReport.adjustments.length === 0
@@ -1015,10 +1204,10 @@ export function ReportsPage() {
       `- Resultado de la temporada: ${formatCurrency(balanceReport.netProfit, primaryCurrency)}`,
       `- Balance general: ${formatCurrency(balanceReport.generalBalance, primaryCurrency)}`,
       '',
-      'Ingresos por tipo',
+      isBasicUser ? 'Ingresos por nombre' : 'Ingresos por tipo',
       incomeByTypeText,
       '',
-      'Egresos por tipo',
+      isBasicUser ? 'Egresos por nombre' : 'Egresos por tipo',
       expenseByTypeText,
       '',
       'Ajustes',
@@ -1277,6 +1466,244 @@ export function ReportsPage() {
           ? buildBalanceSectionsText()
           : 'No hay datos para construir el balance con los filtros seleccionados.',
       ].join('\n')
+    }
+
+    if (kind === 'wallet') {
+      const walletIncomesById = new Map<string, ServiceIncome[]>()
+      const walletExpensesById = new Map<string, Expense[]>()
+      incomes.forEach((income) => {
+        if (!income.walletId) return
+        const list = walletIncomesById.get(income.walletId) ?? []
+        list.push(income)
+        walletIncomesById.set(income.walletId, list)
+      })
+      expenses.forEach((expense) => {
+        if (!expense.walletId) return
+        const list = walletExpensesById.get(expense.walletId) ?? []
+        list.push(expense)
+        walletExpensesById.set(expense.walletId, list)
+      })
+      const transfersOutByWallet = new Map<string, InternalTransfer[]>()
+      const transfersInByWallet = new Map<string, InternalTransfer[]>()
+      periodTransfers.forEach((transfer) => {
+        const out = transfersOutByWallet.get(transfer.fromWalletId) ?? []
+        out.push(transfer)
+        transfersOutByWallet.set(transfer.fromWalletId, out)
+        const inList = transfersInByWallet.get(transfer.toWalletId) ?? []
+        inList.push(transfer)
+        transfersInByWallet.set(transfer.toWalletId, inList)
+      })
+      const walletName = (walletId: string) => wallets.find((wallet) => wallet.id === walletId)?.name ?? 'Wallet no disponible'
+
+      // Wallets activas siempre; archivadas solo si tuvieron actividad en el
+      // período, para no ensuciar el reporte con wallets vacías y cerradas.
+      const relevantWallets = wallets
+        .filter((wallet) =>
+          !wallet.isArchived ||
+          walletIncomesById.has(wallet.id) ||
+          walletExpensesById.has(wallet.id) ||
+          transfersOutByWallet.has(wallet.id) ||
+          transfersInByWallet.has(wallet.id),
+        )
+        .sort((left, right) => left.name.localeCompare(right.name, 'es'))
+
+      const walletSummaryRows = relevantWallets.map((wallet) => ({
+        wallet,
+        balance: walletBalances[wallet.id] ?? 0,
+        incomeTotal: (walletIncomesById.get(wallet.id) ?? []).reduce(
+          (sum, income) => sum + getIncomeValue(income, primaryCurrency), 0),
+        expenseTotal: (walletExpensesById.get(wallet.id) ?? []).reduce(
+          (sum, expense) => sum + getExpenseValue(expense, primaryCurrency), 0),
+        transfersIn: (transfersInByWallet.get(wallet.id) ?? []).reduce((sum, transfer) => sum + transfer.amount, 0),
+        transfersOut: (transfersOutByWallet.get(wallet.id) ?? []).reduce((sum, transfer) => sum + transfer.amount, 0),
+      }))
+      const totalBalance = walletSummaryRows.reduce((sum, row) => sum + row.balance, 0)
+
+      function walletLabel(wallet: Wallet) {
+        return `${wallet.name}${wallet.isDefault ? ' (predeterminada)' : ''}${wallet.isArchived ? ' (archivada)' : ''}`
+      }
+
+      const walletSummaryHtml = walletSummaryRows.length === 0
+        ? '<p class="empty">No hay wallets con movimientos en el período seleccionado.</p>'
+        : `
+          <table>
+            <thead>
+              <tr>
+                <th>Wallet</th>
+                <th class="amount">Saldo actual</th>
+                <th class="amount">Ingresos (período)</th>
+                <th class="amount">Egresos (período)</th>
+                <th class="amount">Transferencias recibidas</th>
+                <th class="amount">Transferencias enviadas</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${walletSummaryRows.map((row) => `
+                <tr>
+                  <td>${escapeHtml(walletLabel(row.wallet))}</td>
+                  <td class="amount">${escapeHtml(formatCurrency(row.balance, primaryCurrency))}</td>
+                  <td class="amount">${escapeHtml(formatCurrency(row.incomeTotal, primaryCurrency))}</td>
+                  <td class="amount">${escapeHtml(formatCurrency(row.expenseTotal, primaryCurrency))}</td>
+                  <td class="amount">${escapeHtml(formatCurrency(row.transfersIn, primaryCurrency))}</td>
+                  <td class="amount">${escapeHtml(formatCurrency(row.transfersOut, primaryCurrency))}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>Total (saldo disponible)</td>
+                <td class="amount">${escapeHtml(formatCurrency(totalBalance, primaryCurrency))}</td>
+                <td colspan="4"></td>
+              </tr>
+            </tfoot>
+          </table>
+        `
+      const walletSummaryText = walletSummaryRows.length === 0
+        ? 'No hay wallets con movimientos en el período seleccionado.'
+        : [
+            ...walletSummaryRows.map((row) =>
+              `${walletLabel(row.wallet)}: saldo ${formatCurrency(row.balance, primaryCurrency)} | ` +
+              `ingresos ${formatCurrency(row.incomeTotal, primaryCurrency)} | ` +
+              `egresos ${formatCurrency(row.expenseTotal, primaryCurrency)} | ` +
+              `transferencias recibidas ${formatCurrency(row.transfersIn, primaryCurrency)} | ` +
+              `transferencias enviadas ${formatCurrency(row.transfersOut, primaryCurrency)}`,
+            ),
+            `Total (saldo disponible): ${formatCurrency(totalBalance, primaryCurrency)}`,
+          ].join('\n')
+
+      const walletCategorySections = relevantWallets
+        .filter((wallet) => walletIncomesById.has(wallet.id) || walletExpensesById.has(wallet.id))
+        .map((wallet) => {
+          const incomeByCategory = buildGroupedByNameRows(
+            walletIncomesById.get(wallet.id) ?? [],
+            (income) => getIncomeCategoryBadgeLabel(income, personalIncomeCategories) ?? 'Sin categoría',
+            (income) => getIncomeValue(income, primaryCurrency),
+          )
+          const expenseByCategory = buildGroupedByNameRows(
+            walletExpensesById.get(wallet.id) ?? [],
+            (expense) => getExpenseCategoryBadgeLabel(expense, personalExpenseCategories) ?? 'Sin categoría',
+            (expense) => getExpenseValue(expense, primaryCurrency),
+          )
+          const incomeCategoryDetails = buildGroupedCategoryDetails(
+            walletIncomesById.get(wallet.id) ?? [],
+            (income) => getIncomeCategoryBadgeLabel(income, personalIncomeCategories) ?? 'Sin categoría',
+            (income) => getIncomeValue(income, primaryCurrency),
+            (income) => ({
+              date: income.date,
+              label: getIncomeDisplayName(income),
+              note: income.notes,
+            }),
+          )
+          const expenseCategoryDetails = buildGroupedCategoryDetails(
+            walletExpensesById.get(wallet.id) ?? [],
+            (expense) => getExpenseCategoryBadgeLabel(expense, personalExpenseCategories) ?? 'Sin categoría',
+            (expense) => getExpenseValue(expense, primaryCurrency),
+            (expense) => ({
+              date: expense.date,
+              label: getExpenseDisplayName(expense),
+              note: expense.notes,
+            }),
+          )
+          return { wallet, incomeByCategory, expenseByCategory, incomeCategoryDetails, expenseCategoryDetails }
+        })
+
+      const walletCategorySectionsHtml = walletCategorySections
+        .map(({ wallet, incomeByCategory, expenseByCategory, incomeCategoryDetails, expenseCategoryDetails }) => `
+          <h2>${escapeHtml(wallet.name)}</h2>
+          ${buildGroupedTotalsTable('Ingresos por categoría', incomeByCategory, 'Categoría')}
+          ${buildGroupedCategoryDetailsTable('Detalle de ingresos por categoría', incomeCategoryDetails)}
+          ${buildGroupedTotalsTable('Egresos por categoría', expenseByCategory, 'Categoría')}
+          ${buildGroupedCategoryDetailsTable('Detalle de egresos por categoría', expenseCategoryDetails)}
+        `)
+        .join('')
+      const walletCategorySectionsText = walletCategorySections
+        .map(({ wallet, incomeByCategory, expenseByCategory, incomeCategoryDetails, expenseCategoryDetails }) => [
+          wallet.name,
+          'Ingresos por categoría',
+          incomeByCategory.length === 0
+            ? 'Sin registros.'
+            : incomeByCategory.map((row) => `${row.label}: ${row.count} | ${formatCurrency(row.total, primaryCurrency)}`).join('\n'),
+          'Detalle de ingresos por categoría',
+          incomeCategoryDetails.length === 0
+            ? 'Sin registros.'
+            : incomeCategoryDetails.flatMap((row) => [
+                row.label,
+                ...row.details.map((detail) => `- ${detail.date} | ${detail.label}${detail.note ? ` | ${detail.note}` : ''} | ${formatCurrency(detail.value, primaryCurrency)}`),
+              ]).join('\n'),
+          'Egresos por categoría',
+          expenseByCategory.length === 0
+            ? 'Sin registros.'
+            : expenseByCategory.map((row) => `${row.label}: ${row.count} | ${formatCurrency(row.total, primaryCurrency)}`).join('\n'),
+          'Detalle de egresos por categoría',
+          expenseCategoryDetails.length === 0
+            ? 'Sin registros.'
+            : expenseCategoryDetails.flatMap((row) => [
+                row.label,
+                ...row.details.map((detail) => `- ${detail.date} | ${detail.label}${detail.note ? ` | ${detail.note}` : ''} | ${formatCurrency(detail.value, primaryCurrency)}`),
+              ]).join('\n'),
+        ].join('\n'))
+        .join('\n\n')
+
+      const sortedTransfers = [...periodTransfers].sort((left, right) => left.date.localeCompare(right.date))
+      const transfersTotal = periodTransfers.reduce((sum, transfer) => sum + transfer.amount, 0)
+      const transfersHtml = periodTransfers.length === 0
+        ? '<p class="empty">No hay transferencias entre wallets en el período seleccionado.</p>'
+        : `
+          <table>
+            <thead>
+              <tr><th>Fecha</th><th>Origen</th><th>Destino</th><th class="amount">Importe</th><th>Nota</th></tr>
+            </thead>
+            <tbody>
+              ${sortedTransfers.map((transfer) => `
+                <tr>
+                  <td>${escapeHtml(transfer.date)}</td>
+                  <td>${escapeHtml(walletName(transfer.fromWalletId))}</td>
+                  <td>${escapeHtml(walletName(transfer.toWalletId))}</td>
+                  <td class="amount">${escapeHtml(formatCurrency(transfer.amount, primaryCurrency))}</td>
+                  <td>${escapeHtml(transfer.note ?? '')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3">Total transferido</td>
+                <td class="amount">${escapeHtml(formatCurrency(transfersTotal, primaryCurrency))}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        `
+      const transfersText = periodTransfers.length === 0
+        ? 'No hay transferencias entre wallets en el período seleccionado.'
+        : [
+            ...sortedTransfers.map((transfer) =>
+              `${transfer.date} | ${walletName(transfer.fromWalletId)} → ${walletName(transfer.toWalletId)} | ` +
+              `${formatCurrency(transfer.amount, primaryCurrency)}${transfer.note ? ` | ${transfer.note}` : ''}`,
+            ),
+            `Total transferido: ${formatCurrency(transfersTotal, primaryCurrency)}`,
+          ].join('\n')
+
+      reportHtml = `
+        <div class="meta">Período: ${escapeHtml(dateFrom || '-')} - ${escapeHtml(dateTo || '-')}</div>
+        <h2>Resumen por wallet</h2>
+        ${walletSummaryHtml}
+        ${walletCategorySectionsHtml}
+        <h2>Transferencias internas</h2>
+        <p class="meta">Nunca cuentan como ingreso ni egreso: solo cambian de wallet.</p>
+        ${transfersHtml}
+      `
+      reportText = [
+        `Reporte de wallets`,
+        `Período: ${dateFrom || '-'} - ${dateTo || '-'}`,
+        '',
+        'Resumen por wallet',
+        walletSummaryText,
+        '',
+        walletCategorySectionsText,
+        '',
+        'Transferencias internas (nunca cuentan como ingreso ni egreso)',
+        transfersText,
+      ].filter(Boolean).join('\n')
     }
 
     return {

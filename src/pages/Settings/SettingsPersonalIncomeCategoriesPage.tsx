@@ -297,7 +297,7 @@ export function SettingsPersonalIncomeCategoriesPage() {
               return (
                 <li className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between" key={category.id}>
                   <div>
-                    <p className="font-medium text-slate-900">
+                    <p className="font-medium text-slate-900 dark:text-white">
                       {category.name}
                       {category.isArchived ? (
                         <span className="ml-2 rounded-full border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-600">

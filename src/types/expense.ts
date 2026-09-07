@@ -16,6 +16,9 @@ export interface Expense {
   /** Personal-only metadata resolved against personalExpenseCategories. */
   personalCategoryId?: string;
 
+  /** Optional source Wallet for Personal (`basic`) expenses — where the money left from. */
+  walletId?: string;
+
   date: string;
 
   category: string;

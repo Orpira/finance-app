@@ -15,6 +15,8 @@ import type { CommunicationChannel } from '../types/communicationChannel'
 import type { FinancialGoal } from '../types/financialGoal'
 import type { PersonalIncomeCategory } from '../types/personalIncomeCategory'
 import type { PersonalExpenseCategory } from '../types/personalExpenseCategory'
+import type { Wallet } from '../types/wallet'
+import type { InternalTransfer } from '../types/internalTransfer'
 import { downloadText } from '../utils/download'
 import {
   decryptJsonPayload,
@@ -46,6 +48,8 @@ export interface BackupData {
   financialGoals?: FinancialGoal[]
   personalIncomeCategories?: PersonalIncomeCategory[]
   personalExpenseCategories?: PersonalExpenseCategory[]
+  wallets?: Wallet[]
+  internalTransfers?: InternalTransfer[]
 }
 
 export interface EncryptedBackupFile {
@@ -236,6 +240,8 @@ export function backupDataToSnapshot(backupData: BackupData): DatabaseSnapshot {
     financialGoals,
     personalIncomeCategories: backupData.personalIncomeCategories ?? [],
     personalExpenseCategories: backupData.personalExpenseCategories ?? [],
+    wallets: backupData.wallets ?? [],
+    internalTransfers: backupData.internalTransfers ?? [],
   }
 }
 
@@ -253,6 +259,8 @@ export async function generateBackupData(): Promise<BackupData> {
     financialGoals,
     personalIncomeCategories,
     personalExpenseCategories,
+    wallets,
+    internalTransfers,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -267,6 +275,8 @@ export async function generateBackupData(): Promise<BackupData> {
       db.financialGoals.toArray(),
       db.personalIncomeCategories.toArray(),
       db.personalExpenseCategories.toArray(),
+      db.wallets.toArray(),
+      db.internalTransfers.toArray(),
     ])
 
   return {
@@ -285,6 +295,8 @@ export async function generateBackupData(): Promise<BackupData> {
     financialGoals,
     personalIncomeCategories,
     personalExpenseCategories,
+    wallets,
+    internalTransfers,
   }
 }
 

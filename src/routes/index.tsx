@@ -22,12 +22,15 @@ import InsightDashboardPage from '../pages/Insights/InsightDashboardPage'
 import MorePage from '../pages/More/MorePage'
 import NotificationCenterPage from '../pages/Notifications/NotificationCenterPage'
 import MovementsPage from '../pages/Movements/MovementsPage'
+import TransferFormPage from '../pages/Movements/TransferFormPage'
+import TransferDetailPage from '../pages/Movements/TransferDetailPage'
 import ReportPreviewPage from '../pages/Reports/ReportPreviewPage'
 import ReportsPage from '../pages/Reports/ReportsPage'
 import SettingsBackupPage from '../pages/Settings/SettingsBackupPage'
 import SettingsBusinessPage from '../pages/Settings/SettingsBusinessPage'
 import SettingsPage from '../pages/Settings/SettingsPage'
 import SettingsCategoriesPage from '../pages/Settings/SettingsCategoriesPage'
+import SettingsWalletsPage from '../pages/Settings/SettingsWalletsPage'
 import SettingsPersonalIncomeCategoriesPage from '../pages/Settings/SettingsPersonalIncomeCategoriesPage'
 import SettingsPersonalExpenseCategoriesPage from '../pages/Settings/SettingsPersonalExpenseCategoriesPage'
 import SettingsSecurityPage from '../pages/Settings/SettingsSecurityPage'
@@ -84,6 +87,8 @@ export function RouterProvider() {
             <Route path="expenses/nuevo" element={<ExpensesPage />} />
             <Route path="expenses" element={<ExpenseListPage />} />
             <Route path="movements" element={<MovementsPage />} />
+            <Route path="transfers/nuevo" element={<UsageModeGuard allowed={['basic']}><TransferFormPage /></UsageModeGuard>} />
+            <Route path="transfers/:id" element={<UsageModeGuard allowed={['basic']}><TransferDetailPage /></UsageModeGuard>} />
             <Route path="agenda/nueva" element={<UsageModeGuard allowed={['professional']}><AppointmentFormPage /></UsageModeGuard>} />
             <Route
               path="agenda/:appointmentId/editar"
@@ -111,6 +116,10 @@ export function RouterProvider() {
             <Route
               path="settings/personal-expense-categories"
               element={<UsageModeGuard allowed={['basic']}><SettingsPersonalExpenseCategoriesPage /></UsageModeGuard>}
+            />
+            <Route
+              path="settings/wallets"
+              element={<UsageModeGuard allowed={['basic']}><SettingsWalletsPage /></UsageModeGuard>}
             />
             <Route path="settings/license" element={<SettingsLicensePage />} />
             <Route path="settings/diagnostics" element={<SettingsDiagnosticsPage />} />

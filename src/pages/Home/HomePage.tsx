@@ -50,6 +50,8 @@ import { financialGoalService } from '../../services/financialGoalService'
 import { buildFinancialGoalPresentation } from '../../services/financialGoalPresentation'
 import { HOME_SECTION_ORDER } from './homeSectionOrder'
 import { selectHomeCopilotPresentation } from './homePendingIncomePresentation'
+import { WalletsSummaryCard } from './WalletsSummaryCard'
+import { WalletActivityCard } from './WalletActivityCard'
 import type {
   CivilDate,
   IanaTimeZone,
@@ -624,8 +626,15 @@ export function HomePage() {
             <p className="mt-1 truncate text-xs text-slate-400 dark:text-slate-500">{description}</p>
           </article>
         ))}
+        {isBasicUser && settings ? (
+          <WalletActivityCard currency={settings.defaultCurrency} hidden={hidden} />
+        ) : null}
         </div>
       </section>
+
+      {isBasicUser && (
+        <WalletsSummaryCard currency={settings.defaultCurrency} hidden={hidden} />
+      )}
 
       {!isBasicUser && seasonGoalProgress && activePeriod && (
         <div className="order-3">

@@ -6,6 +6,7 @@ import {
   Layers,
   Stethoscope,
   LockKeyhole,
+  Wallet,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -33,6 +34,14 @@ const settingsLinks = [
     href: '/settings/categories',
     icon: Layers,
     label: 'Categorías',
+    // Personal-only feature: never surfaced while the active context is Profesional.
+    restrictToUsageMode: 'basic' as const,
+  },
+  {
+    description: 'Crea y administra las wallets donde vive tu dinero (cuenta, efectivo, casa...).',
+    href: '/settings/wallets',
+    icon: Wallet,
+    label: 'Wallets',
     // Personal-only feature: never surfaced while the active context is Profesional.
     restrictToUsageMode: 'basic' as const,
   },

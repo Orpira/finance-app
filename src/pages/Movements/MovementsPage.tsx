@@ -1,5 +1,6 @@
 import {
   ArrowDownLeft,
+  ArrowLeftRight,
   ArrowUpRight,
   Search,
   SlidersHorizontal,
@@ -14,6 +15,8 @@ import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { listExpenses } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
+import { INTERNAL_TRANSFERS_CHANGED_EVENT, listInternalTransfers } from '../../services/internalTransferService'
+import { listWallets, WALLETS_CHANGED_EVENT } from '../../services/walletService'
 import { getSettings } from '../../services/settingsService'
 import {
   listPersonalIncomeCategories,
@@ -111,17 +114,20 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
           listExpenses({ newestFirst: true }),
           getSettings(),
         ])
-        const [personalIncomeCategories, personalExpenseCategories] = isBasicMode(settings)
+        const [personalIncomeCategories, personalExpenseCategories, transfers, wallets] = isBasicMode(settings)
           ? await Promise.all([
               listPersonalIncomeCategories({ archived: 'all' }),
               listPersonalExpenseCategories({ archived: 'all' }),
+              listInternalTransfers(),
+              listWallets({ archived: 'all' }),
             ])
-          : [[], []]
+          : [[], [], [], []]
         if (cancelled) return
         const activeUsageMode = resolveActiveUsageMode(settings)
         const scopedIncomes = scopeRecordsByUsageMode(incomes, activeUsageMode)
         const scopedExpenses = scopeRecordsByUsageMode(expenses, activeUsageMode)
-        setMovements(toUnifiedMovements(scopedIncomes, scopedExpenses, personalIncomeCategories, personalExpenseCategories))
+        const scopedTransfers = scopeRecordsByUsageMode(transfers, activeUsageMode)
+        setMovements(toUnifiedMovements(scopedIncomes, scopedExpenses, personalIncomeCategories, personalExpenseCategories, scopedTransfers, wallets))
         setShowUnreportedIncome(settings.showUnreportedIncome)
       } catch (error) {
         console.warn('No se pudieron cargar los movimientos.', error)
@@ -142,12 +148,16 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
     window.addEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, loadMovements)
     window.addEventListener(PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT, loadMovements)
+    window.addEventListener(INTERNAL_TRANSFERS_CHANGED_EVENT, loadMovements)
+    window.addEventListener(WALLETS_CHANGED_EVENT, loadMovements)
 
     return () => {
       cancelled = true
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
       window.removeEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, loadMovements)
       window.removeEventListener(PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT, loadMovements)
+      window.removeEventListener(INTERNAL_TRANSFERS_CHANGED_EVENT, loadMovements)
+      window.removeEventListener(WALLETS_CHANGED_EVENT, loadMovements)
     }
   }, [])
 
@@ -275,13 +285,17 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
                       'flex size-10 shrink-0 items-center justify-center rounded-full',
                       movement.kind === 'income'
                         ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                        : 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
+                        : movement.kind === 'expense'
+                          ? 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                          : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
                     ].join(' ')}
                   >
                     {movement.kind === 'income' ? (
                       <ArrowUpRight className="size-5" aria-hidden="true" />
-                    ) : (
+                    ) : movement.kind === 'expense' ? (
                       <ArrowDownLeft className="size-5" aria-hidden="true" />
+                    ) : (
+                      <ArrowLeftRight className="size-5" aria-hidden="true" />
                     )}
                   </span>
                   <span className="min-w-0">
@@ -290,6 +304,7 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
                     </span>
                     <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
                       {formatDate(movement.date)}
+                      {movement.walletLabel ? ` · ${movement.walletLabel}` : ''}
                       {movement.personalCategoryLabel ? ` · ${movement.personalCategoryLabel}` : ''}
                       {shouldShowMovementReportBadge(showUnreportedIncome, movement.reportBadge)
                         ? ` · ${movement.reportBadge?.label}`
@@ -302,10 +317,12 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
                     'shrink-0 text-sm font-semibold',
                     movement.kind === 'income'
                       ? 'text-emerald-700 dark:text-emerald-300'
-                      : 'text-rose-700 dark:text-rose-300',
+                      : movement.kind === 'expense'
+                        ? 'text-rose-700 dark:text-rose-300'
+                        : 'text-slate-600 dark:text-slate-300',
                   ].join(' ')}
                 >
-                  {movement.kind === 'income' ? '+' : '-'}
+                  {movement.kind === 'income' ? '+' : movement.kind === 'expense' ? '-' : ''}
                   <SensitiveAmount hidden={hidden} value={formatCurrency(movement.amount, movement.currency as CurrencyCode)} />
                 </span>
               </Link>

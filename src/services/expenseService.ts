@@ -50,6 +50,31 @@ function normalizePersonalCategoryIdInput(value: unknown): string | undefined {
   return trimmed === '' ? undefined : trimmed
 }
 
+function normalizeWalletIdInput(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value !== 'string') {
+    throw new Error('WALLET_INVALID_ID')
+  }
+  const trimmed = value.trim()
+  return trimmed === '' ? undefined : trimmed
+}
+
+async function assertWalletAssignment(
+  walletId: string | undefined,
+  usageMode: 'basic' | 'professional',
+  existingWalletId?: string,
+) {
+  if (!walletId) return
+  if (usageMode !== 'basic') {
+    throw new Error('WALLET_NOT_ALLOWED_FOR_PROFESSIONAL')
+  }
+  const wallet = await db.wallets.get(walletId)
+  const isSameAsBefore = walletId === existingWalletId
+  if (!wallet || wallet.usageMode !== 'basic' || (wallet.isArchived && !isSameAsBefore)) {
+    throw new Error('La wallet seleccionada no es válida.')
+  }
+}
+
 async function assertPersonalExpenseCategoryAssignment(
   categoryId: string | undefined,
   usageMode: 'basic' | 'professional',
@@ -88,6 +113,10 @@ export async function createExpense(input: CreateExpenseInput) {
   if (activeUsageMode === 'professional' && normalizedPersonalCategoryId !== undefined) {
     throw new Error('PERSONAL_EXPENSE_CATEGORY_NOT_ALLOWED_FOR_PROFESSIONAL')
   }
+  const normalizedWalletId = normalizeWalletIdInput(input.walletId)
+  if (activeUsageMode === 'professional' && normalizedWalletId !== undefined) {
+    throw new Error('WALLET_NOT_ALLOWED_FOR_PROFESSIONAL')
+  }
   const period =
     requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
 
@@ -104,6 +133,7 @@ export async function createExpense(input: CreateExpenseInput) {
       ? normalizePersonalExpenseName(input.personalName)
       : undefined,
     personalCategoryId: activeUsageMode === 'basic' ? normalizedPersonalCategoryId : undefined,
+    walletId: activeUsageMode === 'basic' ? normalizedWalletId : undefined,
     createdAt,
     earningPeriodId: period?.id,
     seasonPeriodId: period?.id,
@@ -114,11 +144,13 @@ export async function createExpense(input: CreateExpenseInput) {
     db.services,
     db.automationOutbox,
     db.personalExpenseCategories,
+    db.wallets,
   ], async () => {
     await assertPersonalExpenseCategoryAssignment(
       expense.personalCategoryId,
       activeUsageMode,
     )
+    await assertWalletAssignment(expense.walletId, activeUsageMode)
     const [incomes, expenses] = await Promise.all([
       db.services.toArray(),
       db.expenses.toArray(),
@@ -190,7 +222,7 @@ export async function updateExpense(id: number, updates: UpdateExpenseInput) {
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentExpense)
   }
-  return db.transaction('rw', [db.expenses, db.services, db.personalExpenseCategories], async () => {
+  return db.transaction('rw', [db.expenses, db.services, db.personalExpenseCategories, db.wallets], async () => {
     const latestExpense = await db.expenses.get(id)
     if (!latestExpense) throw new Error('El egreso que intentas modificar no existe.')
     assertReportStatusUpdateIsAllowed(latestExpense, resolveActiveUsageMode(settings), updates)
@@ -211,6 +243,15 @@ export async function updateExpense(id: number, updates: UpdateExpenseInput) {
           latestExpense.personalCategoryId,
         )
         safeUpdates.personalCategoryId = normalizedCategoryId
+      }
+    }
+    if (Object.hasOwn(updates, 'walletId')) {
+      const normalizedWalletId = normalizeWalletIdInput(updates.walletId)
+      if (resolveActiveUsageMode(settings) !== 'basic') {
+        safeUpdates.walletId = undefined
+      } else {
+        await assertWalletAssignment(normalizedWalletId, resolveActiveUsageMode(settings), latestExpense.walletId)
+        safeUpdates.walletId = normalizedWalletId
       }
     }
     const updatedExpense: Expense = withoutReportFields({

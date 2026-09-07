@@ -145,6 +145,7 @@ export function MovementFiltersSheet({
               <option value="all">Todos</option>
               <option value="income">Ingresos</option>
               <option value="expense">Gastos</option>
+              <option value="transfer">Transferencias</option>
             </select>
           </label>
 

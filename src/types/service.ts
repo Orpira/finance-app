@@ -23,6 +23,9 @@ export interface ServiceIncome {
   /** Optional category for Personal (`basic`) incomes. */
   personalCategoryId?: string;
 
+  /** Optional destination Wallet for Personal (`basic`) incomes — where the money landed. */
+  walletId?: string;
+
   createdAt?: string;
 
   status?: ServiceIncomeStatus;

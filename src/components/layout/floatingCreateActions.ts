@@ -1,7 +1,7 @@
-import { CalendarPlus, Plus, ReceiptText, TrendingUp } from 'lucide-react'
+import { ArrowLeftRight, CalendarPlus, Plus, ReceiptText, TrendingUp } from 'lucide-react'
 
 import type { UsageMode } from '../../types/settings'
-import { usesProfessionalAgenda } from '../../utils/usageMode'
+import { isBasicMode, usesProfessionalAgenda } from '../../utils/usageMode'
 
 export interface FloatingCreateAction {
   icon: typeof Plus
@@ -20,10 +20,20 @@ const APPOINTMENT_ACTION: FloatingCreateAction = {
   path: '/agenda/nueva',
 }
 
+const TRANSFER_ACTION: FloatingCreateAction = {
+  icon: ArrowLeftRight,
+  label: 'Transferir dinero',
+  path: '/transfers/nuevo',
+}
+
 export function getFloatingCreateActions(
   usageMode: UsageMode,
 ): readonly FloatingCreateAction[] {
-  return usesProfessionalAgenda({ usageMode })
-    ? [...BASE_CREATE_ACTIONS, APPOINTMENT_ACTION]
+  if (usesProfessionalAgenda({ usageMode })) {
+    return [...BASE_CREATE_ACTIONS, APPOINTMENT_ACTION]
+  }
+  // Transferir dinero entre Wallets es exclusivo de Personal (spec §15/§16).
+  return isBasicMode({ usageMode })
+    ? [...BASE_CREATE_ACTIONS, TRANSFER_ACTION]
     : BASE_CREATE_ACTIONS
 }

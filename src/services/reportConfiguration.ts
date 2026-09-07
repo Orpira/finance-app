@@ -1,4 +1,4 @@
-export type ConfigurableReportType = 'all' | 'income' | 'expense' | 'paymentType' | 'balance'
+export type ConfigurableReportType = 'all' | 'income' | 'expense' | 'paymentType' | 'balance' | 'wallet'
 export type ConfigurableReportStatus = 'ALL' | 'reported' | 'unreported'
 export type ConfigurableReportFormat = 'pdf' | 'csv' | 'xlsx'
 

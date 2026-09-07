@@ -25,6 +25,10 @@ const personalIncomeCategoriesTable = {
   get: vi.fn(),
 }
 
+const walletsTable = {
+  get: vi.fn(),
+}
+
 const transactionMock = vi.fn(async (_mode: unknown, _tables: unknown, callback: () => unknown) =>
   callback(),
 )
@@ -37,6 +41,7 @@ vi.mock('../database/db', () => ({
     earningPeriods: {},
     incomeAdditionals: incomeAdditionalsTable,
     personalIncomeCategories: personalIncomeCategoriesTable,
+    wallets: walletsTable,
     transaction: (...args: unknown[]) =>
       transactionMock(...(args as [unknown, unknown, () => unknown])),
   },
@@ -351,6 +356,7 @@ describe('createServiceIncome', () => {
       transactionStarted = true
       expect(tables).toEqual([
         servicesTable,
+        expect.anything(),
         expect.anything(),
         expect.anything(),
       ])

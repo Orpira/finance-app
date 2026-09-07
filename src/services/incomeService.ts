@@ -80,6 +80,28 @@ function normalizePersonalCategoryIdInput(value: unknown): string | undefined {
   return trimmed === '' ? undefined : trimmed
 }
 
+export const WALLET_INVALID_ID_MESSAGE = 'WALLET_INVALID_ID'
+
+function normalizeWalletIdInput(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value !== 'string') {
+    throw new Error(WALLET_INVALID_ID_MESSAGE)
+  }
+  const trimmed = value.trim()
+  return trimmed === '' ? undefined : trimmed
+}
+
+async function assertWalletAssignmentIsValid(walletId: string | undefined, activeUsageMode: 'basic' | 'professional') {
+  if (!walletId) return
+  if (activeUsageMode !== 'basic') {
+    throw new Error('WALLET_NOT_ALLOWED_FOR_PROFESSIONAL')
+  }
+  const wallet = await db.wallets.get(walletId)
+  if (!wallet || wallet.usageMode !== 'basic' || wallet.isArchived) {
+    throw new Error('La wallet seleccionada no es válida.')
+  }
+}
+
 function normalizePaymentTypeForMethod<T extends CreateServiceIncomeInput>(input: T): T {
   if (shouldCollectPaymentTypeAtRegistration(input.incomeCalculationMethod ?? 'service_duration')) {
     return input
@@ -109,16 +131,24 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
     }
   }
 
+  const normalizedWalletId = normalizeWalletIdInput(input.walletId)
+  const walletId = activeUsageMode === 'basic' ? normalizedWalletId : undefined
+  if (activeUsageMode === 'professional' && normalizedWalletId !== undefined) {
+    throw new Error('WALLET_NOT_ALLOWED_FOR_PROFESSIONAL')
+  }
+  await assertWalletAssignmentIsValid(walletId, activeUsageMode)
+
   const normalizedInput = normalizePaymentTypeForMethod(normalizeIncomeByType({
     ...input,
     personalName: activeUsageMode === 'basic'
       ? normalizePersonalIncomeName(input.personalName)
       : undefined,
     personalCategoryId,
+    walletId,
   }))
   const incomeId = await db.transaction(
     'rw',
-    [db.services, db.automationOutbox, db.earningPeriods],
+    [db.services, db.automationOutbox, db.earningPeriods, db.wallets],
     async () => {
       const earningPeriod =
         requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
@@ -234,7 +264,7 @@ export async function updateServiceIncome(
   }
   assertReportStatusUpdateIsAllowed(currentIncome, resolveActiveUsageMode(settings), updates)
   assertReportedRecordUpdateIsAllowed(currentIncome, updates)
-  return db.transaction('rw', [db.services, db.expenses, db.earningPeriods], async () => {
+  return db.transaction('rw', [db.services, db.expenses, db.earningPeriods, db.wallets, db.personalIncomeCategories], async () => {
     const [latestIncome, incomes, expenses] = await Promise.all([
       db.services.get(id),
       db.services.toArray(),
@@ -298,6 +328,23 @@ export async function updateServiceIncome(
         safeUpdates.personalCategoryId = normalizedCategoryId
       } else {
         safeUpdates.personalCategoryId = undefined
+      }
+    }
+    if (Object.hasOwn(updates, 'walletId')) {
+      const normalizedWalletId = normalizeWalletIdInput(updates.walletId)
+      if (resolveActiveUsageMode(settings) !== 'basic') {
+        safeUpdates.walletId = undefined
+      } else if (normalizedWalletId) {
+        // Keeping the wallet the income already had is always allowed, even if it has
+        // since been archived: only a *new* assignment of an archived wallet is rejected.
+        const isSameAsBefore = normalizedWalletId === latestIncome.walletId
+        const wallet = await db.wallets.get(normalizedWalletId)
+        if (!wallet || wallet.usageMode !== 'basic' || (wallet.isArchived && !isSameAsBefore)) {
+          throw new Error('La wallet seleccionada no es válida.')
+        }
+        safeUpdates.walletId = normalizedWalletId
+      } else {
+        safeUpdates.walletId = undefined
       }
     }
     // El tipo de pago se puede modificar al editar, en "Jornada por horas"

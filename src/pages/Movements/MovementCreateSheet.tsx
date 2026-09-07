@@ -1,8 +1,10 @@
-import { ArrowDownLeft, ArrowUpRight, Plus } from 'lucide-react'
-import { useRef } from 'react'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Plus } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { DialogFrame } from '../../components/dialogs/DialogFrame'
+import { getSettings } from '../../services/settingsService'
+import { isBasicMode } from '../../utils/usageMode'
 
 interface MovementCreateSheetProps {
   readonly onCancel: () => void
@@ -10,6 +12,17 @@ interface MovementCreateSheetProps {
 
 export function MovementCreateSheet({ onCancel }: MovementCreateSheetProps) {
   const incomeRef = useRef<HTMLAnchorElement>(null)
+  const [showTransferOption, setShowTransferOption] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    getSettings().then((settings) => {
+      if (!cancelled) setShowTransferOption(isBasicMode(settings))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
     <DialogFrame
@@ -55,6 +68,20 @@ export function MovementCreateSheet({ onCancel }: MovementCreateSheetProps) {
             <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">Registrar una salida de dinero</span>
           </span>
         </Link>
+        {showTransferOption ? (
+          <Link
+            className="flex min-h-16 items-center gap-3 rounded-md border border-slate-200 px-3 text-left transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-slate-800 dark:hover:bg-slate-800"
+            to="/transfers/nuevo"
+          >
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <ArrowLeftRight aria-hidden="true" className="size-5" />
+            </span>
+            <span>
+              <span className="block text-sm font-semibold text-slate-950 dark:text-white">Transferir dinero</span>
+              <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">Mover dinero entre tus wallets</span>
+            </span>
+          </Link>
+        ) : null}
       </div>
     </DialogFrame>
   )

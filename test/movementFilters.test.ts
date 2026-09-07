@@ -64,6 +64,16 @@ describe('movement filters', () => {
     expect(result.map((item) => item.key)).toEqual(['expense-1'])
   })
 
+  it('filtra por tipo "transfer" sin mezclarse con ingresos ni egresos', () => {
+    const withTransfer = [
+      ...movements,
+      { key: 'transfer-1', kind: 'transfer' as const, date: '2026-08-01', category: 'Transferencia', amount: 150, currency: 'EUR', searchText: 'cuenta principal dinero en casa' },
+    ]
+    const defaults = readMovementFilters(new URLSearchParams(), now)
+    const result = applyMovementFilters(withTransfer, { ...defaults, type: 'transfer' })
+    expect(result.map((item) => item.key)).toEqual(['transfer-1'])
+  })
+
   it('filtra hoy, semana, mes y un rango personalizado con límites inclusivos', () => {
     const defaults = readMovementFilters(new URLSearchParams(), now)
 

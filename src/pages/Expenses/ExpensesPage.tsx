@@ -25,8 +25,10 @@ import {
 } from '../../services/personalExpenseCategoryService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
+import { getWalletById, listWallets, WALLETS_CHANGED_EVENT } from '../../services/walletService'
 import type { ExpenseType } from '../../types/expense'
 import type { PersonalExpenseCategory } from '../../types/personalExpenseCategory'
+import type { Wallet } from '../../types/wallet'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import {
@@ -98,6 +100,9 @@ export function ExpensesPage() {
   const [personalCategoryId, setPersonalCategoryId] = useState('')
   const [personalCategoryOptions, setPersonalCategoryOptions] = useState<PersonalExpenseCategory[]>([])
   const [assignedArchivedCategory, setAssignedArchivedCategory] = useState<PersonalExpenseCategory | null>(null)
+  const [walletId, setWalletId] = useState('')
+  const [walletOptions, setWalletOptions] = useState<Wallet[]>([])
+  const [assignedArchivedWallet, setAssignedArchivedWallet] = useState<Wallet | null>(null)
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [exchangeRate, setExchangeRate] = useState(EUR_COP_DEFAULT_RATE)
   const [exchangeRateSource, setExchangeRateSource] =
@@ -152,6 +157,11 @@ export function ExpensesPage() {
       setSettings(currentSettings)
       if (isBasicMode(currentSettings)) {
         setPersonalCategoryOptions(await listPersonalExpenseCategories({ archived: 'active' }))
+        const currentWallets = await listWallets({ archived: 'active' })
+        setWalletOptions(currentWallets)
+        if (!parsedExpenseId) {
+          setWalletId(currentWallets.find((wallet) => wallet.isDefault)?.id ?? '')
+        }
       }
       setCurrency(
         (!isBasicMode(currentSettings) && currentPeriod?.baseCurrency
@@ -256,6 +266,13 @@ export function ExpensesPage() {
           setAssignedArchivedCategory(assignedCategory)
         }
       }
+      setWalletId(currentExpense.walletId ?? '')
+      if (isBasicMode(currentSettings) && currentExpense.walletId) {
+        const assignedWallet = await getWalletById(currentExpense.walletId)
+        if (assignedWallet?.isArchived) {
+          setAssignedArchivedWallet(assignedWallet)
+        }
+      }
 
       if (currentExpense.exchangeRateBaseToSecondary) {
         setExchangeRate(currentExpense.exchangeRateBaseToSecondary)
@@ -280,6 +297,26 @@ export function ExpensesPage() {
       left.name.localeCompare(right.name, 'es'),
     )
   }, [assignedArchivedCategory, personalCategoryOptions])
+
+  const walletSelectOptions = useMemo(() => {
+    if (
+      assignedArchivedWallet === null ||
+      walletOptions.some((walletOption) => walletOption.id === assignedArchivedWallet.id)
+    ) {
+      return walletOptions
+    }
+    return [...walletOptions, assignedArchivedWallet].sort((left, right) =>
+      left.name.localeCompare(right.name, 'es'),
+    )
+  }, [assignedArchivedWallet, walletOptions])
+
+  useEffect(() => {
+    function handleWalletsChanged() {
+      listWallets({ archived: 'active' }).then(setWalletOptions)
+    }
+    window.addEventListener(WALLETS_CHANGED_EVENT, handleWalletsChanged)
+    return () => window.removeEventListener(WALLETS_CHANGED_EVENT, handleWalletsChanged)
+  }, [])
 
   async function handleQuickCreatePersonalCategory() {
     const name = await prompt({
@@ -477,6 +514,7 @@ export function ExpensesPage() {
         city: isBasicUser ? undefined : expenseCity ?? settings.city,
         ...(isBasicUser ? { personalName } : {}),
         ...(isBasicUser ? { personalCategoryId: personalCategoryId || undefined } : {}),
+        ...(isBasicUser ? { walletId: walletId || undefined } : {}),
       }
 
       if (isEditing && parsedExpenseId) {
@@ -597,6 +635,28 @@ export function ExpensesPage() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-slate-700" htmlFor="expense-wallet">
+              Wallet de origen
+            </label>
+            <select
+              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              id="expense-wallet"
+              onChange={(event) => {
+                setWalletId(event.target.value)
+                setValidationError('')
+              }}
+              value={walletId}
+            >
+              <option value="">Sin wallet</option>
+              {walletSelectOptions.map((walletOption) => (
+                <option key={walletOption.id} value={walletOption.id}>
+                  {walletOption.isArchived ? `${walletOption.name} · Archivada` : walletOption.name}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-slate-500">Opcional. Indica de dónde salió el dinero.</span>
           </div>
           </div>
         )}

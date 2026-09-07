@@ -27,6 +27,12 @@ import {
   PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT,
 } from '../../services/personalIncomeCategoryService'
 import {
+  getWalletById,
+  listWallets,
+  WALLETS_CHANGED_EVENT,
+} from '../../services/walletService'
+import type { Wallet } from '../../types/wallet'
+import {
   createServiceIncome,
   getServiceIncomeById,
   listServiceIncomes,
@@ -179,6 +185,9 @@ export function IncomePage() {
   const [personalCategoryId, setPersonalCategoryId] = useState('')
   const [personalCategoryOptions, setPersonalCategoryOptions] = useState<PersonalIncomeCategory[]>([])
   const [assignedArchivedCategory, setAssignedArchivedCategory] = useState<PersonalIncomeCategory | null>(null)
+  const [walletId, setWalletId] = useState('')
+  const [walletOptions, setWalletOptions] = useState<Wallet[]>([])
+  const [assignedArchivedWallet, setAssignedArchivedWallet] = useState<Wallet | null>(null)
   const [date, setDate] = useState(() => formatInputDate(new Date()))
   const [duration, setDuration] = useState(0)
   const [durationLabel, setDurationLabel] =
@@ -233,6 +242,16 @@ export function IncomePage() {
       const currentAssignedArchivedCategory = assignedCategoryIsMissingFromActiveList
         ? await getPersonalIncomeCategoryById(assignedCategoryId)
         : undefined
+      const currentWallets = isBasicMode(currentSettings)
+        ? await listWallets({ archived: 'active' })
+        : []
+      const assignedWalletId = currentIncome?.walletId
+      const assignedWalletIsMissingFromActiveList =
+        assignedWalletId !== undefined &&
+        !currentWallets.some((wallet) => wallet.id === assignedWalletId)
+      const currentAssignedArchivedWallet = assignedWalletIsMissingFromActiveList
+        ? await getWalletById(assignedWalletId)
+        : undefined
 
       if (!isMounted) {
         return
@@ -243,6 +262,8 @@ export function IncomePage() {
       setEditingPeriod(currentIncomePeriod ?? null)
       setPersonalCategoryOptions(currentPersonalCategories)
       setAssignedArchivedCategory(currentAssignedArchivedCategory ?? null)
+      setWalletOptions(currentWallets)
+      setAssignedArchivedWallet(currentAssignedArchivedWallet ?? null)
       setIncomes(
         currentIncomes.filter((income) =>
           recordBelongsToUsageMode(income, resolveActiveUsageMode(currentSettings)),
@@ -297,6 +318,7 @@ export function IncomePage() {
         setEditingIncome(currentIncome)
         setPersonalName(currentIncome.personalName ?? '')
         setPersonalCategoryId(currentIncome.personalCategoryId ?? '')
+        setWalletId(currentIncome.walletId ?? '')
         setIncomeType(getIncomeType(currentIncome))
         setDate(currentIncome.date)
         const currentDuration = getEffectiveFinancialDuration(currentIncome) ?? 0
@@ -334,6 +356,7 @@ export function IncomePage() {
         )
         setHourlyRateApplied(currentSettings.hourlyRate)
         setPersonalCategoryId('')
+        setWalletId(currentWallets.find((wallet) => wallet.isDefault)?.id ?? '')
       }
     }
 
@@ -360,6 +383,25 @@ export function IncomePage() {
     return () => {
       isMounted = false
       window.removeEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, handlePersonalIncomeCategoriesChanged)
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    function handleWalletsChanged() {
+      listWallets({ archived: 'active' }).then((nextWallets) => {
+        if (isMounted) {
+          setWalletOptions(nextWallets)
+        }
+      })
+    }
+
+    window.addEventListener(WALLETS_CHANGED_EVENT, handleWalletsChanged)
+
+    return () => {
+      isMounted = false
+      window.removeEventListener(WALLETS_CHANGED_EVENT, handleWalletsChanged)
     }
   }, [])
 
@@ -423,6 +465,18 @@ export function IncomePage() {
       a.name.localeCompare(b.name, 'es'),
     )
   }, [personalCategoryOptions, assignedArchivedCategory])
+  // Same "keep the currently-assigned wallet selectable even once archived" rule as categories.
+  const walletSelectOptions = useMemo(() => {
+    if (
+      assignedArchivedWallet === null ||
+      walletOptions.some((wallet) => wallet.id === assignedArchivedWallet.id)
+    ) {
+      return walletOptions
+    }
+    return [...walletOptions, assignedArchivedWallet].sort((a, b) =>
+      a.name.localeCompare(b.name, 'es'),
+    )
+  }, [walletOptions, assignedArchivedWallet])
 
   async function handleQuickCreatePersonalCategory() {
     const name = await prompt({
@@ -662,6 +716,7 @@ export function IncomePage() {
         type: isBasicUser ? 'ingreso' : incomeType,
         ...(isBasicUser ? { personalName } : {}),
         ...(isBasicUser ? { personalCategoryId: personalCategoryId || undefined } : {}),
+        ...(isBasicUser ? { walletId: walletId || undefined } : {}),
         date: registrationDate,
         // Personal nunca captura ni persiste tipo de pago (Bloque 3, modos de
         // uso): sin este chequeo, un ingreso Personal nuevo guardaba de todas
@@ -876,6 +931,29 @@ export function IncomePage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="flex flex-col gap-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700" htmlFor="income-wallet">
+                Wallet de destino
+              </label>
+              <select
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                id="income-wallet"
+                onChange={(event) => {
+                  setWalletId(event.target.value)
+                  setSaveError('')
+                }}
+                value={walletId}
+              >
+                <option value="">Sin wallet</option>
+                {walletSelectOptions.map((wallet) => (
+                  <option key={wallet.id} value={wallet.id}>
+                    {wallet.isArchived ? `${wallet.name} · Archivada` : wallet.name}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-slate-500">Opcional. Indica dónde quedó este dinero.</span>
             </div>
           </div>
         )}

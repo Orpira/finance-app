@@ -80,6 +80,15 @@ vi.mock('../../services/personalIncomeCategoryService', async (importOriginal) =
   }
 })
 
+// This suite never exercises Wallets; stub it out so IncomePage's real import of
+// walletService (and therefore the real Dexie `db`) never touches IndexedDB, which
+// this jsdom environment doesn't provide.
+vi.mock('../../services/walletService', () => ({
+  getWalletById: async () => undefined,
+  listWallets: async () => [],
+  WALLETS_CHANGED_EVENT: 'finance-app:wallets-changed',
+}))
+
 const { IncomePage } = await import('./IncomePage')
 
 function basicSettings(): AppSettings {
@@ -171,7 +180,7 @@ describe('IncomePage — categoría de ingreso personal', () => {
     renderIncomePage()
     await screen.findByText('Categoría')
 
-    const select = screen.getByRole('combobox') as HTMLSelectElement
+    const select = screen.getByRole('combobox', { name: 'Categoría' }) as HTMLSelectElement
     fireEvent.change(select, { target: { value: 'pic-1' } })
     expect(select.value).toBe('pic-1')
 
@@ -197,7 +206,7 @@ describe('IncomePage — categoría de ingreso personal', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Crear' }))
 
     await waitFor(() => expect(categoryService.createPersonalIncomeCategory).toHaveBeenCalledWith({ name: 'Reembolsos' }))
-    const select = await screen.findByRole('combobox') as HTMLSelectElement
+    const select = await screen.findByRole('combobox', { name: 'Categoría' }) as HTMLSelectElement
     await waitFor(() => expect(select.value).toBe('pic-2'))
   })
 
@@ -229,7 +238,7 @@ describe('IncomePage — categoría de ingreso personal', () => {
 
     renderIncomePage('/income/42/editar')
 
-    const select = (await screen.findByRole('combobox')) as HTMLSelectElement
+    const select = (await screen.findByRole('combobox', { name: 'Categoría' })) as HTMLSelectElement
     await waitFor(() => expect(select.value).toBe('pic-archived'))
     screen.getByText('Antigua · Archivada')
 

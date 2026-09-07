@@ -15,6 +15,8 @@ const financialGoalsTable = { toArray: vi.fn() }
 const importDatabaseSnapshotMock = vi.fn()
 const personalIncomeCategoriesTable = { toArray: vi.fn() }
 const personalExpenseCategoriesTable = { toArray: vi.fn() }
+const walletsTable = { toArray: vi.fn() }
+const internalTransfersTable = { toArray: vi.fn() }
 
 vi.mock('../database/db', () => ({
   db: {
@@ -29,6 +31,8 @@ vi.mock('../database/db', () => ({
     financialGoals: financialGoalsTable,
     personalIncomeCategories: personalIncomeCategoriesTable,
     personalExpenseCategories: personalExpenseCategoriesTable,
+    wallets: walletsTable,
+    internalTransfers: internalTransfersTable,
   },
   exportDatabaseSnapshot: vi.fn(),
   importDatabaseSnapshot: importDatabaseSnapshotMock,
@@ -67,6 +71,8 @@ beforeEach(() => {
   financialGoalsTable.toArray.mockResolvedValue([])
   personalIncomeCategoriesTable.toArray.mockResolvedValue([])
   personalExpenseCategoriesTable.toArray.mockResolvedValue([])
+  walletsTable.toArray.mockResolvedValue([])
+  internalTransfersTable.toArray.mockResolvedValue([])
   getSettingsMock.mockResolvedValue(settings())
 })
 
@@ -84,6 +90,18 @@ describe('generateBackupData', () => {
     const goal = { id: 'goal-1', type: 'saving', targetAmount: 300 }
     financialGoalsTable.toArray.mockResolvedValue([goal])
     expect((await generateBackupData()).financialGoals).toEqual([goal])
+  })
+
+  it('incluye las wallets y transferencias internas persistidas', async () => {
+    const wallet = { id: 'wal-1', name: 'Cuenta principal' }
+    const transfer = { id: 'itx-1', fromWalletId: 'wal-1', toWalletId: 'wal-2', amount: 150 }
+    walletsTable.toArray.mockResolvedValue([wallet])
+    internalTransfersTable.toArray.mockResolvedValue([transfer])
+
+    const backup = await generateBackupData()
+
+    expect(backup.wallets).toEqual([wallet])
+    expect(backup.internalTransfers).toEqual([transfer])
   })
 })
 
@@ -182,6 +200,51 @@ describe('backupDataToSnapshot', () => {
     })
 
     expect(snapshot.incomeAdditionals).toEqual([])
+  })
+
+  it('incluye wallets y transferencias internas en el snapshot resultante (spec §18)', () => {
+    const wallet = {
+      id: 'wal-1', name: 'Cuenta principal', normalizedName: 'cuenta principal',
+      usageMode: 'basic' as const, isDefault: true, isArchived: false,
+      createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const transfer = {
+      id: 'itx-1', fromWalletId: 'wal-1', toWalletId: 'wal-2', amount: 150, currency: 'EUR',
+      date: '2026-01-05', usageMode: 'basic' as const,
+      createdAt: '2026-01-05T00:00:00.000Z', updatedAt: '2026-01-05T00:00:00.000Z',
+    }
+
+    const snapshot = backupDataToSnapshot({
+      version: '2',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      appName: 'Private Balance',
+      services: [],
+      expenses: [],
+      appointments: [],
+      settings: settings(),
+      exchangeRates: [],
+      wallets: [wallet],
+      internalTransfers: [transfer],
+    })
+
+    expect(snapshot.wallets).toEqual([wallet])
+    expect(snapshot.internalTransfers).toEqual([transfer])
+  })
+
+  it('devuelve arrays vacíos cuando el backup no trae wallets ni transferencias (backups anteriores a Wallets)', () => {
+    const snapshot = backupDataToSnapshot({
+      version: '2',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      appName: 'Private Balance',
+      services: [],
+      expenses: [],
+      appointments: [],
+      settings: settings(),
+      exchangeRates: [],
+    })
+
+    expect(snapshot.wallets).toEqual([])
+    expect(snapshot.internalTransfers).toEqual([])
   })
 })
 

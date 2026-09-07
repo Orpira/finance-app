@@ -20,6 +20,8 @@ import type { PersistedKnowledgeSnapshot } from '../types/persistedKnowledgeSnap
 import type { FinancialGoal } from '../types/financialGoal'
 import type { PersonalIncomeCategory } from '../types/personalIncomeCategory'
 import type { PersonalExpenseCategory } from '../types/personalExpenseCategory'
+import type { Wallet } from '../types/wallet'
+import type { InternalTransfer } from '../types/internalTransfer'
 import {
   resolveRecordUsageMode,
   resolveUsageMode,
@@ -31,6 +33,8 @@ import { assertPersonalIncomeCategoriesAreValid } from '../utils/personalIncomeC
 import { buildNormalizedPersonalIncomeCategoryName } from '../utils/personalIncomeCategoryName'
 import { assertPersonalExpenseCategoriesAreValid } from '../utils/personalExpenseCategoryImport'
 import { buildNormalizedPersonalExpenseCategoryName } from '../utils/personalExpenseCategoryName'
+import { assertWalletsAreValid, assertInternalTransfersAreValid } from '../utils/walletImport'
+import { buildNormalizedWalletName } from '../utils/walletName'
 import { getIncomeType, normalizeAdjustmentIncome } from '../utils/incomeTypes'
 import { getNumericDurationLabel } from '../utils/serviceDuration'
 import { normalizeReportStatus } from '../catalogs/reportStatuses'
@@ -125,6 +129,8 @@ export class FinanceDB extends Dexie {
   notifications!: Table<CopilotNotification, CopilotNotification['id']>
   personalIncomeCategories!: Table<PersonalIncomeCategory, PersonalIncomeCategory['id']>
   personalExpenseCategories!: Table<PersonalExpenseCategory, PersonalExpenseCategory['id']>
+  wallets!: Table<Wallet, Wallet['id']>
+  internalTransfers!: Table<InternalTransfer, InternalTransfer['id']>
 
   constructor() {
     super('finance-app')
@@ -1056,6 +1062,42 @@ export class FinanceDB extends Dexie {
       personalExpenseCategories: 'id,normalizedName,usageMode,isArchived,createdAt,updatedAt,name',
     })
 
+    // PB Wallets: personal-only balance containers + transfers between them.
+    // Additive migration — services/expenses gain an optional walletId index,
+    // existing records are left untouched (walletId stays undefined, meaning
+    // "not tracked in a Wallet"), and the two new tables start empty.
+    this.version(37).stores({
+      services:
+        '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt,personalCategoryId,walletId',
+      expenses: '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode,personalCategoryId,walletId',
+      appointments:
+        '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode',
+      settings: 'id',
+      exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+      cutoffReports:
+        '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+      earningPeriods:
+        '++id,status,startDate,endDate,plannedEndDate,countryCode,city',
+      licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+      automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+      communicationChannels: 'id,type,provider,status,updatedAt',
+      deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+      conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+      knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+      knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+      financialSnapshots:
+        'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+      knowledgeSnapshots:
+        'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+      incomeAdditionals: '++id,incomeId,createdAt',
+      financialGoals: 'id,type,status,startDate,endDate,updatedAt',
+      notifications: 'id,dedupKey,priority,status,createdAt,expiresAt',
+      personalIncomeCategories: 'id,normalizedName,usageMode,isArchived,createdAt,updatedAt,name',
+      personalExpenseCategories: 'id,normalizedName,usageMode,isArchived,createdAt,updatedAt,name',
+      wallets: 'id,normalizedName,usageMode,isDefault,isArchived,createdAt,updatedAt,name',
+      internalTransfers: 'id,fromWalletId,toWalletId,date,usageMode,createdAt',
+    })
+
     this.financialSnapshots.hook('updating', () => {
       throw new Error('SNAPSHOT_PERSISTENCE_APPEND_ONLY')
     })
@@ -1100,6 +1142,8 @@ export async function resetDatabase() {
       db.notifications,
       db.personalIncomeCategories,
       db.personalExpenseCategories,
+      db.wallets,
+      db.internalTransfers,
     ],
     async () => {
       await Promise.all([
@@ -1117,6 +1161,8 @@ export async function resetDatabase() {
         db.notifications.clear(),
         db.personalIncomeCategories.clear(),
         db.personalExpenseCategories.clear(),
+        db.wallets.clear(),
+        db.internalTransfers.clear(),
       ])
 
       await db.settings.put(createDefaultSettings())
@@ -1138,6 +1184,8 @@ export async function exportDatabaseSnapshot() {
     financialGoals,
     personalIncomeCategories,
     personalExpenseCategories,
+    wallets,
+    internalTransfers,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -1152,6 +1200,8 @@ export async function exportDatabaseSnapshot() {
       db.financialGoals.toArray(),
       db.personalIncomeCategories.toArray(),
       db.personalExpenseCategories.toArray(),
+      db.wallets.toArray(),
+      db.internalTransfers.toArray(),
     ])
 
   return {
@@ -1167,6 +1217,8 @@ export async function exportDatabaseSnapshot() {
     financialGoals,
     personalIncomeCategories,
     personalExpenseCategories,
+    wallets,
+    internalTransfers,
     exportedAt: new Date().toISOString(),
   }
 }
@@ -1185,11 +1237,15 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
     const referencedPersonalCategoryId = income.personalCategoryId === ''
       ? undefined
       : income.personalCategoryId
+    const referencedWalletId = income.walletId === '' ? undefined : income.walletId
     if (incomeUsageMode === 'professional' && income.personalName !== undefined) {
       throw new Error('PERSONAL_INCOME_NAME_NOT_ALLOWED_FOR_PROFESSIONAL')
     }
     if (incomeUsageMode === 'professional' && referencedPersonalCategoryId !== undefined) {
       throw new Error('PERSONAL_INCOME_CATEGORY_NOT_ALLOWED_FOR_PROFESSIONAL')
+    }
+    if (incomeUsageMode === 'professional' && referencedWalletId !== undefined) {
+      throw new Error('WALLET_NOT_ALLOWED_FOR_PROFESSIONAL')
     }
     return normalizeAdjustmentIncome({
       ...normalizeReportStatus(income),
@@ -1199,6 +1255,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         ? normalizePersonalIncomeName(income.personalName)
         : undefined,
       personalCategoryId: incomeUsageMode === 'basic' ? referencedPersonalCategoryId : undefined,
+      walletId: incomeUsageMode === 'basic' ? referencedWalletId : undefined,
       ...(incomeUsageMode === 'basic'
         ? { paymentType: undefined }
         : {}),
@@ -1223,11 +1280,15 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
     const referencedPersonalCategoryId = expense.personalCategoryId === ''
       ? undefined
       : expense.personalCategoryId
+    const referencedWalletId = expense.walletId === '' ? undefined : expense.walletId
     if (expenseUsageMode === 'professional' && expense.personalName !== undefined) {
       throw new Error('PERSONAL_EXPENSE_NAME_NOT_ALLOWED_FOR_PROFESSIONAL')
     }
     if (expenseUsageMode === 'professional' && referencedPersonalCategoryId !== undefined) {
       throw new Error('PERSONAL_EXPENSE_CATEGORY_NOT_ALLOWED_FOR_PROFESSIONAL')
+    }
+    if (expenseUsageMode === 'professional' && referencedWalletId !== undefined) {
+      throw new Error('WALLET_NOT_ALLOWED_FOR_PROFESSIONAL')
     }
     return {
     ...financialExpense,
@@ -1238,6 +1299,7 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
       ? normalizePersonalExpenseName(expense.personalName)
       : undefined,
     personalCategoryId: expenseUsageMode === 'basic' ? referencedPersonalCategoryId : undefined,
+    walletId: expenseUsageMode === 'basic' ? referencedWalletId : undefined,
     }
   })
   const normalizedFinancialGoals = (snapshot.financialGoals ?? []).map((goal) => {
@@ -1250,12 +1312,16 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
   })
   const rawPersonalIncomeCategories = snapshot.personalIncomeCategories ?? []
   const rawPersonalExpenseCategories = snapshot.personalExpenseCategories ?? []
+  const rawWallets = snapshot.wallets ?? []
+  const rawInternalTransfers = snapshot.internalTransfers ?? []
 
   // Validate before clearing local data: an invalid backup must never partially restore.
   assertAllExpenseAdjustmentsAreValid(normalizedServices, normalizedExpenses)
   assertAllIncomeAdditionalsAreValid(normalizedServices, snapshot.incomeAdditionals ?? [])
   assertPersonalIncomeCategoriesAreValid(rawPersonalIncomeCategories, normalizedServices)
   assertPersonalExpenseCategoriesAreValid(rawPersonalExpenseCategories, normalizedExpenses)
+  assertWalletsAreValid(rawWallets, normalizedServices, normalizedExpenses)
+  assertInternalTransfersAreValid(rawInternalTransfers, rawWallets)
 
   const normalizedPersonalIncomeCategories: PersonalIncomeCategory[] = rawPersonalIncomeCategories.map((category) => ({
     ...category,
@@ -1277,6 +1343,24 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
     createdAt: category.createdAt ?? new Date().toISOString(),
     updatedAt: category.updatedAt ?? category.createdAt ?? new Date().toISOString(),
   }))
+  const normalizedWallets: Wallet[] = rawWallets.map((wallet) => ({
+    ...wallet,
+    name: wallet.name.trim().replace(/\s+/g, ' '),
+    // Never trust a backup-provided normalizedName even when it matches: it is
+    // always recomputed canonically, matching what assertWalletsAreValid checked.
+    normalizedName: buildNormalizedWalletName(wallet.name),
+    isDefault: Boolean(wallet.isDefault),
+    isArchived: Boolean(wallet.isArchived),
+    usageMode: 'basic' as const,
+    createdAt: wallet.createdAt ?? new Date().toISOString(),
+    updatedAt: wallet.updatedAt ?? wallet.createdAt ?? new Date().toISOString(),
+  }))
+  const normalizedInternalTransfers: InternalTransfer[] = rawInternalTransfers.map((transfer) => ({
+    ...transfer,
+    usageMode: 'basic' as const,
+    createdAt: transfer.createdAt ?? new Date().toISOString(),
+    updatedAt: transfer.updatedAt ?? transfer.createdAt ?? new Date().toISOString(),
+  }))
 
   await db.transaction(
     'rw',
@@ -1294,6 +1378,8 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
       db.financialGoals,
       db.personalIncomeCategories,
       db.personalExpenseCategories,
+      db.wallets,
+      db.internalTransfers,
     ],
     async () => {
       await Promise.all([
@@ -1310,6 +1396,8 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.financialGoals.clear(),
         db.personalIncomeCategories.clear(),
         db.personalExpenseCategories.clear(),
+        db.wallets.clear(),
+        db.internalTransfers.clear(),
       ])
 
       await Promise.all([
@@ -1343,6 +1431,8 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.financialGoals.bulkPut(normalizedFinancialGoals),
         db.personalIncomeCategories.bulkPut(normalizedPersonalIncomeCategories),
         db.personalExpenseCategories.bulkPut(normalizedPersonalExpenseCategories),
+        db.wallets.bulkPut(normalizedWallets),
+        db.internalTransfers.bulkPut(normalizedInternalTransfers),
       ])
 
       if (!snapshot.settings?.length) {

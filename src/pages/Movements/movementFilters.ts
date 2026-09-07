@@ -1,6 +1,6 @@
 import { recordBelongsToUsageMode, type UsageModeRecord } from '../../utils/usageMode'
 
-export type MovementFilterType = 'all' | 'income' | 'expense'
+export type MovementFilterType = 'all' | 'income' | 'expense' | 'transfer'
 export type MovementReportFilter = 'all' | 'reported' | 'unreported'
 export type MovementOrder = 'newest' | 'oldest' | 'amount_desc' | 'amount_asc'
 export type MovementPeriod = 'all' | 'today' | 'week' | 'month' | 'custom'
@@ -20,7 +20,7 @@ export interface MovementFilters {
 
 export interface FilterableMovement {
   readonly key: string
-  readonly kind: 'income' | 'expense'
+  readonly kind: 'income' | 'expense' | 'transfer'
   readonly date: string
   readonly category: string
   readonly amount: number
@@ -149,7 +149,7 @@ export function readMovementFilters(params: URLSearchParams, now = new Date()): 
     anchorDate: formatLocalDate(anchor),
     dateFrom: parseLocalDate(params.get('from') ?? '') ? params.get('from') as string : '',
     dateTo: parseLocalDate(params.get('to') ?? '') ? params.get('to') as string : '',
-    type: valid(rawType === 'gasto' ? 'expense' : rawType === 'ingreso' ? 'income' : rawType, ['all', 'income', 'expense'], 'all'),
+    type: valid(rawType === 'gasto' ? 'expense' : rawType === 'ingreso' ? 'income' : rawType, ['all', 'income', 'expense', 'transfer'], 'all'),
     category: params.get('category') ?? '',
     currency: params.get('currency') ?? '',
     reported: valid(params.get('reported'), ['all', 'reported', 'unreported'], 'all'),
