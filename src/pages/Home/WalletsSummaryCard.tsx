@@ -1,4 +1,4 @@
-import { Wallet as WalletIcon } from 'lucide-react'
+import { ChevronDown, Wallet as WalletIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -73,19 +73,25 @@ export function WalletsSummaryCard({ currency, hidden }: WalletsSummaryCardProps
         </div>
         <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Disponible total</p>
 
-        <ul className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
-          {wallets.map((wallet) => (
-            <li className="flex items-center justify-between gap-3 text-sm" key={wallet.id}>
-              <span className="truncate text-slate-700 dark:text-slate-200">
-                {wallet.name}
-                {wallet.isDefault ? <span className="ml-1.5 text-xs text-slate-400">· Predeterminada</span> : null}
-              </span>
-              <span className={`shrink-0 font-semibold ${wallet.balance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
-                <SensitiveAmount hidden={hidden} value={formatCurrency(wallet.balance, currency)} />
-              </span>
-            </li>
-          ))}
-        </ul>
+        <details className="group mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-slate-700 dark:text-slate-200 [&::-webkit-details-marker]:hidden">
+            <span>Ver wallets</span>
+            <ChevronDown aria-hidden="true" className="size-4 text-slate-400 transition-transform group-open:rotate-180" />
+          </summary>
+          <ul className="mt-3 flex flex-col gap-2">
+            {wallets.map((wallet) => (
+              <li className="flex items-center justify-between gap-3 text-sm" key={wallet.id}>
+                <span className="truncate text-slate-700 dark:text-slate-200">
+                  {wallet.name}
+                  {wallet.isDefault ? <span className="ml-1.5 text-xs text-slate-400">· Predeterminada</span> : null}
+                </span>
+                <span className={`shrink-0 font-semibold ${wallet.balance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+                  <SensitiveAmount hidden={hidden} value={formatCurrency(wallet.balance, currency)} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
       </div>
     </section>
   )

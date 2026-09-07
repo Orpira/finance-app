@@ -626,9 +626,7 @@ export function HomePage() {
             <p className="mt-1 truncate text-xs text-slate-400 dark:text-slate-500">{description}</p>
           </article>
         ))}
-        {isBasicUser && settings ? (
-          <WalletActivityCard currency={settings.defaultCurrency} hidden={hidden} />
-        ) : null}
+        {isBasicUser ? <WalletActivityCard /> : null}
         </div>
       </section>
 

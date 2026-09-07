@@ -30,7 +30,7 @@ function currentMonthDate() {
 function renderCard() {
   return render(
     <MemoryRouter>
-      <WalletActivityCard currency="EUR" hidden={false} />
+      <WalletActivityCard />
     </MemoryRouter>,
   )
 }
@@ -51,7 +51,7 @@ describe('WalletActivityCard', () => {
     expect(screen.getByText('Sin movimientos entre ubicaciones')).toBeTruthy()
   })
 
-  it('muestra cantidad, total y última ruta de transferencia del mes', async () => {
+  it('muestra cantidad y última ruta de transferencia del mes sin duplicar el total', async () => {
     transferService.listInternalTransfers.mockResolvedValue([
       {
         id: 'itx-1',
@@ -73,6 +73,7 @@ describe('WalletActivityCard', () => {
     await screen.findByText('1 transferencia')
     expect(screen.getByText('Banco')).toBeTruthy()
     expect(screen.getByText('Casa')).toBeTruthy()
-    expect(screen.getByText('150,00 €')).toBeTruthy()
+    expect(screen.queryByText('Total transferido')).toBeNull()
+    expect(screen.queryByRole('link', { name: /Ver movimientos/ })).toBeNull()
   })
 })
