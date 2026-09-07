@@ -29,7 +29,7 @@ export function createReportPdfFromText(options: ShareReportPdfOptions) {
   const margin = 14
   const maxWidth = pageWidth - margin * 2
   const lineHeight = 6
-  let cursorY = 18
+  let cursorY = 24
 
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(16)
@@ -78,7 +78,7 @@ function createRenderContainer(html: string) {
       font-size: 12px;
       line-height: 1.45;
       min-height: 1123px;
-      padding: 68px;
+      padding: 92px 68px 68px;
       width: 794px;
     }
     .pdf-render-page * {

@@ -2,6 +2,10 @@ import { db } from '../database/db'
 import type { InternalTransfer } from '../types/internalTransfer'
 import { getSettings } from './settingsService'
 import { resolveActiveUsageMode } from '../utils/usageMode'
+import { getStoredExpenseValue, getStoredIncomeValue } from '../utils/financeStats'
+import type { Expense } from '../types/expense'
+import type { ServiceIncome } from '../types/service'
+import type { CurrencyCode } from '../types/settings'
 
 /** Mirrors WALLETS_CHANGED_EVENT: open balances/movements refresh without a full reload. */
 export const INTERNAL_TRANSFERS_CHANGED_EVENT = 'finance-app:internal-transfers-changed'
@@ -20,6 +24,29 @@ export type CreateInternalTransferInput = {
 
 export type InternalTransferListOptions = {
   walletId?: string
+}
+
+function calculateWalletBalance(
+  walletId: string,
+  currency: CurrencyCode,
+  incomes: readonly ServiceIncome[],
+  expenses: readonly Expense[],
+  transfers: readonly InternalTransfer[],
+) {
+  const incomeTotal = incomes
+    .filter((income) => income.walletId === walletId)
+    .reduce((total, income) => total + getStoredIncomeValue(income, currency), 0)
+  const expenseTotal = expenses
+    .filter((expense) => expense.walletId === walletId)
+    .reduce((total, expense) => total + getStoredExpenseValue(expense, currency), 0)
+  const transfersIn = transfers
+    .filter((transfer) => transfer.toWalletId === walletId && transfer.currency === currency)
+    .reduce((total, transfer) => total + transfer.amount, 0)
+  const transfersOut = transfers
+    .filter((transfer) => transfer.fromWalletId === walletId && transfer.currency === currency)
+    .reduce((total, transfer) => total + transfer.amount, 0)
+
+  return incomeTotal - expenseTotal + transfersIn - transfersOut
 }
 
 /**
@@ -44,16 +71,29 @@ export async function createInternalTransfer(input: CreateInternalTransferInput)
   }
 
   const now = new Date().toISOString()
-  const transfer = await db.transaction('rw', [db.wallets, db.internalTransfers], async () => {
-    const [fromWallet, toWallet] = await Promise.all([
+  const transfer = await db.transaction('rw', [db.wallets, db.internalTransfers, db.services, db.expenses], async () => {
+    const [fromWallet, toWallet, incomes, expenses, transfers] = await Promise.all([
       db.wallets.get(input.fromWalletId),
       db.wallets.get(input.toWalletId),
+      db.services.toArray(),
+      db.expenses.toArray(),
+      db.internalTransfers.toArray(),
     ])
     if (!fromWallet || fromWallet.usageMode !== 'basic' || fromWallet.isArchived) {
       throw new Error('La wallet de origen no es válida.')
     }
     if (!toWallet || toWallet.usageMode !== 'basic' || toWallet.isArchived) {
       throw new Error('La wallet de destino no es válida.')
+    }
+    const sourceBalance = calculateWalletBalance(
+      input.fromWalletId,
+      settings.defaultCurrency,
+      incomes,
+      expenses,
+      transfers,
+    )
+    if (input.amount > sourceBalance) {
+      throw new Error('La transferencia dejaría la wallet de origen con saldo negativo.')
     }
 
     const newTransfer: InternalTransfer = {

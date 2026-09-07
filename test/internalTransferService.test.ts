@@ -22,6 +22,8 @@ interface TransferRow {
 
 let wallets: WalletRow[]
 let transfers: TransferRow[]
+let incomes: Array<{ walletId?: string; eurValue: number; currency: string }>
+let expenses: Array<{ walletId?: string; eurValue: number; currency: string }>
 let settingsRow: { defaultCurrency: string; usageMode: 'basic' | 'professional' | 'hybrid'; activeContext?: 'basic' | 'professional' }
 
 vi.mock('../src/database/db', () => ({
@@ -30,6 +32,16 @@ vi.mock('../src/database/db', () => ({
       wallets: {
         async get(id: string) {
           return wallets.find((wallet) => wallet.id === id)
+        },
+      },
+      services: {
+        async toArray() {
+          return [...incomes]
+        },
+      },
+      expenses: {
+        async toArray() {
+          return [...expenses]
         },
       },
       internalTransfers: {
@@ -44,6 +56,9 @@ vi.mock('../src/database/db', () => ({
         async delete(id: string) {
           const index = transfers.findIndex((transfer) => transfer.id === id)
           if (index !== -1) transfers.splice(index, 1)
+        },
+        async toArray() {
+          return [...transfers]
         },
         orderBy() {
           return { reverse: () => ({ toArray: async () => [...transfers] }) }
@@ -73,11 +88,14 @@ beforeEach(() => {
     { id: 'wal-archived', name: 'Vieja', usageMode: 'basic', isArchived: true },
   ]
   transfers = []
+  incomes = []
+  expenses = []
   settingsRow = { defaultCurrency: 'EUR', usageMode: 'basic' }
 })
 
 describe('createInternalTransfer — invariantes (spec §20)', () => {
   it('crea una transferencia válida sin tocar ingresos/egresos', async () => {
+    incomes.push({ walletId: 'wal-1', eurValue: 500, currency: 'EUR' })
     const transfer = await createInternalTransfer({
       fromWalletId: 'wal-1',
       toWalletId: 'wal-2',
@@ -87,6 +105,20 @@ describe('createInternalTransfer — invariantes (spec §20)', () => {
     expect(transfer.amount).toBe(150)
     expect(transfer.currency).toBe('EUR')
     expect(transfers).toHaveLength(1)
+  })
+
+  it('rechaza una transferencia que dejaría saldo negativo en el origen', async () => {
+    incomes.push({ walletId: 'wal-1', eurValue: 100, currency: 'EUR' })
+
+    await expect(
+      createInternalTransfer({
+        fromWalletId: 'wal-1',
+        toWalletId: 'wal-2',
+        amount: 100.01,
+        date: '2026-01-05',
+      }),
+    ).rejects.toThrow('saldo negativo')
+    expect(transfers).toHaveLength(0)
   })
 
   it('rechaza origen y destino iguales', async () => {
@@ -140,6 +172,8 @@ describe('createInternalTransfer — invariantes (spec §20)', () => {
 
 describe('listInternalTransfers / deleteInternalTransfer', () => {
   it('filtra por wallet (origen o destino)', async () => {
+    incomes.push({ walletId: 'wal-1', eurValue: 100, currency: 'EUR' })
+    incomes.push({ walletId: 'wal-2', eurValue: 20, currency: 'EUR' })
     await createInternalTransfer({ fromWalletId: 'wal-1', toWalletId: 'wal-2', amount: 10, date: '2026-01-05' })
     await createInternalTransfer({ fromWalletId: 'wal-2', toWalletId: 'wal-1', amount: 20, date: '2026-01-06' })
     wallets.push({ id: 'wal-3', name: 'Otra', usageMode: 'basic', isArchived: false })
@@ -150,6 +184,7 @@ describe('listInternalTransfers / deleteInternalTransfer', () => {
   })
 
   it('elimina una transferencia existente', async () => {
+    incomes.push({ walletId: 'wal-1', eurValue: 10, currency: 'EUR' })
     const transfer = await createInternalTransfer({
       fromWalletId: 'wal-1',
       toWalletId: 'wal-2',

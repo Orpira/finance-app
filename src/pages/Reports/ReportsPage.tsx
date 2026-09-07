@@ -186,7 +186,7 @@ function buildPrintableDocument(title: string, body: string) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(title)}</title>
     <style>
-      @page { margin: 18mm; }
+      @page { margin: 24mm 18mm 18mm; }
       body {
         color: #0f172a;
         font-family: Inter, Arial, sans-serif;
@@ -218,6 +218,8 @@ function buildPrintableDocument(title: string, body: string) {
       .income-date-table { min-width: 760px; table-layout: fixed; }
       .income-date-table .income-name { width: 38%; }
       .record-meta { color: #64748b; display: block; font-size: 10px; margin-top: 3px; }
+      .category-details { margin-left: 16px; }
+      .category-details > h3 { margin-top: 14px; }
       .category-detail-group { margin: 8px 0 16px; }
       .category-detail-heading {
         align-items: baseline;
@@ -1061,36 +1063,40 @@ export function ReportsPage() {
   ) {
     if (rows.length === 0) {
       return `
-        <h3>${escapeHtml(title)}</h3>
-        <p class="empty">Sin registros.</p>
+        <div class="category-details">
+          <h3>${escapeHtml(title)}</h3>
+          <p class="empty">Sin registros.</p>
+        </div>
       `
     }
 
     return `
-      <h3>${escapeHtml(title)}</h3>
-      ${rows.map((row) => `
-        <div class="category-detail-group">
-          <div class="category-detail-heading">
-            <strong>${escapeHtml(row.label)}</strong>
-            <span>${row.count} registro${row.count === 1 ? '' : 's'} · ${escapeHtml(formatCurrency(row.total, primaryCurrency))}</span>
+      <div class="category-details">
+        <h3>${escapeHtml(title)}</h3>
+        ${rows.map((row) => `
+          <div class="category-detail-group">
+            <div class="category-detail-heading">
+              <strong>${escapeHtml(row.label)}</strong>
+              <span>${row.count} registro${row.count === 1 ? '' : 's'} · ${escapeHtml(formatCurrency(row.total, primaryCurrency))}</span>
+            </div>
+            <table>
+              <thead>
+                <tr><th>Fecha</th><th>Registro</th><th>Nota</th><th class="amount">Valor</th></tr>
+              </thead>
+              <tbody>
+                ${row.details.map((detail) => `
+                  <tr>
+                    <td>${escapeHtml(detail.date)}</td>
+                    <td>${escapeHtml(detail.label)}</td>
+                    <td>${escapeHtml(detail.note ?? '')}</td>
+                    <td class="amount">${escapeHtml(formatCurrency(detail.value, primaryCurrency))}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
           </div>
-          <table>
-            <thead>
-              <tr><th>Fecha</th><th>Registro</th><th>Nota</th><th class="amount">Valor</th></tr>
-            </thead>
-            <tbody>
-              ${row.details.map((detail) => `
-                <tr>
-                  <td>${escapeHtml(detail.date)}</td>
-                  <td>${escapeHtml(detail.label)}</td>
-                  <td>${escapeHtml(detail.note ?? '')}</td>
-                  <td class="amount">${escapeHtml(formatCurrency(detail.value, primaryCurrency))}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      `).join('')}
+        `).join('')}
+      </div>
     `
   }
 
@@ -1520,7 +1526,7 @@ export function ReportsPage() {
       const totalBalance = walletSummaryRows.reduce((sum, row) => sum + row.balance, 0)
 
       function walletLabel(wallet: Wallet) {
-        return `${wallet.name}${wallet.isDefault ? ' (predeterminada)' : ''}${wallet.isArchived ? ' (archivada)' : ''}`
+        return `Wallet: ${wallet.name}${wallet.isDefault ? ' (predeterminada)' : ''}${wallet.isArchived ? ' (archivada)' : ''}`
       }
 
       const walletSummaryHtml = walletSummaryRows.length === 0
@@ -1609,7 +1615,7 @@ export function ReportsPage() {
 
       const walletCategorySectionsHtml = walletCategorySections
         .map(({ wallet, incomeByCategory, expenseByCategory, incomeCategoryDetails, expenseCategoryDetails }) => `
-          <h2>${escapeHtml(wallet.name)}</h2>
+          <h2>${escapeHtml(walletLabel(wallet))}</h2>
           ${buildGroupedTotalsTable('Ingresos por categoría', incomeByCategory, 'Categoría')}
           ${buildGroupedCategoryDetailsTable('Detalle de ingresos por categoría', incomeCategoryDetails)}
           ${buildGroupedTotalsTable('Egresos por categoría', expenseByCategory, 'Categoría')}
@@ -1618,7 +1624,7 @@ export function ReportsPage() {
         .join('')
       const walletCategorySectionsText = walletCategorySections
         .map(({ wallet, incomeByCategory, expenseByCategory, incomeCategoryDetails, expenseCategoryDetails }) => [
-          wallet.name,
+          walletLabel(wallet),
           'Ingresos por categoría',
           incomeByCategory.length === 0
             ? 'Sin registros.'
