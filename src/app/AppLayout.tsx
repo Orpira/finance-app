@@ -35,6 +35,7 @@ import type { AppSettings, ThemeMode } from '../types/settings'
 import { isDataEntryFormRoute } from '../utils/formRoutes'
 import { isHybridMode, isProfessionalMode, resolveActiveUsageMode, usesProfessionalAgenda } from '../utils/usageMode'
 import { UsageContextSwitcher } from '../components/layout/UsageContextSwitcher'
+import { UsageModeBadge } from '../components/UsageModeBadge'
 
 interface NavItem {
   label: string
@@ -308,9 +309,19 @@ export function AppLayout() {
   )
 
   return (
-    <div className="min-h-dvh bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
+    <div
+      className={[
+        'min-h-dvh border-t-4 text-slate-950 dark:text-slate-50',
+        activeUsageMode === 'basic'
+          ? 'border-sky-500 bg-slate-50 dark:border-sky-400 dark:bg-slate-950'
+          : 'border-emerald-600 bg-slate-50 dark:border-emerald-400 dark:bg-slate-950',
+      ].join(' ')}
+    >
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950 md:block">
-        <p className="px-3 text-lg font-semibold text-slate-950 dark:text-white">Private Balance</p>
+        <div className="flex items-center justify-between gap-2 px-3">
+          <p className="text-lg font-semibold text-slate-950 dark:text-white">Private Balance</p>
+          <UsageModeBadge usageMode={activeUsageMode} />
+        </div>
         {showUsageContextSwitcher && (
           <UsageContextSwitcher
             activeContext={activeUsageMode}
@@ -366,7 +377,10 @@ export function AppLayout() {
         ].join(' ')}
       >
         <div className="flex items-center justify-between gap-3 py-3 md:hidden">
-          <p className="text-sm font-semibold text-slate-900 dark:text-white">Private Balance</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">Private Balance</p>
+            <UsageModeBadge usageMode={activeUsageMode} />
+          </div>
           <div className="flex items-center gap-2">
             {showUsageContextSwitcher && (
               <UsageContextSwitcher

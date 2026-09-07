@@ -3,11 +3,11 @@ import { useEffect, useState } from 'react'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import { useDialog } from '../../components/dialogs/useDialog'
-import { activateHybridMode, getSettings } from '../../services/settingsService'
+import { activateHybridMode, deactivateHybridMode, getSettings } from '../../services/settingsService'
 import type { AppSettings } from '../../types/settings'
 import { resolveUsageMode } from '../../utils/usageMode'
 
-type ActivationStatus = 'idle' | 'activating' | 'error'
+type ActivationStatus = 'idle' | 'activating' | 'deactivating' | 'error'
 
 export function SettingsUsageModePage() {
   const { confirm, alert } = useDialog()
@@ -67,6 +67,37 @@ export function SettingsUsageModePage() {
     }
   }
 
+  async function handleDeactivateHybrid() {
+    const activeContext = settings?.activeContext === 'basic' ? 'Personal' : 'Profesional'
+    const confirmed = await confirm({
+      title: 'Desactivar uso Híbrido',
+      message: `Se conservarán ambos espacios, pero solo quedará visible el espacio ${activeContext}. Podrás volver a activar Híbrido más adelante.`,
+      confirmLabel: 'Desactivar uso Híbrido',
+      confirmTone: 'primary',
+    })
+
+    if (!confirmed) return
+
+    setStatus('deactivating')
+    setErrorMessage('')
+
+    try {
+      const updatedSettings = await deactivateHybridMode()
+      setSettings(updatedSettings)
+      setStatus('idle')
+      await alert({
+        type: 'success',
+        title: 'Uso Híbrido desactivado',
+        message: `Ahora está activo el espacio ${activeContext}. Tus datos del otro espacio se conservaron y volverán a estar disponibles al activar Híbrido.`,
+      })
+    } catch (error) {
+      setStatus('error')
+      setErrorMessage(
+        error instanceof Error ? error.message : 'No se pudo desactivar el uso Híbrido.',
+      )
+    }
+  }
+
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <PageHeader
@@ -86,8 +117,16 @@ export function SettingsUsageModePage() {
             <p className="mt-1 text-sm text-slate-500">
               Tienes los espacios Personal y Profesional habilitados. Cambia entre ellos con el
               selector de la barra de navegación. Por ahora no es posible desactivar el uso
-              Híbrido desde aquí.
+              desactiva Híbrido temporalmente. Tus datos de ambos espacios se conservarán.
             </p>
+            <button
+              className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={status === 'deactivating'}
+              onClick={handleDeactivateHybrid}
+              type="button"
+            >
+              {status === 'deactivating' ? 'Desactivando...' : 'Desactivar uso Híbrido'}
+            </button>
           </div>
         </div>
       ) : (

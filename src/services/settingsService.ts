@@ -203,9 +203,7 @@ export function disablePin() {
  * whichever workspace matches the installation's previous mode keeps every
  * record exactly as it was (still tagged 'basic' or 'professional', same as
  * before), and the other workspace simply starts with none, since nothing
- * was ever written to it. There is intentionally no inverse
- * (`hybrid` -> `basic`/`professional`) yet: downgrading could leave data
- * from the deactivated workspace invisible and needs its own design.
+ * was ever written to it.
  */
 export async function activateHybridMode() {
   const currentSettings = await getSettings()
@@ -230,9 +228,42 @@ export async function activateHybridMode() {
 
   await db.transaction('rw', [db.settings, db.financialGoals], async () => {
     const goals = await db.financialGoals.toArray()
-    await db.financialGoals.bulkPut(goals.map((goal) => ({ ...goal, usageMode: previousMode })))
+    await db.financialGoals.bulkPut(
+      goals.map((goal) => goal.usageMode === undefined
+        ? { ...goal, usageMode: previousMode }
+        : goal),
+    )
     await db.settings.put(nextSettings)
   })
+  syncSettingsToLocalStorage(nextSettings)
+  applyTheme(nextSettings.theme)
+  notifySettingsChange(nextSettings)
+  return nextSettings
+}
+
+/**
+ * Disables Híbrido without deleting or moving either workspace's records.
+ * The currently selected context becomes the configured single mode; records
+ * from the other context remain stored and become visible again if Híbrido is
+ * activated later.
+ */
+export async function deactivateHybridMode() {
+  const currentSettings = await getSettings()
+
+  if (!isHybridMode(currentSettings)) {
+    return currentSettings
+  }
+
+  const activeContext = currentSettings.activeContext ?? 'professional'
+  const nextSettings: AppSettings = {
+    ...currentSettings,
+    usageMode: activeContext,
+    activeContext: undefined,
+    userType: toLegacyUserType(activeContext),
+    updatedAt: new Date().toISOString(),
+  }
+
+  await db.settings.put(nextSettings)
   syncSettingsToLocalStorage(nextSettings)
   applyTheme(nextSettings.theme)
   notifySettingsChange(nextSettings)
