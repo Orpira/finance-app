@@ -131,6 +131,81 @@ export async function listInternalTransfers(
   )
 }
 
+export interface WalletCopilotTransferPeriod {
+  readonly from: string
+  readonly to: string
+}
+
+export interface EnrichedInternalTransfer extends InternalTransfer {
+  readonly fromWalletName: string
+  readonly toWalletName: string
+}
+
+async function enrichTransfers(transfers: readonly InternalTransfer[]): Promise<EnrichedInternalTransfer[]> {
+  const wallets = await db.wallets.toArray()
+  const nameById = new Map(wallets.map((wallet) => [wallet.id, wallet.name]))
+  return transfers.map((transfer) => ({
+    ...transfer,
+    fromWalletName: nameById.get(transfer.fromWalletId) ?? 'Wallet no disponible',
+    toWalletName: nameById.get(transfer.toWalletId) ?? 'Wallet no disponible',
+  }))
+}
+
+/**
+ * Total moved between Wallets never sums both legs of a transfer — a 150€
+ * transfer counts once, not twice, because it's a redistribution, not two
+ * movements (spec §17). Only transfers in `currency` are included; a
+ * transfer stored in another currency is silently excluded rather than
+ * converted, since InternalTransfer keeps no historical multi-currency
+ * valuation (unlike income/expense records).
+ */
+export interface WalletTransferSummary {
+  readonly periodStart: string | null
+  readonly periodEnd: string | null
+  readonly currency: string
+  readonly transferCount: number
+  readonly totalMoved: number
+  readonly latestTransfer: EnrichedInternalTransfer | null
+}
+
+function sortByDateThenCreatedAtDesc(transfers: readonly EnrichedInternalTransfer[]): EnrichedInternalTransfer[] {
+  return [...transfers].sort((left, right) =>
+    right.date.localeCompare(left.date) || right.createdAt.localeCompare(left.createdAt),
+  )
+}
+
+export async function getWalletTransferSummary(
+  period: WalletCopilotTransferPeriod | 'all',
+  currency: string,
+): Promise<WalletTransferSummary> {
+  const allTransfers = await listInternalTransfers()
+  const inRange = period === 'all'
+    ? allTransfers
+    : allTransfers.filter((transfer) => transfer.date >= period.from && transfer.date <= period.to)
+  const inCurrency = inRange.filter((transfer) => transfer.currency === currency)
+  const enriched = sortByDateThenCreatedAtDesc(await enrichTransfers(inCurrency))
+
+  return {
+    periodStart: period === 'all' ? null : period.from,
+    periodEnd: period === 'all' ? null : period.to,
+    currency,
+    transferCount: enriched.length,
+    totalMoved: enriched.reduce((sum, transfer) => sum + transfer.amount, 0),
+    latestTransfer: enriched[0] ?? null,
+  }
+}
+
+export async function getLatestWalletTransfer(
+  period: WalletCopilotTransferPeriod | 'all' = 'all',
+): Promise<EnrichedInternalTransfer | null> {
+  const allTransfers = await listInternalTransfers()
+  const inRange = period === 'all'
+    ? allTransfers
+    : allTransfers.filter((transfer) => transfer.date >= period.from && transfer.date <= period.to)
+  const enriched = sortByDateThenCreatedAtDesc(await enrichTransfers(inRange))
+  return enriched[0] ?? null
+}
+
 export async function deleteInternalTransfer(id: string) {
   const result = await db.transaction('rw', [db.internalTransfers], async () => {
     const transfer = await db.internalTransfers.get(id)

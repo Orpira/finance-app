@@ -8,6 +8,38 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ## [Unreleased]
 
+### Added
+
+- **Consultas de solo lectura de Wallets en el Copiloto (ADR-036)**: el
+  Copiloto determinista ahora responde preguntas sobre distribucion del
+  dinero — "¿cuanto dinero tengo?", "¿cuanto tengo en casa?", "¿como esta
+  distribuido mi dinero?", "¿donde tengo mas/menos dinero?", "¿cual es mi
+  wallet predeterminada?", "¿cuantas wallets tengo/activas/archivadas?",
+  "¿cuantas transferencias hice este mes?", "¿cual fue mi ultima
+  transferencia?" — sin modificar ingresos, egresos, balance ni metas: una
+  transferencia interna sigue sin afectar el resultado financiero, solo
+  redistribuye el saldo entre Wallets. Nuevo motor puro
+  `src/intelligence/deterministic-copilot/walletCopilotEngine.ts` (deteccion
+  de intencion, resolucion de periodo, coincidencia de nombres con
+  desambiguacion explicita, formateo de respuestas) y orquestador de lectura
+  `src/services/personalWalletCopilotService.ts`, que delega en
+  `walletService.getPersonalWalletLedger` (nuevo) e
+  `internalTransferService.getWalletTransferSummary`/`getLatestWalletTransfer`
+  (nuevos) — nunca escribe, nunca recalcula un saldo por su cuenta. Cableado
+  en `financialCopilotService.ts` antes de las rutas financieras existentes,
+  para que "¿cuanto dinero tengo?" nunca se resuelva como balance del mes.
+  Disponible solo en el espacio Personal (incluido Hibrido con contexto
+  Personal activo); en Profesional responde con un mensaje generico sin
+  exponer ningun nombre ni saldo de Wallet. Limitacion conocida: sin
+  conversion de moneda para transferencias fuera de `defaultCurrency` (no
+  hay valoracion historica multi-moneda en `InternalTransfer`), sin acciones
+  de navegacion clicables en el chat, sin cambios en Quick Actions — ver
+  ADR-036 para el detalle y el porque de cada limite. Gates: `npm run lint`,
+  `npm run typecheck` y `npm run build` en verde; `vitest run` → 256 archivos
+  / 2772 tests en verde (55 nuevos, incluyendo el escenario de aceptacion de
+  la especificacion y la invariante de no-regresion del snapshot financiero
+  ante una transferencia).
+
 ### Security
 
 - **Rotación inmediata de la clave de firma V2 para licencias de pago** (autorizada por el propietario el 2026-08-09): cliente y backend de automatización pasan a confiar coordinadamente en el nuevo par público; la clave privada se conserva fuera del repositorio con permisos restrictivos y la clave dedicada de trial permanece sin cambios. Las licencias V2 de pago emitidas con la clave anterior dejarán de ser válidas al desplegar este cambio y deberán reemitirse. Se actualizó la fixture firmada de política `single` y `.gitignore` protege ahora también salidas accidentales cuyo nombre comience por `PB-DEVICE-`. Se verificaron 28 pruebas focalizadas de licencias/automatización. El despliegue coordinado de web, servidor y Android sigue pendiente.

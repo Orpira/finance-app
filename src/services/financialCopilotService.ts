@@ -31,6 +31,8 @@ import { getPendingIncomeSummary } from './incomeReport.service'
 import { listServiceIncomes } from './incomeService'
 import { getSettings } from './settingsService'
 import { calculateFinancialGoalProgress, financialGoalService } from './financialGoalService'
+import { answerPersonalWalletCopilotQuery } from './personalWalletCopilotService'
+import { detectWalletCopilotIntent } from '../intelligence/deterministic-copilot/walletCopilotEngine'
 
 export interface BuildFinancialCopilotSnapshotInput {
   readonly asOfDate: string
@@ -306,6 +308,18 @@ export function createLocalFinancialCopilotQueryHandler(input: {
 
   return {
     async answer(query) {
+      // Wallet distribution questions ("¿cuánto dinero tengo?") are checked
+      // first and cheaply (a pure regex, no snapshot/DB access) so they never
+      // fall through to the financial-result patterns below — a Wallet
+      // question is never a monthly income/expense/balance question, even
+      // when it shares words like "tengo" (spec §29/§36).
+      if (detectWalletCopilotIntent(query) !== null) {
+        const walletAnswer = await answerPersonalWalletCopilotQuery(query)
+        if (walletAnswer !== null) {
+          return { ...walletAnswer, period: null, category: null }
+        }
+      }
+
       const isDirectQuery = canAnswerFinancialCopilotQuery(query)
       const isFollowUp = canAnswerFinancialCopilotFollowUp(query)
       if (!isDirectQuery && !isFollowUp) return null
