@@ -31,7 +31,7 @@ export function WelcomeStep({ stepNumber, totalSteps, isBusy, onStart }: Welcome
         alt=""
         aria-hidden="true"
         className="mx-auto size-24 object-contain"
-        src="/Favicon_512.png"
+        src="/favicon.png"
       />
     </OnboardingLayout>
   )
