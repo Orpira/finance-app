@@ -94,7 +94,7 @@ function getInitialDate(searchDate: string | null) {
 }
 
 export function AppointmentFormPage() {
-  const { confirm } = useDialog()
+  const { confirm, alert } = useDialog()
   const navigate = useNavigate()
   const { appointmentId } = useParams()
   const [searchParams] = useSearchParams()
@@ -443,6 +443,14 @@ export function AppointmentFormPage() {
           await scheduleAppointmentReminders(savedAppointment)
         } catch (error) {
           console.warn('No se pudieron programar los recordatorios de la cita.', error)
+          await alert({
+            type: 'warning',
+            title: 'Recordatorio no programado',
+            message:
+              'La cita se guardó, pero no pudimos programar el recordatorio: ' +
+              (error instanceof Error ? error.message : 'error desconocido') +
+              ' Revisa los permisos de la app en Ajustes de Android y vuelve a guardar la cita.',
+          })
         }
         navigate(`/agenda?date=${date}&appointment=${savedAppointment.id}`, {
           replace: true,

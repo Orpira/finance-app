@@ -96,6 +96,9 @@ export async function scheduleAppointmentReminders(appointment: Appointment): Pr
     const exactAlarm = await LocalNotifications.checkExactNotificationSetting()
     if (exactAlarm.exact_alarm !== 'granted') {
       await LocalNotifications.changeExactNotificationSetting()
+      throw new Error(
+        'Falta activar el permiso "Alarmas y recordatorios" en Ajustes de Android para esta app.',
+      )
     }
   }
 
