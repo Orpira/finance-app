@@ -2,11 +2,13 @@ import { BriefcaseBusiness, House, Layers } from 'lucide-react'
 import { useState } from 'react'
 
 import { configureOnboardingUsageMode } from '../../../services/onboardingService'
+import { getNextOnboardingStepIndex } from '../../../types/onboarding'
 import type { UsageMode } from '../../../types/settings'
 import { OnboardingLayout } from '../OnboardingLayout'
 
 interface UsageStepProps {
-  currentStep: number
+  stepNumber: number
+  totalSteps: number
   onNext: (step: number) => void
   onBack?: () => void
 }
@@ -35,7 +37,7 @@ const usageOptions = [
   },
 ]
 
-export function UsageStep({ currentStep, onNext, onBack }: UsageStepProps) {
+export function UsageStep({ stepNumber, totalSteps, onNext, onBack }: UsageStepProps) {
   const [usageMode, setUsageMode] = useState<UsageMode | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
@@ -50,7 +52,7 @@ export function UsageStep({ currentStep, onNext, onBack }: UsageStepProps) {
     setError('')
     try {
       await configureOnboardingUsageMode(usageMode)
-      onNext(usageMode === 'professional' || usageMode === 'hybrid' ? 2 : 4)
+      onNext(getNextOnboardingStepIndex('usage', usageMode))
     } catch {
       setError('No se pudo guardar tu selección.')
     } finally {
@@ -61,7 +63,8 @@ export function UsageStep({ currentStep, onNext, onBack }: UsageStepProps) {
   return (
     <OnboardingLayout
       backDisabled={isSaving}
-      currentStep={currentStep}
+      stepNumber={stepNumber}
+      totalSteps={totalSteps}
       description="Elige la opción que mejor se adapte a ti."
       footer={
         <button

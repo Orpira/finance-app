@@ -24,13 +24,14 @@ interface PreferencesForm {
 }
 
 interface PreferencesStepProps {
-  currentStep: number
+  stepNumber: number
+  totalSteps: number
   onNext: () => void
 }
 
 const languageOptions = [{ value: DEFAULT_LANGUAGE, label: 'Español' }]
 
-export function PreferencesStep({ currentStep, onNext }: PreferencesStepProps) {
+export function PreferencesStep({ stepNumber, totalSteps, onNext }: PreferencesStepProps) {
   const [form, setForm] = useState<PreferencesForm | null>(null)
   const [errors, setErrors] = useState<OnboardingPreferencesErrors>({})
   const [isSaving, setIsSaving] = useState(false)
@@ -64,7 +65,7 @@ export function PreferencesStep({ currentStep, onNext }: PreferencesStepProps) {
 
   if (!form) {
     return (
-      <OnboardingLayout currentStep={currentStep} footer={null} title="Preferencias">
+      <OnboardingLayout stepNumber={stepNumber} totalSteps={totalSteps} footer={null} title="Preferencias">
         <p className="text-center text-sm text-slate-500 dark:text-slate-400">Cargando...</p>
       </OnboardingLayout>
     )
@@ -109,7 +110,8 @@ export function PreferencesStep({ currentStep, onNext }: PreferencesStepProps) {
 
   return (
     <OnboardingLayout
-      currentStep={currentStep}
+      stepNumber={stepNumber}
+      totalSteps={totalSteps}
       description="Se usan para tus reportes y para formatear cantidades y fechas."
       footer={
         <button

@@ -85,7 +85,7 @@ export function WalletsSummaryCard({ currency, hidden }: WalletsSummaryCardProps
                   {wallet.name}
                   {wallet.isDefault ? <span className="ml-1.5 text-xs text-slate-400">· Predeterminada</span> : null}
                 </span>
-                <span className={`shrink-0 font-semibold ${wallet.balance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+                <span className={`shrink-0 font-semibold ${wallet.balance > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                   <SensitiveAmount hidden={hidden} value={formatCurrency(wallet.balance, currency)} />
                 </span>
               </li>

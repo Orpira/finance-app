@@ -8,6 +8,39 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ## [Unreleased]
 
+### Fixed
+
+- **Reporte de wallets separa entradas/salidas externas de transferencias internas (ADR-037)**:
+  el reporte de Wallets ahora muestra explícitamente cómo llegó el dinero a
+  cada wallet — "Ingresos externos" y "Transferencias recibidas" quedan
+  separados de "Egresos" y "Transferencias enviadas" (una transferencia
+  nunca cuenta como ingreso ni egreso, solo redistribuye el saldo). Cada
+  wallet muestra ahora saldo inicial del periodo, ingresos externos,
+  transferencias recibidas, egresos, transferencias enviadas, ajustes netos
+  y saldo final, con la fórmula verificada por pruebas
+  (`closingBalance = openingBalance + externalIncomeTotal + transferReceivedTotal
+  - expenseTotal - transferSentTotal + adjustmentTotal`). El saldo mostrado
+  ya no usa el saldo actual de todo el historial (independiente del rango de
+  fechas del reporte, causa de la inconsistencia original) sino el saldo real
+  al cierre del periodo seleccionado. Nuevo modelo puro y reutilizable
+  `src/services/walletReportService.ts` (`buildWalletReportModel`), única
+  fuente para vista previa, PDF y "Compartir PDF" — reutiliza
+  `buildBalanceReport` para separar ajustes de ingresos/egresos reales, sin
+  duplicar ese cálculo. Wallets archivadas con saldo o actividad siguen
+  apareciendo en un reporte histórico. Validación fail-closed: una wallet
+  fuera del espacio Personal o una transferencia con una wallet inexistente
+  produce un error controlado, nunca un reporte parcial o un dato inventado.
+  Limitación conocida: sin conversión de moneda para transferencias fuera de
+  la moneda del reporte (`InternalTransfer` no guarda valoración histórica
+  multi-moneda) — se marca explícitamente en vez de tratarse como cero. Ver
+  ADR-037 para el detalle completo. Gates: `npm run lint`, `npm run typecheck`
+  y `npm run build` en verde; `vitest run` → 255 archivos / 2736 tests en
+  verde (19 nuevos cubriendo el escenario de aceptación de la
+  especificación, la perspectiva de cada transferencia, periodos, adicionales,
+  moneda, wallets archivadas y saldos negativos). No se pudo verificar
+  visualmente en un navegador real en este entorno: la app requiere el
+  backend de licencias (Vercel functions + Neon) que `vite` solo no sirve.
+
 ### Security
 
 - **Rotación inmediata de la clave de firma V2 para licencias de pago** (autorizada por el propietario el 2026-08-09): cliente y backend de automatización pasan a confiar coordinadamente en el nuevo par público; la clave privada se conserva fuera del repositorio con permisos restrictivos y la clave dedicada de trial permanece sin cambios. Las licencias V2 de pago emitidas con la clave anterior dejarán de ser válidas al desplegar este cambio y deberán reemitirse. Se actualizó la fixture firmada de política `single` y `.gitignore` protege ahora también salidas accidentales cuyo nombre comience por `PB-DEVICE-`. Se verificaron 28 pruebas focalizadas de licencias/automatización. El despliegue coordinado de web, servidor y Android sigue pendiente.

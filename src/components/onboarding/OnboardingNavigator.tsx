@@ -7,7 +7,11 @@ import {
   setOnboardingStep,
 } from '../../services/onboardingService'
 import { getSettings } from '../../services/settingsService'
-import { ONBOARDING_STEP_ORDER, type OnboardingStepId } from '../../types/onboarding'
+import {
+  getOnboardingStepPosition,
+  getPreviousOnboardingStepIndex,
+  ONBOARDING_STEP_ORDER,
+} from '../../types/onboarding'
 import type { UsageMode } from '../../types/settings'
 import { CurrencyStep } from './steps/CurrencyStep'
 import { FinishStep } from './steps/FinishStep'
@@ -60,56 +64,41 @@ export function OnboardingNavigator({ currentStep, onAdvance }: OnboardingNaviga
     }
   }
 
-  // El modo personal salta 'work-mode' y 'season': 'currency' vuelve
-  // directo a 'usage' en ese caso, en vez de a 'season'.
-  function getPreviousStep(stepId: OnboardingStepId): number | undefined {
-    switch (stepId) {
-      case 'usage':
-        return 0
-      case 'work-mode':
-        return 1
-      case 'season':
-        return 2
-      case 'currency':
-        // Híbrido sigue el mismo recorrido de configuración que Profesional
-        // (temporada, porcentaje, etc.); el usuario elige el espacio activo
-        // después, desde el selector Personal/Profesional.
-        return usageMode === 'professional' || usageMode === 'hybrid' ? 3 : 1
-      case 'security':
-        return 4
-      case 'finish':
-        return 5
-      default:
-        return undefined
-    }
-  }
-
   const stepId = ONBOARDING_STEP_ORDER[currentStep] ?? 'welcome'
-  const previousStep = getPreviousStep(stepId)
+  const { stepNumber, totalSteps } = getOnboardingStepPosition(stepId, usageMode)
+  const previousStep = getPreviousOnboardingStepIndex(stepId, usageMode)
   const onBack = previousStep === undefined ? undefined : () => goToStep(previousStep)
 
   if (stepId === 'usage') {
-    return <UsageStep currentStep={currentStep} onBack={onBack} onNext={(step) => goToStep(step)} />
+    return (
+      <UsageStep
+        stepNumber={stepNumber}
+        totalSteps={totalSteps}
+        onBack={onBack}
+        onNext={(step) => goToStep(step)}
+      />
+    )
   }
 
   const showHybridBanner = usageMode === 'hybrid'
 
   if (stepId === 'work-mode') {
-    return <WorkModeStep currentStep={currentStep} onBack={onBack} onNext={() => goToStep(3)} showHybridBanner={showHybridBanner} />
+    return <WorkModeStep stepNumber={stepNumber} totalSteps={totalSteps} onBack={onBack} onNext={() => goToStep(3)} showHybridBanner={showHybridBanner} />
   }
 
   if (stepId === 'season') {
-    return <SeasonStep currentStep={currentStep} onBack={onBack} onNext={() => goToStep(4)} showHybridBanner={showHybridBanner} />
+    return <SeasonStep stepNumber={stepNumber} totalSteps={totalSteps} onBack={onBack} onNext={() => goToStep(4)} showHybridBanner={showHybridBanner} />
   }
 
   if (stepId === 'currency') {
-    return <CurrencyStep currentStep={currentStep} onBack={onBack} onNext={() => goToStep(5)} showHybridBanner={showHybridBanner} />
+    return <CurrencyStep stepNumber={stepNumber} totalSteps={totalSteps} onBack={onBack} onNext={() => goToStep(5)} showHybridBanner={showHybridBanner} />
   }
 
   if (stepId === 'security') {
     return (
       <SecurityStep
-        currentStep={currentStep}
+        stepNumber={stepNumber}
+        totalSteps={totalSteps}
         onBack={onBack}
         onNext={async (backupRequested) => {
           await setOnboardingBackupRequested(backupRequested)
@@ -122,7 +111,8 @@ export function OnboardingNavigator({ currentStep, onAdvance }: OnboardingNaviga
   if (stepId === 'finish') {
     return (
       <FinishStep
-        currentStep={currentStep}
+        stepNumber={stepNumber}
+        totalSteps={totalSteps}
         isBusy={isBusy}
         onBack={onBack}
         onFinish={finish}
@@ -132,7 +122,8 @@ export function OnboardingNavigator({ currentStep, onAdvance }: OnboardingNaviga
 
   return (
     <WelcomeStep
-      currentStep={currentStep}
+      stepNumber={stepNumber}
+      totalSteps={totalSteps}
       isBusy={isBusy}
       onStart={() => goToStep(1)}
     />
