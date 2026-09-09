@@ -277,3 +277,40 @@ export async function listWalletsWithBalances(
   )
   return wallets.map((wallet, index) => ({ ...wallet, balance: balances[index] }))
 }
+
+/**
+ * Read-only distribution of money across all Wallets — the Copiloto's single
+ * source of truth for "how much do I have" questions (docs/adr/ADR-XXX). It
+ * never recomputes a balance itself: every figure comes straight from
+ * `listWalletsWithBalances`, which already derives balances purely from the
+ * financial ledger (income/expense/transfers), so internal transfers can
+ * never change `total` — they only redistribute which wallet holds it.
+ *
+ * Archived wallets that still carry a balance are included in `total` and in
+ * `wallets` (per spec: money doesn't disappear because a wallet was
+ * archived); archived wallets are excluded from `activeWalletCount`.
+ */
+export interface PersonalWalletLedger {
+  readonly currency: CurrencyCode
+  readonly total: number
+  readonly wallets: readonly WalletWithBalance[]
+  readonly activeWalletCount: number
+  readonly archivedWalletCount: number
+  readonly defaultWallet: WalletWithBalance | null
+}
+
+export async function getPersonalWalletLedger(currency: CurrencyCode): Promise<PersonalWalletLedger> {
+  const allWallets = await listWalletsWithBalances(currency, { archived: 'all' })
+  const activeWallets = allWallets.filter((wallet) => !wallet.isArchived)
+  const archivedWallets = allWallets.filter((wallet) => wallet.isArchived)
+  const includedInTotal = activeWallets.concat(archivedWallets.filter((wallet) => wallet.balance !== 0))
+
+  return {
+    currency,
+    total: includedInTotal.reduce((sum, wallet) => sum + wallet.balance, 0),
+    wallets: allWallets,
+    activeWalletCount: activeWallets.length,
+    archivedWalletCount: archivedWallets.length,
+    defaultWallet: activeWallets.find((wallet) => wallet.isDefault) ?? null,
+  }
+}

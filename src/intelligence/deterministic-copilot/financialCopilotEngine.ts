@@ -152,6 +152,18 @@ export type FinancialCopilotQueryIntent =
   | 'create-action-follow-up'
   | 'insufficient-context'
   | 'financial-goal-progress'
+  | 'wallet_total'
+  | 'wallet_balance'
+  | 'wallet_distribution'
+  | 'wallet_count'
+  | 'wallet_default'
+  | 'wallet_largest_balance'
+  | 'wallet_smallest_balance'
+  | 'wallet_transfers_summary'
+  | 'wallet_latest_transfer'
+  | 'wallet_ambiguous'
+  | 'wallet_not_found'
+  | 'wallet_period_unresolvable'
 
 export interface FinancialCopilotQueryAnswer {
   readonly intent: FinancialCopilotQueryIntent
