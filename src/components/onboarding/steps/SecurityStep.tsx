@@ -7,12 +7,13 @@ import { isValidPin } from '../../../utils/pin'
 import { OnboardingLayout } from '../OnboardingLayout'
 
 interface SecurityStepProps {
-  currentStep: number
+  stepNumber: number
+  totalSteps: number
   onNext: (backupRequested: boolean) => void | Promise<void>
   onBack?: () => void
 }
 
-export function SecurityStep({ currentStep, onNext, onBack }: SecurityStepProps) {
+export function SecurityStep({ stepNumber, totalSteps, onNext, onBack }: SecurityStepProps) {
   const [pinAlreadyConfigured, setPinAlreadyConfigured] = useState<boolean | null>(null)
   const [pin, setPinValue] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
@@ -59,7 +60,7 @@ export function SecurityStep({ currentStep, onNext, onBack }: SecurityStepProps)
 
   if (pinAlreadyConfigured === null) {
     return (
-      <OnboardingLayout currentStep={currentStep} footer={null} onBack={onBack} title="Seguridad">
+      <OnboardingLayout stepNumber={stepNumber} totalSteps={totalSteps} footer={null} onBack={onBack} title="Seguridad">
         <p className="text-center text-sm text-slate-500 dark:text-slate-400">Cargando...</p>
       </OnboardingLayout>
     )
@@ -68,7 +69,8 @@ export function SecurityStep({ currentStep, onNext, onBack }: SecurityStepProps)
   if (pinAlreadyConfigured) {
     return (
       <OnboardingLayout
-        currentStep={currentStep}
+        stepNumber={stepNumber}
+        totalSteps={totalSteps}
         description="Ya tienes un PIN configurado para desbloquear la app."
         footer={
           <button
@@ -94,7 +96,8 @@ export function SecurityStep({ currentStep, onNext, onBack }: SecurityStepProps)
   return (
     <OnboardingLayout
       backDisabled={isSaving}
-      currentStep={currentStep}
+      stepNumber={stepNumber}
+      totalSteps={totalSteps}
       description="Protege el acceso a tus datos con un PIN. El desbloqueo biométrico no está disponible todavía en esta versión."
       footer={
         <>

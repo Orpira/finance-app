@@ -1,16 +1,19 @@
-import { ONBOARDING_STEP_ORDER } from '../../types/onboarding'
-
 interface OnboardingProgressProps {
-  currentStep: number
+  stepNumber: number
+  totalSteps: number
 }
 
-export function OnboardingProgress({ currentStep }: OnboardingProgressProps) {
+export function OnboardingProgress({ stepNumber, totalSteps }: OnboardingProgressProps) {
   return (
     <p
       aria-live="polite"
+      aria-valuemax={totalSteps}
+      aria-valuemin={1}
+      aria-valuenow={stepNumber}
       className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300"
+      role="progressbar"
     >
-      Paso {currentStep + 1} de {ONBOARDING_STEP_ORDER.length}
+      Paso {stepNumber} de {totalSteps}
     </p>
   )
 }

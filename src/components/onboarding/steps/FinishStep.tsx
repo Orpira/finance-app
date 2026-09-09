@@ -5,13 +5,14 @@ import { getSettings } from '../../../services/settingsService'
 import { OnboardingLayout } from '../OnboardingLayout'
 
 interface FinishStepProps {
-  currentStep: number
+  stepNumber: number
+  totalSteps: number
   isBusy: boolean
   onFinish: (openBackup: boolean) => void
   onBack?: () => void
 }
 
-export function FinishStep({ currentStep, isBusy, onFinish, onBack }: FinishStepProps) {
+export function FinishStep({ stepNumber, totalSteps, isBusy, onFinish, onBack }: FinishStepProps) {
   const [backupRequested, setBackupRequested] = useState(false)
 
   useEffect(() => {
@@ -23,7 +24,8 @@ export function FinishStep({ currentStep, isBusy, onFinish, onBack }: FinishStep
   return (
     <OnboardingLayout
       backDisabled={isBusy}
-      currentStep={currentStep}
+      stepNumber={stepNumber}
+      totalSteps={totalSteps}
       description="Private Balance está listo para utilizarse."
       footer={
         <>

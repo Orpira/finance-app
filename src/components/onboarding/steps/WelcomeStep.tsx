@@ -1,15 +1,17 @@
 import { OnboardingLayout } from '../OnboardingLayout'
 
 interface WelcomeStepProps {
-  currentStep: number
+  stepNumber: number
+  totalSteps: number
   isBusy: boolean
   onStart: () => void
 }
 
-export function WelcomeStep({ currentStep, isBusy, onStart }: WelcomeStepProps) {
+export function WelcomeStep({ stepNumber, totalSteps, isBusy, onStart }: WelcomeStepProps) {
   return (
     <OnboardingLayout
-      currentStep={currentStep}
+      stepNumber={stepNumber}
+      totalSteps={totalSteps}
       description="Tus finanzas. Tu privacidad. Tu control."
       footer={
         <>

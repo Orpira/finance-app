@@ -10,7 +10,8 @@ import { HybridWorkspaceBanner } from '../HybridWorkspaceBanner'
 import { OnboardingLayout } from '../OnboardingLayout'
 
 interface WorkModeStepProps {
-  currentStep: number
+  stepNumber: number
+  totalSteps: number
   onNext: () => void
   onBack?: () => void
   showHybridBanner?: boolean
@@ -21,7 +22,7 @@ const METHOD_DESCRIPTIONS: Record<IncomeCalculationMethod, string> = {
   hourly_workday: 'Tu ingreso se calcula solo: horas × tarifa.',
 }
 
-export function WorkModeStep({ currentStep, onNext, onBack, showHybridBanner }: WorkModeStepProps) {
+export function WorkModeStep({ stepNumber, totalSteps, onNext, onBack, showHybridBanner }: WorkModeStepProps) {
   const [method, setMethod] = useState<IncomeCalculationMethod | null>(null)
   const [hourlyRate, setHourlyRate] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -58,7 +59,8 @@ export function WorkModeStep({ currentStep, onNext, onBack, showHybridBanner }: 
   return (
     <OnboardingLayout
       backDisabled={isSaving}
-      currentStep={currentStep}
+      stepNumber={stepNumber}
+      totalSteps={totalSteps}
       description="Define el formulario predeterminado para tus nuevos ingresos."
       footer={
         <button

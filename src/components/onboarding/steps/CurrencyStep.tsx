@@ -7,13 +7,14 @@ import { HybridWorkspaceBanner } from '../HybridWorkspaceBanner'
 import { OnboardingLayout } from '../OnboardingLayout'
 
 interface CurrencyStepProps {
-  currentStep: number
+  stepNumber: number
+  totalSteps: number
   onNext: () => void
   onBack?: () => void
   showHybridBanner?: boolean
 }
 
-export function CurrencyStep({ currentStep, onNext, onBack, showHybridBanner }: CurrencyStepProps) {
+export function CurrencyStep({ stepNumber, totalSteps, onNext, onBack, showHybridBanner }: CurrencyStepProps) {
   const [currency, setCurrency] = useState<CurrencyCode>('EUR')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
@@ -35,7 +36,8 @@ export function CurrencyStep({ currentStep, onNext, onBack, showHybridBanner }: 
   return (
     <OnboardingLayout
       backDisabled={isSaving}
-      currentStep={currentStep}
+      stepNumber={stepNumber}
+      totalSteps={totalSteps}
       description="Se usará de forma predeterminada en tus importes y reportes."
       footer={
         <button className="h-11 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white disabled:bg-slate-300" disabled={isSaving} form="onboarding-currency-form" type="submit">

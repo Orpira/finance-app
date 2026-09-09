@@ -7,7 +7,8 @@ import { HybridWorkspaceBanner } from '../HybridWorkspaceBanner'
 import { OnboardingLayout } from '../OnboardingLayout'
 
 interface SeasonStepProps {
-  currentStep: number
+  stepNumber: number
+  totalSteps: number
   onNext: () => void
   onBack?: () => void
   showHybridBanner?: boolean
@@ -19,7 +20,7 @@ function defaultPlannedEndDate() {
   return date.toLocaleDateString('en-CA')
 }
 
-export function SeasonStep({ currentStep, onNext, onBack, showHybridBanner }: SeasonStepProps) {
+export function SeasonStep({ stepNumber, totalSteps, onNext, onBack, showHybridBanner }: SeasonStepProps) {
   const [name, setName] = useState('Primera temporada')
   const [startDate, setStartDate] = useState(getTodayInputDate())
   const [plannedEndDate, setPlannedEndDate] = useState(defaultPlannedEndDate)
@@ -55,7 +56,8 @@ export function SeasonStep({ currentStep, onNext, onBack, showHybridBanner }: Se
   return (
     <OnboardingLayout
       backDisabled={isSaving}
-      currentStep={currentStep}
+      stepNumber={stepNumber}
+      totalSteps={totalSteps}
       description="Una temporada es el período durante el que vas a controlar tu actividad y tus resultados. Por ejemplo: verano 2026 o enero–marzo."
       footer={
         <button
