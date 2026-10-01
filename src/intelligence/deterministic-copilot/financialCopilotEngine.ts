@@ -356,19 +356,22 @@ function buildInsights(snapshot: FinancialCopilotSnapshot): FinancialCopilotInsi
 function buildTodayPriorities(snapshot: FinancialCopilotSnapshot): FinancialCopilotPriority[] {
   const priorities: FinancialCopilotPriority[] = []
 
-  if (snapshot.appointments.todayPendingCount > 0) {
-    priorities.push({
-      id: 'today-appointments',
-      message: `Hoy tienes ${snapshot.appointments.todayPendingCount} ${plural(snapshot.appointments.todayPendingCount, 'cita', 'citas')}.`,
-      action: { label: 'Ver agenda', to: '/agenda' },
-    })
-  }
-
+  // Una situación ya vencida requiere atención antes que un evento futuro,
+  // aunque este último ocurra hoy. El orden del array es el ranking canónico
+  // consumido por Inicio, que muestra exclusivamente el primer elemento.
   if (snapshot.pendingIncome.overdueCount > 0) {
     priorities.push({
       id: 'overdue-pending-income',
       message: `${snapshot.pendingIncome.overdueCount} ${plural(snapshot.pendingIncome.overdueCount, 'ingreso lleva', 'ingresos llevan')} más de 7 días sin reportar.`,
       action: { label: 'Revisar ahora', to: '/income/pendientes' },
+    })
+  }
+
+  if (snapshot.appointments.todayPendingCount > 0) {
+    priorities.push({
+      id: 'today-appointments',
+      message: `Hoy tienes ${snapshot.appointments.todayPendingCount} ${plural(snapshot.appointments.todayPendingCount, 'cita', 'citas')}.`,
+      action: { label: 'Ver agenda', to: '/agenda' },
     })
   }
 

@@ -77,7 +77,7 @@ vi.mock('../src/database/db', () => ({
   },
 }))
 
-const { getSettings, activateHybridMode, setActiveContext } = await import(
+const { getSettings, activateHybridMode, deactivateUsageSpace, setActiveContext } = await import(
   '../src/services/settingsService'
 )
 
@@ -163,5 +163,37 @@ describe('setActiveContext', () => {
 
     const reloaded = await getSettings()
     expect(reloaded.activeContext).toBe('basic')
+  })
+})
+
+describe('deactivateUsageSpace', () => {
+  it('desactiva Personal y deja Profesional activo sin borrar otros ajustes', async () => {
+    seedSettings({ usageMode: 'hybrid', activeContext: 'basic', defaultCurrency: 'USD' })
+
+    const updated = await deactivateUsageSpace('basic')
+
+    expect(updated.usageMode).toBe('professional')
+    expect(updated.activeContext).toBeUndefined()
+    expect(updated.defaultCurrency).toBe('USD')
+    expect((await getSettings()).usageMode).toBe('professional')
+  })
+
+  it('desactiva Profesional y deja Personal activo', async () => {
+    seedSettings({ usageMode: 'hybrid', activeContext: 'professional' })
+
+    const updated = await deactivateUsageSpace('professional')
+
+    expect(updated.usageMode).toBe('basic')
+    expect(updated.activeContext).toBeUndefined()
+    expect((await getSettings()).usageMode).toBe('basic')
+  })
+
+  it('impide desactivar el único espacio habilitado', async () => {
+    seedSettings({ usageMode: 'basic', userType: 'basic' })
+
+    await expect(deactivateUsageSpace('basic')).rejects.toThrow(
+      'Debe permanecer al menos un espacio activo.',
+    )
+    expect((await getSettings()).usageMode).toBe('basic')
   })
 })

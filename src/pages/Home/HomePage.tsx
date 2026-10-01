@@ -7,7 +7,6 @@ import {
   EyeOff,
   HeartPulse,
   Lightbulb,
-  ListChecks,
   MessageCircleMore,
   MinusCircle,
   PlusCircle,
@@ -52,6 +51,7 @@ import { HOME_SECTION_ORDER } from './homeSectionOrder'
 import { selectHomeCopilotPresentation } from './homePendingIncomePresentation'
 import { WalletsSummaryCard } from './WalletsSummaryCard'
 import { WalletActivityCard } from './WalletActivityCard'
+import { HomeMainPriority } from './HomeMainPriority'
 import type {
   CivilDate,
   IanaTimeZone,
@@ -675,24 +675,8 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Siempre vacía en Personal (solo agenda/pendientes profesionales la alimentan), así que se oculta en vez de mostrarla vacía. */}
       {!isBasicMode(settings) && (
-        <section aria-labelledby="today-priorities-title" className="order-1">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200" id="today-priorities-title">
-              <ListChecks className="size-5 text-amber-700 dark:text-amber-300" aria-hidden="true" />
-              {HOME_SECTION_ORDER[0]}
-            </h2>
-            {homeCopilotPresentation.todayPriorities.length > 0 ? <ul className="mt-3 grid gap-3">
-              {homeCopilotPresentation.todayPriorities.slice(0, 1).map((priority) => (
-                <li className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/40" key={priority.id}>
-                  <span className="text-sm font-medium text-amber-950 dark:text-amber-100">{priority.message}</span>
-                  <Link className="shrink-0 text-xs font-semibold text-amber-800 hover:text-amber-950 dark:text-amber-200" to={priority.action.to}>
-                    {priority.action.label}
-                  </Link>
-                </li>
-              ))}
-            </ul> : <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">No hay asuntos urgentes para hoy.</p>}
-        </section>
+        <HomeMainPriority priorities={homeCopilotPresentation.todayPriorities} />
       )}
 
       <div className="contents">

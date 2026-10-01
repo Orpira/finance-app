@@ -64,7 +64,7 @@ const settingsLinks = [
     label: 'Notificaciones',
   },
   {
-    description: 'Activa el uso Híbrido o consulta tus espacios Personal y Profesional.',
+    description: 'Consulta tus espacios Personal y Profesional o activa el que te falte.',
     href: '/settings/usage-mode',
     icon: Layers,
     label: 'Espacios de uso',

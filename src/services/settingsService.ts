@@ -270,6 +270,34 @@ export async function deactivateHybridMode() {
   return nextSettings
 }
 
+/**
+ * Desactiva uno de los dos espacios de una instalación Híbrida y deja el
+ * otro como único contexto activo. Los registros del espacio desactivado no
+ * se eliminan ni se transforman: vuelven a estar disponibles al reactivarlo.
+ */
+export async function deactivateUsageSpace(space: ActiveContext) {
+  const currentSettings = await getSettings()
+
+  if (!isHybridMode(currentSettings)) {
+    throw new Error('Debe permanecer al menos un espacio activo.')
+  }
+
+  const remainingSpace: ActiveContext = space === 'basic' ? 'professional' : 'basic'
+  const nextSettings: AppSettings = {
+    ...currentSettings,
+    usageMode: remainingSpace,
+    activeContext: undefined,
+    userType: toLegacyUserType(remainingSpace),
+    updatedAt: new Date().toISOString(),
+  }
+
+  await db.settings.put(nextSettings)
+  syncSettingsToLocalStorage(nextSettings)
+  applyTheme(nextSettings.theme)
+  notifySettingsChange(nextSettings)
+  return nextSettings
+}
+
 export async function setActiveContext(activeContext: ActiveContext) {
   const currentSettings = await getSettings()
 

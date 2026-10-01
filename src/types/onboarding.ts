@@ -27,7 +27,9 @@ export const ONBOARDING_STEP_ORDER: readonly OnboardingStepId[] = [
 
 export const LAST_ONBOARDING_STEP_INDEX = ONBOARDING_STEP_ORDER.length - 1
 
-// 'work-mode' y 'season' solo aplican al recorrido Profesional/Híbrido; con
+// 'work-mode' y 'season' solo aplican al recorrido Profesional. Híbrido ya no
+// se puede elegir en onboarding, pero se conserva aquí para reanudar de forma
+// retrocompatible un onboarding antiguo que ya tuviera ese valor guardado. Con
 // Personal (o mientras aún no se elige modo) quedan fuera del itinerario
 // efectivo. Punto único de verdad para "PASO X DE Y" y para la navegación
 // Atrás/Continuar, evitando condicionales duplicados en cada pantalla.

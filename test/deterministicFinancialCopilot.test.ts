@@ -82,12 +82,12 @@ describe('buildFinancialCopilot', () => {
     )
   })
 
-  it('muestra solo prioridades actuales y ordena primero la cita de hoy', () => {
+  it('muestra solo prioridades actuales y ordena primero la situación ya vencida', () => {
     const result = buildFinancialCopilot(SNAPSHOT)
 
     expect(result.todayPriorities.map((priority) => priority.id)).toEqual([
-      'today-appointments',
       'overdue-pending-income',
+      'today-appointments',
     ])
   })
 

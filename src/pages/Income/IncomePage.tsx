@@ -914,6 +914,37 @@ export function IncomePage() {
         className="flex flex-col gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
         onSubmit={handleSubmit}
       >
+        {!isEditing || isBasicUser ? (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300!">
+              Fecha y hora
+            </p>
+            <p className="mt-1 font-medium text-slate-900 dark:text-white!">
+              {readOnlyDateTime}
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-300!">
+              Se asignan automáticamente al guardar.
+            </p>
+          </div>
+        ) : (
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-slate-700">
+              Fecha del ingreso
+            </span>
+            <input
+              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              min={(editingPeriod ?? activePeriod)?.startDate.slice(0, 10)}
+              onChange={(event) => setDate(event.target.value)}
+              required
+              type="date"
+              value={date}
+            />
+            <span className="text-xs text-slate-500">
+              La hora original del registro se conserva.
+            </span>
+          </label>
+        )}
+
         {isBasicUser && (
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex flex-col gap-2 md:col-span-2">
@@ -1045,37 +1076,6 @@ export function IncomePage() {
           <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900">
             Este registro histórico se conserva como “Otro ingreso histórico”.
           </p>
-        )}
-
-        {!isEditing || isBasicUser ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300!">
-              Fecha y hora
-            </p>
-            <p className="mt-1 font-medium text-slate-900 dark:text-white!">
-              {readOnlyDateTime}
-            </p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-300!">
-              Se asignan automáticamente al guardar.
-            </p>
-          </div>
-        ) : (
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700">
-              Fecha del ingreso
-            </span>
-            <input
-              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              min={(editingPeriod ?? activePeriod)?.startDate.slice(0, 10)}
-              onChange={(event) => setDate(event.target.value)}
-              required
-              type="date"
-              value={date}
-            />
-            <span className="text-xs text-slate-500">
-              La hora original del registro se conserva.
-            </span>
-          </label>
         )}
 
         {usesServiceDuration && (

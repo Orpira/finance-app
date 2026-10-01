@@ -1,13 +1,18 @@
-import { BriefcaseBusiness, House, Layers } from 'lucide-react'
+import { BriefcaseBusiness, Check, House, Minus, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import { useDialog } from '../../components/dialogs/useDialog'
-import { activateHybridMode, deactivateHybridMode, getSettings } from '../../services/settingsService'
+import {
+  activateHybridMode,
+  deactivateUsageSpace,
+  getSettings,
+} from '../../services/settingsService'
 import type { AppSettings } from '../../types/settings'
+import type { ActiveContext } from '../../types/settings'
 import { resolveUsageMode } from '../../utils/usageMode'
 
-type ActivationStatus = 'idle' | 'activating' | 'deactivating' | 'error'
+type ActivationStatus = 'idle' | 'activating' | `deactivating-${ActiveContext}` | 'error'
 
 export function SettingsUsageModePage() {
   const { confirm, alert } = useDialog()
@@ -37,11 +42,12 @@ export function SettingsUsageModePage() {
 
   const configuredMode = resolveUsageMode(settings)
 
-  async function handleActivateHybrid() {
+  async function handleActivateSecondSpace() {
+    const secondSpace = configuredMode === 'basic' ? 'Profesional' : 'Personal'
     const confirmed = await confirm({
-      title: 'Activar uso Híbrido',
-      message: 'Esta acción habilitará los espacios Personal y Profesional. No trasladará, duplicará ni modificará tus registros actuales.',
-      confirmLabel: 'Activar uso Híbrido',
+      title: `Activar espacio ${secondSpace.toLowerCase()}`,
+      message: `Se habilitará el espacio ${secondSpace} sin trasladar, duplicar ni modificar los registros de tu espacio actual.`,
+      confirmLabel: `Activar espacio ${secondSpace.toLowerCase()}`,
       confirmTone: 'primary',
     })
 
@@ -56,44 +62,43 @@ export function SettingsUsageModePage() {
       setStatus('idle')
       await alert({
         type: 'success',
-        title: 'Uso Híbrido activado',
+        title: `Espacio ${secondSpace} activado`,
         message: 'Ya puedes alternar entre Personal y Profesional desde el selector de la barra de navegación.',
       })
     } catch (error) {
       setStatus('error')
       setErrorMessage(
-        error instanceof Error ? error.message : 'No se pudo activar el uso Híbrido.',
+        error instanceof Error ? error.message : `No se pudo activar el espacio ${secondSpace}.`,
       )
     }
   }
 
-  async function handleDeactivateHybrid() {
-    const activeContext = settings?.activeContext === 'basic' ? 'Personal' : 'Profesional'
+  async function handleDeactivateSpace(space: ActiveContext, label: string) {
     const confirmed = await confirm({
-      title: 'Desactivar uso Híbrido',
-      message: `Se conservarán ambos espacios, pero solo quedará visible el espacio ${activeContext}. Podrás volver a activar Híbrido más adelante.`,
-      confirmLabel: 'Desactivar uso Híbrido',
+      title: `Desactivar espacio ${label.toLowerCase()}`,
+      message: `El espacio ${label} dejará de estar visible, pero todos sus datos se conservarán. Podrás activarlo de nuevo más adelante.`,
+      confirmLabel: `Desactivar espacio ${label.toLowerCase()}`,
       confirmTone: 'primary',
     })
 
     if (!confirmed) return
 
-    setStatus('deactivating')
+    setStatus(`deactivating-${space}`)
     setErrorMessage('')
 
     try {
-      const updatedSettings = await deactivateHybridMode()
+      const updatedSettings = await deactivateUsageSpace(space)
       setSettings(updatedSettings)
       setStatus('idle')
       await alert({
         type: 'success',
-        title: 'Uso Híbrido desactivado',
-        message: `Ahora está activo el espacio ${activeContext}. Tus datos del otro espacio se conservaron y volverán a estar disponibles al activar Híbrido.`,
+        title: `Espacio ${label} desactivado`,
+        message: 'Tus datos se han conservado y estarán disponibles cuando vuelvas a activar el espacio.',
       })
     } catch (error) {
       setStatus('error')
       setErrorMessage(
-        error instanceof Error ? error.message : 'No se pudo desactivar el uso Híbrido.',
+        error instanceof Error ? error.message : `No se pudo desactivar el espacio ${label}.`,
       )
     }
   }
@@ -107,67 +112,69 @@ export function SettingsUsageModePage() {
         title="Espacios de uso"
       />
 
-      {configuredMode === 'hybrid' ? (
-        <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
-            <Layers className="size-5" aria-hidden="true" />
-          </span>
-          <div>
-            <h2 className="font-semibold text-slate-950">Uso Híbrido activo</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Tienes los espacios Personal y Profesional habilitados. Cambia entre ellos con el
-              selector de la barra de navegación. Por ahora no es posible desactivar el uso
-              desactiva Híbrido temporalmente. Tus datos de ambos espacios se conservarán.
-            </p>
-            <button
-              className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={status === 'deactivating'}
-              onClick={handleDeactivateHybrid}
-              type="button"
-            >
-              {status === 'deactivating' ? 'Desactivando...' : 'Desactivar uso Híbrido'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
-              {configuredMode === 'basic' ? (
-                <House className="size-5" aria-hidden="true" />
-              ) : (
-                <BriefcaseBusiness className="size-5" aria-hidden="true" />
-              )}
-            </span>
-            <div>
-              <h2 className="font-semibold text-slate-950">
-                Actualmente usas el espacio {configuredMode === 'basic' ? 'Personal' : 'Profesional'}
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {configuredMode === 'basic'
-                  ? 'Activa también el espacio Profesional y cambia entre ambos sin reinstalar. Tus datos personales permanecerán intactos y el espacio Profesional comenzará vacío.'
-                  : 'Activa también el espacio Personal y cambia entre ambos sin reinstalar. Tus datos profesionales permanecerán intactos y el espacio Personal comenzará vacío.'}
-              </p>
-            </div>
-          </div>
+      <p className="text-sm text-slate-500">
+        Cada espacio mantiene sus datos y funciones por separado.
+      </p>
 
-          <div className="flex flex-col gap-2">
-            <button
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-              disabled={status === 'activating'}
-              onClick={handleActivateHybrid}
-              type="button"
-            >
-              <Layers className="size-4" aria-hidden="true" />
-              {status === 'activating' ? 'Activando...' : 'Activar uso Híbrido'}
-            </button>
-            {errorMessage && (
-              <p className="text-sm font-medium text-red-600" role="status">
-                {errorMessage}
-              </p>
-            )}
-          </div>
-        </div>
+      <div className="grid gap-4">
+        {([
+          { mode: 'basic' as const, label: 'Personal', icon: House, description: 'Gestiona tus finanzas personales.' },
+          { mode: 'professional' as const, label: 'Profesional', icon: BriefcaseBusiness, description: 'Gestiona tu actividad profesional.' },
+        ]).map(({ mode, label, icon: Icon, description }) => {
+          const isEnabled = configuredMode === mode || configuredMode === 'hybrid'
+          return (
+            <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" key={mode}>
+              <div className="flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+                  <Icon className="size-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="font-semibold text-slate-950">{label}</h2>
+                    {isEnabled && (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                        <Check className="size-4" aria-hidden="true" /> Activo
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-slate-500">{description}</p>
+                  {!isEnabled && (
+                    <button
+                      className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      disabled={status === 'activating'}
+                      onClick={handleActivateSecondSpace}
+                      type="button"
+                    >
+                      <Plus className="size-4" aria-hidden="true" />
+                      {status === 'activating' ? 'Activando...' : `Activar espacio ${label.toLowerCase()}`}
+                    </button>
+                  )}
+                  {configuredMode === 'hybrid' && (
+                    <button
+                      className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={status !== 'idle' && status !== 'error'}
+                      onClick={() => handleDeactivateSpace(mode, label)}
+                      type="button"
+                    >
+                      <Minus className="size-4" aria-hidden="true" />
+                      {status === `deactivating-${mode}`
+                        ? 'Desactivando...'
+                        : `Desactivar espacio ${label.toLowerCase()}`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </article>
+          )
+        })}
+      </div>
+      {configuredMode === 'hybrid' && (
+        <p className="text-sm text-slate-500">
+          Cambia entre Personal y Profesional desde el selector de la barra de navegación.
+        </p>
+      )}
+      {errorMessage && (
+        <p className="text-sm font-medium text-red-600" role="status">{errorMessage}</p>
       )}
     </section>
   )
