@@ -205,7 +205,9 @@ describe('answerPersonalWalletCopilotQuery — criterio de aceptación (spec §5
 
   it('responde el resumen de transferencias sin duplicar el importe movido (spec §17)', async () => {
     await buildAcceptanceScenario()
-    const answer = await answerPersonalWalletCopilotQuery('¿Cuánto transferí?')
+    const answer = await answerPersonalWalletCopilotQuery('¿Cuánto transferí?', {
+      now: () => new Date('2026-09-08T00:00:00.000Z'),
+    })
     expect(answer?.text).toContain('150,00')
     expect(answer?.text).not.toContain('300,00')
   })
