@@ -10,6 +10,25 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Added
 
+- **Metodo de calculo por ingreso, seleccionable al crear (D-015)**: en modo
+  Profesional, el formulario de Ingreso agrega un selector "Metodo de
+  calculo para este ingreso" ("Servicio por tiempo" / "Jornada por horas")
+  para registros de tipo servicio, visible unicamente al crear uno nuevo. El
+  selector parte del ajuste global de Configuracion
+  (`settings.incomeCalculationMethod`) como valor por defecto, pero permite
+  elegir el otro metodo para ese ingreso puntual — util cuando se necesita
+  registrar un servicio medido en horas que si aplique el % de temporada,
+  sin cambiar el ajuste global ni forzar "Jornada por horas" (que, por D-011,
+  nunca aplica ese %). No reabre D-011 ni ninguna otra decision de
+  PB-IS-0007: la regla por metodo sigue igual, solo cambia quien la elige
+  (por ingreso en vez de solo por ajuste global). Respeta la inmutabilidad
+  ya existente (PB-IS-0007, seccion 9): el selector no aparece al editar un
+  ingreso ya creado, y `incomeService.ts` sigue descartando
+  `incomeCalculationMethod` en cualquier actualizacion. Cambio de un solo
+  archivo (`src/pages/Income/IncomePage.tsx`). Gates: `tsc -b`, `eslint .` y
+  `vitest run` en verde — 262 archivos / 2823 tests (1 `todo`); build de
+  produccion (`vite build`) en verde.
+
 - **Consultas de solo lectura de Wallets en el Copiloto (ADR-036)**: el
   Copiloto determinista ahora responde preguntas sobre distribucion del
   dinero — "¿cuanto dinero tengo?", "¿cuanto tengo en casa?", "¿como esta

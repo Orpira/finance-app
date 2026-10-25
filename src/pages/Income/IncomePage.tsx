@@ -10,6 +10,7 @@ import {
 import { PageHeader } from '../../components/layout/PageHeader'
 import type { IncomeCalculationMethod, WorkedTimeUnit } from '../../catalogs/incomeCalculationMethods'
 import {
+  INCOME_CALCULATION_METHODS,
   WORKED_TIME_UNITS,
   getWorkedTimeUnitForMethod,
   shouldCollectPaymentTypeAtRegistration,
@@ -200,6 +201,12 @@ export function IncomePage() {
   const [workedTime, setWorkedTime] = useState(0)
   const [workedTimeUnit, setWorkedTimeUnit] = useState<WorkedTimeUnit>('minutes')
   const [hourlyRateApplied, setHourlyRateApplied] = useState(0)
+  // Elección puntual del método de cálculo para ESTE ingreso nuevo, que
+  // prevalece sobre el ajuste global de Configuración. Solo aplica al crear:
+  // el método es inmutable una vez guardado el ingreso (PB-IS-0007, sección
+  // 9; reforzado en incomeService.ts), así que en edición se sigue usando
+  // siempre editingIncome.incomeCalculationMethod, sin selector visible.
+  const [methodOverride, setMethodOverride] = useState<IncomeCalculationMethod | null>(null)
   const [hasAdditionalsOnCreate, setHasAdditionalsOnCreate] = useState<'yes' | 'no'>('no')
   const [draftAdditionals, setDraftAdditionals] = useState<IncomeAdditionalItem[]>([])
   const [persistedAdditionals, setPersistedAdditionals] = useState<IncomeAdditionalItem[]>([])
@@ -260,6 +267,7 @@ export function IncomePage() {
       }
 
       setSettings(currentSettings)
+      setMethodOverride(null)
       setActivePeriod(currentPeriod ?? null)
       setEditingPeriod(currentIncomePeriod ?? null)
       setPersonalCategoryOptions(currentPersonalCategories)
@@ -552,9 +560,13 @@ export function IncomePage() {
   }
   const isServiceType = isBasicUser || isServiceIncome({ type: incomeType })
   const isAdjustmentType = !isBasicUser && isAdjustmentIncome({ type: incomeType })
+  // En edición el método ya quedó fijado al crear el ingreso y no es
+  // seleccionable (ver nota junto a methodOverride). Al crear, la elección
+  // puntual (methodOverride) prevalece sobre el ajuste global de
+  // Configuración, que solo actúa como valor por defecto del selector.
   const registrationMethod = editingIncome
     ? editingIncome.incomeCalculationMethod ?? 'service_duration'
-    : settings?.incomeCalculationMethod ?? 'service_duration'
+    : methodOverride ?? settings?.incomeCalculationMethod ?? 'service_duration'
   // El método de cálculo solo aplica a la actividad profesional. Los
   // ajustes y el modo básico conservan exactamente el flujo existente
   // (equivalente a 'service_duration' con additionalsTotal=0).
@@ -669,6 +681,24 @@ export function IncomePage() {
       isMounted = false
     }
   }, [currency, date, exchangeRate, isEditing, realGain, settings])
+
+  function handleMethodOverrideChange(nextMethod: IncomeCalculationMethod) {
+    setMethodOverride(nextMethod)
+    setSaveError('')
+    // Limpia los campos propios del método que se abandona para que no
+    // queden valores de un cálculo distinto flotando en el formulario; el
+    // motor de cálculo (incomeCalculatorRegistry) solo lee los campos de su
+    // propio método, así que esto es higiene de UI, no una corrección de
+    // cálculo.
+    if (nextMethod === 'hourly_workday') {
+      setDuration(0)
+      setDurationLabel('')
+      setDurationSelectionChanged(false)
+      setTimerPreference('')
+    } else {
+      setWorkedTime(0)
+    }
+  }
 
   function handleDurationChange(nextLabel: ServiceDurationLabel) {
     const selectedOption = getServiceDurationOption(nextLabel)
@@ -1076,6 +1106,44 @@ export function IncomePage() {
           <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900">
             Este registro histórico se conserva como “Otro ingreso histórico”.
           </p>
+        )}
+
+        {!isBasicUser && isServiceType && !isAdjustmentType && !isEditing && (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Método de cálculo para este ingreso
+            </legend>
+            <div className="grid grid-cols-2 gap-2">
+              {INCOME_CALCULATION_METHODS.map((option) => (
+                <label
+                  className={[
+                    'flex h-11 cursor-pointer items-center justify-center rounded-md border px-3 text-center text-sm font-semibold transition',
+                    effectiveMethod === option.code
+                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                      : 'border-slate-300 text-slate-600 hover:bg-slate-50',
+                  ].join(' ')}
+                  key={option.code}
+                >
+                  <input
+                    checked={effectiveMethod === option.code}
+                    className="sr-only"
+                    name="methodOverride"
+                    onChange={() => handleMethodOverrideChange(option.code)}
+                    type="radio"
+                    value={option.code}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500">
+              {effectiveMethod === 'hourly_workday'
+                ? 'Jornada por horas: el valor por hora es el 100% del ingreso, sin aplicar el % de temporada.'
+                : 'Servicio por tiempo: aplica el % de temporada configurado sobre el importe.'}
+              {' '}Válido solo para este ingreso; no cambia el ajuste de Configuración. Una vez
+              guardado, el método ya no se puede cambiar.
+            </p>
+          </fieldset>
         )}
 
         {usesServiceDuration && (

@@ -76,6 +76,13 @@
 - Estado: aceptada.
 - Resultado: `incomeAdditionals` no bloquea el borrado del ingreso padre (`deleteServiceIncome` los borra en la misma transacción), porque un Adicional no es un movimiento financiero independiente — a diferencia de los ajustes en `expenses`, que sí bloquean el borrado mientras existan.
 
+### D-015 El método de cálculo es seleccionable por ingreso al crear, no solo por ajuste global
+
+- Estado: aceptada (solicitada explícitamente por el propietario del proyecto: necesitaba registrar, caso por caso, un servicio por horas que sí aplicara el % de temporada, cosa que "Jornada por horas" nunca hace por D-011).
+- Resultado: `IncomePage.tsx` incorpora un selector de método ("Servicio por tiempo" / "Jornada por horas") visible únicamente al crear un ingreso profesional de tipo servicio, que parte del valor del ajuste global de Configuración (`settings.incomeCalculationMethod`) como default pero puede sobreescribirse para ese ingreso puntual. El ajuste global de Configuración no cambia y sigue siendo el valor por defecto para nuevos ingresos.
+- No reabre D-011: "Jornada por horas" sigue sin aplicar nunca el % de temporada; lo que cambia es que ahora se puede *elegir* ese método (o el otro) por ingreso, en vez de quedar fijado únicamente por el ajuste global.
+- Respeta la inmutabilidad ya existente (PB-IS-0007, sección 9): el selector no aparece al editar un ingreso ya creado; `incomeService.ts` sigue descartando `incomeCalculationMethod` en cualquier actualización.
+
 ## 3) Decisiones pendientes (requieren ADR futura)
 
 1. Definición normativa oficial del milestone 8A con criterios medibles.
