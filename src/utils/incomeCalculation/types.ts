@@ -15,6 +15,14 @@ export interface IncomeCalculationInput {
   workedTime?: number
   workedTimeUnit?: WorkedTimeUnit
   hourlyRate?: number
+  /**
+   * Significativo solo en 'hourly_workday' (D-015 revisited). Por defecto
+   * 'hourly_workday' sigue sin aplicar el % (D-011): este flag es un opt-in
+   * explícito por ingreso para que el 100% se recorte al % de temporada,
+   * igual que 'service_duration'. false/undefined preserva el comportamiento
+   * histórico.
+   */
+  applySeasonPercentage?: boolean
   storedRealGain?: number
 }
 

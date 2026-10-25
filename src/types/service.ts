@@ -119,6 +119,14 @@ export interface ServiceIncome {
   /** Valor por hora efectivamente aplicado a este ingreso (autocompletado desde Configuración, sobreescribible por ingreso). */
   hourlyRateApplied?: number;
 
+  /**
+   * Solo 'hourly_workday' (D-015 revisión). true si este ingreso optó
+   * explícitamente por recortar realGain al % de temporada en vez del 100%
+   * por defecto (D-011). Campo explícito (no se infiere de `percentage`)
+   * para que la decisión quede auditable sin ambigüedad.
+   */
+  hourlyAppliesSeasonPercentage?: boolean;
+
   /** true si este ingreso inició el cronómetro de "Servicio por tiempo". */
   timerUsed?: boolean;
 

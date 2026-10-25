@@ -83,6 +83,14 @@
 - No reabre D-011: "Jornada por horas" sigue sin aplicar nunca el % de temporada; lo que cambia es que ahora se puede *elegir* ese método (o el otro) por ingreso, en vez de quedar fijado únicamente por el ajuste global.
 - Respeta la inmutabilidad ya existente (PB-IS-0007, sección 9): el selector no aparece al editar un ingreso ya creado; `incomeService.ts` sigue descartando `incomeCalculationMethod` en cualquier actualización.
 
+### D-016 "Jornada por horas" permite aplicar el % de temporada como opt-in explícito por ingreso
+
+- Estado: aceptada (solicitada explícitamente por el propietario del proyecto, revisando D-011 tras D-015: el selector de método por sí solo no bastaba, porque "Servicio por tiempo" usa un flujo distinto — duración en minutos vía `ServiceDurationSelect` + importe tecleado — y no permite registrar horas trabajadas × valor por hora aplicando el %).
+- Resultado: `hourlyWorkdayCalculator.ts` acepta `applySeasonPercentage?: boolean` en `IncomeCalculationInput`. Por defecto (`false`/`undefined`) el comportamiento de D-011 se preserva sin cambios: `realGain = workedHours × hourlyRate`, 100% para la profesional. Si se activa explícitamente, `realGain = workedHours × hourlyRate × (percentage / 100)`, usando el mismo % que usaría "Servicio por tiempo" (el % activo de la temporada). `IncomePage.tsx` agrega el interruptor "¿Aplicar el % de temporada a este ingreso?" (No/Sí) dentro del formulario de Jornada por horas, visible tanto al crear como al editar (a diferencia del selector de método de D-015, este campo no es inmutable — `percentage`/`realGain` ya eran editables antes de esta decisión).
+- Persistencia: `ServiceIncome.hourlyAppliesSeasonPercentage?: boolean` (nuevo campo opcional, sin migración Dexie — no indexado) registra la elección de forma explícita y auditable, sin inferirla del campo `percentage` (que `createServiceIncome` puede sobreescribir con el % de la temporada activa para cualquier ingreso de tipo servicio, independientemente del método — comportamiento preexistente no modificado por esta decisión).
+- Fail-closed (principio no negociable de `AGENTS.md`): si `applySeasonPercentage` es `true` sin un `percentage` válido (> 0), tanto `IncomePage.tsx` como `assertIncomeCalculationInputIsValid` rechazan el guardado/cálculo en vez de asumir un 100% o un 0% silencioso.
+- No reabre D-011 como regla por defecto: "Jornada por horas" sigue siendo 100% para la profesional salvo que la usuaria decida explícitamente lo contrario, ingreso por ingreso.
+
 ## 3) Decisiones pendientes (requieren ADR futura)
 
 1. Definición normativa oficial del milestone 8A con criterios medibles.

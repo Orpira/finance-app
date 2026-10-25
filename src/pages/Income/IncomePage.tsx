@@ -207,6 +207,14 @@ export function IncomePage() {
   // 9; reforzado en incomeService.ts), así que en edición se sigue usando
   // siempre editingIncome.incomeCalculationMethod, sin selector visible.
   const [methodOverride, setMethodOverride] = useState<IncomeCalculationMethod | null>(null)
+  // D-015 (revisión): dentro de "Jornada por horas", opt-in explícito por
+  // ingreso para recortar realGain al % de temporada en vez del 100% por
+  // defecto (D-011). A diferencia de methodOverride, este campo SÍ es
+  // editable en un ingreso existente (el método en sí es inmutable, pero
+  // percentage/realGain no lo son — ver incomeService.ts, que solo protege
+  // incomeCalculationMethod). Por defecto false: preserva el comportamiento
+  // histórico de Jornada por horas.
+  const [applySeasonPercentageToHourly, setApplySeasonPercentageToHourly] = useState(false)
   const [hasAdditionalsOnCreate, setHasAdditionalsOnCreate] = useState<'yes' | 'no'>('no')
   const [draftAdditionals, setDraftAdditionals] = useState<IncomeAdditionalItem[]>([])
   const [persistedAdditionals, setPersistedAdditionals] = useState<IncomeAdditionalItem[]>([])
@@ -268,6 +276,7 @@ export function IncomePage() {
 
       setSettings(currentSettings)
       setMethodOverride(null)
+      setApplySeasonPercentageToHourly(false)
       setActivePeriod(currentPeriod ?? null)
       setEditingPeriod(currentIncomePeriod ?? null)
       setPersonalCategoryOptions(currentPersonalCategories)
@@ -344,6 +353,9 @@ export function IncomePage() {
         setWorkedTimeUnit(currentIncome.workedTimeUnit ?? currentSettings.workedTimeUnit)
         setHourlyRateApplied(
           currentIncome.hourlyRateApplied ?? currentSettings.hourlyRate,
+        )
+        setApplySeasonPercentageToHourly(
+          currentIncome.hourlyAppliesSeasonPercentage ?? false,
         )
         setCurrency(currentIncome.currency as CurrencyCode)
         setPaymentType(currentIncome.paymentType ?? paymentTypes[0].value)
@@ -609,6 +621,11 @@ export function IncomePage() {
         workedTime,
         workedTimeUnit: effectiveWorkedTimeUnit,
         hourlyRate: hourlyRateApplied,
+        // D-015 (revisión): opt-in explícito, por ingreso, para que Jornada
+        // por horas recorte realGain al % de temporada en vez del 100% por
+        // defecto (D-011). Sin efecto en 'service_duration', que ya aplica
+        // `percentage` siempre.
+        applySeasonPercentage: usesHourlyWorkday ? applySeasonPercentageToHourly : undefined,
         storedRealGain: editingIncome?.realGain,
       })
     } catch {
@@ -618,6 +635,7 @@ export function IncomePage() {
       return { realGain: 0 }
     }
   }, [
+    applySeasonPercentageToHourly,
     editingIncome?.realGain,
     effectiveMethod,
     effectiveWorkedTimeUnit,
@@ -626,6 +644,7 @@ export function IncomePage() {
     isBasicUser,
     percentage,
     totalAmount,
+    usesHourlyWorkday,
     workedTime,
   ])
   const realGain = calculation.realGain
@@ -695,8 +714,10 @@ export function IncomePage() {
       setDurationLabel('')
       setDurationSelectionChanged(false)
       setTimerPreference('')
+      setApplySeasonPercentageToHourly(false)
     } else {
       setWorkedTime(0)
+      setApplySeasonPercentageToHourly(false)
     }
   }
 
@@ -735,6 +756,15 @@ export function IncomePage() {
     if (usesHourlyWorkday && (!hourlyRateApplied || hourlyRateApplied <= 0)) {
       setSaveStatus('error')
       setSaveError('El valor por hora debe ser mayor a cero.')
+      return
+    }
+
+    // Fail-closed (AGENTS.md): si se optó por aplicar el % de temporada a
+    // Jornada por horas, no se guarda sin un % válido — nunca se inventa un
+    // valor ni se degrada silenciosamente a 100%.
+    if (usesHourlyWorkday && applySeasonPercentageToHourly && (!percentage || percentage <= 0)) {
+      setSaveStatus('error')
+      setSaveError('No hay un % de temporada válido para aplicar a este ingreso.')
       return
     }
 
@@ -822,28 +852,48 @@ export function IncomePage() {
         workedTimeUnit:
           !isBasicUser && isServiceType ? effectiveWorkedTimeUnit : undefined,
         hourlyRateApplied: usesHourlyWorkday ? hourlyRateApplied : undefined,
+        // D-015 (revisión): opt-in explícito y auditable, que no se infiere
+        // de `percentage` (createServiceIncome puede sobreescribir ese campo
+        // con el % de la temporada activa al crear, para cualquier ingreso
+        // de tipo servicio, independientemente del método). Solo relevante
+        // para 'hourly_workday'; undefined en cualquier otro caso.
+        hourlyAppliesSeasonPercentage: usesHourlyWorkday ? applySeasonPercentageToHourly : undefined,
         currency,
         earningPeriodId:
           editingIncome?.earningPeriodId ??
           editingIncome?.seasonPeriodId ??
           activePeriod?.id,
-        // "Jornada por horas" no usa el % de temporada (100% para la
-        // profesional): no se captura/persiste ningún porcentaje para ese método.
-        earningPercentage: isAdjustmentType || usesHourlyWorkday
+        // D-011 (vigente por defecto): "Jornada por horas" no usa el % de
+        // temporada (100% para la profesional). D-015 (revisión): si la
+        // usuaria activó applySeasonPercentageToHourly para este ingreso, se
+        // persiste el mismo % que usaría "Servicio por tiempo" — nunca se
+        // infiere de otro campo.
+        earningPercentage: isAdjustmentType
           ? 0
-          : isServiceType
-          ? isBasicUser
-            ? 100
-            : editingIncome?.earningPercentage ??
-              editingIncome?.percentage ??
-              activePeriod?.percentage ??
-              percentage
-          : editingIncome?.earningPercentage ?? percentage,
-        percentage: isAdjustmentType || usesHourlyWorkday
+          : usesHourlyWorkday
+            ? applySeasonPercentageToHourly
+              ? editingIncome?.earningPercentage ??
+                editingIncome?.percentage ??
+                activePeriod?.percentage ??
+                percentage
+              : 0
+            : isServiceType
+              ? isBasicUser
+                ? 100
+                : editingIncome?.earningPercentage ??
+                  editingIncome?.percentage ??
+                  activePeriod?.percentage ??
+                  percentage
+              : editingIncome?.earningPercentage ?? percentage,
+        percentage: isAdjustmentType
           ? 0
-          : isServiceType
-            ? isBasicUser ? 100 : percentage
-            : editingIncome?.percentage ?? percentage,
+          : usesHourlyWorkday
+            ? applySeasonPercentageToHourly
+              ? percentage
+              : 0
+            : isServiceType
+              ? isBasicUser ? 100 : percentage
+              : editingIncome?.percentage ?? percentage,
         realGain,
         eurValue: roundMoney(convertedValues.eurValue),
         copValue: roundMoney(convertedValues.copValue),
@@ -1196,39 +1246,83 @@ export function IncomePage() {
         )}
 
         {usesHourlyWorkday ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-700">
-                Tiempo trabajado
-              </span>
-              <div className="flex items-center gap-3">
-                <input
-                  className="h-11 flex-1 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                  min={0}
-                  onChange={(event) => setWorkedTime(Number(event.target.value))}
-                  step={effectiveWorkedTimeUnit === 'hours' ? '0.25' : '1'}
-                  type="number"
-                  value={workedTime}
-                />
-                <span className="text-sm font-medium text-slate-500">
-                  {WORKED_TIME_UNITS.find((unit) => unit.code === effectiveWorkedTimeUnit)?.label}
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-slate-700">
+                  Tiempo trabajado
+                </span>
+                <div className="flex items-center gap-3">
+                  <input
+                    className="h-11 flex-1 rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                    min={0}
+                    onChange={(event) => setWorkedTime(Number(event.target.value))}
+                    step={effectiveWorkedTimeUnit === 'hours' ? '0.25' : '1'}
+                    type="number"
+                    value={workedTime}
+                  />
+                  <span className="text-sm font-medium text-slate-500">
+                    {WORKED_TIME_UNITS.find((unit) => unit.code === effectiveWorkedTimeUnit)?.label}
+                  </span>
+                </div>
+              </label>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-slate-700">
+                  Total calculado
+                </span>
+                <p className="h-11 rounded-md border border-slate-200 bg-slate-50 px-3 text-base font-semibold text-slate-950 flex items-center">
+                  {formatCurrency(calculation.realGain, currency)}
+                </p>
+                <span className="text-xs text-slate-500">
+                  {applySeasonPercentageToHourly
+                    ? `Tiempo trabajado × valor por hora, con el ${percentage}% de temporada aplicado. Los Adicionales se suman aparte, no están incluidos en este total.`
+                    : 'Tiempo trabajado × valor por hora, 100% para la profesional (sin % de temporada). Los Adicionales se suman aparte, no están incluidos en este total.'}
                 </span>
               </div>
-            </label>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-700">
-                Total calculado
-              </span>
-              <p className="h-11 rounded-md border border-slate-200 bg-slate-50 px-3 text-base font-semibold text-slate-950 flex items-center">
-                {formatCurrency(calculation.realGain, currency)}
-              </p>
-              <span className="text-xs text-slate-500">
-                Tiempo trabajado × valor por hora. Los Adicionales se suman
-                aparte, no están incluidos en este total.
-              </span>
             </div>
-          </div>
+
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-medium text-slate-700">
+                ¿Aplicar el % de temporada a este ingreso?
+              </legend>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { label: 'No (100%)', value: false },
+                  { label: `Sí (${percentage}%)`, value: true },
+                ] as const).map((option) => (
+                  <label
+                    className={[
+                      'flex h-11 cursor-pointer items-center justify-center rounded-md border px-3 text-center text-sm font-semibold transition',
+                      applySeasonPercentageToHourly === option.value
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                        : 'border-slate-300 text-slate-600 hover:bg-slate-50',
+                    ].join(' ')}
+                    key={String(option.value)}
+                  >
+                    <input
+                      checked={applySeasonPercentageToHourly === option.value}
+                      className="sr-only"
+                      name="applySeasonPercentageToHourly"
+                      onChange={() => {
+                        setApplySeasonPercentageToHourly(option.value)
+                        setSaveError('')
+                      }}
+                      type="radio"
+                      value={String(option.value)}
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500">
+                Por defecto, Jornada por horas es el 100% del ingreso para la
+                profesional, sin recorte de temporada. Actívalo solo para este
+                ingreso si corresponde aplicar el % de temporada igual que en
+                “Servicio por tiempo”.
+              </p>
+            </fieldset>
+          </>
         ) : (
           <div className="grid gap-4">
             <label className="flex flex-col gap-2">

@@ -28,6 +28,27 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
   archivo (`src/pages/Income/IncomePage.tsx`). Gates: `tsc -b`, `eslint .` y
   `vitest run` en verde — 262 archivos / 2823 tests (1 `todo`); build de
   produccion (`vite build`) en verde.
+- **Aplicar el % de temporada a "Jornada por horas" como opt-in por ingreso
+  (D-016)**: el selector de D-015 no alcanzaba para registrar horas
+  trabajadas × valor por hora con el % de temporada aplicado, porque
+  "Servicio por tiempo" usa un flujo distinto (duracion en minutos +
+  importe tecleado). Se agrega el interruptor "¿Aplicar el % de temporada a
+  este ingreso?" (No/Si) dentro del formulario de Jornada por horas, visible
+  al crear y al editar. Por defecto sigue en "No" y el comportamiento de
+  D-011 no cambia (100% para la profesional); al activarlo, `realGain =
+  workedHours × hourlyRate × (percentage / 100)`, usando el mismo % que
+  "Servicio por tiempo". Nuevo campo `ServiceIncome.hourlyAppliesSeasonPercentage`
+  (opcional, no indexado, sin migracion Dexie) registra la eleccion de forma
+  explicita y auditable, sin inferirla de `percentage`. Fail-closed: si se
+  activa sin un % de temporada valido (> 0), tanto el formulario como
+  `assertIncomeCalculationInputIsValid` rechazan la operacion en vez de
+  asumir un valor. No reabre D-011 como regla por defecto. Archivos:
+  `src/utils/incomeCalculation/{types,hourlyWorkdayCalculator,incomeCalculationValidation}.ts`,
+  `src/types/service.ts`, `src/pages/Income/IncomePage.tsx`. Tests nuevos en
+  `test/incomeCalculation.test.ts` (10), incluyendo el caso de aceptacion
+  10h × 120€/h al 70% = 840€. Gates: `tsc -b`, `eslint .` y `vitest run` en
+  verde — 262 archivos / 2834 tests (1 `todo`); build de produccion (`vite
+  build`) en verde.
 
 - **Consultas de solo lectura de Wallets en el Copiloto (ADR-036)**: el
   Copiloto determinista ahora responde preguntas sobre distribucion del

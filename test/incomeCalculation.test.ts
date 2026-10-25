@@ -66,6 +66,78 @@ describe('hourlyWorkdayCalculator', () => {
 
     expect(result.realGain).toBe(30)
   })
+
+  describe('applySeasonPercentage (D-015, opt-in por ingreso)', () => {
+    it('por defecto (sin applySeasonPercentage) sigue sin aplicar el %, igual que D-011', () => {
+      const result = hourlyWorkdayCalculator.calculate({
+        totalAmount: 0,
+        percentage: 70,
+        usageMode: 'professional',
+        workedTime: 10,
+        workedTimeUnit: 'hours',
+        hourlyRate: 120,
+      })
+
+      expect(result.realGain).toBe(1200)
+    })
+
+    it('applySeasonPercentage=false se comporta igual que no enviarlo', () => {
+      const result = hourlyWorkdayCalculator.calculate({
+        totalAmount: 0,
+        percentage: 70,
+        usageMode: 'professional',
+        workedTime: 10,
+        workedTimeUnit: 'hours',
+        hourlyRate: 120,
+        applySeasonPercentage: false,
+      })
+
+      expect(result.realGain).toBe(1200)
+    })
+
+    it('applySeasonPercentage=true recorta el 100% al % de temporada (caso de aceptación: 10h × 120€/h al 70%)', () => {
+      const result = hourlyWorkdayCalculator.calculate({
+        totalAmount: 0,
+        percentage: 70,
+        usageMode: 'professional',
+        workedTime: 10,
+        workedTimeUnit: 'hours',
+        hourlyRate: 120,
+        applySeasonPercentage: true,
+      })
+
+      expect(result.workedHours).toBe(10)
+      expect(result.realGain).toBe(840) // 1200 × 70%
+    })
+
+    it('applySeasonPercentage=true con percentage=100 no altera el resultado', () => {
+      const result = hourlyWorkdayCalculator.calculate({
+        totalAmount: 0,
+        percentage: 100,
+        usageMode: 'professional',
+        workedTime: 2,
+        workedTimeUnit: 'hours',
+        hourlyRate: 50,
+        applySeasonPercentage: true,
+      })
+
+      expect(result.realGain).toBe(100)
+    })
+
+    it('applySeasonPercentage=true con percentage=0 produce realGain=0 (no se inventa un valor)', () => {
+      const result = hourlyWorkdayCalculator.calculate({
+        totalAmount: 0,
+        percentage: 0,
+        usageMode: 'professional',
+        workedTime: 5,
+        workedTimeUnit: 'hours',
+        hourlyRate: 20,
+        applySeasonPercentage: true,
+      })
+
+      expect(result.realGain).toBe(0)
+    })
+  })
 })
 
 describe('assertIncomeCalculationInputIsValid', () => {
@@ -94,6 +166,50 @@ describe('assertIncomeCalculationInputIsValid', () => {
     expect(() =>
       assertIncomeCalculationInputIsValid('hourly_workday', { workedTime: 60, hourlyRate: 20 }),
     ).not.toThrow()
+  })
+
+  describe('applySeasonPercentage (D-015, fail-closed)', () => {
+    it('rechaza hourly_workday con applySeasonPercentage=true y percentage ausente', () => {
+      expect(() =>
+        assertIncomeCalculationInputIsValid('hourly_workday', {
+          workedTime: 60,
+          hourlyRate: 20,
+          applySeasonPercentage: true,
+        }),
+      ).toThrow('No hay un % de temporada válido para aplicar a este ingreso de Jornada por horas.')
+    })
+
+    it('rechaza hourly_workday con applySeasonPercentage=true y percentage=0', () => {
+      expect(() =>
+        assertIncomeCalculationInputIsValid('hourly_workday', {
+          workedTime: 60,
+          hourlyRate: 20,
+          applySeasonPercentage: true,
+          percentage: 0,
+        }),
+      ).toThrow('No hay un % de temporada válido para aplicar a este ingreso de Jornada por horas.')
+    })
+
+    it('acepta hourly_workday con applySeasonPercentage=true y percentage válido', () => {
+      expect(() =>
+        assertIncomeCalculationInputIsValid('hourly_workday', {
+          workedTime: 60,
+          hourlyRate: 20,
+          applySeasonPercentage: true,
+          percentage: 70,
+        }),
+      ).not.toThrow()
+    })
+
+    it('acepta hourly_workday con applySeasonPercentage=false sin percentage', () => {
+      expect(() =>
+        assertIncomeCalculationInputIsValid('hourly_workday', {
+          workedTime: 60,
+          hourlyRate: 20,
+          applySeasonPercentage: false,
+        }),
+      ).not.toThrow()
+    })
   })
 })
 
@@ -143,5 +259,19 @@ describe('runIncomeCalculation', () => {
         hourlyRate: 25,
       }),
     ).toThrow('El tiempo trabajado debe ser mayor a cero para Jornada por horas.')
+  })
+
+  it('despacha a hourlyWorkdayCalculator con applySeasonPercentage=true y aplica el %', () => {
+    const result = runIncomeCalculation('hourly_workday', {
+      totalAmount: 0,
+      percentage: 70,
+      usageMode: 'professional',
+      workedTime: 10,
+      workedTimeUnit: 'hours',
+      hourlyRate: 120,
+      applySeasonPercentage: true,
+    })
+
+    expect(result.realGain).toBe(840)
   })
 })
