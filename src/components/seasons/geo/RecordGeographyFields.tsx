@@ -1,8 +1,8 @@
 import { MapPin, Navigation } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 
-import { resolveCreateRecordGeography, type GeographicRecordKind } from '../../../services/recordGeographyService'
-import { listSeasonStays } from '../../../services/seasonStayService'
+import type { GeographicRecordKind } from '../../../services/recordGeographyService'
+import { listSelectableSeasonStays } from '../../../services/seasonStayService'
 import type { SeasonStay } from '../../../types/seasonStay'
 import type { CountryCode } from '../../../types/settings'
 import { countries, fallbackCityOptions } from '../../../utils/countries'
@@ -77,9 +77,16 @@ export function RecordGeographyFields({
         return
       }
       try {
-        const stays = await listSeasonStays(earningPeriodId)
+        const readModels = await listSelectableSeasonStays({
+          earningPeriodId,
+          recordKind: kind,
+          currentSeasonStayId: draftRef.current.seasonStayId ?? undefined,
+          temporalValue: temporalValue || undefined,
+        })
+        const stays = readModels.map((item) => item.stay)
         const visitNumbers = computeVisitNumbers(stays)
-        const evaluated = await Promise.all(stays.map(async (stay): Promise<StayOption> => {
+        const evaluated = readModels.map((readModel): StayOption => {
+          const stay = readModel.stay
           const base = {
             stay,
             visitNumber: stay.id === undefined ? undefined : visitNumbers.get(stay.id),
@@ -88,20 +95,17 @@ export function RecordGeographyFields({
           if (!temporalValue || stay.id === undefined) {
             return { ...base, compatible: false, reason: 'Indica primero la fecha.' }
           }
-          try {
-            // Misma regla que aplicará el servicio al guardar; aquí solo se usa
-            // para orientar la selección, nunca para persistir.
-            await resolveCreateRecordGeography({ seasonStayId: stay.id }, {
-              kind,
-              usageMode: 'professional',
-              earningPeriodId,
-              temporalValue,
-            })
-            return { ...base, compatible: true }
-          } catch (error) {
-            return { ...base, compatible: false, reason: describeSeasonGeoError(error) }
-          }
-        }))
+          const reason = readModel.disabledReason === 'cancelled'
+            ? 'La estancia está cancelada.'
+            : readModel.disabledReason === 'not_started'
+              ? 'La estancia todavía no ha comenzado.'
+              : readModel.disabledReason === 'outside_interval'
+                ? 'La fecha queda fuera del intervalo de la estancia.'
+                : readModel.disabledReason === 'season_closed'
+                  ? 'La temporada está cerrada.'
+                  : undefined
+          return { ...base, compatible: readModel.selectable, reason }
+        })
         if (cancelled) return
         setLoadError('')
         setOptions(evaluated)

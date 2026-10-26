@@ -2,6 +2,7 @@ import { db } from '../database/db'
 import type { SeasonStay, SelectableSeasonStay } from '../types/seasonStay'
 import { normalizeCityName } from '../utils/cityNormalization'
 import { isReported } from '../catalogs/reportStatuses'
+import { getStayRecordDisabledReason } from './recordGeographyService'
 import {
   assertNoConfirmedStayOverlaps,
   assertStayBelongsToSeason,
@@ -314,19 +315,22 @@ export async function listSelectableSeasonStays(input: {
   earningPeriodId: number
   recordKind: 'income' | 'expense' | 'appointment'
   currentSeasonStayId?: number
+  /** Fecha civil para movimientos o instante ISO para citas. Si se omite, solo valida estado. */
+  temporalValue?: string
 }) : Promise<SelectableSeasonStay[]> {
   const stays = await listSeasonStays(input.earningPeriodId)
   const visitCounts = new Map<string, number>()
   return stays.map((stay) => {
     const count = stay.status === 'cancelled' ? (visitCounts.get(stay.cityNormalized) ?? 0) : (visitCounts.get(stay.cityNormalized) ?? 0) + 1
     if (stay.status !== 'cancelled') visitCounts.set(stay.cityNormalized, count)
-    const selectable = stay.status === 'active' || stay.status === 'completed' || (input.recordKind === 'appointment' && stay.status === 'planned')
+    const disabledReason = getStayRecordDisabledReason(stay, input.recordKind, input.temporalValue)
+    const selectable = disabledReason === undefined
     const selected = stay.id === input.currentSeasonStayId
     const range = stay.plannedStartDate && stay.plannedEndDate ? ` · ${stay.plannedStartDate}–${stay.plannedEndDate}` : ''
     return {
-      id: stay.id!, earningPeriodId: stay.earningPeriodId, status: stay.status, city: stay.city,
+      stay, id: stay.id!, earningPeriodId: stay.earningPeriodId, status: stay.status, city: stay.city,
       visitNumber: count, label: `${stay.city} · ${count}.ª visita${range}`, selectable, selected,
-      disabledReason: selectable ? undefined : stay.status === 'cancelled' ? 'cancelled' : 'not_started',
+      disabledReason,
     }
   })
 }

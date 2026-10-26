@@ -7,7 +7,7 @@ import type { AppSettings, CountryCode, CurrencyCode } from '../types/settings'
 import type { SeasonRevision } from '../types/seasonRevision'
 import type { SeasonStay } from '../types/seasonStay'
 import { normalizeCityName } from '../utils/cityNormalization'
-import { isLocalDate, SeasonGeoDomainError } from '../utils/seasonGeoValidation'
+import { isIsoInstant, isLocalDate, SeasonGeoDomainError, validateSeasonStayShape } from '../utils/seasonGeoValidation'
 import { isBasicMode, recordBelongsToUsageMode } from '../utils/usageMode'
 import { isAdjustmentIncome, isServiceIncome } from '../utils/incomeTypes'
 import {
@@ -37,6 +37,9 @@ export interface CreateSeasonInput {
     city: string
     plannedStartDate?: string
     plannedEndDate?: string
+    /** Si se informa, la primera estancia nace activa dentro de la misma transacción. */
+    actualStartAt?: string
+    timeZone?: string
   }
 }
 
@@ -203,6 +206,19 @@ export async function createEarningPeriod(input: CreateSeasonInput) {
   ) {
     throw new Error('La meta económica debe ser mayor a cero.')
   }
+  if (input.firstStay?.actualStartAt) {
+    if (!isIsoInstant(input.firstStay.actualStartAt) || !input.firstStay.timeZone) {
+      throw new SeasonGeoDomainError('STAY_DATE_INVALID', 'El inicio real de la primera estancia no es válido.')
+    }
+    const actualCivilDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: input.firstStay.timeZone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(input.firstStay.actualStartAt))
+    if (actualCivilDate < input.startDate ||
+      (input.plannedEndDate && actualCivilDate > input.plannedEndDate)) {
+      throw new SeasonGeoDomainError('STAY_DATE_INVALID', 'El inicio real de la primera estancia queda fuera de la temporada.')
+    }
+  }
 
   const now = new Date().toISOString()
   const period: Omit<EarningPeriod, 'id'> = {
@@ -268,13 +284,16 @@ export async function createEarningPeriod(input: CreateSeasonInput) {
           city,
           cityNormalized: normalizeCityName(city),
           countryCode: input.countryCode,
-          status: 'planned',
+          status: input.firstStay.actualStartAt ? 'active' : 'planned',
           plannedStartDate: input.firstStay.plannedStartDate,
           plannedEndDate: input.firstStay.plannedEndDate,
+          actualStartAt: input.firstStay.actualStartAt,
+          timeZone: input.firstStay.timeZone,
           locationSource: 'manual',
           createdAt: now,
           updatedAt: now,
         }
+        validateSeasonStayShape(stay)
         await db.seasonStays.add(stay)
       }
       await db.settings.put({
@@ -292,11 +311,10 @@ export async function createEarningPeriod(input: CreateSeasonInput) {
 
 export async function updateActiveEarningPeriod(
   id: number,
-  updates: Pick<EarningPeriod, 'name' | 'notes' | 'percentage'> &
+  updates: Pick<EarningPeriod, 'name' | 'notes' | 'percentage'> & { city?: string | null } &
     Partial<
       Pick<
         EarningPeriod,
-        | 'city'
         | 'country'
         | 'countryCode'
         | 'baseCurrency'
@@ -322,7 +340,7 @@ export async function updateActiveEarningPeriod(
     name: updates.name,
     notes: updates.notes,
     percentage: updates.percentage,
-    city: updates.city,
+    city: updates.city === undefined ? period.city : updates.city ?? '',
     updatedAt: now,
   }
   await db.earningPeriods.update(id, allowedUpdates)
@@ -343,39 +361,59 @@ export async function updateActiveEarningPeriod(
   return db.earningPeriods.get(id)
 }
 
-export async function closeActiveEarningPeriod(endDate = new Date().toLocaleDateString('en-CA')) {
-  if (!isLocalDate(endDate)) throw new Error('La fecha de cierre no es válida.')
+export async function closeActiveEarningPeriod(endDate?: string) {
+  const now = new Date()
+  const closingDate = endDate ?? now.toLocaleDateString('en-CA')
+  if (!isLocalDate(closingDate)) throw new Error('La fecha de cierre no es válida.')
   return db.transaction('rw', [db.earningPeriods, db.seasonStays], async () => {
     const active = (await db.earningPeriods.where('status').equals('active').toArray())[0]
     if (!active?.id) throw new Error(NO_ACTIVE_SEASON_MESSAGE)
-    if (endDate < active.startDate.slice(0, 10)) throw new Error('La fecha de cierre no puede ser anterior al inicio.')
-    const now = new Date().toISOString()
+    if (closingDate < active.startDate.slice(0, 10)) throw new Error('La fecha de cierre no puede ser anterior al inicio.')
+    const timestamp = now.toISOString()
     const stays = await db.seasonStays.where('earningPeriodId').equals(active.id).toArray()
     const activeStays = stays.filter((stay) => stay.status === 'active')
     if (activeStays.length > 1) throw new SeasonGeoDomainError('ACTIVE_STAY_ALREADY_EXISTS', 'La temporada tiene varias estancias activas.')
-    const closeAt = `${endDate}T23:59:59.999Z`
+    const seasonCloseAt = `${closingDate}T23:59:59.999Z`
+    // Para el cierre interactivo de hoy se conserva el instante real. Una
+    // fecha histórica explícita mantiene el límite civil legacy.
+    const stayCloseAt = endDate === undefined ? timestamp : seasonCloseAt
     for (const stay of stays) {
       if (stay.status === 'active') {
-        if (stay.actualStartAt && Date.parse(closeAt) <= Date.parse(stay.actualStartAt)) {
+        if (stay.actualStartAt && Date.parse(stayCloseAt) <= Date.parse(stay.actualStartAt)) {
           throw new SeasonGeoDomainError('STAY_DATE_INVALID', 'El cierre debe ser posterior al inicio de la estancia activa.')
         }
-        await db.seasonStays.put({ ...stay, status: 'completed', actualEndAt: closeAt, completedAt: now, updatedAt: now })
+        await db.seasonStays.put({ ...stay, status: 'completed', actualEndAt: stayCloseAt, completedAt: timestamp, updatedAt: timestamp })
       } else if (stay.status === 'planned') {
         await db.seasonStays.put({
           ...stay,
           status: 'cancelled',
-          cancelledAt: now,
+          cancelledAt: timestamp,
           cancellationReasonCode: 'season_closed',
           cancellationReason: 'Temporada cerrada antes de iniciar la estancia.',
-          updatedAt: now,
+          updatedAt: timestamp,
         })
       }
     }
     await db.earningPeriods.update(active.id, {
-      status: 'closed', endDate: closeAt, closedAt: now, updatedAt: now,
+      status: 'closed', endDate: seasonCloseAt, closedAt: timestamp, updatedAt: timestamp,
     })
     return db.earningPeriods.get(active.id)
   })
+}
+
+/** Cierra la temporada vigente y crea la siguiente con rollback conjunto. */
+export async function closeActiveEarningPeriodAndCreate(
+  input: CreateSeasonInput,
+  endDate?: string,
+) {
+  return db.transaction(
+    'rw',
+    [db.earningPeriods, db.settings, db.seasonStays, db.seasonRevisions],
+    async () => {
+      await closeActiveEarningPeriod(endDate)
+      return createEarningPeriod(input)
+    },
+  )
 }
 
 /** Kept for old callers/backups; explicit season UI should be used for new flows. */
@@ -384,17 +422,14 @@ export async function closeActiveEarningPeriodAndCreateNext(
   nextPercentage: number,
   nextPeriodName?: string,
 ) {
-  return db.transaction('rw', [db.earningPeriods, db.settings, db.seasonStays, db.seasonRevisions], async () => {
-    await closeActiveEarningPeriod()
-    return createEarningPeriod({
-      name: nextPeriodName?.trim() || `Temporada ${new Date().toLocaleDateString('es-ES')}`,
-      city: settings.city,
-      country: settings.country,
-      countryCode: settings.country,
-      baseCurrency: settings.defaultCurrency,
-      earningPercentage: nextPercentage,
-      startDate: new Date().toLocaleDateString('en-CA'),
-    })
+  return closeActiveEarningPeriodAndCreate({
+    name: nextPeriodName?.trim() || `Temporada ${new Date().toLocaleDateString('es-ES')}`,
+    city: settings.city,
+    country: settings.country,
+    countryCode: settings.country,
+    baseCurrency: settings.defaultCurrency,
+    earningPercentage: nextPercentage,
+    startDate: new Date().toLocaleDateString('en-CA'),
   })
 }
 

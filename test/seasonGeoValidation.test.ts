@@ -5,9 +5,11 @@ import { normalizeCityName } from '../src/utils/cityNormalization'
 import {
   assertNoConfirmedStayOverlaps,
   assertSeasonGeoBackupIsValid,
+  isLocalDate,
   SeasonGeoDomainError,
   validateTravelDestination,
 } from '../src/utils/seasonGeoValidation'
+import { getStayRecordDisabledReason } from '../src/services/recordGeographyService'
 
 function stay(overrides: Partial<SeasonStay> = {}): SeasonStay {
   return {
@@ -29,6 +31,10 @@ function stay(overrides: Partial<SeasonStay> = {}): SeasonStay {
 }
 
 describe('normalización geográfica PB-GEO-002', () => {
+  it('valida fechas civiles sin normalizar días inexistentes mediante UTC', () => {
+    expect(isLocalDate('2026-02-28')).toBe(true)
+    expect(isLocalDate('2026-02-29')).toBe(false)
+  })
   it('unifica mayúsculas, espacios y diacríticos', () => {
     expect(normalizeCityName('  BOGOTÁ   D.C. ')).toBe('bogota d c')
   })
@@ -52,6 +58,20 @@ describe('invariantes de estancias', () => {
       stay(),
       stay({ id: 2, position: 1, actualStartAt: '2026-10-05T09:59:59.000Z', actualEndAt: '2026-10-10T10:00:00.000Z' }),
     ])).toThrowError(SeasonGeoDomainError)
+  })
+
+  it('rechaza cualquier estancia posterior mientras la anterior siga abierta', () => {
+    expect(() => assertNoConfirmedStayOverlaps([
+      stay({ status: 'active', actualEndAt: undefined }),
+      stay({ id: 2, position: 1, city: 'Cali', cityNormalized: 'cali', actualStartAt: '2026-10-05T10:00:00.000Z' }),
+    ])).toThrowError(expect.objectContaining({ code: 'STAY_OVERLAP' }))
+  })
+
+  it('calcula en dominio la compatibilidad por fecha que consume el selector', () => {
+    const completed = stay()
+    expect(getStayRecordDisabledReason(completed, 'income', '2026-10-03')).toBeUndefined()
+    expect(getStayRecordDisabledReason(completed, 'income', '2026-10-06')).toBe('outside_interval')
+    expect(getStayRecordDisabledReason(completed, 'appointment', '2026-10-05T10:00:00.000Z')).toBe('outside_interval')
   })
 
   it('rechaza un backup con una estancia huérfana antes de restaurar', () => {

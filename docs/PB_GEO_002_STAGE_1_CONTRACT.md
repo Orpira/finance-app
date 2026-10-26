@@ -116,11 +116,13 @@ El motivo no vacío es obligatorio. La desvinculación conserva `city`, `country
 
 Componentes en `src/components/seasons/geo/`: `SeasonItinerary`, `SeasonRevisionPanel`, `RecordGeographyFields`, `RecordGeographySummary`, `useAppointmentCompletion` (+ `StayNotStartedDialog`) y helpers puros de presentación y payload. La UI solo consume las APIs listadas arriba; la compatibilidad de una estancia con la fecha de un registro se consulta a `resolveCreateRecordGeography`, sin duplicar reglas.
 
-Dependencias pendientes del dominio detectadas al implementar la interfaz:
+## Integridad dominio–UI — Etapa 5A
 
-- `listSelectableSeasonStays` no recibe la fecha del registro ni calcula `disabledReason: 'outside_interval'`; la UI evalúa cada estancia con `resolveCreateRecordGeography`.
-- `createEarningPeriod.firstStay` siempre nace `planned`. «Empezar la estancia ahora» se ejecuta después con `switchActiveSeasonStay` y no es atómico con la creación.
-- No existe `closeAndCreateNext`; «Nueva temporada» con otra activa sigue cerrando y creando en dos pasos.
-- `updateActiveEarningPeriod` escribe `city: updates.city` aunque llegue `undefined`; la UI reenvía la ciudad legacy para no borrarla.
-- `assertNoConfirmedStayOverlaps` omite el par cuando la estancia anterior no tiene `actualEndAt`.
+- `listSelectableSeasonStays` acepta `temporalValue?` y devuelve cada `stay` junto con `selectable` y `disabledReason`. La UI consume este read model; la regla temporal pura compartida es `getStayRecordDisabledReason`.
+- `createEarningPeriod.firstStay` acepta `actualStartAt` y `timeZone`. Si se informan, temporada, revisiones, configuración y primera estancia activa nacen en la misma transacción.
+- `closeActiveEarningPeriodAndCreate(input, endDate?)` cierra la temporada vigente y crea la siguiente con rollback conjunto. Abrir el formulario de nueva temporada ya no cierra anticipadamente la anterior.
+- `updateActiveEarningPeriod.city` aplica semántica estable: `undefined` conserva, `null` elimina y un texto establece la instantánea legacy.
+- Una estancia real sin `actualEndAt` se considera abierta y se solapa con cualquier estancia confirmada posterior. La transición de ciudad en el mismo instante sigue admitida porque el intervalo anterior termina exactamente cuando empieza el siguiente.
+- Las fechas previstas continúan siendo fechas civiles sin conversión de zona. En un cierre interactivo de hoy, la estancia activa guarda el instante real de cierre; la fecha civil de la temporada se conserva separadamente.
+- `closedLocationSeasons` continúa aplicándose solo a registros legacy sin `seasonStayId`; nunca bloquea un registro asociado explícitamente a una estancia.
 

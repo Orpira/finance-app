@@ -3,9 +3,8 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
-import { closeActiveEarningPeriod, createEarningPeriod, getActiveEarningPeriod, getEarningPeriodById } from '../../services/earningPeriodService'
+import { closeActiveEarningPeriodAndCreate, createEarningPeriod, getActiveEarningPeriod, getEarningPeriodById, type CreateSeasonInput } from '../../services/earningPeriodService'
 import { listCityOptions } from '../../services/locationService'
-import { listSeasonStays, switchActiveSeasonStay } from '../../services/seasonStayService'
 import { describeSeasonGeoError } from '../../components/seasons/geo/seasonGeoMessages'
 import { currentTimeZone } from '../../components/seasons/geo/stayPresentation'
 import { getSettings } from '../../services/settingsService'
@@ -21,7 +20,7 @@ function defaultPlannedEndDate() {
 }
 
 export function SeasonFormPage() {
-  const { alert, confirm } = useDialog()
+  const { confirm } = useDialog()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const basedOn = Number(params.get('basedOn')) || undefined
@@ -72,10 +71,10 @@ export function SeasonFormPage() {
           confirmTone: 'warning',
         })
         if (!confirmed) { setSaving(false); return }
-        await closeActiveEarningPeriod()
       }
       const firstCity = city.trim()
-      const period = await createEarningPeriod({
+      const startsNow = Boolean(firstCity && canStartNow && startStayNow)
+      const input: CreateSeasonInput = {
         name,
         country,
         countryCode: country,
@@ -86,31 +85,18 @@ export function SeasonFormPage() {
         economicGoal: Number(economicGoal),
         notes,
         firstStay: firstCity
-          ? { city: firstCity, plannedStartDate: firstStayStart || undefined, plannedEndDate: firstStayEnd || undefined }
+          ? {
+              city: firstCity,
+              plannedStartDate: firstStayStart || undefined,
+              plannedEndDate: firstStayEnd || undefined,
+              actualStartAt: startsNow ? new Date().toISOString() : undefined,
+              timeZone: startsNow ? currentTimeZone() : undefined,
+            }
           : undefined,
-      })
-      if (firstCity && canStartNow && startStayNow && period.id) {
-        // La primera estancia siempre nace prevista; activarla es una acción
-        // explícita y separada. Si falla, la temporada ya existe y la estancia
-        // puede activarse desde el itinerario.
-        try {
-          const [firstStay] = await listSeasonStays(period.id)
-          if (firstStay?.id) {
-            await switchActiveSeasonStay({
-              earningPeriodId: period.id,
-              next: { kind: 'existing', seasonStayId: firstStay.id },
-              effectiveAt: new Date().toISOString(),
-              timeZone: currentTimeZone(),
-            })
-          }
-        } catch (activationError) {
-          await alert({
-            type: 'warning',
-            title: 'Temporada creada',
-            message: `La temporada se creó, pero no se pudo empezar la estancia: ${describeSeasonGeoError(activationError)} Puedes activarla desde el itinerario.`,
-          })
-        }
       }
+      const period = active
+        ? await closeActiveEarningPeriodAndCreate(input)
+        : await createEarningPeriod(input)
       navigate(`/temporadas/${period.id}`, { replace: true })
     } catch (reason) {
       setError(describeSeasonGeoError(reason, 'No se pudo crear la temporada.'))

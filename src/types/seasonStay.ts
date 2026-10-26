@@ -26,6 +26,7 @@ export interface SeasonStay {
 }
 
 export interface SelectableSeasonStay {
+  stay: SeasonStay
   id: number
   earningPeriodId: number
   status: SeasonStayStatus

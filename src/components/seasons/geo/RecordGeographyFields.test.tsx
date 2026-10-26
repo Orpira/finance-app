@@ -4,17 +4,12 @@ import { useEffect, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SeasonStay } from '../../../types/seasonStay'
-import { SeasonGeoDomainError } from '../../../utils/seasonGeoValidation'
 import { createGeographyDraft, type RecordGeographyDraft } from './recordGeographyForm'
 
-const listSeasonStays = vi.fn()
-const resolveCreateRecordGeography = vi.fn()
+const listSelectableSeasonStays = vi.fn()
 
 vi.mock('../../../services/seasonStayService', () => ({
-  listSeasonStays: (...args: unknown[]) => listSeasonStays(...args),
-}))
-vi.mock('../../../services/recordGeographyService', () => ({
-  resolveCreateRecordGeography: (...args: unknown[]) => resolveCreateRecordGeography(...args),
+  listSelectableSeasonStays: (...args: unknown[]) => listSelectableSeasonStays(...args),
 }))
 
 const { RecordGeographyFields } = await import('./RecordGeographyFields')
@@ -73,12 +68,17 @@ function Harness({ isEditing = false, initial, kind = 'income' as const }: {
 describe('RecordGeographyFields', () => {
   beforeEach(() => {
     latestDraft = null
-    listSeasonStays.mockResolvedValue(stays)
-    // Solo la estancia activa (Madrid, 2.ª visita) es compatible con el 9 de noviembre.
-    resolveCreateRecordGeography.mockImplementation(async ({ seasonStayId }: { seasonStayId: number }) => {
-      if (seasonStayId === 3) return { seasonStayId }
-      if (seasonStayId === 4) throw new SeasonGeoDomainError('STAY_NOT_STARTED', 'x')
-      throw new SeasonGeoDomainError('RECORD_OUTSIDE_STAY_INTERVAL', 'x')
+    listSelectableSeasonStays.mockImplementation(async ({ recordKind }: { recordKind: string }) => {
+      return stays.map((item, index) => {
+        const disabledReason = item.id === 3 || (item.id === 4 && recordKind === 'appointment')
+          ? undefined
+          : item.id === 4 ? 'not_started' : 'outside_interval'
+        return {
+          stay: item, id: item.id, earningPeriodId: 7, status: item.status, city: item.city,
+          visitNumber: index + 1, label: item.city, selectable: disabledReason === undefined,
+          selected: false, disabledReason,
+        }
+      })
     })
   })
 
@@ -87,13 +87,12 @@ describe('RecordGeographyFields', () => {
     vi.clearAllMocks()
   })
 
-  it('consulta la compatibilidad al dominio con el tipo de registro y la fecha', async () => {
+  it('consulta el read model de dominio con el tipo de registro y la fecha', async () => {
     render(<Harness />)
     await screen.findByLabelText(/Estancia/)
-    expect(resolveCreateRecordGeography).toHaveBeenCalledWith(
-      { seasonStayId: 3 },
-      expect.objectContaining({ kind: 'income', usageMode: 'professional', earningPeriodId: 7, temporalValue: '2026-11-09' }),
-    )
+    expect(listSelectableSeasonStays).toHaveBeenCalledWith(expect.objectContaining({
+      recordKind: 'income', earningPeriodId: 7, temporalValue: '2026-11-09',
+    }))
   })
 
   it('al crear, propone la estancia actual compatible y distingue visitas repetidas', async () => {
@@ -132,7 +131,7 @@ describe('RecordGeographyFields', () => {
   })
 
   it('muestra un estado normal cuando la temporada no tiene estancias', async () => {
-    listSeasonStays.mockResolvedValue([])
+    listSelectableSeasonStays.mockResolvedValue([])
     render(<Harness />)
     expect(await screen.findByText(/aún no tiene estancias\. Puedes guardar sin estancia/)).toBeTruthy()
     expect(screen.queryByRole('alert')).toBeNull()

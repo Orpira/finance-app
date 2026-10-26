@@ -148,10 +148,12 @@ vi.mock('../src/database/db', () => ({
 const {
   createEarningPeriod,
   closeActiveEarningPeriod,
+  closeActiveEarningPeriodAndCreate,
   getActiveEarningPeriod,
   getPreviousEarningPeriod,
   listSeasonRecords,
   getSeasonStatistics,
+  updateActiveEarningPeriod,
 } = await import('../src/services/earningPeriodService')
 
 function income(overrides: Row = {}): Row {
@@ -194,6 +196,47 @@ beforeEach(() => {
 })
 
 describe('listSeasonRecords / getSeasonStatistics — TDD HOME-SEASON', () => {
+  it('crea la primera estancia activa atómicamente cuando ya está en la ciudad', async () => {
+    const startedAt = '2026-08-20T10:30:00.000Z'
+    const period = await createEarningPeriod({
+      name: 'Con estancia', country: 'GB', countryCode: 'GB', baseCurrency: 'GBP',
+      earningPercentage: 50, startDate: '2026-08-20',
+      firstStay: { city: 'Londres', actualStartAt: startedAt, timeZone: 'Europe/London' },
+    })
+
+    await expect(seasonStaysTable.toArray()).resolves.toEqual([
+      expect.objectContaining({ earningPeriodId: period.id, status: 'active', actualStartAt: startedAt }),
+    ])
+  })
+
+  it('conserva ciudad con undefined y la elimina únicamente con null', async () => {
+    const period = await createEarningPeriod({
+      name: 'Ciudad legacy', city: 'Londres', country: 'GB', countryCode: 'GB',
+      baseCurrency: 'GBP', earningPercentage: 50, startDate: '2026-08-20',
+    })
+    await updateActiveEarningPeriod(period.id as number, {
+      name: period.name, notes: period.notes, percentage: period.percentage, city: undefined,
+    })
+    expect((await earningPeriodsTable.get(period.id as number))?.city).toBe('Londres')
+    await updateActiveEarningPeriod(period.id as number, {
+      name: period.name, notes: period.notes, percentage: period.percentage, city: null,
+    })
+    expect((await earningPeriodsTable.get(period.id as number))?.city).toBe('')
+  })
+
+  it('cierra y crea la temporada siguiente mediante un único contrato', async () => {
+    const first = await createEarningPeriod({
+      name: 'Primera', country: 'GB', countryCode: 'GB', baseCurrency: 'GBP',
+      earningPercentage: 50, startDate: '2026-08-01',
+    })
+    const next = await closeActiveEarningPeriodAndCreate({
+      name: 'Segunda', country: 'GB', countryCode: 'GB', baseCurrency: 'GBP',
+      earningPercentage: 50, startDate: '2026-09-01',
+    }, '2026-08-31')
+    expect((await earningPeriodsTable.get(first.id as number))?.status).toBe('closed')
+    expect(next.status).toBe('active')
+  })
+
   it('HOME-SEASON-001: temporada activa 20/08→30/09 acumula agosto + septiembre, sin reset de mes', async () => {
     const period = await createEarningPeriod({
       name: 'Temporada', city: 'Londres', country: 'GB', countryCode: 'GB',

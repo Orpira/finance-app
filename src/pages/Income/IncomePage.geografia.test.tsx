@@ -88,9 +88,9 @@ vi.mock('../../services/walletService', () => ({
   WALLETS_CHANGED_EVENT: 'finance-app:wallets-changed',
 }))
 
-const seasonStayService = { listSeasonStays: vi.fn() }
+const seasonStayService = { listSelectableSeasonStays: vi.fn() }
 vi.mock('../../services/seasonStayService', () => ({
-  listSeasonStays: (...args: unknown[]) => seasonStayService.listSeasonStays(...args),
+  listSelectableSeasonStays: (...args: unknown[]) => seasonStayService.listSelectableSeasonStays(...args),
 }))
 const recordGeographyService = { resolveCreateRecordGeography: vi.fn() }
 vi.mock('../../services/recordGeographyService', () => ({
@@ -136,10 +136,14 @@ function arrange(settings: AppSettings, period: unknown) {
   categoryService.listPersonalIncomeCategories.mockResolvedValue([])
   currencyConversionService.convertCurrencyPair.mockResolvedValue({ primaryValue: 0, secondaryValue: 0 })
   currencyConversionService.convertCurrencyToEurCop.mockResolvedValue({ eurValue: 0, copValue: 0 })
-  seasonStayService.listSeasonStays.mockResolvedValue([{
+  const stay = {
     id: 3, earningPeriodId: 7, position: 0, city: 'Madrid', cityNormalized: 'madrid', countryCode: 'ES',
     status: 'active', actualStartAt: '2026-01-02T08:00:00.000Z', timeZone: 'Europe/Madrid',
     locationSource: 'manual', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+  }
+  seasonStayService.listSelectableSeasonStays.mockResolvedValue([{
+    stay, id: 3, earningPeriodId: 7, status: 'active', city: 'Madrid', visitNumber: 1,
+    label: 'Madrid · 1.ª visita', selectable: true, selected: false,
   }])
   recordGeographyService.resolveCreateRecordGeography.mockResolvedValue({})
 }
@@ -157,14 +161,16 @@ describe('IncomePage — estancia y destino según el modo de uso (PB-GEO-002)',
     renderIncomePage()
     await screen.findByText('Categoría')
     expect(screen.queryByText('Ubicación')).toBeNull()
-    expect(seasonStayService.listSeasonStays).not.toHaveBeenCalled()
+    expect(seasonStayService.listSelectableSeasonStays).not.toHaveBeenCalled()
   })
 
   it('Profesional muestra la estancia de la temporada activa', async () => {
     arrange(professionalSettings(), professionalPeriod)
     renderIncomePage()
     expect(await screen.findByText('Ubicación')).toBeTruthy()
-    await waitFor(() => expect(seasonStayService.listSeasonStays).toHaveBeenCalledWith(7))
+    await waitFor(() => expect(seasonStayService.listSelectableSeasonStays).toHaveBeenCalledWith(
+      expect.objectContaining({ earningPeriodId: 7, recordKind: 'income' }),
+    ))
     expect(screen.getByRole('checkbox', { name: /Destino puntual/ })).toBeTruthy()
   })
 
@@ -173,7 +179,7 @@ describe('IncomePage — estancia y destino según el modo de uso (PB-GEO-002)',
     renderIncomePage()
     await screen.findByText('Categoría')
     expect(screen.queryByText('Ubicación')).toBeNull()
-    expect(seasonStayService.listSeasonStays).not.toHaveBeenCalled()
+    expect(seasonStayService.listSelectableSeasonStays).not.toHaveBeenCalled()
   })
 
   it('Híbrido en contexto Profesional sí muestra la estancia', async () => {

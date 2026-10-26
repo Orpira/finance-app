@@ -28,9 +28,12 @@ import { completeAppointmentAsIncome } from '../../src/services/appointmentCompl
 import { createAppointment, startAppointmentService } from '../../src/services/appointmentService'
 import { createExpense, deleteExpense, updateExpense } from '../../src/services/expenseService'
 import {
+  closeActiveEarningPeriodAndCreate,
   createEarningPeriod,
+  getActiveEarningPeriod,
   getSeasonGoalProgress,
   getSeasonStatistics,
+  updateActiveEarningPeriod,
 } from '../../src/services/earningPeriodService'
 import { deleteServiceIncome, updateServiceIncome } from '../../src/services/incomeService'
 import {
@@ -1766,7 +1769,47 @@ async function run() {
     country: 'ES',
     city: 'Madrid',
   })
-  const financialPeriod = await createEarningPeriod({
+  const atomicSeason = await createEarningPeriod({
+    name: 'Temporada atómica',
+    country: 'ES',
+    countryCode: 'ES',
+    baseCurrency: 'EUR',
+    earningPercentage: 25,
+    startDate: '2026-07-01',
+    firstStay: {
+      city: 'Madrid',
+      actualStartAt: '2026-07-01T10:00:00.000Z',
+      timeZone: 'Europe/Madrid',
+    },
+  })
+  const atomicStay = (await db.seasonStays.where('earningPeriodId').equals(atomicSeason.id!).toArray())[0]
+  assert(atomicStay?.status === 'active', 'season creation atomically starts the first stay')
+  await updateActiveEarningPeriod(atomicSeason.id!, {
+    name: atomicSeason.name,
+    notes: atomicSeason.notes,
+    percentage: atomicSeason.percentage,
+    city: undefined,
+  })
+  assert((await db.earningPeriods.get(atomicSeason.id!))?.city === 'Madrid', 'undefined season city preserves the legacy snapshot')
+
+  const rejectRevision = () => { throw new Error('TEST_SEASON_REPLACEMENT_FAILURE') }
+  db.seasonRevisions.hook('creating').subscribe(rejectRevision)
+  let replacementRejected = false
+  try {
+    await closeActiveEarningPeriodAndCreate({
+      name: 'No debe persistir', country: 'ES', countryCode: 'ES', baseCurrency: 'EUR',
+      earningPercentage: 30, startDate: '2026-08-01', plannedEndDate: '2026-08-31',
+    }, '2026-07-31')
+  } catch {
+    replacementRejected = true
+  } finally {
+    db.seasonRevisions.hook('creating').unsubscribe(rejectRevision)
+  }
+  assert(replacementRejected, 'season replacement rejects when creation fails')
+  assert((await getActiveEarningPeriod())?.id === atomicSeason.id, 'season replacement failure rolls back the previous closure')
+  assert((await db.seasonStays.get(atomicStay!.id!))?.status === 'active', 'season replacement failure rolls back the active stay')
+
+  const financialPeriod = await closeActiveEarningPeriodAndCreate({
     name: 'Temporada integración financiera',
     city: 'Madrid',
     country: 'ES',
@@ -1775,7 +1818,7 @@ async function run() {
     earningPercentage: 30,
     startDate: '2026-08-01',
     economicGoal: 100,
-  })
+  }, '2026-07-31')
   const financialSettings = await getSettings()
   const appointmentId = await createAppointment({
     dateTime: '2026-08-20T10:00:00.000Z',

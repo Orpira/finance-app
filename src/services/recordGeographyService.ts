@@ -51,45 +51,61 @@ function civilDateAt(instant: string, timeZone: string) {
   }).format(new Date(instant))
 }
 
-function assertRecordFallsInsideStay(
+export function getStayRecordDisabledReason(
   stay: SeasonStay,
   kind: GeographicRecordKind,
-  temporalValue: string,
-) {
+  temporalValue?: string,
+): 'not_started' | 'cancelled' | 'outside_interval' | undefined {
   if (stay.status === 'cancelled') {
-    throw new SeasonGeoDomainError('STAY_STATUS_INVALID', 'La estancia seleccionada está cancelada.')
+    return 'cancelled'
   }
 
   if (stay.status === 'planned') {
-    if (kind !== 'appointment') {
-      throw new SeasonGeoDomainError('STAY_NOT_STARTED', 'La estancia seleccionada todavía no ha comenzado.')
-    }
+    if (kind !== 'appointment') return 'not_started'
+    if (!temporalValue) return undefined
     const appointmentDate = temporalValue.slice(0, 10)
     if ((stay.plannedStartDate && appointmentDate < stay.plannedStartDate) ||
       (stay.plannedEndDate && appointmentDate > stay.plannedEndDate)) {
-      throw new SeasonGeoDomainError('RECORD_OUTSIDE_STAY_INTERVAL', 'La cita queda fuera de las fechas previstas de la estancia.')
+      return 'outside_interval'
     }
-    return
+    return undefined
   }
 
-  if (!stay.actualStartAt) {
-    throw new SeasonGeoDomainError('STAY_NOT_STARTED', 'La estancia seleccionada no tiene inicio real.')
-  }
+  if (!stay.actualStartAt) return 'not_started'
+  if (!temporalValue) return undefined
 
   if (kind === 'appointment') {
     const recordTime = Date.parse(temporalValue)
     if (Number.isNaN(recordTime) || recordTime < Date.parse(stay.actualStartAt) ||
       (stay.actualEndAt && recordTime >= Date.parse(stay.actualEndAt))) {
-      throw new SeasonGeoDomainError('RECORD_OUTSIDE_STAY_INTERVAL', 'La cita queda fuera del intervalo real de la estancia.')
+      return 'outside_interval'
     }
-    return
+    return undefined
   }
 
   const timeZone = stay.timeZone ?? 'UTC'
   const startDate = civilDateAt(stay.actualStartAt, timeZone)
   const endDate = stay.actualEndAt ? civilDateAt(stay.actualEndAt, timeZone) : undefined
   if (temporalValue < startDate || (endDate && temporalValue > endDate)) {
-    throw new SeasonGeoDomainError('RECORD_OUTSIDE_STAY_INTERVAL', 'El movimiento queda fuera de las fechas reales de la estancia.')
+    return 'outside_interval'
+  }
+  return undefined
+}
+
+function assertRecordFallsInsideStay(
+  stay: SeasonStay,
+  kind: GeographicRecordKind,
+  temporalValue: string,
+) {
+  const reason = getStayRecordDisabledReason(stay, kind, temporalValue)
+  if (reason === 'cancelled') {
+    throw new SeasonGeoDomainError('STAY_STATUS_INVALID', 'La estancia seleccionada está cancelada.')
+  }
+  if (reason === 'not_started') {
+    throw new SeasonGeoDomainError('STAY_NOT_STARTED', 'La estancia seleccionada todavía no ha comenzado.')
+  }
+  if (reason === 'outside_interval') {
+    throw new SeasonGeoDomainError('RECORD_OUTSIDE_STAY_INTERVAL', 'El registro queda fuera del intervalo de la estancia.')
   }
 }
 

@@ -15,10 +15,10 @@ import { formatCurrency } from '../../utils/currency'
 import { countries } from '../../utils/countries'
 import { getSeasonOverviewState } from '../../utils/seasonOverview'
 import { useDialog } from '../../components/dialogs/useDialog'
+import { formatCivilDate } from '../../components/seasons/geo/stayPresentation'
 
 function formatDate(value?: string) {
-  if (!value) return '—'
-  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(value))
+  return formatCivilDate(value?.slice(0, 10))
 }
 
 function countryLabel(code?: string) {
@@ -181,7 +181,6 @@ export function SeasonsPage() {
       confirmTone: 'warning',
     })
     if (!confirmed) return
-    await closeActiveEarningPeriod()
     navigate(`/temporadas/nueva?basedOn=${active.id}`)
   }
 

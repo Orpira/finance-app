@@ -45,7 +45,9 @@ function fail(code: SeasonGeoErrorCode, message: string): never {
 }
 
 export function isLocalDate(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`))
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
 }
 
 export function isIsoInstant(value: string): boolean {
@@ -135,7 +137,10 @@ export function assertNoConfirmedStayOverlaps(stays: readonly SeasonStay[]): voi
   for (let index = 1; index < confirmed.length; index += 1) {
     const previous = confirmed[index - 1]
     const current = confirmed[index]
-    if (!previous || !current || !previous.actualEndAt) continue
+    if (!previous || !current) continue
+    if (!previous.actualEndAt) {
+      fail('STAY_OVERLAP', 'Una estancia sin fin real se solapa con cualquier estancia posterior.')
+    }
     if (Date.parse(current.actualStartAt!) < Date.parse(previous.actualEndAt)) {
       fail('STAY_OVERLAP', 'Las estancias confirmadas no pueden solaparse.')
     }
