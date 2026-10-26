@@ -17,6 +17,8 @@ const personalIncomeCategoriesTable = { toArray: vi.fn() }
 const personalExpenseCategoriesTable = { toArray: vi.fn() }
 const walletsTable = { toArray: vi.fn() }
 const internalTransfersTable = { toArray: vi.fn() }
+const seasonStaysTable = { toArray: vi.fn() }
+const seasonRevisionsTable = { toArray: vi.fn() }
 
 vi.mock('../database/db', () => ({
   db: {
@@ -33,6 +35,8 @@ vi.mock('../database/db', () => ({
     personalExpenseCategories: personalExpenseCategoriesTable,
     wallets: walletsTable,
     internalTransfers: internalTransfersTable,
+    seasonStays: seasonStaysTable,
+    seasonRevisions: seasonRevisionsTable,
   },
   exportDatabaseSnapshot: vi.fn(),
   importDatabaseSnapshot: importDatabaseSnapshotMock,
@@ -73,6 +77,8 @@ beforeEach(() => {
   personalExpenseCategoriesTable.toArray.mockResolvedValue([])
   walletsTable.toArray.mockResolvedValue([])
   internalTransfersTable.toArray.mockResolvedValue([])
+  seasonStaysTable.toArray.mockResolvedValue([])
+  seasonRevisionsTable.toArray.mockResolvedValue([])
   getSettingsMock.mockResolvedValue(settings())
 })
 
@@ -102,6 +108,16 @@ describe('generateBackupData', () => {
 
     expect(backup.wallets).toEqual([wallet])
     expect(backup.internalTransfers).toEqual([transfer])
+  })
+
+  it('incluye estancias y revisiones de temporada', async () => {
+    seasonStaysTable.toArray.mockResolvedValue([{ id: 1, earningPeriodId: 3 }])
+    seasonRevisionsTable.toArray.mockResolvedValue([{ id: 2, earningPeriodId: 3 }])
+
+    const backup = await generateBackupData()
+
+    expect(backup.seasonStays).toEqual([{ id: 1, earningPeriodId: 3 }])
+    expect(backup.seasonRevisions).toEqual([{ id: 2, earningPeriodId: 3 }])
   })
 })
 

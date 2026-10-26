@@ -42,6 +42,12 @@ function createTable(seed: Row[] = []) {
       rows.set(id, { ...row, id })
       return id
     },
+    async bulkAdd(items: Row[]) {
+      for (const row of items) {
+        const id = row.id ?? nextId++
+        rows.set(id, { ...row, id })
+      }
+    },
     async get(id: number) {
       return rows.get(id)
     },
@@ -109,6 +115,8 @@ let servicesTable: ReturnType<typeof createTable>
 let expensesTable: ReturnType<typeof createTable>
 let appointmentsTable: ReturnType<typeof createTable>
 let settingsTable: ReturnType<typeof createTable>
+let seasonStaysTable: ReturnType<typeof createTable>
+let seasonRevisionsTable: ReturnType<typeof createTable>
 
 vi.mock('../src/database/db', () => ({
   DEFAULT_SETTINGS_ID: 'app',
@@ -127,6 +135,8 @@ vi.mock('../src/database/db', () => ({
       expenses: expensesTable,
       appointments: appointmentsTable,
       settings: settingsTable,
+      seasonStays: seasonStaysTable,
+      seasonRevisions: seasonRevisionsTable,
       // Dexie acepta db.transaction(mode, table1, table2, ..., callback):
       // el callback siempre es el último argumento, sin importar cuántas
       // tablas se listen antes.
@@ -179,6 +189,8 @@ beforeEach(() => {
   expensesTable = createTable()
   appointmentsTable = createTable()
   settingsTable = createTable()
+  seasonStaysTable = createTable()
+  seasonRevisionsTable = createTable()
 })
 
 describe('listSeasonRecords / getSeasonStatistics — TDD HOME-SEASON', () => {

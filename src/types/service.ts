@@ -4,6 +4,7 @@ import type {
 } from '../catalogs/incomeCalculationMethods'
 import type { ReportStatusCode, ReportStatusLabel } from '../catalogs/reportStatuses'
 import type { UsageMode } from './settings'
+import type { TravelDestination } from './travelDestination'
 
 export type ServiceIncomeStatus = 'PENDIENTE' | 'EJECUCION' | 'FINALIZADO';
 export type ServiceIncomeType = 'ingreso' | 'ajuste' | 'otro';
@@ -53,6 +54,10 @@ export interface ServiceIncome {
   earningPeriodId?: number;
 
   seasonPeriodId?: number;
+
+  seasonStayId?: number;
+
+  travelDestination?: TravelDestination;
 
   earningPercentage?: number;
 

@@ -2,6 +2,7 @@ import type {
   ClosedLocationSeason,
   ReopenedLocationSeason,
 } from '../types/settings'
+import { normalizeCityName } from './cityNormalization'
 
 interface LocationRecord {
   city?: string
@@ -10,7 +11,7 @@ interface LocationRecord {
 }
 
 function normalizeCity(city?: string) {
-  return city?.trim().toLocaleLowerCase('es') ?? ''
+  return city ? normalizeCityName(city) : ''
 }
 
 function isSameLocation(

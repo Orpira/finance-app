@@ -1,5 +1,6 @@
 import type { ReportStatusCode, ReportStatusLabel } from '../catalogs/reportStatuses'
 import type { IncomeCalculationMethod, WorkedTimeUnit } from '../catalogs/incomeCalculationMethods'
+import type { TravelDestination } from './travelDestination'
 
 export type AppointmentReminderUnit = 'minutes' | 'hours' | 'days';
 
@@ -49,6 +50,12 @@ export interface Appointment {
   earningPeriodId?: number;
 
   seasonPeriodId?: number;
+
+  seasonStayId?: number;
+
+  travelDestination?: TravelDestination;
+
+  completedIncomeId?: number;
 
   notes?: string;
 

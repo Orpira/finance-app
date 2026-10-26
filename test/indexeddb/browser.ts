@@ -305,7 +305,7 @@ async function run() {
 
   let database = new FinanceDB()
   await database.open()
-  assert(database.verno === 37, 'physical migration upgrades a Personal profile from v32 to v37')
+  assert(database.verno === 38, 'physical migration upgrades a Personal profile from v32 to v38')
   const migratedBasicIncome = await database.services.get(3201)
   assert(migratedBasicIncome?.paymentType === undefined, 'v33 removes paymentType from historical Personal income')
   assert(migratedBasicIncome?.totalAmount === 100, 'v33 preserves the Personal income amount and id')
@@ -362,7 +362,7 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 37, 'physical migration upgrades from v33 to v37')
+  assert(database.verno === 38, 'physical migration upgrades from v33 to v38')
   assert(database.tables.some((table) => table.name === 'personalIncomeCategories'), 'v33 to v35 migration preserves personalIncomeCategories')
   assert(database.tables.some((table) => table.name === 'personalExpenseCategories'), 'v35 migration creates personalExpenseCategories')
   const migratedV33Income = await database.services.get(3301)
@@ -377,7 +377,7 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 37, 'v33 to v37 migration keeps schema v37 after close and reopen')
+  assert(database.verno === 38, 'v33 to v38 migration keeps schema v38 after close and reopen')
   const reopenedV33Income = await database.services.get(3301)
   assert(reopenedV33Income?.totalAmount === v33Income.totalAmount, 'v33 to v34 migration keeps income data after close and reopen')
   database.close()
@@ -436,7 +436,7 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 37, 'physical migration upgrades from v25 to v37')
+  assert(database.verno === 38, 'physical migration upgrades from v25 to v38')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration preserves v25 conversationMemories table')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v25 base')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v25 base')
@@ -505,7 +505,7 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 37, 'physical migration upgrades from v24 to v37')
+  assert(database.verno === 38, 'physical migration upgrades from v24 to v38')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'v27 migration keeps conversationMemories from v24 base')
   assert(database.tables.some((table) => table.name === 'knowledgeDocuments'), 'v27 migration creates knowledgeDocuments from v24 base')
   assert(database.tables.some((table) => table.name === 'knowledgeChunks'), 'v27 migration creates knowledgeChunks from v24 base')
@@ -519,6 +519,10 @@ async function run() {
   assert(migratedV24Season?.name === v24Season.name, 'v31 migration preserves historical seasons')
   assert(migratedV24Season?.plannedEndDate === undefined, 'v31 migration does not invent planned dates for historical seasons')
   assert(migratedV24Season?.economicGoal === undefined, 'v31 migration does not invent economic goals for historical seasons')
+  assert((await database.seasonStays.count()) === 0, 'v38 does not invent stays for legacy seasons')
+  const migratedV24Revisions = await database.seasonRevisions.where('earningPeriodId').equals(24).toArray()
+  assert(migratedV24Revisions.length === 1, 'v38 creates one migration baseline for a legacy season')
+  assert(migratedV24Revisions[0]?.kind === 'migration_baseline', 'v38 marks legacy revision provenance explicitly')
   database.close()
 
   await Dexie.delete(databaseName)
@@ -537,7 +541,9 @@ async function run() {
 
   database = new FinanceDB()
   await database.open()
-  assert(database.verno === 37, 'physical migration opens schema v37')
+  assert(database.verno === 38, 'physical migration opens schema v38')
+  assert(database.tables.some((table) => table.name === 'seasonStays'), 'v38 creates seasonStays')
+  assert(database.tables.some((table) => table.name === 'seasonRevisions'), 'v38 creates seasonRevisions')
   assert(database.tables.some((table) => table.name === 'financialSnapshots'), 'migration creates financialSnapshots')
   assert(database.tables.some((table) => table.name === 'knowledgeSnapshots'), 'migration creates knowledgeSnapshots')
   assert(database.tables.some((table) => table.name === 'conversationMemories'), 'migration creates conversationMemories')

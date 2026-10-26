@@ -1,4 +1,5 @@
 import type { CountryCode, CurrencyCode } from '../types/settings'
+import { normalizeCityName } from '../utils/cityNormalization'
 import {
   fallbackCityOptions,
   getCityOption,
@@ -8,16 +9,6 @@ import {
 
 export interface ResolvedCityOption extends CityOption {
   currency: CurrencyCode
-}
-
-function normalizeCityName(value: string) {
-  return value
-    .trim()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^\p{Letter}\p{Number}]+/gu, ' ')
-    .trim()
-    .toLocaleLowerCase('en')
 }
 
 function resolveOptionCurrency(

@@ -17,6 +17,8 @@ import type { PersonalIncomeCategory } from '../types/personalIncomeCategory'
 import type { PersonalExpenseCategory } from '../types/personalExpenseCategory'
 import type { Wallet } from '../types/wallet'
 import type { InternalTransfer } from '../types/internalTransfer'
+import type { SeasonStay } from '../types/seasonStay'
+import type { SeasonRevision } from '../types/seasonRevision'
 import { downloadText } from '../utils/download'
 import {
   decryptJsonPayload,
@@ -50,6 +52,8 @@ export interface BackupData {
   personalExpenseCategories?: PersonalExpenseCategory[]
   wallets?: Wallet[]
   internalTransfers?: InternalTransfer[]
+  seasonStays?: SeasonStay[]
+  seasonRevisions?: SeasonRevision[]
 }
 
 export interface EncryptedBackupFile {
@@ -73,7 +77,7 @@ interface EncryptedBackupDocument {
   payloadEncrypted: EncryptedPayload
 }
 
-const BACKUP_VERSION = '2'
+const BACKUP_VERSION = '3'
 
 export function buildBackupFilename(generatedAt: string) {
   const date = generatedAt.slice(0, 10)
@@ -242,6 +246,8 @@ export function backupDataToSnapshot(backupData: BackupData): DatabaseSnapshot {
     personalExpenseCategories: backupData.personalExpenseCategories ?? [],
     wallets: backupData.wallets ?? [],
     internalTransfers: backupData.internalTransfers ?? [],
+    seasonStays: backupData.seasonStays ?? [],
+    seasonRevisions: backupData.seasonRevisions ?? [],
   }
 }
 
@@ -261,6 +267,8 @@ export async function generateBackupData(): Promise<BackupData> {
     personalExpenseCategories,
     wallets,
     internalTransfers,
+    seasonStays,
+    seasonRevisions,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -277,6 +285,8 @@ export async function generateBackupData(): Promise<BackupData> {
       db.personalExpenseCategories.toArray(),
       db.wallets.toArray(),
       db.internalTransfers.toArray(),
+      db.seasonStays.toArray(),
+      db.seasonRevisions.toArray(),
     ])
 
   return {
@@ -297,6 +307,8 @@ export async function generateBackupData(): Promise<BackupData> {
     personalExpenseCategories,
     wallets,
     internalTransfers,
+    seasonStays,
+    seasonRevisions,
   }
 }
 

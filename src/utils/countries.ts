@@ -1,4 +1,5 @@
 import type { CountryCode, CurrencyCode } from '../types/settings'
+import { normalizeCityName } from './cityNormalization'
 
 export interface CountryOption {
   value: CountryCode
@@ -89,14 +90,14 @@ export function getCountryCurrency(countryCode: CountryCode) {
 }
 
 export function getCityOption(city: string, options = fallbackCityOptions) {
-  const normalizedCity = city.trim().toLocaleLowerCase('es')
+  const normalizedCity = normalizeCityName(city)
 
   if (!normalizedCity) {
     return undefined
   }
 
   const localOption = fallbackCityOptions.find(
-    (option) => option.value.toLocaleLowerCase('es') === normalizedCity,
+    (option) => normalizeCityName(option.value) === normalizedCity,
   )
 
   if (localOption) {
@@ -104,6 +105,6 @@ export function getCityOption(city: string, options = fallbackCityOptions) {
   }
 
   return options.find(
-    (option) => option.value.toLocaleLowerCase('es') === normalizedCity,
+    (option) => normalizeCityName(option.value) === normalizedCity,
   )
 }

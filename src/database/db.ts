@@ -22,6 +22,8 @@ import type { PersonalIncomeCategory } from '../types/personalIncomeCategory'
 import type { PersonalExpenseCategory } from '../types/personalExpenseCategory'
 import type { Wallet } from '../types/wallet'
 import type { InternalTransfer } from '../types/internalTransfer'
+import type { SeasonStay } from '../types/seasonStay'
+import type { SeasonRevision } from '../types/seasonRevision'
 import {
   resolveRecordUsageMode,
   resolveUsageMode,
@@ -48,6 +50,8 @@ import {
   detectTimeZone,
 } from '../utils/onboarding'
 import { migrateSeasonPlanningV31 } from './migrations/v31SeasonPlanning'
+import { migrateMulticitySeasonsV38 } from './migrations/v38MulticitySeasons'
+import { assertSeasonGeoBackupIsValid } from '../utils/seasonGeoValidation'
 import type { CopilotNotification } from '../notifications/types'
 import { DEFAULT_NOTIFICATION_PREFERENCES } from '../notifications/notificationDefaults'
 
@@ -131,6 +135,8 @@ export class FinanceDB extends Dexie {
   personalExpenseCategories!: Table<PersonalExpenseCategory, PersonalExpenseCategory['id']>
   wallets!: Table<Wallet, Wallet['id']>
   internalTransfers!: Table<InternalTransfer, InternalTransfer['id']>
+  seasonStays!: Table<SeasonStay, number>
+  seasonRevisions!: Table<SeasonRevision, number>
 
   constructor() {
     super('finance-app')
@@ -1098,6 +1104,46 @@ export class FinanceDB extends Dexie {
       internalTransfers: 'id,fromWalletId,toWalletId,date,usageMode,createdAt',
     })
 
+    // PB-GEO-002: additive multicity persistence. Legacy seasons and records
+    // remain untouched; in particular, the migration does not invent stays.
+    this.version(38)
+      .stores({
+        services:
+          '++id,date,currency,country,status,earningPeriodId,seasonPeriodId,reportStatusCode,timerStatus,timerEndsAt,createdAt,reportedAt,personalCategoryId,walletId,seasonStayId',
+        expenses: '++id,type,date,category,currency,country,relatedIncomeId,createdAt,earningPeriodId,seasonPeriodId,reportStatusCode,personalCategoryId,walletId,seasonStayId',
+        appointments:
+          '++id,dateTime,completed,currency,earningPeriodId,seasonPeriodId,reportStatusCode,seasonStayId',
+        settings: 'id',
+        exchangeRates: '++id,date,[baseCurrency+targetCurrency+date]',
+        cutoffReports:
+          '++id,frequency,periodStart,periodEnd,[frequency+periodStart+periodEnd]',
+        earningPeriods:
+          '++id,status,startDate,endDate,plannedEndDate,countryCode,city',
+        licenses: 'id,deviceCode,status,expirationDate,licenseVersion',
+        automationOutbox: 'eventId,event,nextAttemptAt,createdAt',
+        communicationChannels: 'id,type,provider,status,updatedAt',
+        deviceIdentity: 'id,userCode,deviceCode,platform,updatedAt',
+        conversationMemories: 'sessionId,updatedAt,lastMessageAt,status',
+        knowledgeDocuments: 'documentId,updatedAt,createdAt,sourceType',
+        knowledgeChunks: 'chunkId,documentId,[documentId+chunkOrder],updatedAt,tokenCount',
+        financialSnapshots:
+          'snapshotId,snapshotKey,&[snapshotKey+revision],sealedAt,status,scopeKind,scopePeriodStart,fingerprintValue',
+        knowledgeSnapshots:
+          'knowledgeSnapshotId,knowledgeSnapshotKey,&[knowledgeSnapshotKey+revision],sealedAt,status,sourceSnapshotId,sourceSnapshotKey,fingerprintValue,knowledgeVersion,projectionVersion',
+        incomeAdditionals: '++id,incomeId,createdAt',
+        financialGoals: 'id,type,status,startDate,endDate,updatedAt',
+        notifications: 'id,dedupKey,priority,status,createdAt,expiresAt',
+        personalIncomeCategories: 'id,normalizedName,usageMode,isArchived,createdAt,updatedAt,name',
+        personalExpenseCategories: 'id,normalizedName,usageMode,isArchived,createdAt,updatedAt,name',
+        wallets: 'id,normalizedName,usageMode,isDefault,isArchived,createdAt,updatedAt,name',
+        internalTransfers: 'id,fromWalletId,toWalletId,date,usageMode,createdAt',
+        seasonStays:
+          '++id,earningPeriodId,&[earningPeriodId+position],[earningPeriodId+status],plannedStartDate,plannedEndDate,actualStartAt,actualEndAt,cityNormalized',
+        seasonRevisions:
+          '++id,earningPeriodId,&[earningPeriodId+sequence],kind,recordedAt',
+      })
+      .upgrade(migrateMulticitySeasonsV38)
+
     this.financialSnapshots.hook('updating', () => {
       throw new Error('SNAPSHOT_PERSISTENCE_APPEND_ONLY')
     })
@@ -1144,6 +1190,8 @@ export async function resetDatabase() {
       db.personalExpenseCategories,
       db.wallets,
       db.internalTransfers,
+      db.seasonStays,
+      db.seasonRevisions,
     ],
     async () => {
       await Promise.all([
@@ -1163,6 +1211,8 @@ export async function resetDatabase() {
         db.personalExpenseCategories.clear(),
         db.wallets.clear(),
         db.internalTransfers.clear(),
+        db.seasonStays.clear(),
+        db.seasonRevisions.clear(),
       ])
 
       await db.settings.put(createDefaultSettings())
@@ -1186,6 +1236,8 @@ export async function exportDatabaseSnapshot() {
     personalExpenseCategories,
     wallets,
     internalTransfers,
+    seasonStays,
+    seasonRevisions,
   ] =
     await Promise.all([
       db.services.toArray(),
@@ -1202,6 +1254,8 @@ export async function exportDatabaseSnapshot() {
       db.personalExpenseCategories.toArray(),
       db.wallets.toArray(),
       db.internalTransfers.toArray(),
+      db.seasonStays.toArray(),
+      db.seasonRevisions.toArray(),
     ])
 
   return {
@@ -1219,6 +1273,8 @@ export async function exportDatabaseSnapshot() {
     personalExpenseCategories,
     wallets,
     internalTransfers,
+    seasonStays,
+    seasonRevisions,
     exportedAt: new Date().toISOString(),
   }
 }
@@ -1314,6 +1370,8 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
   const rawPersonalExpenseCategories = snapshot.personalExpenseCategories ?? []
   const rawWallets = snapshot.wallets ?? []
   const rawInternalTransfers = snapshot.internalTransfers ?? []
+  const rawSeasonStays = snapshot.seasonStays ?? []
+  const rawSeasonRevisions = snapshot.seasonRevisions ?? []
 
   // Validate before clearing local data: an invalid backup must never partially restore.
   assertAllExpenseAdjustmentsAreValid(normalizedServices, normalizedExpenses)
@@ -1322,6 +1380,14 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
   assertPersonalExpenseCategoriesAreValid(rawPersonalExpenseCategories, normalizedExpenses)
   assertWalletsAreValid(rawWallets, normalizedServices, normalizedExpenses)
   assertInternalTransfersAreValid(rawInternalTransfers, rawWallets)
+  assertSeasonGeoBackupIsValid({
+    seasons: snapshot.earningPeriods ?? [],
+    stays: rawSeasonStays,
+    revisions: rawSeasonRevisions,
+    services: normalizedServices,
+    expenses: normalizedExpenses,
+    appointments: snapshot.appointments ?? [],
+  })
 
   const normalizedPersonalIncomeCategories: PersonalIncomeCategory[] = rawPersonalIncomeCategories.map((category) => ({
     ...category,
@@ -1380,6 +1446,8 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
       db.personalExpenseCategories,
       db.wallets,
       db.internalTransfers,
+      db.seasonStays,
+      db.seasonRevisions,
     ],
     async () => {
       await Promise.all([
@@ -1398,6 +1466,8 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.personalExpenseCategories.clear(),
         db.wallets.clear(),
         db.internalTransfers.clear(),
+        db.seasonStays.clear(),
+        db.seasonRevisions.clear(),
       ])
 
       await Promise.all([
@@ -1426,6 +1496,8 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
         db.exchangeRates.bulkPut(snapshot.exchangeRates ?? []),
         db.cutoffReports.bulkPut(snapshot.cutoffReports ?? []),
         db.earningPeriods.bulkPut(snapshot.earningPeriods ?? []),
+        db.seasonStays.bulkPut(rawSeasonStays),
+        db.seasonRevisions.bulkPut(rawSeasonRevisions),
         db.communicationChannels.bulkPut(snapshot.communicationChannels ?? []),
         db.incomeAdditionals.bulkPut(snapshot.incomeAdditionals ?? []),
         db.financialGoals.bulkPut(normalizedFinancialGoals),
