@@ -1798,6 +1798,45 @@ async function run() {
   const appointmentIncomes = await db.services.toArray()
   assert(appointmentIncomes.length === 1, 'agenda completion persists exactly one income')
   const appointmentIncome = appointmentIncomes[0]!
+  const completedAppointment = await db.appointments.get(appointmentId)
+  assert(completedAppointment?.completed === true, 'atomic agenda completion marks the appointment completed')
+  assert(completedAppointment?.completedIncomeId === appointmentIncome.id, 'atomic agenda completion links completedIncomeId to the persisted income')
+  const retryResult = await completeAppointmentAsIncome(
+    appointmentId,
+    financialSettings,
+    new Date('2026-08-20T11:05:00.000Z'),
+  )
+  assert(retryResult.status === 'already_completed', 'agenda completion retry returns already_completed')
+  assert((await db.services.count()) === 1, 'agenda completion retry does not duplicate income')
+
+  const rollbackAppointmentId = await createAppointment({
+    dateTime: '2026-08-21T10:00:00.000Z',
+    duration: 60,
+    expectedAmount: 80,
+    currency: 'EUR',
+    country: 'ES',
+    city: 'Madrid',
+    reminders: [],
+    completed: false,
+  })
+  await startAppointmentService(rollbackAppointmentId, new Date('2026-08-21T10:00:00.000Z'))
+  const rejectOutbox = () => { throw new Error('TEST_OUTBOX_FAILURE') }
+  db.automationOutbox.hook('creating').subscribe(rejectOutbox)
+  let rollbackRejected = false
+  try {
+    await completeAppointmentAsIncome(
+      rollbackAppointmentId,
+      financialSettings,
+      new Date('2026-08-21T11:00:00.000Z'),
+    )
+  } catch {
+    rollbackRejected = true
+  } finally {
+    db.automationOutbox.hook('creating').unsubscribe(rejectOutbox)
+  }
+  assert(rollbackRejected, 'outbox insertion failure rejects atomic agenda completion')
+  assert((await db.appointments.get(rollbackAppointmentId))?.completed === false, 'outbox insertion failure rolls back appointment completion')
+  assert((await db.services.count()) === 1, 'outbox insertion failure rolls back derived income')
   assert(appointmentIncome.totalAmount === 100, 'agenda completion preserves gross income')
   assert(appointmentIncome.percentage === 30, 'agenda completion snapshots season percentage')
   assert(appointmentIncome.realGain === 30, 'agenda completion applies percentage exactly once')

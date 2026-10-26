@@ -1,6 +1,6 @@
 # PB-GEO-002 — contrato público de dominio y persistencia (Etapa 1)
 
-Estado: dominio/persistencia de Etapa 1 e integración de registros de Etapa 2. La UI y la finalización atómica de citas pertenecen a etapas posteriores.
+Estado: dominio/persistencia de Etapa 1, integración de registros de Etapa 2 y finalización atómica de citas de Etapa 3. La UI pertenece a una etapa posterior.
 
 ## Persistencia
 
@@ -88,3 +88,26 @@ Las citas legacy sin temporada y todos los registros sin estancia continúan sie
 ## Backup
 
 El formato lógico pasa a versión 3 e incluye ambas colecciones nuevas. Los backups anteriores siguen admitidos con colecciones vacías. Antes de borrar datos locales, la restauración valida referencias, país, posiciones, secuencias, estados, solapamientos y asociaciones registro-temporada-estancia; una estancia huérfana causa rechazo fail-closed.
+
+## Finalización atómica de citas — Etapa 3
+
+`src/services/appointmentCompletionService.ts` exporta:
+
+- `completeAppointmentAsIncome(appointmentId, settings, now?, options?)`
+- `CompleteAppointmentOptions`
+- `CompleteAppointmentResult`
+- `AppointmentCompletionError` y `AppointmentCompletionErrorCode`
+
+El resultado discriminado es `completed`, con la cita y el ingreso persistidos, o `already_completed`, que es el resultado idempotente de un reintento. Toda finalización nueva escribe cita, ingreso, evento `income.created` y `completedIncomeId` en una única transacción Dexie sobre `appointments`, `services`, `earningPeriods`, `seasonStays`, `automationOutbox` y `settings`. Un fallo en cualquiera de las escrituras revierte el conjunto completo.
+
+Las conversiones asíncronas se preparan antes del commit. Dentro de la transacción se releen la cita, temporada, estancia y configuración, se compara un fingerprint de las precondiciones financieras y geográficas, se recalcula el importe mediante el calculador canónico y se revalida la geografía. Un cambio concurrente produce `APPOINTMENT_PRECONDITION_CHANGED` o `APPOINTMENT_SEASON_INVALID`; nunca se aplican cálculos preparados sobre datos distintos. La cotización válida se persiste en el ingreso aunque falle su caché auxiliar.
+
+Una estancia `planned` produce `STAY_NOT_STARTED`. La UI puede activar la estancia y reintentar, o solicitar explícitamente la desvinculación con:
+
+```ts
+{ plannedStayResolution: { action: 'detach', reason: string } }
+```
+
+El motivo no vacío es obligatorio. La desvinculación conserva `city`, `country` y `travelDestination` de la cita, y registra `seasonStayDetachedFromId`, `seasonStayDetachedAt` y `seasonStayDetachmentReason`. Estancias canceladas o geográficamente incompatibles continúan rechazadas. Las citas legacy sin temporada explícita usan la temporada activa, manteniendo su instantánea de ubicación; `settings.city` solo cubre la ausencia total de instantánea y nunca la reemplaza.
+
+`claimAppointmentCompletion` y completar mediante `markAppointmentCompleted` quedan bloqueados: los consumidores deben usar `completeAppointmentAsIncome`. Reabrir una cita que ya tiene `completedIncomeId` también se rechaza para preservar la integridad financiera. El despacho del outbox y la cancelación de recordatorios ocurren exclusivamente después del commit; un fallo de recordatorios se devuelve como `REMINDER_CANCELLATION_FAILED` sin revertir el ingreso ya confirmado.

@@ -268,77 +268,15 @@ describe('startAppointmentService', () => {
 })
 
 describe('claimAppointmentCompletion', () => {
-  it('no crea nada si la cita nunca tuvo un servicio activo', async () => {
+  it('impide completar una cita fuera de la transacción atómica de ingreso', async () => {
     const id = await createAppointment(appointment({ dateTime: '2026-08-24T15:00' }))
 
-    const result = await claimAppointmentCompletion(id, {
-      timerStoppedAt: '2026-08-24T15:45:00.000Z',
-      actualDuration: 45,
-    })
-
-    expect(result).toBeNull()
-    await expect(getAppointmentById(id)).resolves.toEqual(
-      expect.objectContaining({ completed: false }),
-    )
-  })
-
-  it('"Jornada por horas" no exige timerStartedAt: se puede reclamar sin haber iniciado un cronómetro (D-011)', async () => {
-    const id = await createAppointment(
-      appointment({
-        dateTime: '2026-08-24T15:00',
-        incomeCalculationMethod: 'hourly_workday',
-        workedTime: 2,
-        workedTimeUnit: 'hours',
-      }),
-    )
-
-    const result = await claimAppointmentCompletion(id, {
-      timerStoppedAt: '2026-08-24T15:00:00.000Z',
-      actualDuration: 0,
-    })
-
-    expect(result).not.toBeNull()
-    await expect(getAppointmentById(id)).resolves.toEqual(
-      expect.objectContaining({ completed: true }),
-    )
-  })
-
-  it('es idempotente: solo la primera reclamación concurrente gana, el resto recibe null (TEST E)', async () => {
-    const id = await createAppointment(appointment({ dateTime: '2026-08-24T15:00' }))
-    await startAppointmentService(id, new Date('2026-08-24T15:00:00'))
-
-    const results = await Promise.all(
-      Array.from({ length: 5 }, () =>
-        claimAppointmentCompletion(id, {
-          timerStoppedAt: '2026-08-24T15:45:00.000Z',
-          actualDuration: 45,
-        }),
-      ),
-    )
-
-    expect(results.filter((result) => result !== null)).toHaveLength(1)
+    await expect(claimAppointmentCompletion(id, {
+      timerStoppedAt: '2026-08-24T15:45:00.000Z', actualDuration: 45,
+    })).rejects.toThrow('APPOINTMENT_COMPLETION_REQUIRES_ATOMIC_INCOME_TRANSACTION')
 
     const persisted = await getAppointmentById(id)
-    expect(persisted?.completed).toBe(true)
-    expect(persisted?.actualDuration).toBe(45)
-  })
-
-  it('una llamada posterior a una cita ya finalizada no cambia nada (TEST F)', async () => {
-    const id = await createAppointment(appointment({ dateTime: '2026-08-24T15:00' }))
-    await startAppointmentService(id, new Date('2026-08-24T15:00:00'))
-    await claimAppointmentCompletion(id, {
-      timerStoppedAt: '2026-08-24T15:45:00.000Z',
-      actualDuration: 45,
-    })
-
-    const secondAttempt = await claimAppointmentCompletion(id, {
-      timerStoppedAt: '2026-08-24T16:00:00.000Z',
-      actualDuration: 60,
-    })
-
-    expect(secondAttempt).toBeNull()
-    const persisted = await getAppointmentById(id)
-    expect(persisted?.actualDuration).toBe(45)
-    expect(persisted?.timerStoppedAt).toBe('2026-08-24T15:45:00.000Z')
+    expect(persisted?.completed).toBe(false)
+    expect(persisted?.completedIncomeId).toBeUndefined()
   })
 })

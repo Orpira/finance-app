@@ -220,60 +220,27 @@ export async function startAppointmentService(id: number, now = new Date()) {
   })
 }
 
-/**
- * Reclama atómicamente la finalización de una cita: marca completed=true y
- * fija la hora real de fin y la duración real en una única transacción sobre
- * `appointments`. Al ser una transacción `rw` sobre la misma tabla, el motor
- * de IndexedDB serializa pulsaciones concurrentes: solo la primera puede
- * "ganar" la reclamación (ve completed=false y escribe), cualquier otra ve
- * ya completed=true y recibe null. Esta es la protección real contra
- * servicios duplicados por múltiples pulsaciones en "Servicio realizado".
- * No crea servicios: si la cita no tiene un servicio activo (timerStartedAt)
- * devuelve null sin modificar nada.
- */
+/** @deprecated La finalización solo puede hacerse mediante completeAppointmentAsIncome. */
 export async function claimAppointmentCompletion(
   id: number,
   fields: { timerStoppedAt: string; actualDuration: number },
 ) {
-  return db.transaction('rw', [db.appointments, db.earningPeriods], async () => {
-    const currentAppointment = await db.appointments.get(id)
-    if (!currentAppointment) {
-      throw new Error('La cita que intentas finalizar no existe.')
-    }
-
-    if (currentAppointment.completed) {
-      // Idempotente: otra pulsación ya finalizó esta cita.
-      return null
-    }
-
-    // "Jornada por horas" no usa cronómetro (D-011/PB-IS-0007): no exige
-    // haber pulsado "Iniciar servicio" para poder reclamar la finalización.
-    // "Servicio por tiempo" conserva la regla original: sin cronómetro
-    // iniciado, "Servicio realizado" nunca crea un ingreso nuevo.
-    const method = currentAppointment.incomeCalculationMethod ?? 'service_duration'
-    if (method === 'service_duration' && !currentAppointment.timerStartedAt) {
-      return null
-    }
-
-    await assertRecordIsMutable(currentAppointment)
-
-    const claimedAppointment = normalizeReportStatus({
-      ...currentAppointment,
-      completed: true,
-      timerStoppedAt: fields.timerStoppedAt,
-      actualDuration: fields.actualDuration,
-    }) as Appointment
-    await db.appointments.put(claimedAppointment)
-    return claimedAppointment
-  })
+  void id
+  void fields
+  throw new Error('APPOINTMENT_COMPLETION_REQUIRES_ATOMIC_INCOME_TRANSACTION')
 }
 
 export async function markAppointmentCompleted(id: number, completed = true) {
   const currentAppointment = await db.appointments.get(id)
+  if (completed) {
+    throw new Error('APPOINTMENT_COMPLETION_REQUIRES_ATOMIC_INCOME_TRANSACTION')
+  }
+  if (currentAppointment?.completedIncomeId) {
+    throw new Error('Una cita vinculada a un ingreso completado no puede reabrirse.')
+  }
   await assertRecordIsMutable(currentAppointment)
   assertRecordIsNotReported(currentAppointment)
   await db.appointments.update(id, { completed })
-  if (completed) await cancelAppointmentReminders(id)
   return db.appointments.get(id)
 }
 

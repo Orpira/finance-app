@@ -57,6 +57,12 @@ export interface Appointment {
 
   completedIncomeId?: number;
 
+  seasonStayDetachedFromId?: number;
+
+  seasonStayDetachedAt?: string;
+
+  seasonStayDetachmentReason?: string;
+
   notes?: string;
 
   reminders: AppointmentReminder[];
