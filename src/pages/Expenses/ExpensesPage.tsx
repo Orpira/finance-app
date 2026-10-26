@@ -57,6 +57,16 @@ import {
 } from '../../utils/usageMode'
 import { isServiceIncome } from '../../utils/incomeTypes'
 import { useDialog } from '../../components/dialogs/useDialog'
+import { RecordGeographyFields } from '../../components/seasons/geo/RecordGeographyFields'
+import {
+  buildCreateGeographyPayload,
+  buildUpdateGeographyPayload,
+  createGeographyDraft,
+  validateDestinationDraft,
+} from '../../components/seasons/geo/recordGeographyForm'
+import { describeSeasonGeoError } from '../../components/seasons/geo/seasonGeoMessages'
+import { isReported } from '../../catalogs/reportStatuses'
+import type { Expense } from '../../types/expense'
 
 type SaveStatus = 'idle' | 'saving' | 'error'
 type CrossIncomeChoice = 'yes' | 'no'
@@ -121,6 +131,8 @@ export function ExpensesPage() {
     eurCopRate: EUR_COP_DEFAULT_RATE,
   })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [geoDraft, setGeoDraft] = useState(() => createGeographyDraft())
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [validationError, setValidationError] = useState('')
   const [adjustmentCapacity, setAdjustmentCapacity] =
     useState<AdjustmentCapacity | null>(null)
@@ -183,6 +195,7 @@ export function ExpensesPage() {
         ),
       )
       setActivePeriod(currentPeriod ?? null)
+      if (!parsedExpenseId) setGeoDraft(createGeographyDraft(undefined, currentPeriod?.countryCode))
     }
 
     loadInitialData()
@@ -257,6 +270,8 @@ export function ExpensesPage() {
       setExpenseCountry(currentExpense.country)
       setExpenseCity(currentExpense.city)
       setExpenseCreatedAt(currentExpense.createdAt)
+      setEditingExpense(currentExpense)
+      setGeoDraft(createGeographyDraft(currentExpense))
       setCrossIncome(currentExpense.relatedIncomeId ? 'yes' : 'no')
       setRelatedIncomeId(
         currentExpense.relatedIncomeId
@@ -506,6 +521,12 @@ export function ExpensesPage() {
       return
     }
 
+    const destinationError = isBasicUser ? null : validateDestinationDraft(geoDraft)
+    if (destinationError) {
+      setValidationError(destinationError)
+      return
+    }
+
     setValidationError('')
     setSaveStatus('saving')
 
@@ -558,18 +579,24 @@ export function ExpensesPage() {
         ...(isBasicUser ? { walletId: walletId || undefined } : {}),
       }
 
+      // PB-GEO-002: Personal nunca envía estancia ni destino; en edición solo
+      // se envían los campos geográficos que cambiaron.
       if (isEditing && parsedExpenseId) {
-        await updateExpense(parsedExpenseId, expenseInput)
+        await updateExpense(parsedExpenseId, {
+          ...expenseInput,
+          ...(isBasicUser || !editingExpense ? {} : buildUpdateGeographyPayload(editingExpense, geoDraft)),
+        })
       } else {
-        await createExpense(expenseInput)
+        await createExpense({
+          ...expenseInput,
+          ...(isBasicUser ? {} : buildCreateGeographyPayload(geoDraft)),
+        })
       }
 
       navigate('/expenses')
     } catch (error: unknown) {
       setSaveStatus('error')
-      setValidationError(
-        error instanceof Error ? error.message : 'No se pudo guardar el egreso.',
-      )
+      setValidationError(describeSeasonGeoError(error, 'No se pudo guardar el egreso.'))
     }
   }
 
@@ -835,6 +862,27 @@ export function ExpensesPage() {
             />
           </label>
        {/*  )} */}
+
+        {!isBasicUser && (
+          <RecordGeographyFields
+            draft={geoDraft}
+            earningPeriodId={
+              editingExpense?.earningPeriodId ??
+              editingExpense?.seasonPeriodId ??
+              activePeriod?.id
+            }
+            historicalLocation={editingExpense ? { city: editingExpense.city, country: editingExpense.country } : undefined}
+            isEditing={isEditing}
+            kind="expense"
+            onChange={(nextDraft) => {
+              setGeoDraft(nextDraft)
+              setValidationError('')
+            }}
+            readOnly={Boolean(editingExpense && isReported(editingExpense))}
+            seasonCountryCode={activePeriod?.countryCode}
+            temporalValue={isEditing ? date : getTodayInputDate()}
+          />
+        )}
 
         {!isBasicUser && expenseType === 'ajuste' && (
           <div className="flex flex-col gap-4 rounded-lg border border-amber-200 bg-amber-50/60 p-4">

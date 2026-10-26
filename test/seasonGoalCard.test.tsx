@@ -58,4 +58,34 @@ describe('SeasonGoalCard', () => {
     expect(markup).toContain('aria-valuenow="0"')
     expect(markup).toContain('width:0%')
   })
+
+  it('muestra la fecha prevista como fecha civil, sin desplazarla por zona horaria', () => {
+    const progress = getSeasonGoalProgress({ economicGoal: 5_000 }, { netIncome: 0, expenses: 0, result: 0 })!
+    const markup = renderToStaticMarkup(
+      <SeasonGoalCard currency="EUR" plannedEndDate="2026-12-21T23:59:59.999Z" progress={progress} />,
+    )
+    expect(markup).toContain('21 dic 2026')
+  })
+
+  it('compara con el objetivo original usando el mismo resultado (PB-GEO-002)', () => {
+    const result = { netIncome: 2_000, expenses: 0, result: 2_000 }
+    const current = getSeasonGoalProgress({ economicGoal: 5_000 }, result)!
+    const original = getSeasonGoalProgress({ economicGoal: 4_000 }, result)!
+    const markup = renderToStaticMarkup(
+      <SeasonGoalCard currency="EUR" originalProgress={original} originalSource="season_creation" progress={current} />,
+    )
+    expect(markup).toContain('Objetivo original')
+    expect(markup).toContain('50 % de progreso')
+    expect(markup).toContain('40 %')
+
+    const migrated = renderToStaticMarkup(
+      <SeasonGoalCard currency="EUR" originalProgress={original} originalSource="migration_baseline" progress={current} />,
+    )
+    expect(migrated).toContain('Objetivo conocido al actualizar la app')
+
+    const unchanged = renderToStaticMarkup(
+      <SeasonGoalCard currency="EUR" originalProgress={current} progress={current} />,
+    )
+    expect(unchanged).not.toContain('Objetivo original')
+  })
 })

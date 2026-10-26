@@ -8,6 +8,8 @@ interface LocationRecord {
   city?: string
   country?: string
   dateTime?: string
+  /** PB-GEO-002 §3.8: los cierres legacy por ciudad solo aplican a registros sin estancia. */
+  seasonStayId?: number
 }
 
 function normalizeCity(city?: string) {
@@ -29,7 +31,7 @@ export function isLocationSeasonClosed(
   closedLocationSeasons: ClosedLocationSeason[] = [],
   reopenedLocationSeasons: ReopenedLocationSeason[] = [],
 ) {
-  if (!record.country) {
+  if (!record.country || record.seasonStayId !== undefined) {
     return false
   }
 

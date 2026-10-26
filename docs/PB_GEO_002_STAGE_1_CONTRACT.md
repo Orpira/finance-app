@@ -111,3 +111,16 @@ Una estancia `planned` produce `STAY_NOT_STARTED`. La UI puede activar la estanc
 El motivo no vacío es obligatorio. La desvinculación conserva `city`, `country` y `travelDestination` de la cita, y registra `seasonStayDetachedFromId`, `seasonStayDetachedAt` y `seasonStayDetachmentReason`. Estancias canceladas o geográficamente incompatibles continúan rechazadas. Las citas legacy sin temporada explícita usan la temporada activa, manteniendo su instantánea de ubicación; `settings.city` solo cubre la ausencia total de instantánea y nunca la reemplaza.
 
 `claimAppointmentCompletion` y completar mediante `markAppointmentCompleted` quedan bloqueados: los consumidores deben usar `completeAppointmentAsIncome`. Reabrir una cita que ya tiene `completedIncomeId` también se rechaza para preservar la integridad financiera. El despacho del outbox y la cancelación de recordatorios ocurren exclusivamente después del commit; un fallo de recordatorios se devuelve como `REMINDER_CANCELLATION_FAILED` sin revertir el ingreso ya confirmado.
+
+## Interfaz — Etapa 4
+
+Componentes en `src/components/seasons/geo/`: `SeasonItinerary`, `SeasonRevisionPanel`, `RecordGeographyFields`, `RecordGeographySummary`, `useAppointmentCompletion` (+ `StayNotStartedDialog`) y helpers puros de presentación y payload. La UI solo consume las APIs listadas arriba; la compatibilidad de una estancia con la fecha de un registro se consulta a `resolveCreateRecordGeography`, sin duplicar reglas.
+
+Dependencias pendientes del dominio detectadas al implementar la interfaz:
+
+- `listSelectableSeasonStays` no recibe la fecha del registro ni calcula `disabledReason: 'outside_interval'`; la UI evalúa cada estancia con `resolveCreateRecordGeography`.
+- `createEarningPeriod.firstStay` siempre nace `planned`. «Empezar la estancia ahora» se ejecuta después con `switchActiveSeasonStay` y no es atómico con la creación.
+- No existe `closeAndCreateNext`; «Nueva temporada» con otra activa sigue cerrando y creando en dos pasos.
+- `updateActiveEarningPeriod` escribe `city: updates.city` aunque llegue `undefined`; la UI reenvía la ciudad legacy para no borrarla.
+- `assertNoConfirmedStayOverlaps` omite el par cuando la estancia anterior no tiene `actualEndAt`.
+

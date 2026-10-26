@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
+import { RecordGeographySummary } from '../../components/seasons/geo/RecordGeographySummary'
 import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
 import { isEarningPeriodClosed } from '../../services/earningPeriodService'
@@ -186,6 +187,12 @@ export function IncomeDetailPage() {
         {!isBasicUser && isService && <div><p className="text-xs font-semibold uppercase text-slate-500">Duración</p><p className="mt-1 font-semibold">{getIncomeDurationDisplay(income)}</p></div>}
         {income.notes && <div className="sm:col-span-3"><p className="text-xs font-semibold uppercase text-slate-500">Observación</p><p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{income.notes}</p></div>}
       </section>
+
+      {!isBasicUser && (
+        <section aria-label="Ubicación del ingreso" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <RecordGeographySummary record={income} />
+        </section>
+      )}
 
       {!isBasicUser && isService && additionals.length > 0 && (
         <IncomeAdditionalsDetail

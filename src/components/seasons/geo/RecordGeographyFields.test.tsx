@@ -1,0 +1,156 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useEffect, useState } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { SeasonStay } from '../../../types/seasonStay'
+import { SeasonGeoDomainError } from '../../../utils/seasonGeoValidation'
+import { createGeographyDraft, type RecordGeographyDraft } from './recordGeographyForm'
+
+const listSeasonStays = vi.fn()
+const resolveCreateRecordGeography = vi.fn()
+
+vi.mock('../../../services/seasonStayService', () => ({
+  listSeasonStays: (...args: unknown[]) => listSeasonStays(...args),
+}))
+vi.mock('../../../services/recordGeographyService', () => ({
+  resolveCreateRecordGeography: (...args: unknown[]) => resolveCreateRecordGeography(...args),
+}))
+
+const { RecordGeographyFields } = await import('./RecordGeographyFields')
+
+function stay(overrides: Partial<SeasonStay>): SeasonStay {
+  return {
+    id: 1,
+    earningPeriodId: 7,
+    position: 0,
+    city: 'Madrid',
+    cityNormalized: 'madrid',
+    countryCode: 'ES',
+    status: 'completed',
+    actualStartAt: '2026-11-01T08:00:00.000Z',
+    actualEndAt: '2026-11-05T08:00:00.000Z',
+    timeZone: 'Europe/Madrid',
+    locationSource: 'manual',
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2026-11-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+const stays = [
+  stay({ id: 1 }),
+  stay({ id: 2, city: 'Barcelona', cityNormalized: 'barcelona', actualStartAt: '2026-11-05T08:00:00.000Z', actualEndAt: '2026-11-08T08:00:00.000Z' }),
+  stay({ id: 3, status: 'active', actualStartAt: '2026-11-08T08:00:00.000Z', actualEndAt: undefined }),
+  stay({ id: 4, city: 'Sevilla', cityNormalized: 'sevilla', status: 'planned', actualStartAt: undefined, actualEndAt: undefined }),
+]
+
+let latestDraft: RecordGeographyDraft | null = null
+
+function Harness({ isEditing = false, initial, kind = 'income' as const }: {
+  isEditing?: boolean
+  initial?: RecordGeographyDraft
+  kind?: 'income' | 'expense' | 'appointment'
+}) {
+  const [draft, setDraft] = useState(initial ?? createGeographyDraft(undefined, 'ES'))
+  useEffect(() => {
+    latestDraft = draft
+  }, [draft])
+  return (
+    <RecordGeographyFields
+      draft={draft}
+      earningPeriodId={7}
+      historicalLocation={{ city: 'Madrid', country: 'ES' }}
+      isEditing={isEditing}
+      kind={kind}
+      onChange={setDraft}
+      seasonCountryCode="ES"
+      temporalValue="2026-11-09"
+    />
+  )
+}
+
+describe('RecordGeographyFields', () => {
+  beforeEach(() => {
+    latestDraft = null
+    listSeasonStays.mockResolvedValue(stays)
+    // Solo la estancia activa (Madrid, 2.ª visita) es compatible con el 9 de noviembre.
+    resolveCreateRecordGeography.mockImplementation(async ({ seasonStayId }: { seasonStayId: number }) => {
+      if (seasonStayId === 3) return { seasonStayId }
+      if (seasonStayId === 4) throw new SeasonGeoDomainError('STAY_NOT_STARTED', 'x')
+      throw new SeasonGeoDomainError('RECORD_OUTSIDE_STAY_INTERVAL', 'x')
+    })
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  it('consulta la compatibilidad al dominio con el tipo de registro y la fecha', async () => {
+    render(<Harness />)
+    await screen.findByLabelText(/Estancia/)
+    expect(resolveCreateRecordGeography).toHaveBeenCalledWith(
+      { seasonStayId: 3 },
+      expect.objectContaining({ kind: 'income', usageMode: 'professional', earningPeriodId: 7, temporalValue: '2026-11-09' }),
+    )
+  })
+
+  it('al crear, propone la estancia actual compatible y distingue visitas repetidas', async () => {
+    render(<Harness />)
+    const select = await screen.findByLabelText(/Estancia/) as HTMLSelectElement
+    await waitFor(() => expect(select.value).toBe('3'))
+    const options = Array.from(select.options)
+    expect(options.find((option) => option.value === '1')?.textContent).toMatch(/Madrid, España · 1\.ª visita/)
+    expect(options.find((option) => option.value === '3')?.textContent).toMatch(/Madrid, España · 2\.ª visita/)
+    expect(options.find((option) => option.value === '1')?.disabled).toBe(true)
+    expect(options.find((option) => option.value === '4')?.disabled).toBe(true)
+  })
+
+  it('permite guardar sin estancia', async () => {
+    render(<Harness />)
+    const select = await screen.findByLabelText(/Estancia/) as HTMLSelectElement
+    await waitFor(() => expect(select.value).toBe('3'))
+    fireEvent.change(select, { target: { value: '' } })
+    await waitFor(() => expect(latestDraft?.seasonStayId).toBeNull())
+  })
+
+  it('al editar no cambia la estancia guardada y la muestra como histórica si ya no es compatible', async () => {
+    render(<Harness initial={createGeographyDraft({ seasonStayId: 1 })} isEditing />)
+    const select = await screen.findByLabelText(/Estancia/) as HTMLSelectElement
+    await screen.findByText(/Estancia histórica/)
+    expect(select.value).toBe('1')
+    expect(latestDraft?.seasonStayId).toBe(1)
+  })
+
+  it('la sincronización de ubicación es una acción explícita en edición', async () => {
+    render(<Harness initial={createGeographyDraft({ seasonStayId: 3 })} isEditing />)
+    const checkbox = await screen.findByRole('checkbox', { name: /Actualizar la ciudad y el país/ })
+    expect(latestDraft?.syncLocationFromStay).toBe(false)
+    fireEvent.click(checkbox)
+    await waitFor(() => expect(latestDraft?.syncLocationFromStay).toBe(true))
+  })
+
+  it('muestra un estado normal cuando la temporada no tiene estancias', async () => {
+    listSeasonStays.mockResolvedValue([])
+    render(<Harness />)
+    expect(await screen.findByText(/aún no tiene estancias\. Puedes guardar sin estancia/)).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('el destino puntual es independiente de la estancia y avisa si es internacional', async () => {
+    render(<Harness />)
+    await screen.findByLabelText(/Estancia/)
+    fireEvent.click(screen.getByRole('checkbox', { name: /Destino puntual/ }))
+    fireEvent.change(screen.getByLabelText('Ciudad de destino'), { target: { value: 'Lisboa' } })
+    fireEvent.change(screen.getByLabelText('País (opcional)'), { target: { value: 'PT' } })
+    expect(screen.getByText(/Destino internacional/)).toBeTruthy()
+    await waitFor(() => expect(latestDraft?.destination).toMatchObject({ kind: 'city', label: 'Lisboa', countryCode: 'PT' }))
+    await waitFor(() => expect(latestDraft?.seasonStayId).toBe(3))
+  })
+
+  it('las citas indican que pueden usar estancias previstas', async () => {
+    render(<Harness kind="appointment" />)
+    expect(await screen.findByText(/Las citas futuras pueden asociarse a una estancia prevista/)).toBeTruthy()
+  })
+})

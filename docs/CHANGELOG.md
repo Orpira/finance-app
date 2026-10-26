@@ -10,6 +10,27 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Added
 
+- **Temporadas multiciudad — interfaz (PB-GEO-002, Etapa 4)**: el detalle de
+  temporada incorpora el itinerario (estancias previstas, actuales,
+  finalizadas y canceladas; huecos entre estancias; número de visita para
+  ciudades repetidas; activar, cambiar de ciudad, finalizar, corregir con
+  motivo, cancelar planes con desvinculación explícita de citas y reordenar
+  planes sin fecha) y el panel de planificación (revisión de fecha prevista y
+  de objetivo con historial; el objetivo original se conserva y se compara con
+  el vigente usando el mismo resultado financiero). La edición directa de la
+  temporada queda limitada a nombre y porcentaje. Crear temporada permite una
+  primera ciudad opcional. Ingresos, egresos y citas (solo en Profesional)
+  admiten estancia opcional, destino puntual y sincronización explícita de la
+  ubicación; las estancias compatibles se consultan al dominio. "Servicio
+  realizado" (Agenda y alarma de servicio) usa un único flujo sobre
+  `completeAppointmentAsIncome` con `already_completed`, `STAY_NOT_STARTED`
+  (activar o finalizar sin estancia con motivo) y reintento seguro ante
+  contexto obsoleto. Los cierres legacy por ciudad (`closedLocationSeasons`)
+  ya no aplican a registros con estancia (§3.8). Las fechas de inicio, cierre
+  y fin previsto de temporada se muestran como fecha civil, sin desplazarse un
+  día por zona horaria. No cambia cálculos financieros, esquema Dexie ni
+  llamadas de red.
+
 - **Metodo de calculo por ingreso, seleccionable al crear (D-015)**: en modo
   Profesional, el formulario de Ingreso agrega un selector "Metodo de
   calculo para este ingreso" ("Servicio por tiempo" / "Jornada por horas")

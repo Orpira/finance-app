@@ -4,17 +4,27 @@ import type { SeasonGoalProgress } from '../../services/earningPeriodService'
 import type { CurrencyCode } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
 import { SensitiveAmount } from '../SensitiveAmount'
+import { formatCivilDate } from './geo/stayPresentation'
 
 interface SeasonGoalCardProps {
   currency: CurrencyCode
   hidden?: boolean
   plannedEndDate?: string
   progress: SeasonGoalProgress
+  /**
+   * PB-GEO-002: progreso contra el objetivo original, calculado con el mismo
+   * resultado financiero (getSeasonGoalProgress). Solo se muestra si difiere.
+   */
+  originalProgress?: SeasonGoalProgress | null
+  /** 'migration_baseline' indica que el original es el valor conocido al migrar. */
+  originalSource?: 'season_creation' | 'migration_baseline'
 }
 
+// plannedEndDate se guarda como `YYYY-MM-DDT23:59:59.999Z` (fecha civil con hora
+// UTC sintética): se formatea la fecha civil para no desplazarla un día.
 function formatDate(value?: string) {
   if (!value) return null
-  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(value))
+  return formatCivilDate(value.slice(0, 10))
 }
 
 export function SeasonGoalCard({
@@ -22,7 +32,10 @@ export function SeasonGoalCard({
   hidden = false,
   plannedEndDate,
   progress,
+  originalProgress,
+  originalSource,
 }: SeasonGoalCardProps) {
+  const showOriginal = Boolean(originalProgress && originalProgress.goal !== progress.goal)
   const plannedDate = formatDate(plannedEndDate)
   const displayPercentage = Math.round(progress.percentage)
   const displayedExpenses = progress.expenses > 0 ? -progress.expenses : 0
@@ -92,6 +105,14 @@ export function SeasonGoalCard({
           style={{ width: `${Math.min(Math.max(progress.percentage, 0), 100)}%` }}
         />
       </div>
+
+      {showOriginal && originalProgress && (
+        <p className="mt-3 rounded-md bg-slate-50 p-2 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          {originalSource === 'migration_baseline' ? 'Objetivo conocido al actualizar la app' : 'Objetivo original'}:{' '}
+          <SensitiveAmount hidden={hidden} value={formatCurrency(originalProgress.goal, currency)} />
+          {' · '}{Math.round(originalProgress.percentage)} % de progreso. El objetivo vigente es el que se muestra arriba.
+        </p>
+      )}
 
       <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">
         {progress.exceeded > 0 ? (

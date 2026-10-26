@@ -20,7 +20,8 @@ import {
   listAppointments,
   startAppointmentService,
 } from '../../services/appointmentService'
-import { completeAppointmentAsIncome } from '../../services/appointmentCompletionService'
+import { RecordGeographySummary } from '../../components/seasons/geo/RecordGeographySummary'
+import { useAppointmentCompletion } from '../../components/seasons/geo/useAppointmentCompletion'
 import { getSettings } from '../../services/settingsService'
 import { listClosedEarningPeriods } from '../../services/earningPeriodService'
 import type { Appointment } from '../../types/appointment'
@@ -102,6 +103,7 @@ export function AgendaPage() {
     () => getDateFromSearch(searchParams.get('date')) ?? new Date(),
   )
   const [now, setNow] = useState(new Date())
+  const { complete: completeAppointment, dialog: completionDialog } = useAppointmentCompletion()
 
   const highlightedAppointmentId = searchParams.get('appointment')
   const selectedDateFromSearch = getDateFromSearch(searchParams.get('date'))
@@ -237,8 +239,12 @@ export function AgendaPage() {
     }
 
     await runExclusive(appointment.id, async () => {
-      await completeAppointmentAsIncome(appointment.id as number, settings, new Date())
-      await reloadAppointments()
+      // La cita solo se mostrará como completada tras recargar desde el
+      // dominio; no hay actualización optimista.
+      const outcome = await completeAppointment(appointment.id as number, settings)
+      if (outcome === 'completed' || outcome === 'already_completed') {
+        await reloadAppointments()
+      }
     })
   }
 
@@ -405,6 +411,9 @@ export function AgendaPage() {
                               Disponible a las {getTimeFromDateTime(appointment.dateTime)}
                             </p>
                           )}
+                          <div className="mt-2">
+                            <RecordGeographySummary compact record={appointment} />
+                          </div>
                           {appointmentIsReported && (
                             <p className="mt-2 text-sm font-semibold text-emerald-700">
                               Reportado · solo consulta
@@ -509,6 +518,7 @@ export function AgendaPage() {
           </div>
         </section>
       </div>
+      {completionDialog}
     </section>
   )
 }

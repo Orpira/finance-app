@@ -85,6 +85,14 @@ import {
 } from '../../utils/serviceDuration'
 import { runIncomeCalculation } from '../../utils/incomeCalculation/incomeCalculatorRegistry'
 import { isReported } from '../../catalogs/reportStatuses'
+import { RecordGeographyFields } from '../../components/seasons/geo/RecordGeographyFields'
+import {
+  buildCreateGeographyPayload,
+  buildUpdateGeographyPayload,
+  createGeographyDraft,
+  validateDestinationDraft,
+} from '../../components/seasons/geo/recordGeographyForm'
+import { describeSeasonGeoError } from '../../components/seasons/geo/seasonGeoMessages'
 import { useDialog } from '../../components/dialogs/useDialog'
 import { MAX_PERSONAL_INCOME_NAME_LENGTH } from '../../utils/personalIncomeName'
 import type { PersonalIncomeCategory } from '../../types/personalIncomeCategory'
@@ -234,6 +242,7 @@ export function IncomePage() {
   })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState('')
+  const [geoDraft, setGeoDraft] = useState(() => createGeographyDraft())
 
   useEffect(() => {
     let isMounted = true
@@ -275,6 +284,7 @@ export function IncomePage() {
       }
 
       setSettings(currentSettings)
+      if (!currentIncome) setGeoDraft(createGeographyDraft(undefined, currentPeriod?.countryCode))
       setMethodOverride(null)
       setApplySeasonPercentageToHourly(false)
       setActivePeriod(currentPeriod ?? null)
@@ -335,6 +345,7 @@ export function IncomePage() {
         }
 
         setEditingIncome(currentIncome)
+        setGeoDraft(createGeographyDraft(currentIncome, (currentIncomePeriod ?? currentPeriod)?.countryCode))
         setPersonalName(currentIncome.personalName ?? '')
         setPersonalCategoryId(currentIncome.personalCategoryId ?? '')
         setWalletId(currentIncome.walletId ?? '')
@@ -774,6 +785,13 @@ export function IncomePage() {
       return
     }
 
+    const destinationError = isBasicUser ? null : validateDestinationDraft(geoDraft)
+    if (destinationError) {
+      setSaveStatus('error')
+      setSaveError(destinationError)
+      return
+    }
+
     setSaveStatus('saving')
     setSaveError('')
 
@@ -914,14 +932,20 @@ export function IncomePage() {
         city: isBasicUser ? undefined : editingIncome?.city ?? settings.city,
       }
 
+      // PB-GEO-002: estancia y destino se añaden después de resolver el
+      // cálculo (D-015/D-016) y no participan en él. Personal nunca los envía.
       if (isEditing && parsedIncomeId) {
-        await updateServiceIncome(parsedIncomeId, incomeValues)
+        await updateServiceIncome(parsedIncomeId, {
+          ...incomeValues,
+          ...(isBasicUser || !editingIncome ? {} : buildUpdateGeographyPayload(editingIncome, geoDraft)),
+        })
         navigate('/income')
         return
       }
 
       const newIncomeId = await createServiceIncome({
         ...incomeValues,
+        ...(isBasicUser ? {} : buildCreateGeographyPayload(geoDraft)),
         createdAt: registrationDateTime,
         date: registrationDate,
       })
@@ -938,9 +962,7 @@ export function IncomePage() {
       navigate('/income')
     } catch (error: unknown) {
       setSaveStatus('error')
-      setSaveError(
-        error instanceof Error ? error.message : 'No se pudo guardar el ingreso.',
-      )
+      setSaveError(describeSeasonGeoError(error, 'No se pudo guardar el ingreso.'))
     }
   }
 
@@ -1426,6 +1448,29 @@ export function IncomePage() {
             value={notes}
           />
         </label>
+
+        {!isBasicUser && (
+          <RecordGeographyFields
+            draft={geoDraft}
+            earningPeriodId={
+              editingIncome?.earningPeriodId ??
+              editingIncome?.seasonPeriodId ??
+              activePeriod?.id
+            }
+            historicalLocation={editingIncome ? { city: editingIncome.city, country: editingIncome.country } : undefined}
+            isEditing={isEditing}
+            kind="income"
+            onChange={(nextDraft) => {
+              setGeoDraft(nextDraft)
+              if (saveStatus === 'error') {
+                setSaveStatus('idle')
+                setSaveError('')
+              }
+            }}
+            seasonCountryCode={(editingPeriod ?? activePeriod)?.countryCode}
+            temporalValue={isEditing ? date : formatInputDate(new Date())}
+          />
+        )}
 
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-slate-500" role="status">

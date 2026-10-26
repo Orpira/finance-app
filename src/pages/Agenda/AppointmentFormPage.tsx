@@ -42,6 +42,14 @@ import { useDialog } from '../../components/dialogs/useDialog'
 import type { IncomeCalculationMethod } from '../../catalogs/incomeCalculationMethods'
 import { shouldCollectPaymentTypeAtRegistration } from '../../catalogs/incomeCalculationMethods'
 import { runIncomeCalculation } from '../../utils/incomeCalculation/incomeCalculatorRegistry'
+import { RecordGeographyFields } from '../../components/seasons/geo/RecordGeographyFields'
+import {
+  buildCreateGeographyPayload,
+  buildUpdateGeographyPayload,
+  createGeographyDraft,
+  validateDestinationDraft,
+} from '../../components/seasons/geo/recordGeographyForm'
+import { describeSeasonGeoError } from '../../components/seasons/geo/seasonGeoMessages'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'timeConflict'
 type SeasonActionStatus = 'idle' | 'reopening' | 'reopened' | 'error'
@@ -124,6 +132,8 @@ export function AppointmentFormPage() {
   const [loadError, setLoadError] = useState('')
   const [seasonActionStatus, setSeasonActionStatus] =
     useState<SeasonActionStatus>('idle')
+  const [geoDraft, setGeoDraft] = useState(() => createGeographyDraft())
+  const [saveErrorMessage, setSaveErrorMessage] = useState('')
 
   const todayInput = formatInputDate(now)
   const currentTimeInput = formatInputTime(now)
@@ -170,8 +180,10 @@ export function AppointmentFormPage() {
   const principalAmount = usesHourlyWorkday
     ? hourlyCalculation.realGain
     : expectedAmount
+  // §3.8: el cierre legacy por ciudad no aplica cuando la cita se asocia a una estancia.
   const isCurrentLocationClosed =
     !isEditing &&
+    geoDraft.seasonStayId === null &&
     isLocationSeasonClosed(settings ?? {}, settings?.closedLocationSeasons)
 
   const returnToAgenda = useMemo(
@@ -203,6 +215,7 @@ export function AppointmentFormPage() {
       setActivePeriod(currentPeriod ?? null)
 
       if (!parsedAppointmentId) {
+        setGeoDraft(createGeographyDraft(undefined, currentPeriod?.countryCode))
         return
       }
 
@@ -239,6 +252,7 @@ export function AppointmentFormPage() {
       }
 
       setEditingAppointment(appointment)
+      setGeoDraft(createGeographyDraft(appointment, currentPeriod?.countryCode))
       setDate(getDateFromDateTime(appointment.dateTime))
       setTime(getTimeFromDateTime(appointment.dateTime))
       setDuration(appointment.duration)
@@ -378,10 +392,19 @@ export function AppointmentFormPage() {
       return
     }
 
+    const destinationError = validateDestinationDraft(geoDraft)
+    if (destinationError) {
+      setSaveErrorMessage(destinationError)
+      setSaveStatus('error')
+      return
+    }
+    setSaveErrorMessage('')
+
     const currentSettings = isEditing ? settings : await getSettings()
 
     if (
       !isEditing &&
+      geoDraft.seasonStayId === null &&
       isLocationSeasonClosed(
         currentSettings,
         currentSettings.closedLocationSeasons,
@@ -432,9 +455,15 @@ export function AppointmentFormPage() {
       let savedAppointment: Appointment | undefined
 
       if (editingAppointment?.id) {
-        savedAppointment = await updateAppointment(editingAppointment.id, input)
+        savedAppointment = await updateAppointment(editingAppointment.id, {
+          ...input,
+          ...buildUpdateGeographyPayload(editingAppointment, geoDraft),
+        })
       } else {
-        const nextAppointmentId = await createAppointment(input)
+        const nextAppointmentId = await createAppointment({
+          ...input,
+          ...buildCreateGeographyPayload(geoDraft),
+        })
         savedAppointment = { ...input, id: nextAppointmentId }
       }
 
@@ -460,11 +489,9 @@ export function AppointmentFormPage() {
 
       setSaveStatus('saved')
     } catch (error) {
-      setSaveStatus(
-        error instanceof Error && error.message === APPOINTMENT_TIME_CONFLICT_MESSAGE
-          ? 'timeConflict'
-          : 'error',
-      )
+      const isTimeConflict = error instanceof Error && error.message === APPOINTMENT_TIME_CONFLICT_MESSAGE
+      setSaveErrorMessage(isTimeConflict ? '' : describeSeasonGeoError(error, 'No se pudo guardar'))
+      setSaveStatus(isTimeConflict ? 'timeConflict' : 'error')
     }
   }
 
@@ -680,6 +707,24 @@ export function AppointmentFormPage() {
           />
         </label>
 
+        <RecordGeographyFields
+          draft={geoDraft}
+          earningPeriodId={
+            editingAppointment?.earningPeriodId ??
+            editingAppointment?.seasonPeriodId ??
+            activePeriod?.id
+          }
+          historicalLocation={editingAppointment ? { city: editingAppointment.city, country: editingAppointment.country } : undefined}
+          isEditing={isEditing}
+          kind="appointment"
+          onChange={(nextDraft) => {
+            setGeoDraft(nextDraft)
+            setSaveErrorMessage('')
+          }}
+          seasonCountryCode={activePeriod?.countryCode}
+          temporalValue={date && time ? `${date}T${time}` : ''}
+        />
+
         <div className="flex flex-col gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -797,7 +842,7 @@ export function AppointmentFormPage() {
                 ? 'Selecciona una fecha y hora actual o futura'
                 : hasReminderErrors
                   ? 'Revisa los recordatorios'
-                  : 'No se pudo guardar')}
+                  : saveErrorMessage || 'No se pudo guardar')}
             {saveStatus === 'timeConflict' && APPOINTMENT_TIME_CONFLICT_MESSAGE}
           </p>
 

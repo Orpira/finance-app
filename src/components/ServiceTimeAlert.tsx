@@ -2,14 +2,12 @@ import { BellRing, Check } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { listAppointments, updateAppointment } from '../services/appointmentService'
-import {
-  completeAppointmentAsIncome,
-  getAppointmentActualDuration,
-} from '../services/appointmentCompletionService'
+import { getAppointmentActualDuration } from '../services/appointmentCompletionService'
 import { getSettings } from '../services/settingsService'
 import type { Appointment } from '../types/appointment'
 import type { AppSettings } from '../types/settings'
 import { playPriorityAlarm } from '../utils/alarm'
+import { useAppointmentCompletion } from './seasons/geo/useAppointmentCompletion'
 
 function getElapsedSeconds(appointment: Appointment, now: Date) {
   if (!appointment.timerStartedAt) {
@@ -33,6 +31,7 @@ export function ServiceTimeAlert() {
   )
   const [extensionMinutes, setExtensionMinutes] = useState(15)
   const [isSaving, setIsSaving] = useState(false)
+  const { complete: completeAppointment, dialog: completionDialog } = useAppointmentCompletion()
 
   const activeAppointment = useMemo(
     () =>
@@ -151,10 +150,15 @@ export function ServiceTimeAlert() {
     }
 
     setIsSaving(true)
-    await completeAppointmentAsIncome(activeAppointment.id, settings, now)
-    await reloadAppointments()
-    setActiveAppointmentId(null)
-    setIsSaving(false)
+    try {
+      const outcome = await completeAppointment(activeAppointment.id, settings)
+      if (outcome === 'completed' || outcome === 'already_completed') {
+        await reloadAppointments()
+        setActiveAppointmentId(null)
+      }
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   if (!activeAppointment) {
@@ -169,6 +173,7 @@ export function ServiceTimeAlert() {
   )
 
   return (
+    <>
     <div
       aria-labelledby="global-service-time-alert-title"
       aria-modal="true"
@@ -246,6 +251,8 @@ export function ServiceTimeAlert() {
         </div>
       </div>
     </div>
+    {completionDialog}
+    </>
   )
 }
 
