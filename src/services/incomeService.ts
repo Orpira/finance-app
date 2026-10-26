@@ -33,8 +33,26 @@ import {
 } from '../catalogs/reportStatuses'
 import { assertReportStatusUpdateIsAllowed } from '../utils/reportStatus'
 import { normalizePersonalIncomeName } from '../utils/personalIncomeName'
-export type CreateServiceIncomeInput = Omit<ServiceIncome, 'id'>
-export type UpdateServiceIncomeInput = Partial<CreateServiceIncomeInput>
+import type { TravelDestination } from '../types/travelDestination'
+import {
+  resolveCreateRecordGeography,
+  resolveUpdateRecordGeography,
+} from './recordGeographyService'
+
+export type CreateServiceIncomeInput = Omit<
+  ServiceIncome,
+  'id' | 'seasonStayId' | 'travelDestination'
+> & {
+  seasonStayId?: number | null
+  travelDestination?: TravelDestination | null
+}
+export type UpdateServiceIncomeInput = Partial<
+  Omit<CreateServiceIncomeInput, 'seasonStayId' | 'travelDestination'>
+> & {
+  seasonStayId?: number | null
+  travelDestination?: TravelDestination | null
+  syncLocationFromStay?: boolean
+}
 
 export interface ServiceIncomeListOptions extends DateRangeListOptions {
   country?: CountryCode
@@ -59,7 +77,7 @@ function assertIncomeIsNotBeforeSeasonStart(
   }
 }
 
-function normalizeIncomeByType<T extends CreateServiceIncomeInput>(input: T): T {
+function normalizeIncomeByType<T extends ServiceIncome>(input: T): T {
   if (!isAdjustmentIncome(input)) return input
   return normalizeAdjustmentIncome(input)
 }
@@ -140,6 +158,8 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
 
   const normalizedInput = normalizePaymentTypeForMethod(normalizeIncomeByType({
     ...input,
+    seasonStayId: input.seasonStayId ?? undefined,
+    travelDestination: input.travelDestination ?? undefined,
     personalName: activeUsageMode === 'basic'
       ? normalizePersonalIncomeName(input.personalName)
       : undefined,
@@ -148,7 +168,7 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
   }))
   const incomeId = await db.transaction(
     'rw',
-    [db.services, db.automationOutbox, db.earningPeriods, db.wallets],
+    [db.services, db.automationOutbox, db.earningPeriods, db.seasonStays, db.wallets],
     async () => {
       const earningPeriod =
         requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
@@ -158,6 +178,13 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
       }
 
       assertIncomeIsNotBeforeSeasonStart(input.date, earningPeriod)
+
+      const geography = await resolveCreateRecordGeography(normalizedInput, {
+        kind: 'income',
+        usageMode: activeUsageMode,
+        earningPeriodId: earningPeriod?.id,
+        temporalValue: normalizedInput.date,
+      })
 
       const createdAt = new Date().toISOString()
       const incomeBase: ServiceIncome = normalizeReportStatus({
@@ -171,6 +198,7 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
           : normalizedInput.paymentType,
         earningPeriodId: earningPeriod?.id,
         seasonPeriodId: earningPeriod?.id,
+        ...geography,
         earningPercentage: isServiceIncome(normalizedInput)
           ? earningPeriod?.percentage ??
             normalizedInput.earningPercentage ??
@@ -264,7 +292,7 @@ export async function updateServiceIncome(
   }
   assertReportStatusUpdateIsAllowed(currentIncome, resolveActiveUsageMode(settings), updates)
   assertReportedRecordUpdateIsAllowed(currentIncome, updates)
-  return db.transaction('rw', [db.services, db.expenses, db.earningPeriods, db.wallets, db.personalIncomeCategories], async () => {
+  return db.transaction('rw', [db.services, db.expenses, db.earningPeriods, db.seasonStays, db.wallets, db.personalIncomeCategories], async () => {
     const [latestIncome, incomes, expenses] = await Promise.all([
       db.services.get(id),
       db.services.toArray(),
@@ -307,6 +335,7 @@ export async function updateServiceIncome(
     // sección 9): editar Configuración nunca debe alterar ingresos históricos.
     const safeUpdates: UpdateServiceIncomeInput = { ...updates }
     delete safeUpdates.incomeCalculationMethod
+    delete safeUpdates.syncLocationFromStay
     if (Object.hasOwn(updates, 'personalName')) {
       safeUpdates.personalName = resolveActiveUsageMode(settings) === 'basic'
         ? normalizePersonalIncomeName(updates.personalName)
@@ -354,10 +383,19 @@ export async function updateServiceIncome(
       delete safeUpdates.paymentType
     }
 
+    const earningPeriodId = latestIncome.earningPeriodId ?? latestIncome.seasonPeriodId
+    const geography = await resolveUpdateRecordGeography(latestIncome, updates, {
+      kind: 'income',
+      usageMode: resolveActiveUsageMode(settings),
+      earningPeriodId,
+      temporalValue: updates.date ?? latestIncome.date,
+    })
+
     const updatedIncome = normalizeIncomeByType(
       normalizeReportStatus({
         ...latestIncome,
         ...safeUpdates,
+        ...geography,
         usageMode: latestIncome.usageMode ?? resolveActiveUsageMode(settings),
         ...((latestIncome.usageMode ?? resolveActiveUsageMode(settings)) === 'basic'
           ? { paymentType: undefined }

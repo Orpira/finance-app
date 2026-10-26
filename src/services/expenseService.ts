@@ -2,6 +2,7 @@ import { db } from '../database/db'
 import type { DateRangeListOptions } from '../types/dataAccess'
 import type { Expense } from '../types/expense'
 import type { CountryCode } from '../types/settings'
+import type { TravelDestination } from '../types/travelDestination'
 import { assertRecordIsMutable, getActiveEarningPeriod } from './earningPeriodService'
 import { getSettings } from './settingsService'
 import {
@@ -20,6 +21,11 @@ import {
 } from './automationOutboxService'
 import { assertReportStatusUpdateIsAllowed } from '../utils/reportStatus'
 import { normalizePersonalExpenseName } from '../utils/personalExpenseName'
+import { assertRecordIsNotReported, assertReportedRecordUpdateIsAllowed } from '../catalogs/reportStatuses'
+import {
+  resolveCreateRecordGeography,
+  resolveUpdateRecordGeography,
+} from './recordGeographyService'
 
 const REPORT_FIELDS = ['reportStatusCode', 'reportStatusLabel', 'reportedAt', 'reportReference', 'reportNotes'] as const
 
@@ -36,10 +42,16 @@ export interface ExpenseListOptions extends DateRangeListOptions {
   earningPeriodId?: number
 }
 
-export type CreateExpenseInput = Omit<Expense, 'id' | 'createdAt'> & {
+export type CreateExpenseInput = Omit<Expense, 'id' | 'createdAt' | 'seasonStayId' | 'travelDestination'> & {
   createdAt?: string
+  seasonStayId?: number | null
+  travelDestination?: TravelDestination | null
 }
-export type UpdateExpenseInput = Partial<CreateExpenseInput>
+export type UpdateExpenseInput = Partial<Omit<CreateExpenseInput, 'seasonStayId' | 'travelDestination'>> & {
+  seasonStayId?: number | null
+  travelDestination?: TravelDestination | null
+  syncLocationFromStay?: boolean
+}
 
 function normalizePersonalCategoryIdInput(value: unknown): string | undefined {
   if (value === undefined || value === null || value === '') return undefined
@@ -117,35 +129,40 @@ export async function createExpense(input: CreateExpenseInput) {
   if (activeUsageMode === 'professional' && normalizedWalletId !== undefined) {
     throw new Error('WALLET_NOT_ALLOWED_FOR_PROFESSIONAL')
   }
-  const period =
-    requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
-
-  if (requiresSeason(settings) && !period) {
-    throw new Error('No hay una temporada activa. Crea una temporada para registrar actividad.')
-  }
-
   const createdAt = input.createdAt ?? formatLocalDateTime(new Date())
-
-  const expense: Expense = withoutReportFields({
-    usageMode: activeUsageMode,
-    ...input,
-    personalName: activeUsageMode === 'basic'
-      ? normalizePersonalExpenseName(input.personalName)
-      : undefined,
-    personalCategoryId: activeUsageMode === 'basic' ? normalizedPersonalCategoryId : undefined,
-    walletId: activeUsageMode === 'basic' ? normalizedWalletId : undefined,
-    createdAt,
-    earningPeriodId: period?.id,
-    seasonPeriodId: period?.id,
-  })
 
   const expenseId = await db.transaction('rw', [
     db.expenses,
     db.services,
     db.automationOutbox,
+    db.earningPeriods,
+    db.seasonStays,
     db.personalExpenseCategories,
     db.wallets,
   ], async () => {
+    const period = requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
+    if (requiresSeason(settings) && !period) {
+      throw new Error('No hay una temporada activa. Crea una temporada para registrar actividad.')
+    }
+    const geography = await resolveCreateRecordGeography(input, {
+      kind: 'expense',
+      usageMode: activeUsageMode,
+      earningPeriodId: period?.id,
+      temporalValue: input.date,
+    })
+    const expense: Expense = withoutReportFields({
+      usageMode: activeUsageMode,
+      ...input,
+      ...geography,
+      personalName: activeUsageMode === 'basic'
+        ? normalizePersonalExpenseName(input.personalName)
+        : undefined,
+      personalCategoryId: activeUsageMode === 'basic' ? normalizedPersonalCategoryId : undefined,
+      walletId: activeUsageMode === 'basic' ? normalizedWalletId : undefined,
+      createdAt,
+      earningPeriodId: period?.id,
+      seasonPeriodId: period?.id,
+    })
     await assertPersonalExpenseCategoryAssignment(
       expense.personalCategoryId,
       activeUsageMode,
@@ -219,14 +236,25 @@ export async function updateExpense(id: number, updates: UpdateExpenseInput) {
     throw new Error('Este egreso pertenece a otro modo de uso.')
   }
   assertReportStatusUpdateIsAllowed(currentExpense, resolveActiveUsageMode(settings), updates)
+  assertReportedRecordUpdateIsAllowed(currentExpense, updates)
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentExpense)
   }
-  return db.transaction('rw', [db.expenses, db.services, db.personalExpenseCategories, db.wallets], async () => {
+  return db.transaction('rw', [db.expenses, db.services, db.earningPeriods, db.seasonStays, db.personalExpenseCategories, db.wallets], async () => {
     const latestExpense = await db.expenses.get(id)
     if (!latestExpense) throw new Error('El egreso que intentas modificar no existe.')
     assertReportStatusUpdateIsAllowed(latestExpense, resolveActiveUsageMode(settings), updates)
+    assertReportedRecordUpdateIsAllowed(latestExpense, updates)
+    if (requiresSeason(settings)) {
+      await assertRecordIsMutable(latestExpense)
+      const earningPeriodId = latestExpense.earningPeriodId ?? latestExpense.seasonPeriodId
+      if ((Object.hasOwn(updates, 'earningPeriodId') && updates.earningPeriodId !== earningPeriodId) ||
+        (Object.hasOwn(updates, 'seasonPeriodId') && updates.seasonPeriodId !== earningPeriodId)) {
+        throw new Error('No se puede cambiar la temporada de un egreso existente.')
+      }
+    }
     const safeUpdates: UpdateExpenseInput = { ...updates }
+    delete safeUpdates.syncLocationFromStay
     if (Object.hasOwn(updates, 'personalName')) {
       safeUpdates.personalName = resolveActiveUsageMode(settings) === 'basic'
         ? normalizePersonalExpenseName(updates.personalName)
@@ -254,9 +282,17 @@ export async function updateExpense(id: number, updates: UpdateExpenseInput) {
         safeUpdates.walletId = normalizedWalletId
       }
     }
+    const earningPeriodId = latestExpense.earningPeriodId ?? latestExpense.seasonPeriodId
+    const geography = await resolveUpdateRecordGeography(latestExpense, updates, {
+      kind: 'expense',
+      usageMode: resolveActiveUsageMode(settings),
+      earningPeriodId,
+      temporalValue: updates.date ?? latestExpense.date,
+    })
     const updatedExpense: Expense = withoutReportFields({
       ...latestExpense,
       ...safeUpdates,
+      ...geography,
       usageMode: latestExpense.usageMode ?? resolveActiveUsageMode(settings),
     })
     const [incomes, expenses] = await Promise.all([
@@ -302,7 +338,9 @@ export async function deleteExpense(id: number) {
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentExpense)
   }
+  assertRecordIsNotReported(currentExpense)
   return db.transaction('rw', db.expenses, async () => {
+    assertRecordIsNotReported(await db.expenses.get(id))
     return db.expenses.delete(id)
   })
 }

@@ -24,11 +24,15 @@ const appointmentsTable = {
     return appointment.id
   }),
 }
+const seasonStaysTable = { get: vi.fn() }
+const earningPeriodsTable = { get: vi.fn() }
 
 vi.mock('../database/db', () => ({
   db: {
     appointments: appointmentsTable,
     automationOutbox: {},
+    earningPeriods: earningPeriodsTable,
+    seasonStays: seasonStaysTable,
     transaction: (_mode: string, _tables: unknown, callback: () => unknown) => {
       const run = transactionQueue.then(callback)
       transactionQueue = run.then(
@@ -89,6 +93,19 @@ beforeEach(() => {
 })
 
 describe('disponibilidad de agenda', () => {
+  it('permite una estancia planificada y copia su ubicación', async () => {
+    earningPeriodsTable.get.mockResolvedValue({ id: 7, countryCode: 'ES' })
+    seasonStaysTable.get.mockResolvedValue({
+      id: 3, earningPeriodId: 7, position: 0, city: 'Valencia', cityNormalized: 'valencia',
+      countryCode: 'ES', status: 'planned', plannedStartDate: '2026-08-20',
+      plannedEndDate: '2026-08-30', locationSource: 'manual', createdAt: '', updatedAt: '',
+    })
+
+    const id = await createAppointment(appointment({ seasonStayId: 3 }))
+
+    expect(appointments.get(id)).toMatchObject({ seasonStayId: 3, city: 'Valencia', country: 'ES' })
+  })
+
   it('rechaza otra cita con el mismo inicio', async () => {
     await createAppointment(appointment({ dateTime: '2026-08-24T15:00', duration: 60 }))
 

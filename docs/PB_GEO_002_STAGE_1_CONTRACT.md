@@ -1,6 +1,6 @@
 # PB-GEO-002 — contrato público de dominio y persistencia (Etapa 1)
 
-Estado: implementación de Etapa 1. La UI y la finalización atómica de citas pertenecen a etapas posteriores.
+Estado: dominio/persistencia de Etapa 1 e integración de registros de Etapa 2. La UI y la finalización atómica de citas pertenecen a etapas posteriores.
 
 ## Persistencia
 
@@ -49,6 +49,41 @@ El cierre de temporada completa la estancia activa y cancela los planes aún no 
 - La selección manual y la normalización de ciudades funcionan sin red mediante `normalizeCityName`.
 - Una cita puede seleccionar una estancia `planned`; ingresos y egresos solo pueden seleccionar estancias iniciadas. La activación o desvinculación previa a completar la cita se implementará junto con la transacción unificada de la etapa correspondiente.
 - La ciudad/país guardados en cada registro siguen siendo la instantánea histórica. Editar una estancia no los reescribe automáticamente.
+
+## Contrato de registros — Etapa 2
+
+Los DTO públicos `CreateServiceIncomeInput`, `CreateExpenseInput` y `CreateAppointmentInput` aceptan:
+
+```ts
+seasonStayId?: number | null
+travelDestination?: TravelDestination | null
+```
+
+Los DTO de actualización añaden además:
+
+```ts
+syncLocationFromStay?: boolean
+```
+
+La semántica de actualización es estable para los tres servicios:
+
+- campo omitido o `undefined`: conserva el valor persistido;
+- `null`: elimina la asociación o el destino;
+- valor: valida y establece el valor;
+- `syncLocationFromStay: true`: sustituye explícitamente la instantánea `city`/`country` por la estancia validada.
+
+En una creación con estancia, `city` y `country` siempre se copian de ella. En una edición se conserva la instantánea histórica aunque cambie la asociación, salvo edición manual explícita de esos campos o `syncLocationFromStay`. Nunca se obtiene una estancia desde GPS ni desde `settings.city`.
+
+`src/services/recordGeographyService.ts` centraliza las reglas y exporta:
+
+- `resolveCreateRecordGeography(input, options)`
+- `resolveUpdateRecordGeography(existing, updates, options)`
+- `getRecordGeographyReadModel(record)`
+- `RecordGeographyReadModel`
+
+Ingresos y egresos solo admiten estancias `active` o `completed` y deben caer dentro de sus fechas reales. Las citas admiten además una estancia `planned` cuando su fecha cae dentro del intervalo previsto. Las estancias canceladas, las pertenecientes a otra temporada y los intervalos incompatibles se rechazan dentro de la misma transacción que persistiría el registro.
+
+Las citas legacy sin temporada y todos los registros sin estancia continúan siendo legibles y editables conforme a las reglas anteriores. `completedIncomeId` queda reservado al servicio de finalización atómica de la etapa siguiente y no forma parte de los DTO públicos de creación o edición de citas.
 
 ## Backup
 

@@ -6,6 +6,7 @@ import type { SeasonStay } from '../types/seasonStay'
 import type { ServiceIncome } from '../types/service'
 import type { TravelDestination } from '../types/travelDestination'
 import { normalizeCityName } from './cityNormalization'
+import { countries } from './countries'
 import { resolveRecordUsageMode } from './usageMode'
 
 export type SeasonGeoErrorCode =
@@ -20,9 +21,11 @@ export type SeasonGeoErrorCode =
   | 'ACTIVE_STAY_ALREADY_EXISTS'
   | 'STAY_STARTED_CANNOT_CANCEL'
   | 'STAY_HAS_LINKED_RECORDS'
+  | 'STAY_NOT_STARTED'
   | 'CORRECTION_REASON_REQUIRED'
   | 'RECORD_SEASON_MISMATCH'
   | 'RECORD_STAY_MISMATCH'
+  | 'RECORD_OUTSIDE_STAY_INTERVAL'
   | 'TRAVEL_DESTINATION_INVALID'
   | 'REVISION_INVALID'
   | 'BACKUP_SEASON_GEO_INVALID'
@@ -54,7 +57,10 @@ export function validateTravelDestination(
 ): TravelDestination | undefined {
   if (destination == null) return undefined
   const label = destination.label.trim().replace(/\s+/g, ' ')
-  if (!label || destination.source !== 'manual') {
+  if (!label || destination.source !== 'manual' ||
+    (destination.kind !== 'city' && destination.kind !== 'place') ||
+    (destination.countryCode !== undefined &&
+      !countries.some((country) => country.value === destination.countryCode))) {
     fail('TRAVEL_DESTINATION_INVALID', 'El destino de desplazamiento no es válido.')
   }
   const city = destination.city?.trim().replace(/\s+/g, ' ') || undefined

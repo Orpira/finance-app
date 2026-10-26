@@ -20,6 +20,8 @@ const personalExpenseCategoriesTable = {
   get: vi.fn(),
   where: vi.fn(),
 }
+const seasonStaysTable = { get: vi.fn() }
+const earningPeriodsTable = { get: vi.fn() }
 
 const transactionMock = vi.fn(async (_mode: unknown, _tables: unknown, callback: () => unknown) =>
   callback(),
@@ -30,6 +32,9 @@ vi.mock('../database/db', () => ({
     expenses: expensesTable,
     services: servicesTable,
     automationOutbox: {},
+    earningPeriods: earningPeriodsTable,
+    seasonStays: seasonStaysTable,
+    wallets: { get: vi.fn() },
     personalExpenseCategories: personalExpenseCategoriesTable,
     transaction: (...args: unknown[]) =>
       transactionMock(...(args as [unknown, unknown, () => unknown])),
@@ -90,6 +95,23 @@ beforeEach(() => {
 })
 
 describe('createExpense', () => {
+  it('valida y copia la ubicación de la estancia dentro de la transacción', async () => {
+    getSettingsMock.mockResolvedValue(professionalSettings())
+    getActiveEarningPeriodMock.mockResolvedValue({ id: 7 })
+    earningPeriodsTable.get.mockResolvedValue({ id: 7, countryCode: 'CO' })
+    seasonStaysTable.get.mockResolvedValue({
+      id: 3, earningPeriodId: 7, position: 0, city: 'Medellín', cityNormalized: 'medellin',
+      countryCode: 'CO', status: 'active', actualStartAt: '2026-09-01T00:00:00.000Z',
+      timeZone: 'America/Bogota', locationSource: 'manual', createdAt: '', updatedAt: '',
+    })
+
+    await createExpense(baseExpenseInput({ seasonStayId: 3 }))
+
+    expect(expensesTable.add).toHaveBeenCalledWith(expect.objectContaining({
+      seasonStayId: 3, city: 'Medellín', country: 'CO',
+    }))
+  })
+
   it('persiste una categoría de egreso personal válida y la separa del catálogo de ingresos', async () => {
     getSettingsMock.mockResolvedValue(basicSettings())
     personalExpenseCategoriesTable.get.mockResolvedValue({

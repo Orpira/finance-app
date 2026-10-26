@@ -1,6 +1,7 @@
 import { db } from '../database/db'
 import type { DateRangeListOptions } from '../types/dataAccess'
 import type { Appointment } from '../types/appointment'
+import type { TravelDestination } from '../types/travelDestination'
 import { cancelAppointmentReminders } from './reminderService'
 import { assertRecordIsMutable, requireActiveEarningPeriod } from './earningPeriodService'
 import {
@@ -17,14 +18,30 @@ import {
 import { assertReportStatusUpdateIsAllowed } from '../utils/reportStatus'
 import { resolveActiveUsageMode } from '../utils/usageMode'
 import { getSettings } from './settingsService'
+import {
+  resolveCreateRecordGeography,
+  resolveUpdateRecordGeography,
+} from './recordGeographyService'
 
 export interface AppointmentListOptions extends DateRangeListOptions {
   completed?: boolean
   earningPeriodId?: number
 }
 
-export type CreateAppointmentInput = Omit<Appointment, 'id'>
-export type UpdateAppointmentInput = Partial<CreateAppointmentInput>
+export type CreateAppointmentInput = Omit<
+  Appointment,
+  'id' | 'seasonStayId' | 'travelDestination' | 'completedIncomeId'
+> & {
+  seasonStayId?: number | null
+  travelDestination?: TravelDestination | null
+}
+export type UpdateAppointmentInput = Partial<
+  Omit<CreateAppointmentInput, 'seasonStayId' | 'travelDestination'>
+> & {
+  seasonStayId?: number | null
+  travelDestination?: TravelDestination | null
+  syncLocationFromStay?: boolean
+}
 
 export const APPOINTMENT_TIME_CONFLICT_MESSAGE =
   'El horario está ocupado por otra cita. Elige una hora que no coincida con su duración prevista.'
@@ -50,16 +67,25 @@ function assertAppointmentIntervalIsAvailable(
 }
 
 export async function createAppointment(input: CreateAppointmentInput) {
-  const period = await requireActiveEarningPeriod()
-  const appointment = normalizeReportStatus({
-    ...input,
-    earningPeriodId: period.id,
-    seasonPeriodId: period.id,
-  })
   const appointmentId = await db.transaction('rw', [
     db.appointments,
     db.automationOutbox,
+    db.earningPeriods,
+    db.seasonStays,
   ], async () => {
+    const period = await requireActiveEarningPeriod()
+    const geography = await resolveCreateRecordGeography(input, {
+      kind: 'appointment',
+      usageMode: 'professional',
+      earningPeriodId: period.id,
+      temporalValue: input.dateTime,
+    })
+    const appointment = normalizeReportStatus({
+      ...input,
+      ...geography,
+      earningPeriodId: period.id,
+      seasonPeriodId: period.id,
+    })
     assertAppointmentIntervalIsAvailable(
       appointment,
       await db.appointments.toArray(),
@@ -111,7 +137,7 @@ export async function updateAppointment(
 ) {
   const settings = await getSettings()
 
-  return db.transaction('rw', [db.appointments, db.earningPeriods], async () => {
+  return db.transaction('rw', [db.appointments, db.earningPeriods, db.seasonStays], async () => {
     const currentAppointment = await db.appointments.get(id)
     if (!currentAppointment) throw new Error('La cita que intentas modificar no existe.')
     await assertRecordIsMutable(currentAppointment)
@@ -123,10 +149,23 @@ export async function updateAppointment(
     // nunca debe reinterpretar con qué método se agendó.
     const safeUpdates: UpdateAppointmentInput = { ...updates }
     delete safeUpdates.incomeCalculationMethod
+    delete safeUpdates.syncLocationFromStay
+    const earningPeriodId = currentAppointment.earningPeriodId ?? currentAppointment.seasonPeriodId
+    if ((Object.hasOwn(updates, 'earningPeriodId') && updates.earningPeriodId !== earningPeriodId) ||
+      (Object.hasOwn(updates, 'seasonPeriodId') && updates.seasonPeriodId !== earningPeriodId)) {
+      throw new Error('No se puede cambiar la temporada de una cita existente.')
+    }
+    const geography = await resolveUpdateRecordGeography(currentAppointment, updates, {
+      kind: 'appointment',
+      usageMode: 'professional',
+      earningPeriodId,
+      temporalValue: updates.dateTime ?? currentAppointment.dateTime,
+    })
 
     const updatedAppointment = normalizeReportStatus({
       ...currentAppointment,
       ...safeUpdates,
+      ...geography,
     }) as Appointment
     const scheduleChanged =
       updatedAppointment.dateTime !== currentAppointment.dateTime ||

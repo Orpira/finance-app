@@ -28,6 +28,8 @@ const personalIncomeCategoriesTable = {
 const walletsTable = {
   get: vi.fn(),
 }
+const seasonStaysTable = { get: vi.fn() }
+const earningPeriodsTable = { get: vi.fn() }
 
 const transactionMock = vi.fn(async (_mode: unknown, _tables: unknown, callback: () => unknown) =>
   callback(),
@@ -38,7 +40,8 @@ vi.mock('../database/db', () => ({
     services: servicesTable,
     expenses: expensesTable,
     automationOutbox: {},
-    earningPeriods: {},
+    earningPeriods: earningPeriodsTable,
+    seasonStays: seasonStaysTable,
     incomeAdditionals: incomeAdditionalsTable,
     personalIncomeCategories: personalIncomeCategoriesTable,
     wallets: walletsTable,
@@ -107,6 +110,23 @@ beforeEach(() => {
 })
 
 describe('createServiceIncome', () => {
+  it('valida y copia la ubicación de la estancia dentro de la transacción', async () => {
+    getSettingsMock.mockResolvedValue(professionalSettings())
+    getActiveEarningPeriodMock.mockResolvedValue({ id: 7, startDate: '2026-01-01', percentage: 50 })
+    earningPeriodsTable.get.mockResolvedValue({ id: 7, countryCode: 'CO' })
+    seasonStaysTable.get.mockResolvedValue({
+      id: 3, earningPeriodId: 7, position: 0, city: 'Bogotá', cityNormalized: 'bogota',
+      countryCode: 'CO', status: 'active', actualStartAt: '2026-01-01T00:00:00.000Z',
+      timeZone: 'America/Bogota', locationSource: 'manual', createdAt: '', updatedAt: '',
+    })
+
+    await createServiceIncome(baseIncomeInput({ seasonStayId: 3 }))
+
+    expect(servicesTable.add).toHaveBeenCalledWith(expect.objectContaining({
+      seasonStayId: 3, city: 'Bogotá', country: 'CO',
+    }))
+  })
+
   it('normaliza y persiste el nombre de un ingreso Personal', async () => {
     getSettingsMock.mockResolvedValue(basicSettings())
     await createServiceIncome(baseIncomeInput({ personalName: '  Nómina   septiembre  ' }))
@@ -356,6 +376,7 @@ describe('createServiceIncome', () => {
       transactionStarted = true
       expect(tables).toEqual([
         servicesTable,
+        expect.anything(),
         expect.anything(),
         expect.anything(),
         expect.anything(),
