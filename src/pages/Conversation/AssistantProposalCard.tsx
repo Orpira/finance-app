@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
+import { describeStay, formatTravelDestination } from '../../components/seasons/geo/stayPresentation'
 import type { AssistantProposalRecord } from '../../intelligence/assistant'
+import { getSeasonStayById } from '../../services/seasonStayService'
 import type { CurrencyCode } from '../../types/settings'
 
 interface AssistantProposalCardProps {
@@ -59,6 +61,24 @@ function isFieldEditable(status: AssistantProposalRecord['status']): boolean {
   return status === 'draft' || status === 'awaiting_confirmation'
 }
 
+/**
+ * Un ingreso o gasto fallido no persistió nada y su ejecución es idempotente
+ * por `proposalId`, así que puede reintentarse (p. ej., tras conseguir la
+ * cotización o guardar una tasa manual).
+ */
+function isRetryable(proposal: AssistantProposalRecord): boolean {
+  return proposal.status === 'failed' &&
+    (proposal.kind === 'register_income' || proposal.kind === 'register_expense')
+}
+
+function geographyOf(proposal: AssistantProposalRecord) {
+  if (proposal.kind !== 'register_income' && proposal.kind !== 'register_expense') return {}
+  return {
+    seasonStayId: proposal.fields.seasonStayId ?? undefined,
+    travelDestination: proposal.fields.travelDestination ?? undefined,
+  }
+}
+
 export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel }: AssistantProposalCardProps) {
   const [draft, setDraft] = useState<Record<string, string | number | null>>(() =>
     Object.fromEntries(Object.entries(proposal.fields).filter((entry): entry is [string, string | number | null] => {
@@ -79,6 +99,18 @@ export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel 
   function handleConfirm() {
     onConfirm(draft)
   }
+
+  // La geografía la valida el servicio al guardar; aquí solo se muestra.
+  const { seasonStayId, travelDestination } = geographyOf(proposal)
+  const [stayLabel, setStayLabel] = useState<string | null>(null)
+  useEffect(() => {
+    if (seasonStayId === undefined) return
+    let active = true
+    getSeasonStayById(seasonStayId)
+      .then((stay) => { if (active) setStayLabel(stay ? describeStay(stay) : 'Estancia no disponible') })
+      .catch(() => { if (active) setStayLabel('Estancia no disponible') })
+    return () => { active = false }
+  }, [seasonStayId])
 
   const fieldEntries = Object.keys(draft).filter((field) =>
     field !== 'incomeId' && field !== 'seasonStayId')
@@ -155,6 +187,18 @@ export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel 
             </div>
           )
         })}
+        {seasonStayId !== undefined ? (
+          <div>
+            <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">Estancia</dt>
+            <dd className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">{stayLabel ?? 'Cargando…'}</dd>
+          </div>
+        ) : null}
+        {travelDestination ? (
+          <div>
+            <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">Destino puntual</dt>
+            <dd className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">{formatTravelDestination(travelDestination)}</dd>
+          </div>
+        ) : null}
       </dl>
 
       {isFieldEditable(proposal.status) ? (
@@ -176,8 +220,32 @@ export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel 
             Confirmar
           </button>
         </div>
-      ) : proposal.status === 'failed' && proposal.failureReason ? (
-        <p className="mt-2 text-xs text-rose-700 dark:text-rose-300">{proposal.failureReason}</p>
+      ) : proposal.status === 'failed' ? (
+        <>
+          {proposal.failureReason ? (
+            <p className="mt-2 text-xs text-rose-700 dark:text-rose-300">{proposal.failureReason}</p>
+          ) : null}
+          {isRetryable(proposal) ? (
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                className="h-9 rounded-md px-3 text-sm font-semibold text-slate-600 hover:text-slate-900 disabled:opacity-60 dark:text-slate-300 dark:hover:text-white"
+                disabled={disabled}
+                onClick={onCancel}
+                type="button"
+              >
+                Descartar
+              </button>
+              <button
+                className="h-9 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={disabled}
+                onClick={handleConfirm}
+                type="button"
+              >
+                Reintentar
+              </button>
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   )

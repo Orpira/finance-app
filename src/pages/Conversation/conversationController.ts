@@ -188,6 +188,7 @@ export function createConversationController(
 
   let state: ConversationUiState = createInitialConversationUiState()
   let disposed = false
+  let failureSequence = 0
   const listeners = new Set<(state: ConversationUiState) => void>()
 
   function emit(nextState: Omit<ConversationUiState, 'context'> & { readonly context?: ConversationUiState['context'] }): void {
@@ -424,6 +425,12 @@ export function createConversationController(
       if (!targetMessage || !targetMessage.proposal) {
         return
       }
+      // Solo se ejecuta desde un estado confirmable (o tras un fallo, para
+      // reintentar). Un doble clic llega con la propuesta ya en `executing`.
+      const currentStatus = targetMessage.proposal.status
+      if (currentStatus !== 'draft' && currentStatus !== 'awaiting_confirmation' && currentStatus !== 'failed') {
+        return
+      }
 
       const editedProposal = input.edits
         ? applyProposalEdits(targetMessage.proposal, input.edits)
@@ -484,7 +491,7 @@ export function createConversationController(
         failureReason: result.safeMessage,
       }
       const failureMessage = createAssistantMessage({
-        id: `conversation:assistant:failed:${input.messageId}:${turn}`,
+        id: `conversation:assistant:failed:${input.messageId}:${turn}:${++failureSequence}`,
         text: toAssistantErrorMessage(result.safeMessage),
         createdAt: now(),
       })

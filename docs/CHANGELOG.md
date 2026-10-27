@@ -10,6 +10,16 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Added
 
+- **Asistente — validación final de interfaz (PB-GEO-002, Etapa 5F)**: una
+  propuesta de ingreso o gasto que falla de forma recuperable (por ejemplo,
+  `FINANCIAL_QUOTE_UNAVAILABLE`) ofrece «Reintentar» y «Descartar», en lugar de
+  pedir «vuelve a confirmar» sin ningún botón; el reintento es seguro porque la
+  ejecución es idempotente por `proposalId`. El controlador ignora una segunda
+  confirmación mientras la primera se ejecuta (doble clic) y los mensajes de
+  fallo tienen id único, lo que elimina claves React duplicadas y la
+  confirmación «Listo, registré» repetida. La tarjeta muestra, sin editarlos,
+  la estancia y el destino puntual de la propuesta cuando existen. Sin cambios
+  en servicios de dominio, fórmulas financieras ni esquema.
 - **Temporadas multiciudad — validación final de interfaz (PB-GEO-002, Etapa 5D)**:
   los formularios de ingreso y egreso muestran el estado de la conversión
   monetaria («Calculando la conversión monetaria…» o un aviso de fallo con

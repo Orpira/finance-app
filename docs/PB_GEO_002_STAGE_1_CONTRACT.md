@@ -150,6 +150,13 @@ Componentes en `src/components/seasons/geo/`: `SeasonItinerary`, `SeasonRevision
 - Un fallo `FINANCIAL_QUOTE_UNAVAILABLE` o `FINANCIAL_CONVERSION_INCOMPLETE` nunca se confirma como éxito. La respuesta indica que no se registró el movimiento y permite recuperar guardando una tasa manual o consiguiendo conectividad.
 - `saveExchangeRate` evita nuevas filas exactamente duplicadas para el mismo par, fecha, tasa y origen. Las filas históricas divergentes se conservan; las lecturas eligen determinísticamente la más reciente por fecha, creación e identificador.
 
+## Interfaz — Etapa 5F
+
+- La tarjeta de propuesta delega la ejecución en `executeAssistantProposal` y nunca construye snapshots financieros. Una propuesta `failed` de ingreso o gasto ofrece «Reintentar» y «Descartar»; reintentar reutiliza el mismo `proposalId`, de modo que no puede duplicar el movimiento. Las demás acciones fallidas no ofrecen reintento, porque no tienen clave de idempotencia.
+- `confirmProposal` solo ejecuta desde `draft`, `awaiting_confirmation` o `failed`; una segunda confirmación con la propuesta en `executing` se ignora.
+- `seasonStayId` y `travelDestination` se muestran en solo lectura («Estancia», «Destino puntual»); la validación de temporada, estancia e intervalo sigue siendo del servicio.
+- El hallazgo de la Etapa 5D sobre el Asistente queda resuelto por la Etapa 5E y verificado desde la interfaz con servicios reales.
+
 ## Interfaz — Etapa 5D
 
 - Los formularios de ingreso y egreso muestran el estado de conversión pendiente o fallida, con reintento explícito; nunca se guardan ceros ni se reintenta guardando.

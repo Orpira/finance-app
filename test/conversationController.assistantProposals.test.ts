@@ -202,6 +202,53 @@ describe('ConversationController - flujo de propuestas del Asistente', () => {
     expect(proposalMessage?.proposal?.failureReason).toBe('No hay una temporada activa.')
   })
 
+  it('ignora una segunda confirmación mientras la primera se ejecuta (doble clic)', async () => {
+    interpretAssistantMessageMock.mockReturnValue({ kind: 'proposal', proposal: baseProposal() })
+    executeAssistantProposalMock.mockResolvedValue({ ok: true, recordId: 42 })
+    const controller = createConversationController({
+      pipeline: { generateAssistantMessage: vi.fn() },
+      getAssistantContext: async () => ({ defaultCurrency: 'EUR', usageMode: 'professional' }),
+    })
+    await controller.sendMessage('Hoy recibí 120 euros por un servicio')
+    const proposalMessageId = controller.getState().messages.at(-1)!.id
+
+    await Promise.all([
+      controller.confirmProposal({ messageId: proposalMessageId }),
+      controller.confirmProposal({ messageId: proposalMessageId }),
+    ])
+
+    expect(executeAssistantProposalMock).toHaveBeenCalledTimes(1)
+    const ids = controller.getState().messages.map((message) => message.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(controller.getState().messages.filter((message) => message.text.includes('registré'))).toHaveLength(1)
+  })
+
+  it('permite reintentar una propuesta fallida con mensajes de error de id único', async () => {
+    interpretAssistantMessageMock.mockReturnValue({ kind: 'proposal', proposal: baseProposal() })
+    applyProposalEditsMock.mockImplementation((proposal: Record<string, unknown>) => ({ ...proposal, status: 'awaiting_confirmation' }))
+    executeAssistantProposalMock
+      .mockResolvedValueOnce({ ok: false, safeMessage: 'No se registró el movimiento.' })
+      .mockResolvedValueOnce({ ok: false, safeMessage: 'No se registró el movimiento.' })
+      .mockResolvedValueOnce({ ok: true, recordId: 7 })
+    const controller = createConversationController({
+      pipeline: { generateAssistantMessage: vi.fn() },
+      getAssistantContext: async () => ({ defaultCurrency: 'EUR', usageMode: 'professional' }),
+    })
+    await controller.sendMessage('Hoy recibí 120 euros por un servicio')
+    const proposalMessageId = controller.getState().messages.at(-1)!.id
+
+    await controller.confirmProposal({ messageId: proposalMessageId, edits: {} })
+    await controller.confirmProposal({ messageId: proposalMessageId, edits: {} })
+    await controller.confirmProposal({ messageId: proposalMessageId, edits: {} })
+    await controller.confirmProposal({ messageId: proposalMessageId, edits: {} })
+
+    expect(executeAssistantProposalMock).toHaveBeenCalledTimes(3)
+    const state = controller.getState()
+    const ids = state.messages.map((message) => message.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(state.messages.find((message) => message.id === proposalMessageId)?.proposal?.status).toBe('completed')
+  })
+
   it('cancelProposal cancela sin ejecutar nada y registra auditoría', async () => {
     interpretAssistantMessageMock.mockReturnValue({ kind: 'proposal', proposal: baseProposal() })
     const controller = createConversationController({
