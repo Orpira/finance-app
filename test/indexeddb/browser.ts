@@ -2185,6 +2185,37 @@ async function run() {
   const assistantExpenseRetry = await executeAssistantProposal(assistantExpenseProposal)
   assert(assistantExpenseRetry.ok && assistantExpenseRetry.recordId === assistantExpenseResult.recordId, 'assistant expense retry returns the persisted record')
   assert((await db.expenses.count()) === expenseCountAfterAssistant, 'assistant expense retry does not duplicate the record')
+
+  const originalFetch = window.fetch
+  await updateSettings({ rateMode: 'automatic' })
+  window.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    const rate = url.includes('/USD/EUR') ? 0.8 : url.includes('/USD/COP') ? 3_600 : 4_500
+    return new Response(JSON.stringify({ rate, date: '2026-08-20' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }) as typeof window.fetch
+  let automaticIncomeId: number | undefined
+  try {
+    const automaticResult = await executeAssistantProposal({
+      proposalId: 'indexeddb:assistant:income:automatic',
+      kind: 'register_income',
+      status: 'confirmed',
+      createdAt: '2026-08-20T09:10:00.000Z',
+      sourceText: 'Ingreso de 25 dólares',
+      missingRequiredFields: [],
+      fields: { amount: 25, currency: 'USD', date: '2026-08-20', description: null },
+    })
+    assert(automaticResult.ok, 'assistant creates an income with automatic API quotes through the real service')
+    automaticIncomeId = automaticResult.ok ? automaticResult.recordId as number : undefined
+    const automaticIncome = automaticIncomeId === undefined ? undefined : await db.services.get(automaticIncomeId)
+    assert(automaticIncome?.eurValue === 20, 'automatic assistant quote persists the API EUR value')
+    assert(automaticIncome?.copValue === 90_000, 'automatic assistant quote persists the API COP value')
+  } finally {
+    window.fetch = originalFetch
+  }
+  if (automaticIncomeId !== undefined) await deleteServiceIncome(automaticIncomeId)
   const assistantStats = await getSeasonStatistics(financialPeriod.id!)
   assert(assistantStats.realGain === 120, 'assistant income is included once in season totals')
   assert(assistantStats.expenses === 10, 'assistant expense is included once in season totals')
