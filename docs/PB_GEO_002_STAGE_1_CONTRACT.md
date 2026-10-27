@@ -126,3 +126,14 @@ Componentes en `src/components/seasons/geo/`: `SeasonItinerary`, `SeasonRevision
 - Las fechas previstas continúan siendo fechas civiles sin conversión de zona. En un cierre interactivo de hoy, la estancia activa guarda el instante real de cierre; la fecha civil de la temporada se conserva separadamente.
 - `closedLocationSeasons` continúa aplicándose solo a registros legacy sin `seasonStayId`; nunca bloquea un registro asociado explícitamente a una estancia.
 
+## Interfaz — Etapa 5B
+
+- El selector de estancia nunca asocia una estancia sin acción explícita: «Sin estancia» es el valor inicial y la estancia actual compatible se ofrece como sugerencia identificable («Usar estancia actual: ciudad, país · visita»).
+- En edición, ingresos, egresos y citas envían exactamente la instantánea `city`/`country` guardada; `settings` solo precarga la ubicación de registros nuevos sin estancia. La sincronización con la estancia sigue siendo explícita (`syncLocationFromStay`).
+- `describeSeasonLocation` presenta la ubicación de una temporada desde el itinerario; `EarningPeriod.city` solo se muestra como «Ciudad histórica» cuando no hay estancias.
+
+Hallazgos fuera del alcance de la interfaz, pendientes de decisión:
+
+- `elapsedPercentage` (`src/notifications/rules/seasonGoalShared.ts`) concatena `T00:00:00` a `startDate`/`plannedEndDate`, que ya son ISO completos; el resultado es `NaN` y la regla de riesgo de meta no puede evaluar el tiempo transcurrido.
+- Ingresos y egresos pueden guardarse antes de que termine la conversión de moneda asíncrona del formulario; en ese caso se persisten `eurValue`/`baseCurrencyValue` a 0 y el resultado de temporada omite el importe. Reproducido en navegador con IndexedDB real; existía antes de PB-GEO-002.
+

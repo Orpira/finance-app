@@ -4,6 +4,7 @@ import type { SeasonStay } from '../../../types/seasonStay'
 import {
   buildItinerary,
   computeVisitNumbers,
+  describeSeasonLocation,
   formatStayPeriod,
   formatTravelDestination,
   isoToLocalDateTimeInput,
@@ -86,4 +87,16 @@ describe('stayPresentation', () => {
     expect(isoToLocalDateTimeInput(iso)).toBe('2026-11-10T13:00')
     expect(localDateTimeInputToIso('no-es-fecha')).toBe('')
   })
+
+  it('describe la ubicación de la temporada a partir del itinerario', () => {
+    const active = { city: 'Madrid', status: 'active' as const }
+    expect(describeSeasonLocation(active)).toBe('Madrid')
+    expect(describeSeasonLocation({ city: '', status: 'active' }, [])).toBe('Ciudad por decidir')
+    expect(describeSeasonLocation(active, [])).toBe('Ciudad histórica: Madrid')
+    expect(describeSeasonLocation(active, [stay({ id: 2, city: 'Toledo', status: 'active', actualStartAt: '2026-11-01T08:00:00.000Z' })]))
+      .toBe('Estancia actual: Toledo')
+    expect(describeSeasonLocation(active, [stay({ id: 3 })])).toBe('Sin estancia actual')
+    expect(describeSeasonLocation({ city: 'Madrid', status: 'closed' }, [stay({ id: 3 })])).toBe('Sin estancias realizadas')
+  })
 })
+

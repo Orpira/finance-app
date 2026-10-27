@@ -15,7 +15,9 @@ import { formatCurrency } from '../../utils/currency'
 import { countries } from '../../utils/countries'
 import { getSeasonOverviewState } from '../../utils/seasonOverview'
 import { useDialog } from '../../components/dialogs/useDialog'
-import { formatCivilDate } from '../../components/seasons/geo/stayPresentation'
+import { describeSeasonLocation, formatCivilDate } from '../../components/seasons/geo/stayPresentation'
+import { listSeasonStays } from '../../services/seasonStayService'
+import type { SeasonStay } from '../../types/seasonStay'
 
 function formatDate(value?: string) {
   return formatCivilDate(value?.slice(0, 10))
@@ -25,11 +27,12 @@ function countryLabel(code?: string) {
   return countries.find((item) => item.value === code)?.label ?? code ?? 'Sin país'
 }
 
-type SeasonWithStats = { period: EarningPeriod; stats: SeasonStatistics }
+type SeasonWithStats = { period: EarningPeriod; stats: SeasonStatistics; stays?: SeasonStay[] }
 
 export function ClosedSeasonCard({
   period,
   stats,
+  stays,
 }: SeasonWithStats) {
   return (
     <article className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
@@ -48,7 +51,7 @@ export function ClosedSeasonCard({
             {period.name}
           </h3>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {period.city || 'Sin ciudad'}, {countryLabel(period.countryCode ?? period.country)} · {formatDate(period.startDate)} – {formatDate(period.endDate)}
+            {describeSeasonLocation(period, stays)} · {countryLabel(period.countryCode ?? period.country)} · {formatDate(period.startDate)} – {formatDate(period.endDate)}
           </p>
         </div>
         <Link
@@ -117,8 +120,8 @@ export function SeasonHistoryPanel({
       </div>
 
       <div className="grid gap-3">
-        {recent.map(({ period, stats }) => (
-          <ClosedSeasonCard key={period.id} period={period} stats={stats} />
+        {recent.map(({ period, stats, stays }) => (
+          <ClosedSeasonCard key={period.id} period={period} stats={stats} stays={stays} />
         ))}
       </div>
 
@@ -129,8 +132,8 @@ export function SeasonHistoryPanel({
             <ChevronRight aria-hidden="true" className="size-4 transition-transform group-open:rotate-90" />
           </summary>
           <div className="mt-3 grid gap-3">
-            {remaining.map(({ period, stats }) => (
-              <ClosedSeasonCard key={period.id} period={period} stats={stats} />
+            {remaining.map(({ period, stats, stays }) => (
+              <ClosedSeasonCard key={period.id} period={period} stats={stats} stays={stays} />
             ))}
           </div>
         </details>
@@ -143,18 +146,24 @@ export function SeasonsPage() {
   const { confirm } = useDialog()
   const navigate = useNavigate()
   const [active, setActive] = useState<EarningPeriod | null>(null)
-  const [closed, setClosed] = useState<Array<{ period: EarningPeriod; stats: SeasonStatistics }>>([])
+  const [closed, setClosed] = useState<SeasonWithStats[]>([])
   const [activeStats, setActiveStats] = useState<SeasonStatistics | null>(null)
+  const [activeStays, setActiveStays] = useState<SeasonStay[] | undefined>(undefined)
   const [loading, setLoading] = useState(true)
 
   async function load() {
     const [current, old] = await Promise.all([getActiveEarningPeriod(), listClosedEarningPeriods()])
-    const [currentStats, oldStats] = await Promise.all([
+    const [currentStats, currentStays, oldStats] = await Promise.all([
       current?.id ? getSeasonStatistics(current.id) : null,
-      Promise.all(old.map(async (period) => ({ period, stats: await getSeasonStatistics(period.id!) }))),
+      current?.id ? listSeasonStays(current.id) : undefined,
+      Promise.all(old.map(async (period) => {
+        const [stats, stays] = await Promise.all([getSeasonStatistics(period.id!), listSeasonStays(period.id!)])
+        return { period, stats, stays }
+      })),
     ])
     setActive(current ?? null)
     setActiveStats(currentStats)
+    setActiveStays(currentStays)
     setClosed(oldStats)
     setLoading(false)
   }
@@ -175,9 +184,9 @@ export function SeasonsPage() {
       return
     }
     const confirmed = await confirm({
-      title: 'Cerrar temporada activa',
-      message: 'Ya existe una temporada activa.\n\nPara crear una nueva temporada debes cerrar la temporada actual.\n¿Deseas cerrarla ahora y crear una nueva?',
-      confirmLabel: 'Cerrar y continuar',
+      title: 'Preparar nueva temporada',
+      message: `«${active.name}» sigue activa.\n\nVas a preparar la nueva temporada. «${active.name}» solo se cerrará cuando guardes la nueva, y ambas operaciones se harán en un único paso.\n\nSi sales del formulario sin guardar, seguirá activa.`,
+      confirmLabel: 'Preparar nueva temporada',
       confirmTone: 'warning',
     })
     if (!confirmed) return
@@ -188,7 +197,7 @@ export function SeasonsPage() {
     if (!active) return
     const confirmed = await confirm({
       title: 'Finalizar temporada',
-      message: 'Vas a finalizar la temporada actual.\n\nTodos los ingresos, egresos, ajustes y citas asociados quedarán en modo solo consulta. No podrán editarse ni eliminarse. Tampoco serán incluidos en los cálculos de nuevas temporadas.\n\n¿Deseas continuar?',
+      message: 'Vas a finalizar la temporada actual.\n\nTodos los ingresos, egresos, ajustes y citas asociados quedarán en modo solo consulta. No podrán editarse ni eliminarse. Tampoco serán incluidos en los cálculos de nuevas temporadas.\n\nLa estancia actual, si hay una, se finalizará ahora y las ciudades previstas que no hayan comenzado quedarán canceladas en el historial.\n\n¿Deseas continuar?',
       confirmLabel: 'Finalizar temporada',
       confirmTone: 'danger',
     })
@@ -211,7 +220,7 @@ export function SeasonsPage() {
             <div>
               <span className="rounded-full bg-emerald-700 px-2.5 py-1 text-xs font-semibold text-white">Activa</span>
               <h2 className="mt-3 text-2xl font-semibold">{active.name}</h2>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{active.city || 'Sin ciudad'}, {countryLabel(active.countryCode ?? active.country)} · desde {formatDate(active.startDate)} · prevista hasta {formatDate(active.plannedEndDate)} · {active.percentage}%</p>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{describeSeasonLocation(active, activeStays)} · {countryLabel(active.countryCode ?? active.country)} · desde {formatDate(active.startDate)} · prevista hasta {formatDate(active.plannedEndDate)} · {active.percentage}%</p>
             </div>
             <Link className="inline-flex h-10 items-center gap-2 rounded-md border border-emerald-300 bg-white px-3 text-sm font-semibold text-emerald-800" to={`/temporadas/${active.id}`}>Ver detalle <ChevronRight className="size-4" /></Link>
           </div>

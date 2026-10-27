@@ -928,8 +928,10 @@ export function IncomePage() {
           : isAdjustmentType || usesHourlyWorkday
             ? 0
             : duration,
-        country: editingIncome?.country ?? settings.country,
-        city: isBasicUser ? undefined : editingIncome?.city ?? settings.city,
+        // Al editar se conserva exactamente la instantánea histórica (aunque
+        // falte); settings solo precarga la ubicación de un registro nuevo.
+        country: editingIncome ? editingIncome.country : settings.country,
+        city: isBasicUser ? undefined : editingIncome ? editingIncome.city : settings.city,
       }
 
       // PB-GEO-002: estancia y destino se añaden después de resolver el

@@ -8,6 +8,7 @@ import { listCityOptions } from '../../services/locationService'
 import { describeSeasonGeoError } from '../../components/seasons/geo/seasonGeoMessages'
 import { currentTimeZone } from '../../components/seasons/geo/stayPresentation'
 import { getSettings } from '../../services/settingsService'
+import type { EarningPeriod } from '../../types/earningPeriod'
 import type { CountryCode, CurrencyCode } from '../../types/settings'
 import { countries, fallbackCityOptions, getCountryCurrency, type CityOption } from '../../utils/countries'
 import { getTodayInputDate } from '../../utils/currency'
@@ -39,10 +40,12 @@ export function SeasonFormPage() {
   const [startStayNow, setStartStayNow] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [currentActive, setCurrentActive] = useState<EarningPeriod | null>(null)
 
   useEffect(() => {
-    Promise.all([getSettings(), listCityOptions(), basedOn ? getEarningPeriodById(basedOn) : undefined]).then(([settings, options, base]) => {
+    Promise.all([getSettings(), listCityOptions(), basedOn ? getEarningPeriodById(basedOn) : undefined, getActiveEarningPeriod()]).then(([settings, options, base, active]) => {
       setCities(options)
+      setCurrentActive(active ?? null)
       // La primera ciudad es opcional: no se precarga desde settings.city.
       setCountry((base?.countryCode ?? settings.country) as CountryCode)
       setCurrency(base?.baseCurrency ?? getCountryCurrency((base?.countryCode ?? settings.country) as CountryCode) ?? settings.defaultCurrency)
@@ -65,9 +68,9 @@ export function SeasonFormPage() {
       const active = await getActiveEarningPeriod()
       if (active) {
         const confirmed = await confirm({
-          title: 'Cerrar temporada activa',
-          message: 'Ya existe una temporada activa.\n\nPara crear una nueva temporada debes cerrar la temporada actual.\n¿Deseas cerrarla ahora y crear una nueva?',
-          confirmLabel: 'Cerrar y continuar',
+          title: 'Cerrar y crear temporada',
+          message: `Se cerrará «${active.name}» y se creará «${name.trim() || 'la nueva temporada'}» en un único paso. Si algo falla, no cambia nada.\n\nAl cerrarla, su estancia actual se finaliza y las ciudades previstas que no hayan comenzado quedan canceladas en el historial. Sus registros pasan a solo consulta.`,
+          confirmLabel: 'Cerrar y crear',
           confirmTone: 'warning',
         })
         if (!confirmed) { setSaving(false); return }
@@ -106,6 +109,11 @@ export function SeasonFormPage() {
 
   return <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">
     <PageHeader backLabel="Temporadas" backTo="/temporadas" eyebrow="Temporadas" title="Nueva temporada" />
+    {currentActive && (
+      <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100" role="status">
+        «{currentActive.name}» sigue activa. Solo se cerrará cuando guardes esta nueva temporada; si sales sin guardar, no cambia nada.
+      </p>
+    )}
     <form className="grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900" onSubmit={submit}>
       <label className="grid gap-2"><span className="text-sm font-medium">Nombre</span><input className="h-11 rounded-md border border-slate-300 px-3" onChange={(e) => setName(e.target.value)} required value={name} /></label>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -135,7 +143,7 @@ export function SeasonFormPage() {
       </fieldset>
       <label className="grid gap-2"><span className="text-sm font-medium">Observaciones</span><textarea className="min-h-24 rounded-md border border-slate-300 p-3" onChange={(e) => setNotes(e.target.value)} value={notes} /></label>
       {error && <p className="rounded-md bg-red-50 p-3 text-sm font-medium text-red-700">{error}</p>}
-      <button className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white disabled:opacity-60" disabled={saving} type="submit"><Save className="size-4" /> {saving ? 'Creando...' : 'Crear temporada'}</button>
+      <button className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white disabled:opacity-60" disabled={saving} type="submit"><Save className="size-4" /> {saving ? 'Creando...' : currentActive ? 'Cerrar actual y crear' : 'Crear temporada'}</button>
     </form>
   </section>
 }

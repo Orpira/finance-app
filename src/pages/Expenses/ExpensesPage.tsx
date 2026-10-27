@@ -572,8 +572,10 @@ export function ExpensesPage() {
             ? notes.trim()
             : undefined,
         createdAt: isEditing ? expenseCreatedAt ?? now.toISOString() : undefined,
-        country: expenseCountry ?? settings.country,
-        city: isBasicUser ? undefined : expenseCity ?? settings.city,
+        // Al editar se conserva exactamente la instantánea histórica (aunque
+        // falte); settings solo precarga la ubicación de un registro nuevo.
+        country: isEditing ? expenseCountry : expenseCountry ?? settings.country,
+        city: isBasicUser ? undefined : isEditing ? expenseCity : expenseCity ?? settings.city,
         ...(isBasicUser ? { personalName } : {}),
         ...(isBasicUser ? { personalCategoryId: personalCategoryId || undefined } : {}),
         ...(isBasicUser ? { walletId: walletId || undefined } : {}),

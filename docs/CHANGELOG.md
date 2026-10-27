@@ -10,6 +10,20 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Added
 
+- **Temporadas multiciudad — ajustes de interfaz (PB-GEO-002, Etapa 5B)**:
+  el selector de estancia de ingresos, egresos y citas ya no asocia una
+  estancia automáticamente; empieza en «Sin estancia» y ofrece «Usar estancia
+  actual» de forma explícita, con el número de visita del dominio. Al editar,
+  los formularios conservan exactamente la ciudad y el país guardados en lugar
+  de completarlos con la configuración. Las tarjetas de Temporadas y la
+  cabecera del detalle muestran la ubicación a partir del itinerario (estancia
+  actual, ciudades realizadas o «Ciudad histórica» en temporadas antiguas), y
+  las fechas civiles de «Servicios por día» ya no se desplazan por zona
+  horaria. Los textos de «Nueva temporada» y «Finalizar temporada» explican
+  que el cierre de la temporada actual ocurre al guardar la nueva, en un único
+  paso, y su efecto sobre estancias. La edición de temporada deja de reenviar
+  la ciudad antigua. Sin cambios en servicios de dominio, cálculos ni esquema.
+
 - **Temporadas multiciudad — interfaz (PB-GEO-002, Etapa 4)**: el detalle de
   temporada incorpora el itinerario (estancias previstas, actuales,
   finalizadas y canceladas; huecos entre estancias; número de visita para

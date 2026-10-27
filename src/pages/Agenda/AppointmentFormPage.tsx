@@ -437,8 +437,10 @@ export function AppointmentFormPage() {
       workedTime: usesHourlyWorkday ? workedTime : undefined,
       workedTimeUnit: usesHourlyWorkday ? ('hours' as const) : undefined,
       hourlyRateApplied: usesHourlyWorkday ? hourlyRateApplied : undefined,
-      country: editingAppointment?.country ?? currentSettings.country,
-      city: editingAppointment?.city ?? currentSettings.city,
+      // Al editar se conserva exactamente la instantánea histórica (aunque
+      // falte); settings solo precarga la ubicación de una cita nueva.
+      country: editingAppointment ? editingAppointment.country : currentSettings.country,
+      city: editingAppointment ? editingAppointment.city : currentSettings.city,
       notes: notes.trim(),
       reminders: reminders.map((reminder) => ({
         ...reminder,

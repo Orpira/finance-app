@@ -10,7 +10,6 @@ import type { RecordGeographyDraft } from './recordGeographyForm'
 import { describeSeasonGeoError } from './seasonGeoMessages'
 import {
   STAY_STATUS_LABELS,
-  computeVisitNumbers,
   cityHasRepeatedVisits,
   countryLabel,
   describeStay,
@@ -61,7 +60,6 @@ export function RecordGeographyFields({
   const cityListId = useId()
   const [options, setOptions] = useState<StayOption[] | null>(null)
   const [loadError, setLoadError] = useState('')
-  const userTouchedStay = useRef(isEditing)
   const draftRef = useRef(draft)
 
   useEffect(() => {
@@ -84,12 +82,12 @@ export function RecordGeographyFields({
           temporalValue: temporalValue || undefined,
         })
         const stays = readModels.map((item) => item.stay)
-        const visitNumbers = computeVisitNumbers(stays)
         const evaluated = readModels.map((readModel): StayOption => {
           const stay = readModel.stay
           const base = {
             stay,
-            visitNumber: stay.id === undefined ? undefined : visitNumbers.get(stay.id),
+            // Número de visita calculado por el dominio (listSelectableSeasonStays).
+            visitNumber: readModel.visitNumber,
             repeated: cityHasRepeatedVisits(stays, stay.cityNormalized),
           }
           if (!temporalValue || stay.id === undefined) {
@@ -109,12 +107,6 @@ export function RecordGeographyFields({
         if (cancelled) return
         setLoadError('')
         setOptions(evaluated)
-
-        const current = draftRef.current
-        if (!userTouchedStay.current && current.seasonStayId === null) {
-          const active = evaluated.find((option) => option.stay.status === 'active' && option.compatible)
-          if (active?.stay.id !== undefined) onChange({ ...current, seasonStayId: active.stay.id })
-        }
       } catch (error) {
         if (cancelled) return
         setOptions([])
@@ -126,8 +118,6 @@ export function RecordGeographyFields({
     return () => {
       cancelled = true
     }
-    // onChange se omite a propósito: solo se usa para la preselección inicial.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [earningPeriodId, kind, temporalValue])
 
   const selected = options?.find((option) => option.stay.id === draft.seasonStayId)
@@ -135,8 +125,13 @@ export function RecordGeographyFields({
     (option) => option.stay.status !== 'cancelled' || option.stay.id === draft.seasonStayId,
   )
 
+  // Nunca se asocia una estancia sin acción de la usuaria: la estancia actual
+  // compatible solo se ofrece como sugerencia explícita e identificable.
+  const suggestion = !isEditing && draft.seasonStayId === null
+    ? options?.find((option) => option.stay.status === 'active' && option.compatible)
+    : undefined
+
   function selectStay(value: string) {
-    userTouchedStay.current = true
     const seasonStayId = value === '' ? null : Number(value)
     onChange({
       ...draft,
@@ -186,9 +181,21 @@ export function RecordGeographyFields({
             })}
           </select>
         )}
+        {suggestion && (
+          <button
+            className="inline-flex min-h-11 w-fit items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 text-left text-sm font-semibold text-emerald-800 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+            onClick={() => selectStay(String(suggestion.stay.id))}
+            type="button"
+          >
+            <MapPin aria-hidden="true" className="size-4 shrink-0" />
+            Usar estancia actual: {describeStay(suggestion.stay, { visitNumber: suggestion.visitNumber, showVisit: suggestion.repeated })}
+          </button>
+        )}
         <p className="text-xs text-slate-500 dark:text-slate-400" id={`${stayFieldId}-hint`}>
           {options && options.length === 0
             ? 'Esta temporada aún no tiene estancias. Puedes guardar sin estancia.'
+            : draft.seasonStayId === null
+              ? 'No se asociará ninguna estancia salvo que la elijas.'
             : kind === 'appointment'
               ? 'Las citas futuras pueden asociarse a una estancia prevista.'
               : 'Solo se pueden elegir estancias ya iniciadas cuyas fechas incluyan este movimiento.'}

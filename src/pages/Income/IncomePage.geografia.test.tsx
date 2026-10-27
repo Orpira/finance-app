@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
@@ -187,4 +187,31 @@ describe('IncomePage — estancia y destino según el modo de uso (PB-GEO-002)',
     renderIncomePage()
     expect(await screen.findByText('Ubicación')).toBeTruthy()
   })
+
+  it('al editar conserva la ubicación histórica aunque falte, sin rellenarla con settings', async () => {
+    arrange({ ...professionalSettings(), city: 'Madrid', country: 'ES' } as AppSettings, professionalPeriod)
+    earningPeriodService.getEarningPeriodById.mockResolvedValue(professionalPeriod)
+    earningPeriodService.isEarningPeriodClosed.mockResolvedValue(false)
+    incomeAdditionalService.listIncomeAdditionals.mockResolvedValue([])
+    incomeService.getServiceIncomeById.mockResolvedValue({
+      id: 41, type: 'otro', status: 'FINALIZADO', date: '2026-01-10', duration: 0,
+      totalAmount: 50, currency: 'EUR', percentage: 0, realGain: 50, eurValue: 50, copValue: 0,
+      exchangeRateUsed: 1, earningPeriodId: 7, usageMode: 'professional',
+      // Registro legacy sin instantánea de ubicación.
+    })
+    incomeService.updateServiceIncome.mockResolvedValue(undefined)
+
+    renderIncomePage('/income/41/editar')
+    await screen.findByText('Ubicación')
+    const form = document.querySelector('form')!
+    fireEvent.submit(form)
+
+    await waitFor(() => expect(incomeService.updateServiceIncome).toHaveBeenCalled())
+    const [, updates] = incomeService.updateServiceIncome.mock.calls[0]
+    expect(updates.city).toBeUndefined()
+    expect(updates.country).toBeUndefined()
+    expect(updates).not.toHaveProperty('seasonStayId')
+    expect(updates).not.toHaveProperty('syncLocationFromStay')
+  })
 })
+

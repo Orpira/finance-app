@@ -13,7 +13,7 @@ import { describeSeasonGeoError } from '../../components/seasons/geo/seasonGeoMe
 // Inicio, cierre y fin previsto se guardan como fechas civiles con hora UTC
 // sintética (T00:00Z / T23:59Z): se formatean como fecha civil para que no se
 // desplacen un día según la zona horaria del dispositivo.
-import { formatCivilDate } from '../../components/seasons/geo/stayPresentation'
+import { describeSeasonLocation, formatCivilDate } from '../../components/seasons/geo/stayPresentation'
 import type { SeasonRevision } from '../../types/seasonRevision'
 import type { SeasonStay } from '../../types/seasonStay'
 import type { Appointment } from '../../types/appointment'
@@ -30,7 +30,11 @@ import { RecordDetailDialog, type RecordDetailItem, type RecordDetailRequest } f
 const DETAIL_CLOSE_ANIMATION_MS = 200
 
 function formatDate(value?: string) {
-  return value ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(value)) : 'En curso'
+  if (!value) return 'En curso'
+  // Una fecha civil (YYYY-MM-DD) no se convierte a Date: se desplazaría un día
+  // en zonas con desfase negativo. Las fechas-hora locales sí se formatean.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return formatCivilDate(value)
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(value))
 }
 
 export function SeasonDetailPage() {
@@ -151,8 +155,6 @@ export function SeasonDetailPage() {
         name: nextName.trim() || period.name,
         notes: period.notes,
         percentage: nextPercentage,
-        // Ciudad legacy: se reenvía tal cual para no borrarla.
-        city: period.city,
       })
       await reload()
     } catch (reason) {
@@ -170,7 +172,7 @@ export function SeasonDetailPage() {
     </PageHeader>
     <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-wrap items-center gap-2"><span className={period.status === 'closed' ? 'rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:!text-slate-100' : 'rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900 dark:!text-emerald-100'}>{period.status === 'closed' ? 'Temporada cerrada' : 'Activa'}</span>{period.status === 'closed' && <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:!text-slate-300"><LockKeyhole className="size-3" /> Registros bloqueados</span>}</div>
-      <p className="mt-3 text-sm text-slate-600 dark:!text-slate-300">{stays.length > 0 ? country : period.city ? `Ciudad histórica: ${period.city}, ${country}` : `${country} · Ciudad por decidir`} · Moneda {currency} · Inicio {formatCivilDate(period.startDate.slice(0, 10))} · {period.status === 'closed' ? `Cierre ${formatCivilDate(period.endDate?.slice(0, 10))}` : `Finalización prevista ${formatCivilDate(period.plannedEndDate?.slice(0, 10))}`} · {period.percentage}%</p>
+      <p className="mt-3 text-sm text-slate-600 dark:!text-slate-300">{describeSeasonLocation(period, stays)} · {country} · Moneda {currency} · Inicio {formatCivilDate(period.startDate.slice(0, 10))} · {period.status === 'closed' ? `Cierre ${formatCivilDate(period.endDate?.slice(0, 10))}` : `Finalización prevista ${formatCivilDate(period.plannedEndDate?.slice(0, 10))}`} · {period.percentage}%</p>
     </div>
     {goalProgress && (
       <SeasonGoalCard

@@ -75,7 +75,8 @@ describe('RecordGeographyFields', () => {
           : item.id === 4 ? 'not_started' : 'outside_interval'
         return {
           stay: item, id: item.id, earningPeriodId: 7, status: item.status, city: item.city,
-          visitNumber: index + 1, label: item.city, selectable: disabledReason === undefined,
+          // Números de visita como los calcula el dominio: Madrid 1.ª y 2.ª.
+          visitNumber: [1, 1, 2, 1][index], label: item.city, selectable: disabledReason === undefined,
           selected: false, disabledReason,
         }
       })
@@ -95,10 +96,29 @@ describe('RecordGeographyFields', () => {
     }))
   })
 
-  it('al crear, propone la estancia actual compatible y distingue visitas repetidas', async () => {
+  it('al crear empieza sin estancia: nunca asocia una en silencio', async () => {
     render(<Harness />)
     const select = await screen.findByLabelText(/Estancia/) as HTMLSelectElement
+    await screen.findByRole('button', { name: /Usar estancia actual/ })
+    expect(select.value).toBe('')
+    expect(latestDraft?.seasonStayId).toBeNull()
+    expect(screen.getByText('No se asociará ninguna estancia salvo que la elijas.')).toBeTruthy()
+  })
+
+  it('sugiere la estancia actual de forma identificable y la asocia solo al pulsar', async () => {
+    render(<Harness />)
+    const suggestion = await screen.findByRole('button', { name: /Usar estancia actual: Madrid, España · 2\.ª visita/ })
+    fireEvent.click(suggestion)
+    const select = screen.getByLabelText(/Estancia/) as HTMLSelectElement
     await waitFor(() => expect(select.value).toBe('3'))
+    expect(latestDraft?.seasonStayId).toBe(3)
+    expect(screen.queryByRole('button', { name: /Usar estancia actual/ })).toBeNull()
+  })
+
+  it('distingue visitas repetidas y desactiva las no compatibles', async () => {
+    render(<Harness />)
+    const select = await screen.findByLabelText(/Estancia/) as HTMLSelectElement
+    await screen.findByRole('button', { name: /Usar estancia actual/ })
     const options = Array.from(select.options)
     expect(options.find((option) => option.value === '1')?.textContent).toMatch(/Madrid, España · 1\.ª visita/)
     expect(options.find((option) => option.value === '3')?.textContent).toMatch(/Madrid, España · 2\.ª visita/)
@@ -106,9 +126,10 @@ describe('RecordGeographyFields', () => {
     expect(options.find((option) => option.value === '4')?.disabled).toBe(true)
   })
 
-  it('permite guardar sin estancia', async () => {
+  it('permite volver a «Sin estancia» tras elegir una', async () => {
     render(<Harness />)
     const select = await screen.findByLabelText(/Estancia/) as HTMLSelectElement
+    fireEvent.click(await screen.findByRole('button', { name: /Usar estancia actual/ }))
     await waitFor(() => expect(select.value).toBe('3'))
     fireEvent.change(select, { target: { value: '' } })
     await waitFor(() => expect(latestDraft?.seasonStayId).toBeNull())
@@ -145,11 +166,14 @@ describe('RecordGeographyFields', () => {
     fireEvent.change(screen.getByLabelText('País (opcional)'), { target: { value: 'PT' } })
     expect(screen.getByText(/Destino internacional/)).toBeTruthy()
     await waitFor(() => expect(latestDraft?.destination).toMatchObject({ kind: 'city', label: 'Lisboa', countryCode: 'PT' }))
-    await waitFor(() => expect(latestDraft?.seasonStayId).toBe(3))
+    // El destino no crea ni elige estancia.
+    expect(latestDraft?.seasonStayId).toBeNull()
   })
 
   it('las citas indican que pueden usar estancias previstas', async () => {
-    render(<Harness kind="appointment" />)
+    render(<Harness initial={createGeographyDraft({ seasonStayId: 4 })} isEditing kind="appointment" />)
     expect(await screen.findByText(/Las citas futuras pueden asociarse a una estancia prevista/)).toBeTruthy()
+    const select = screen.getByLabelText(/Estancia/) as HTMLSelectElement
+    expect(Array.from(select.options).find((option) => option.value === '4')?.disabled).toBe(false)
   })
 })

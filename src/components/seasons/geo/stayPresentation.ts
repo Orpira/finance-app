@@ -1,3 +1,4 @@
+import type { EarningPeriod } from '../../../types/earningPeriod'
 import type { SeasonStay, SeasonStayStatus } from '../../../types/seasonStay'
 import type { TravelDestination } from '../../../types/travelDestination'
 import { countries } from '../../../utils/countries'
@@ -188,4 +189,27 @@ export function formatRevisionDate(value: string) {
 
 export function formatCivilDate(value?: string | null) {
   return value ? formatLocalDate(value) : '—'
+}
+
+/**
+ * Ubicación visible de una temporada en listados y cabeceras. Con estancias,
+ * la fuente es el itinerario; sin estancias, `EarningPeriod.city` es solo la
+ * instantánea legacy y se rotula como histórica. `stays === undefined` indica
+ * que el llamador no cargó el itinerario y conserva el texto anterior.
+ */
+export function describeSeasonLocation(
+  period: Pick<EarningPeriod, 'city' | 'status'>,
+  stays?: readonly SeasonStay[],
+) {
+  if (!stays) return period.city || 'Sin ciudad'
+  if (stays.length === 0) return period.city ? `Ciudad histórica: ${period.city}` : 'Ciudad por decidir'
+  const active = stays.find((stay) => stay.status === 'active')
+  if (active) return `Estancia actual: ${active.city}`
+  const visitedCities = [...new Set(
+    stays.filter((stay) => stay.status === 'completed').map((stay) => stay.city),
+  )]
+  if (period.status === 'closed') {
+    return visitedCities.length ? `Ciudades: ${visitedCities.join(', ')}` : 'Sin estancias realizadas'
+  }
+  return 'Sin estancia actual'
 }
