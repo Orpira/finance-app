@@ -412,18 +412,18 @@ export function AppLayout() {
 
       <nav
         aria-label="Navegación principal"
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 md:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 box-border max-w-[100vw] overflow-x-clip border-t border-slate-200 bg-white/95 pb-[max(env(safe-area-inset-bottom),0.5rem)] pl-[max(env(safe-area-inset-left),0.5rem)] pr-[max(env(safe-area-inset-right),0.5rem)] pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 md:hidden"
       >
-        <ul className="mx-auto grid max-w-5xl grid-cols-5 gap-0.5">
+        <ul className="mx-auto grid w-full max-w-5xl grid-cols-5 gap-0.5">
           {visibleNavItems.map(({ label, path, icon: Icon, onboardingTarget }) => (
-            <li key={path}>
+            <li className="min-w-0" key={path}>
               <NavLink
                 to={path}
                 end={path === '/'}
                 data-onboarding-target={onboardingTarget}
                 className={({ isActive }) =>
                   [
-                    'flex min-h-14 flex-col items-center justify-center rounded-md px-0 text-[0.65rem] font-medium leading-tight transition-colors',
+                    'flex min-h-14 w-full min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg px-0.5 text-[0.65rem] font-medium leading-tight transition-colors',
                     isActive || (path === '/more' && isMoreSection)
                       ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                       : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100',
@@ -431,7 +431,7 @@ export function AppLayout() {
                 }
               >
                 <Icon className="mb-1 size-5" aria-hidden="true" />
-                <span className="max-w-full truncate">{label}</span>
+                <span className="block w-full truncate text-center">{label}</span>
               </NavLink>
             </li>
           ))}
