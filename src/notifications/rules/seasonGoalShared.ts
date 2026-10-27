@@ -35,9 +35,18 @@ export async function getActiveSeasonGoalSnapshot(): Promise<ActiveSeasonGoalSna
 
 export function elapsedPercentage(period: Pick<EarningPeriod, 'startDate' | 'plannedEndDate'>, now: Date): number | undefined {
   if (!period.plannedEndDate) return undefined
-  const start = new Date(`${period.startDate}T00:00:00`).getTime()
-  const end = new Date(`${period.plannedEndDate}T23:59:59`).getTime()
+  const parseBoundary = (value: string, endOfCivilDay: boolean) => {
+    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    const instant = Date.parse(dateOnly
+      ? `${value}T${endOfCivilDay ? '23:59:59.999' : '00:00:00.000'}Z`
+      : value)
+    return Number.isFinite(instant) ? instant : undefined
+  }
+  const start = parseBoundary(period.startDate, false)
+  const end = parseBoundary(period.plannedEndDate, true)
+  const current = now.getTime()
+  if (start === undefined || end === undefined || !Number.isFinite(current)) return undefined
   const total = end - start
   if (total <= 0) return undefined
-  return Math.min(Math.max(((now.getTime() - start) / total) * 100, 0), 100)
+  return Math.min(Math.max(((current - start) / total) * 100, 0), 100)
 }

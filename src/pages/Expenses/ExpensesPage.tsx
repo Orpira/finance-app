@@ -130,12 +130,19 @@ export function ExpensesPage() {
     copValue: 0,
     eurCopRate: EUR_COP_DEFAULT_RATE,
   })
+  const [conversionState, setConversionState] = useState<{
+    status: 'pending' | 'ready' | 'error'
+    subject?: string
+  }>({ status: 'pending' })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [geoDraft, setGeoDraft] = useState(() => createGeographyDraft())
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [validationError, setValidationError] = useState('')
   const [adjustmentCapacity, setAdjustmentCapacity] =
     useState<AdjustmentCapacity | null>(null)
+  const conversionSubject = settings
+    ? JSON.stringify([roundMoney(amount), currency, date, settings.secondaryCurrency])
+    : undefined
   const hasSelectedRelatedIncome = incomes.some(
     (income) => income.id === Number(relatedIncomeId),
   )
@@ -446,6 +453,9 @@ export function ExpensesPage() {
         return
       }
 
+      const subject = JSON.stringify([roundMoney(amount), currency, date, settings.secondaryCurrency])
+      setConversionState({ status: 'pending' })
+
       const conversionOptions = {
         date,
         manualRate:
@@ -480,9 +490,12 @@ export function ExpensesPage() {
       })
       setExchangeRate(convertedPairValue.rate)
       setExchangeRateSource(convertedPairValue.source)
+      setConversionState({ status: 'ready', subject })
     }
 
-    convertExpenseValue()
+    convertExpenseValue().catch(() => {
+      if (isMounted) setConversionState({ status: 'error' })
+    })
 
     return () => {
       isMounted = false
@@ -524,6 +537,13 @@ export function ExpensesPage() {
     const destinationError = isBasicUser ? null : validateDestinationDraft(geoDraft)
     if (destinationError) {
       setValidationError(destinationError)
+      return
+    }
+
+    if (conversionState.status !== 'ready' || conversionState.subject !== conversionSubject) {
+      setValidationError(conversionState.status === 'error'
+        ? 'No se pudo obtener una conversión válida. Revisa la cotización y vuelve a intentarlo.'
+        : 'Espera a que termine la conversión monetaria antes de guardar.')
       return
     }
 
@@ -1045,6 +1065,8 @@ export function ExpensesPage() {
             className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
             disabled={
               saveStatus === 'saving' ||
+              conversionState.status !== 'ready' ||
+              conversionState.subject !== conversionSubject ||
               amount <= 0 ||
               notes.length > 500 ||
               adjustmentLimitExceeded ||

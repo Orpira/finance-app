@@ -38,6 +38,7 @@ import {
   resolveCreateRecordGeography,
   resolveUpdateRecordGeography,
 } from './recordGeographyService'
+import { assertFinancialConversionIsComplete, updatesFinancialConversion } from '../utils/financialConversionValidation'
 
 export type CreateServiceIncomeInput = Omit<
   ServiceIncome,
@@ -170,6 +171,7 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
     'rw',
     [db.services, db.automationOutbox, db.earningPeriods, db.seasonStays, db.wallets],
     async () => {
+      assertFinancialConversionIsComplete(normalizedInput, normalizedInput.realGain)
       const earningPeriod =
         requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
 
@@ -403,6 +405,9 @@ export async function updateServiceIncome(
         updatedAt: new Date().toISOString(),
       }),
     )
+    if (updatesFinancialConversion(updates)) {
+      assertFinancialConversionIsComplete(updatedIncome, updatedIncome.realGain)
+    }
     const updatedIncomes = incomes.map((income) =>
       income.id === id ? updatedIncome : income,
     )

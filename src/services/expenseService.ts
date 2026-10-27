@@ -26,6 +26,7 @@ import {
   resolveCreateRecordGeography,
   resolveUpdateRecordGeography,
 } from './recordGeographyService'
+import { assertFinancialConversionIsComplete, updatesFinancialConversion } from '../utils/financialConversionValidation'
 
 const REPORT_FIELDS = ['reportStatusCode', 'reportStatusLabel', 'reportedAt', 'reportReference', 'reportNotes'] as const
 
@@ -140,6 +141,7 @@ export async function createExpense(input: CreateExpenseInput) {
     db.personalExpenseCategories,
     db.wallets,
   ], async () => {
+    assertFinancialConversionIsComplete(input, input.amount)
     const period = requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
     if (requiresSeason(settings) && !period) {
       throw new Error('No hay una temporada activa. Crea una temporada para registrar actividad.')
@@ -295,6 +297,9 @@ export async function updateExpense(id: number, updates: UpdateExpenseInput) {
       ...geography,
       usageMode: latestExpense.usageMode ?? resolveActiveUsageMode(settings),
     })
+    if (updatesFinancialConversion(updates)) {
+      assertFinancialConversionIsComplete(updatedExpense, updatedExpense.amount)
+    }
     const [incomes, expenses] = await Promise.all([
       db.services.toArray(),
       db.expenses.toArray(),

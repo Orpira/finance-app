@@ -134,8 +134,8 @@ function arrange(settings: AppSettings, period: unknown) {
   incomeService.listServiceIncomes.mockResolvedValue([])
   earningPeriodService.getActiveEarningPeriod.mockResolvedValue(period)
   categoryService.listPersonalIncomeCategories.mockResolvedValue([])
-  currencyConversionService.convertCurrencyPair.mockResolvedValue({ primaryValue: 0, secondaryValue: 0 })
-  currencyConversionService.convertCurrencyToEurCop.mockResolvedValue({ eurValue: 0, copValue: 0 })
+  currencyConversionService.convertCurrencyPair.mockResolvedValue({ primaryValue: 0, secondaryValue: 0, rate: 4_300, source: 'manual' })
+  currencyConversionService.convertCurrencyToEurCop.mockResolvedValue({ eurValue: 0, copValue: 0, eurCopRate: 4_300, source: 'manual' })
   const stay = {
     id: 3, earningPeriodId: 7, position: 0, city: 'Madrid', cityNormalized: 'madrid', countryCode: 'ES',
     status: 'active', actualStartAt: '2026-01-02T08:00:00.000Z', timeZone: 'Europe/Madrid',
@@ -203,6 +203,9 @@ describe('IncomePage — estancia y destino según el modo de uso (PB-GEO-002)',
 
     renderIncomePage('/income/41/editar')
     await screen.findByText('Ubicación')
+    await waitFor(() => expect(
+      (screen.getByRole('button', { name: 'Actualizar ingreso' }) as HTMLButtonElement).disabled,
+    ).toBe(false))
     const form = document.querySelector('form')!
     fireEvent.submit(form)
 

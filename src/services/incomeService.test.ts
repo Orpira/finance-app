@@ -97,8 +97,13 @@ function baseIncomeInput(overrides: Partial<ServiceIncome> = {}) {
     percentage: 0,
     realGain: 100,
     eurValue: 100,
-    copValue: 0,
-    exchangeRateUsed: 1,
+    copValue: 430_000,
+    exchangeRateUsed: 4_300,
+    baseCurrency: 'EUR',
+    secondaryCurrency: 'COP',
+    baseCurrencyValue: 100,
+    secondaryCurrencyValue: 430_000,
+    exchangeRateBaseToSecondary: 4_300,
     ...overrides,
   }
 }
@@ -110,6 +115,13 @@ beforeEach(() => {
 })
 
 describe('createServiceIncome', () => {
+  it('rechaza dentro de la transacción una conversión pendiente representada por ceros', async () => {
+    getSettingsMock.mockResolvedValue(basicSettings())
+    await expect(createServiceIncome(baseIncomeInput({ eurValue: 0, baseCurrencyValue: 0 })))
+      .rejects.toThrow('FINANCIAL_CONVERSION_INCOMPLETE')
+    expect(servicesTable.add).not.toHaveBeenCalled()
+  })
+
   it('valida y copia la ubicación de la estancia dentro de la transacción', async () => {
     getSettingsMock.mockResolvedValue(professionalSettings())
     getActiveEarningPeriodMock.mockResolvedValue({ id: 7, startDate: '2026-01-01', percentage: 50 })

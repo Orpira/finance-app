@@ -240,6 +240,10 @@ export function IncomePage() {
     eurValue: 0,
     copValue: 0,
   })
+  const [conversionState, setConversionState] = useState<{
+    status: 'pending' | 'ready' | 'error'
+    subject?: string
+  }>({ status: 'pending' })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState('')
   const [geoDraft, setGeoDraft] = useState(() => createGeographyDraft())
@@ -660,6 +664,9 @@ export function IncomePage() {
   ])
   const realGain = calculation.realGain
   const principalAmount = usesHourlyWorkday ? calculation.realGain : totalAmount
+  const conversionSubject = settings
+    ? JSON.stringify([roundMoney(realGain), currency, date, settings.secondaryCurrency])
+    : undefined
 
   useEffect(() => {
     let isMounted = true
@@ -668,6 +675,9 @@ export function IncomePage() {
       if (!settings) {
         return
       }
+
+      const subject = JSON.stringify([roundMoney(realGain), currency, date, settings.secondaryCurrency])
+      setConversionState({ status: 'pending' })
 
       const conversionOptions = {
         date,
@@ -703,9 +713,12 @@ export function IncomePage() {
       })
       setExchangeRate(convertedPairValue.rate)
       setExchangeRateSource(convertedPairValue.source)
+      setConversionState({ status: 'ready', subject })
     }
 
-    convertIncomeValue()
+    convertIncomeValue().catch(() => {
+      if (isMounted) setConversionState({ status: 'error' })
+    })
 
     return () => {
       isMounted = false
@@ -789,6 +802,14 @@ export function IncomePage() {
     if (destinationError) {
       setSaveStatus('error')
       setSaveError(destinationError)
+      return
+    }
+
+    if (conversionState.status !== 'ready' || conversionState.subject !== conversionSubject) {
+      setSaveStatus('error')
+      setSaveError(conversionState.status === 'error'
+        ? 'No se pudo obtener una conversión válida. Revisa la cotización y vuelve a intentarlo.'
+        : 'Espera a que termine la conversión monetaria antes de guardar.')
       return
     }
 
@@ -1485,6 +1506,8 @@ export function IncomePage() {
             className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
             disabled={
               saveStatus === 'saving' ||
+              conversionState.status !== 'ready' ||
+              conversionState.subject !== conversionSubject ||
               (usesHourlyWorkday ? principalAmount <= 0 : totalAmount <= 0)
             }
             type="submit"

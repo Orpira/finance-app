@@ -78,6 +78,12 @@ function baseExpenseInput(overrides: Partial<Expense> = {}) {
     currency: 'EUR',
     eurValue: 50,
     copValue: 200_000,
+    exchangeRateUsed: 4_000,
+    baseCurrency: 'EUR',
+    secondaryCurrency: 'COP',
+    baseCurrencyValue: 50,
+    secondaryCurrencyValue: 200_000,
+    exchangeRateBaseToSecondary: 4_000,
     ...overrides,
   }
 }
@@ -95,6 +101,13 @@ beforeEach(() => {
 })
 
 describe('createExpense', () => {
+  it('rechaza dentro de la transacción una conversión pendiente representada por ceros', async () => {
+    getSettingsMock.mockResolvedValue(basicSettings())
+    await expect(createExpense(baseExpenseInput({ eurValue: 0, baseCurrencyValue: 0 })))
+      .rejects.toThrow('FINANCIAL_CONVERSION_INCOMPLETE')
+    expect(expensesTable.add).not.toHaveBeenCalled()
+  })
+
   it('valida y copia la ubicación de la estancia dentro de la transacción', async () => {
     getSettingsMock.mockResolvedValue(professionalSettings())
     getActiveEarningPeriodMock.mockResolvedValue({ id: 7 })

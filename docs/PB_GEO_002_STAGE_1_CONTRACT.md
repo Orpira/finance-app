@@ -132,8 +132,12 @@ Componentes en `src/components/seasons/geo/`: `SeasonItinerary`, `SeasonRevision
 - En edición, ingresos, egresos y citas envían exactamente la instantánea `city`/`country` guardada; `settings` solo precarga la ubicación de registros nuevos sin estancia. La sincronización con la estancia sigue siendo explícita (`syncLocationFromStay`).
 - `describeSeasonLocation` presenta la ubicación de una temporada desde el itinerario; `EarningPeriod.city` solo se muestra como «Ciudad histórica» cuando no hay estancias.
 
-Hallazgos fuera del alcance de la interfaz, pendientes de decisión:
+## Integridad financiera prepublicación — Etapa 5C
 
-- `elapsedPercentage` (`src/notifications/rules/seasonGoalShared.ts`) concatena `T00:00:00` a `startDate`/`plannedEndDate`, que ya son ISO completos; el resultado es `NaN` y la regla de riesgo de meta no puede evaluar el tiempo transcurrido.
-- Ingresos y egresos pueden guardarse antes de que termine la conversión de moneda asíncrona del formulario; en ese caso se persisten `eurValue`/`baseCurrencyValue` a 0 y el resultado de temporada omite el importe. Reproducido en navegador con IndexedDB real; existía antes de PB-GEO-002.
+- Los formularios de ingresos y egresos mantienen un estado explícito de conversión (`pending`, `ready` o `error`). Guardar queda bloqueado hasta que el resultado corresponda exactamente al importe, moneda, fecha y moneda secundaria actuales; una respuesta antigua no puede reutilizarse después de editar esos datos.
+- `createServiceIncome` y `createExpense` revalidan la instantánea monetaria dentro de su transacción. `updateServiceIncome` y `updateExpense` hacen la misma validación cuando el cambio toca un campo financiero. El error estable es `FINANCIAL_CONVERSION_INCOMPLETE`.
+- `assertFinancialConversionIsComplete` no obtiene tasas ni aplica fórmulas alternativas: comprueba finitud, tasa positiva, moneda base, coherencia del importe base y del par secundario, y distingue un importe fuente cero válido de una conversión ausente para un importe distinto de cero.
+- Los registros legacy con snapshot incompleto siguen siendo legibles y una edición ajena a sus campos financieros no los reinterpreta ni bloquea. `detectFinancialConversionSuspicion` permite una auditoría conservadora sin escribir datos.
+- La recuperación histórica automática no es segura cuando no existe una tasa persistida coherente para la fecha y el par. Cualquier reparación deberá ser explícita, mantener trazabilidad y no sobrescribir registros reportados.
+- `elapsedPercentage` admite tanto fechas civiles `YYYY-MM-DD` como instantes ISO completos. Las fechas civiles se evalúan en UTC como inicio y fin inclusivo del día; una fecha inválida o un intervalo no positivo devuelve `undefined`, nunca `NaN`.
 

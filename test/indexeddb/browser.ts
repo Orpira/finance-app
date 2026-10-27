@@ -47,6 +47,7 @@ import {
 } from '../../src/services/personalIncomeCategoryService'
 import { getSettings, updateSettings } from '../../src/services/settingsService'
 import { getOnboardingState, setOnboardingStep } from '../../src/services/onboardingService'
+import { detectFinancialConversionSuspicion } from '../../src/utils/financialConversionValidation'
 import { groupIncomesByDate } from '../../src/services/incomeReport.service'
 import {
   buildIncomeDateTableHtml,
@@ -1911,6 +1912,42 @@ async function run() {
     country: 'ES',
     city: 'Madrid',
   })
+  const financialRecords = [
+    ...(await db.services.toArray()).map((record) => ({ record, amount: record.realGain })),
+    ...(await db.expenses.toArray()).map((record) => ({ record, amount: record.amount })),
+  ]
+  const suspiciousFinancialRecords = financialRecords.filter(({ record, amount }) =>
+    detectFinancialConversionSuspicion(record, amount).length > 0)
+  assert(suspiciousFinancialRecords.length === 0, 'test database has no suspicious conversion snapshots')
+
+  const expenseCountBeforeInvalidConversion = await db.expenses.count()
+  let invalidConversionRejected = false
+  try {
+    await createExpense({
+      type: 'gasto',
+      date: '2026-08-20',
+      category: 'Materiales',
+      amount: 10,
+      currency: 'EUR',
+      eurValue: 0,
+      copValue: 0,
+      baseCurrency: 'EUR',
+      secondaryCurrency: 'COP',
+      baseCurrencyValue: 0,
+      secondaryCurrencyValue: 0,
+      exchangeRateBaseToSecondary: 4_300,
+      exchangeRateUsed: 4_300,
+      country: 'ES',
+      city: 'Madrid',
+    })
+  } catch {
+    invalidConversionRejected = true
+  }
+  assert(invalidConversionRejected, 'incomplete conversion is rejected by the persistence service')
+  assert(
+    (await db.expenses.count()) === expenseCountBeforeInvalidConversion,
+    'rejected conversion does not persist a partial expense',
+  )
   let financialStats = await getSeasonStatistics(financialPeriod.id!)
   let goalProgress = getSeasonGoalProgress(financialPeriod, {
     netIncome: financialStats.realGain,
