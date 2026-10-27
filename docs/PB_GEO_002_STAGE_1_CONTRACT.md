@@ -150,6 +150,12 @@ Componentes en `src/components/seasons/geo/`: `SeasonItinerary`, `SeasonRevision
 - Un fallo `FINANCIAL_QUOTE_UNAVAILABLE` o `FINANCIAL_CONVERSION_INCOMPLETE` nunca se confirma como éxito. La respuesta indica que no se registró el movimiento y permite recuperar guardando una tasa manual o consiguiendo conectividad.
 - `saveExchangeRate` evita nuevas filas exactamente duplicadas para el mismo par, fecha, tasa y origen. Las filas históricas divergentes se conservan; las lecturas eligen determinísticamente la más reciente por fecha, creación e identificador.
 
+## Identificadores del Asistente — Etapa 5G
+
+- Toda propuesta nueva usa `createAssistantProposalId`: conserva el prefijo legacy legible e incorpora entropía criptográfica mediante `crypto.randomUUID()` o `crypto.getRandomValues()` sin dependencias adicionales.
+- Editar, confirmar, reintentar o recargar nunca regenera el identificador. Las propuestas legacy y los `assistantProposalId` ya persistidos permanecen intactos.
+- La consulta sin índice conserva compatibilidad con Dexie v38. En Chrome headless, el peor caso ausente midió aproximadamente 8 ms con 1.000 movimientos, 59 ms con 10.000 y 392 ms con 50.000. Se recomienda proponer un índice y una migración nueva antes de superar 5.000 movimientos por tabla o si la mediana en dispositivos objetivo alcanza 25 ms; esta etapa no autoriza v39.
+
 ## Interfaz — Etapa 5F
 
 - La tarjeta de propuesta delega la ejecución en `executeAssistantProposal` y nunca construye snapshots financieros. Una propuesta `failed` de ingreso o gasto ofrece «Reintentar» y «Descartar»; reintentar reutiliza el mismo `proposalId`, de modo que no puede duplicar el movimiento. Las demás acciones fallidas no ofrecen reintento, porque no tienen clave de idempotencia.

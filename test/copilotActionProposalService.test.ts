@@ -48,6 +48,21 @@ describe('copilotActionProposalService', () => {
     if (report.kind !== 'proposal' || report.proposal.kind !== 'generate_report') throw new Error('expected report')
     expect(report.proposal.fields.includedData).toContain('500,00')
     expect(goal).toEqual(expect.objectContaining({ kind: 'proposal', proposal: expect.objectContaining({ kind: 'create_financial_goal', fields: expect.objectContaining({ goalType: 'saving', targetAmount: 300 }) }) }))
+    if (goal.kind !== 'proposal') throw new Error('expected goal')
+    expect(report.proposal.proposalId).not.toBe(goal.proposal.proposalId)
+  })
+
+  it('no colisiona al preparar dos propuestas iguales en el mismo milisegundo', async () => {
+    const service = createCopilotActionProposalService({
+      now: () => new Date('2026-08-02T10:00:00.000Z'),
+      loadSnapshot: vi.fn().mockResolvedValue({
+        currency: 'EUR', currentMonth: { income: 0, expenses: 0, incomeCount: 0, expenseCount: 0 },
+      }),
+    })
+    const first = await service.prepare('Prepara un PDF de este mes', { defaultCurrency: 'EUR' })
+    const second = await service.prepare('Prepara un PDF de este mes', { defaultCurrency: 'EUR' })
+    if (first.kind !== 'proposal' || second.kind !== 'proposal') throw new Error('expected proposals')
+    expect(first.proposal.proposalId).not.toBe(second.proposal.proposalId)
   })
 
   it('interpreta un mes nombrado y la semana actual en propuestas de reporte', async () => {

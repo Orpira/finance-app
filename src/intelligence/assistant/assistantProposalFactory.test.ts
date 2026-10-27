@@ -24,6 +24,16 @@ describe('createProposalFromParsedIntent', () => {
     expect(proposal?.missingRequiredFields).toEqual([])
   })
 
+  it('crea IDs distintos aunque dos propuestas nazcan en el mismo milisegundo', () => {
+    const parsed: ParsedAssistantIntent = {
+      kind: 'register_income', sourceText: 'Ingreso',
+      fields: { amount: 10, currency: 'EUR', date: '2026-08-01', description: null },
+    }
+    const first = createProposalFromParsedIntent(parsed, CONTEXT)
+    const second = createProposalFromParsedIntent(parsed, CONTEXT)
+    expect(first?.proposalId).not.toBe(second?.proposalId)
+  })
+
   it('usa la moneda por defecto del contexto cuando el mensaje no la menciona', () => {
     const parsed: ParsedAssistantIntent = {
       kind: 'register_expense',
@@ -80,6 +90,7 @@ describe('applyProposalEdits', () => {
     expect(edited.missingRequiredFields).toEqual([])
     if (edited.kind !== 'register_income') throw new Error('expected register_income')
     expect(edited.fields.amount).toBe(200)
+    expect(edited.proposalId).toBe(proposal.proposalId)
   })
 
   it('no marca campos opcionales como faltantes', () => {

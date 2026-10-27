@@ -88,6 +88,7 @@ const databaseName = 'finance-app'
 const at = '2026-02-01T00:00:00.000Z' as UtcInstant
 const result = document.querySelector<HTMLPreElement>('#result')!
 const checks: string[] = []
+const assistantProposalScanBenchmark: Array<{ records: number; medianMs: number }> = []
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message)
@@ -2113,6 +2114,12 @@ async function run() {
   assert(!missingQuoteResult.ok, 'assistant rejects a movement without sufficient persisted quotes')
   assert((await db.services.count()) === incomeCountBeforeMissingQuote, 'missing quote does not persist an assistant income')
 
+  async function countAssistantOutboxEvents(proposalId: string) {
+    return (await db.automationOutbox.toArray()).filter((record) => {
+      const movement = (record.data.income ?? record.data.expense) as { assistantProposalId?: string } | undefined
+      return movement?.assistantProposalId === proposalId
+    }).length
+  }
   const assistantIncomeProposal = {
     proposalId: 'indexeddb:assistant:income:1',
     kind: 'register_income' as const,
@@ -2134,10 +2141,14 @@ async function run() {
   assert(assistantIncome?.secondaryCurrencyValue === 516_000, 'assistant income persists its converted secondary value')
   assert(assistantIncome?.seasonStayId === assistantStay.activeStay.id, 'assistant income preserves the optional stay association')
   assert(assistantIncome?.city === 'Barcelona', 'assistant income copies the selected stay city')
+  assert((await countAssistantOutboxEvents(assistantIncomeProposal.proposalId)) === 1, 'assistant proposal creates exactly one outbox event')
   const incomeCountAfterAssistant = await db.services.count()
+  db.close()
+  await db.open()
   const assistantIncomeRetry = await executeAssistantProposal(assistantIncomeProposal)
-  assert(assistantIncomeRetry.ok && assistantIncomeRetry.recordId === assistantIncomeResult.recordId, 'assistant income retry returns the persisted record')
+  assert(assistantIncomeRetry.ok && assistantIncomeRetry.recordId === assistantIncomeResult.recordId, 'assistant income retry after reload returns the persisted record')
   assert((await db.services.count()) === incomeCountAfterAssistant, 'assistant income retry does not duplicate the record')
+  assert((await countAssistantOutboxEvents(assistantIncomeProposal.proposalId)) === 1, 'assistant income retry does not duplicate the outbox event')
   const concurrentProposal = {
     ...assistantIncomeProposal,
     proposalId: 'indexeddb:assistant:income:concurrent',
@@ -2155,6 +2166,7 @@ async function run() {
     'concurrent assistant income executions resolve to one record',
   )
   assert((await db.services.count()) === incomeCountBeforeConcurrentRetry + 1, 'concurrent assistant retries persist exactly one income')
+  assert((await countAssistantOutboxEvents(concurrentProposal.proposalId)) === 1, 'concurrent assistant retries persist exactly one outbox event')
   if (concurrentResults[0]!.ok) await deleteServiceIncome(concurrentResults[0]!.recordId as number)
 
   await updateSettings(
@@ -2221,6 +2233,29 @@ async function run() {
   assert(assistantStats.expenses === 10, 'assistant expense is included once in season totals')
   assert(assistantStats.netGain === 110, 'assistant movements preserve canonical season balance')
 
+  const benchmarkDbName = 'finance-app-assistant-id-benchmark'
+  await Dexie.delete(benchmarkDbName)
+  const benchmarkDb = new Dexie(benchmarkDbName)
+  benchmarkDb.version(1).stores({ records: '++id' })
+  const benchmarkRecords = benchmarkDb.table<{ assistantProposalId: string }, number>('records')
+  for (const size of [1_000, 10_000, 50_000]) {
+    await benchmarkRecords.clear()
+    await benchmarkRecords.bulkAdd(Array.from({ length: size }, (_, index) => ({
+      assistantProposalId: `benchmark:${index}`,
+    })))
+    await benchmarkRecords.filter((record) => record.assistantProposalId === 'missing').first()
+    const samples: number[] = []
+    for (let iteration = 0; iteration < 5; iteration += 1) {
+      const startedAt = performance.now()
+      await benchmarkRecords.filter((record) => record.assistantProposalId === 'missing').first()
+      samples.push(performance.now() - startedAt)
+    }
+    samples.sort((left, right) => left - right)
+    assistantProposalScanBenchmark.push({ records: size, medianMs: Number(samples[2]!.toFixed(2)) })
+  }
+  benchmarkDb.close()
+  await Dexie.delete(benchmarkDbName)
+
   await resetDatabase()
 
   localStorage.removeItem('finance-app:settings')
@@ -2253,7 +2288,7 @@ async function run() {
 try {
   await run()
   result.dataset.status = 'passed'
-  result.textContent = JSON.stringify({ runtime: navigator.userAgent, indexedDB: typeof indexedDB, checks })
+  result.textContent = JSON.stringify({ runtime: navigator.userAgent, indexedDB: typeof indexedDB, checks, assistantProposalScanBenchmark })
 } catch (error) {
   result.dataset.status = 'failed'
   result.textContent = JSON.stringify({ message: (error as Error).message, stack: (error as Error).stack, checks })

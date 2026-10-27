@@ -6,13 +6,7 @@ import type {
   ExpenseProposal,
   IncomeProposal,
 } from './assistantProposalContracts'
-
-let sequence = 0
-
-function createProposalId(kind: string): string {
-  sequence += 1
-  return `assistant-proposal:${kind}:${Date.now()}:${sequence}`
-}
+import { createAssistantProposalId } from './assistantProposalId'
 
 /**
  * Nunca inventa cantidades, fechas ni monedas: un campo requerido ausente
@@ -35,7 +29,7 @@ export function createProposalFromParsedIntent(
     if (parsed.fields.date === null) missing.push('date')
 
     const proposal: IncomeProposal = {
-      proposalId: createProposalId('register_income'),
+      proposalId: createAssistantProposalId('register_income'),
       kind: 'register_income',
       status: 'awaiting_confirmation',
       createdAt,
@@ -54,7 +48,7 @@ export function createProposalFromParsedIntent(
     if (parsed.fields.category === null) missing.push('category')
 
     const proposal: ExpenseProposal = {
-      proposalId: createProposalId('register_expense'),
+      proposalId: createAssistantProposalId('register_expense'),
       kind: 'register_expense',
       status: 'awaiting_confirmation',
       createdAt,
@@ -72,7 +66,7 @@ export function createProposalFromParsedIntent(
   if (parsed.fields.expectedAmount === null) missing.push('expectedAmount')
 
   const proposal: AppointmentProposal = {
-    proposalId: createProposalId('create_appointment'),
+    proposalId: createAssistantProposalId('create_appointment'),
     kind: 'create_appointment',
     status: 'awaiting_confirmation',
     createdAt,

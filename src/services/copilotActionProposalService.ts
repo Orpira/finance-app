@@ -5,6 +5,7 @@ import type { CurrencyCode } from '../types/settings'
 import { getPendingIncomes } from './incomeReport.service'
 import { createFinancialCopilotService } from './financialCopilotService'
 import { getLocalDateKey } from '../utils/currency'
+import { createAssistantProposalId } from '../intelligence/assistant/assistantProposalId'
 
 export type CopilotActionPreparation =
   | { readonly kind: 'no-action' }
@@ -74,7 +75,7 @@ function resolveAmount(text: string): number | null {
 
 function createBase(kind: AssistantProposalRecord['kind'], sourceText: string, now: Date) {
   return {
-    proposalId: `assistant-proposal:${kind}:${now.getTime()}`,
+    proposalId: createAssistantProposalId(kind, now.getTime()),
     kind,
     status: 'awaiting_confirmation' as const,
     createdAt: now.toISOString(),
