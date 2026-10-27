@@ -25,8 +25,10 @@ import { executeSnapshotPromotion } from '../../src/services/snapshotPromotionEx
 import { executeKnowledgePromotion } from '../../src/services/knowledgePromotionExecutor'
 import { buildBalanceReport } from '../../src/services/balanceReportService'
 import { completeAppointmentAsIncome } from '../../src/services/appointmentCompletionService'
+import { executeAssistantProposal } from '../../src/intelligence/assistant/assistantExecutionService'
 import { createAppointment, startAppointmentService } from '../../src/services/appointmentService'
 import { createExpense, deleteExpense, updateExpense } from '../../src/services/expenseService'
+import { getExchangeRate, saveExchangeRate } from '../../src/services/exchangeRateService'
 import {
   closeActiveEarningPeriodAndCreate,
   createEarningPeriod,
@@ -36,6 +38,7 @@ import {
   updateActiveEarningPeriod,
 } from '../../src/services/earningPeriodService'
 import { deleteServiceIncome, updateServiceIncome } from '../../src/services/incomeService'
+import { switchActiveSeasonStay } from '../../src/services/seasonStayService'
 import {
   archivePersonalIncomeCategory,
   countIncomeReferencesForCategory,
@@ -2066,6 +2069,126 @@ async function run() {
   })
   assert(financialStats.netGain === 0, 'deleting income recalculates season result')
   assert(goalProgress?.percentage === 0, 'deleting the last income restores zero goal progress')
+
+  const assistantStay = await switchActiveSeasonStay({
+    earningPeriodId: financialPeriod.id!,
+    next: { kind: 'new', city: 'Barcelona' },
+    effectiveAt: '2026-08-01T10:00:00.000Z',
+    timeZone: 'Europe/Madrid',
+  }, new Date('2026-08-01T10:00:00.000Z'))
+  await saveExchangeRate({
+    baseCurrency: 'EUR', targetCurrency: 'COP', rate: 4_300,
+    date: '2026-08-20', source: 'manual',
+  })
+  await saveExchangeRate({
+    baseCurrency: 'COP', targetCurrency: 'EUR', rate: 1 / 4_300,
+    date: '2026-08-20', source: 'manual',
+  })
+  const exchangeRateCount = await db.exchangeRates.count()
+  await saveExchangeRate({
+    baseCurrency: 'EUR', targetCurrency: 'COP', rate: 4_300,
+    date: '2026-08-20', source: 'manual',
+  })
+  assert((await db.exchangeRates.count()) === exchangeRateCount, 'identical exchange-rate writes are idempotent')
+  await saveExchangeRate({
+    baseCurrency: 'USD', targetCurrency: 'MXN', rate: 20,
+    date: '2026-08-20', source: 'manual',
+  })
+  await saveExchangeRate({
+    baseCurrency: 'USD', targetCurrency: 'MXN', rate: 21,
+    date: '2026-08-20', source: 'manual',
+  })
+  assert((await getExchangeRate('USD', 'MXN', '2026-08-20'))?.rate === 21, 'contradictory historical rates are preserved and newest resolution is deterministic')
+
+  const incomeCountBeforeMissingQuote = await db.services.count()
+  const missingQuoteResult = await executeAssistantProposal({
+    proposalId: 'indexeddb:assistant:missing-quote:1',
+    kind: 'register_income',
+    status: 'confirmed',
+    createdAt: '2026-08-20T08:55:00.000Z',
+    sourceText: 'Ingreso de 10 dólares',
+    missingRequiredFields: [],
+    fields: { amount: 10, currency: 'USD', date: '2026-08-20', description: null },
+  })
+  assert(!missingQuoteResult.ok, 'assistant rejects a movement without sufficient persisted quotes')
+  assert((await db.services.count()) === incomeCountBeforeMissingQuote, 'missing quote does not persist an assistant income')
+
+  const assistantIncomeProposal = {
+    proposalId: 'indexeddb:assistant:income:1',
+    kind: 'register_income' as const,
+    status: 'confirmed' as const,
+    createdAt: '2026-08-20T09:00:00.000Z',
+    sourceText: 'Ingreso de 120 euros en Barcelona',
+    missingRequiredFields: [],
+    fields: {
+      amount: 120, currency: 'EUR' as const, date: '2026-08-20', description: 'Servicio asistido',
+      seasonStayId: assistantStay.activeStay.id,
+    },
+  }
+  const assistantIncomeResult = await executeAssistantProposal(assistantIncomeProposal)
+  assert(assistantIncomeResult.ok, 'assistant creates an income through the real domain service')
+  const assistantIncome = assistantIncomeResult.ok
+    ? await db.services.get(assistantIncomeResult.recordId as number)
+    : undefined
+  assert(assistantIncome?.baseCurrencyValue === 120, 'assistant income persists its canonical base value')
+  assert(assistantIncome?.secondaryCurrencyValue === 516_000, 'assistant income persists its converted secondary value')
+  assert(assistantIncome?.seasonStayId === assistantStay.activeStay.id, 'assistant income preserves the optional stay association')
+  assert(assistantIncome?.city === 'Barcelona', 'assistant income copies the selected stay city')
+  const incomeCountAfterAssistant = await db.services.count()
+  const assistantIncomeRetry = await executeAssistantProposal(assistantIncomeProposal)
+  assert(assistantIncomeRetry.ok && assistantIncomeRetry.recordId === assistantIncomeResult.recordId, 'assistant income retry returns the persisted record')
+  assert((await db.services.count()) === incomeCountAfterAssistant, 'assistant income retry does not duplicate the record')
+  const concurrentProposal = {
+    ...assistantIncomeProposal,
+    proposalId: 'indexeddb:assistant:income:concurrent',
+    fields: { ...assistantIncomeProposal.fields, amount: 5 },
+  }
+  const incomeCountBeforeConcurrentRetry = await db.services.count()
+  const concurrentResults = await Promise.all([
+    executeAssistantProposal(concurrentProposal),
+    executeAssistantProposal(concurrentProposal),
+  ])
+  assert(concurrentResults.every((result) => result.ok), 'concurrent assistant income executions both resolve safely')
+  assert(
+    concurrentResults[0]!.ok && concurrentResults[1]!.ok &&
+      concurrentResults[0].recordId === concurrentResults[1].recordId,
+    'concurrent assistant income executions resolve to one record',
+  )
+  assert((await db.services.count()) === incomeCountBeforeConcurrentRetry + 1, 'concurrent assistant retries persist exactly one income')
+  if (concurrentResults[0]!.ok) await deleteServiceIncome(concurrentResults[0]!.recordId as number)
+
+  await updateSettings(
+    { usageMode: 'hybrid', activeContext: 'professional' },
+    { allowUsageModeChange: true },
+  )
+  const assistantExpenseProposal = {
+    proposalId: 'indexeddb:assistant:expense:1',
+    kind: 'register_expense' as const,
+    status: 'confirmed' as const,
+    createdAt: '2026-08-20T09:05:00.000Z',
+    sourceText: 'Gasto de 43000 pesos en transporte',
+    missingRequiredFields: [],
+    fields: {
+      amount: 43_000, currency: 'COP' as const, date: '2026-08-20', category: 'Transporte',
+      seasonStayId: assistantStay.activeStay.id,
+    },
+  }
+  const assistantExpenseResult = await executeAssistantProposal(assistantExpenseProposal)
+  assert(assistantExpenseResult.ok, 'assistant creates an expense in Hybrid-professional through the real domain service')
+  const assistantExpense = assistantExpenseResult.ok
+    ? await db.expenses.get(assistantExpenseResult.recordId as number)
+    : undefined
+  assert(assistantExpense?.eurValue === 10, 'assistant expense persists the verified offline conversion')
+  assert(assistantExpense?.baseCurrencyValue === 43_000, 'assistant expense persists its canonical base value')
+  assert(assistantExpense?.seasonStayId === assistantStay.activeStay.id, 'assistant expense preserves the optional stay association')
+  const expenseCountAfterAssistant = await db.expenses.count()
+  const assistantExpenseRetry = await executeAssistantProposal(assistantExpenseProposal)
+  assert(assistantExpenseRetry.ok && assistantExpenseRetry.recordId === assistantExpenseResult.recordId, 'assistant expense retry returns the persisted record')
+  assert((await db.expenses.count()) === expenseCountAfterAssistant, 'assistant expense retry does not duplicate the record')
+  const assistantStats = await getSeasonStatistics(financialPeriod.id!)
+  assert(assistantStats.realGain === 120, 'assistant income is included once in season totals')
+  assert(assistantStats.expenses === 10, 'assistant expense is included once in season totals')
+  assert(assistantStats.netGain === 110, 'assistant movements preserve canonical season balance')
 
   await resetDatabase()
 

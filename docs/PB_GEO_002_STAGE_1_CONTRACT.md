@@ -141,6 +141,15 @@ Componentes en `src/components/seasons/geo/`: `SeasonItinerary`, `SeasonRevision
 - La recuperación histórica automática no es segura cuando no existe una tasa persistida coherente para la fecha y el par. Cualquier reparación deberá ser explícita, mantener trazabilidad y no sobrescribir registros reportados.
 - `elapsedPercentage` admite tanto fechas civiles `YYYY-MM-DD` como instantes ISO completos. Las fechas civiles se evalúan en UTC como inicio y fin inclusivo del día; una fecha inválida o un intervalo no positivo devuelve `undefined`, nunca `NaN`.
 
+## Asistente y snapshots financieros — Etapa 5E
+
+- `prepareFinancialConversionSnapshot` es la ruta canónica para consumidores sin formulario. Recibe importe, moneda, fecha y configuración, y devuelve el snapshot completo exigido por ingresos y egresos.
+- Solo acepta identidad de moneda, cotización API, tasa manual explícita o tasa persistida. El fallback de referencia no acredita una cotización y produce `FINANCIAL_QUOTE_UNAVAILABLE`.
+- Las propuestas de ingreso y egreso admiten opcionalmente `seasonStayId` y `travelDestination`; los servicios de dominio siguen validando temporada, estancia e intervalo dentro de la transacción.
+- `assistantProposalId` es la clave de idempotencia persistida. Los servicios devuelven el registro existente ante reintentos o ejecuciones concurrentes y no generan un segundo movimiento ni un segundo evento de outbox.
+- Un fallo `FINANCIAL_QUOTE_UNAVAILABLE` o `FINANCIAL_CONVERSION_INCOMPLETE` nunca se confirma como éxito. La respuesta indica que no se registró el movimiento y permite recuperar guardando una tasa manual o consiguiendo conectividad.
+- `saveExchangeRate` evita nuevas filas exactamente duplicadas para el mismo par, fecha, tasa y origen. Las filas históricas divergentes se conservan; las lecturas eligen determinísticamente la más reciente por fecha, creación e identificador.
+
 ## Interfaz — Etapa 5D
 
 - Los formularios de ingreso y egreso muestran el estado de conversión pendiente o fallida, con reintento explícito; nunca se guardan ceros ni se reintenta guardando.

@@ -18,6 +18,9 @@ export type ServiceTimerStatus =
 export interface ServiceIncome {
   id?: number;
 
+  /** Clave de idempotencia de una propuesta confirmada del Asistente. */
+  assistantProposalId?: string;
+
   /** Optional user-defined label. Valid only for Personal (`basic`) incomes. */
   personalName?: string;
 

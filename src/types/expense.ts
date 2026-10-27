@@ -7,6 +7,9 @@ export type ExpenseType = 'gasto' | 'ajuste'
 export interface Expense {
   id?: number;
 
+  /** Clave de idempotencia de una propuesta confirmada del Asistente. */
+  assistantProposalId?: string;
+
   /** Optional user-defined label. Valid only for Personal (`basic`) expenses. */
   personalName?: string;
 

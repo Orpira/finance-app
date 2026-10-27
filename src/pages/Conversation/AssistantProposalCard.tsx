@@ -60,7 +60,11 @@ function isFieldEditable(status: AssistantProposalRecord['status']): boolean {
 }
 
 export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel }: AssistantProposalCardProps) {
-  const [draft, setDraft] = useState<Record<string, string | number | null>>({ ...proposal.fields })
+  const [draft, setDraft] = useState<Record<string, string | number | null>>(() =>
+    Object.fromEntries(Object.entries(proposal.fields).filter((entry): entry is [string, string | number | null] => {
+      const value = entry[1]
+      return value === null || typeof value === 'string' || typeof value === 'number'
+    })))
   const editable = isFieldEditable(proposal.status) && !disabled
   const badge = STATUS_BADGE[proposal.status]
   const hasMissingDraftFields = proposal.missingRequiredFields.some((field) => {
@@ -76,7 +80,8 @@ export function AssistantProposalCard({ proposal, disabled, onConfirm, onCancel 
     onConfirm(draft)
   }
 
-  const fieldEntries = Object.keys(proposal.fields).filter((field) => field !== 'incomeId')
+  const fieldEntries = Object.keys(draft).filter((field) =>
+    field !== 'incomeId' && field !== 'seasonStayId')
 
   return (
     <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">

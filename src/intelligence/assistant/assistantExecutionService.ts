@@ -1,7 +1,10 @@
-import { convertCurrencyToEurCop } from '../../services/currencyConversionService'
 import { createAppointment } from '../../services/appointmentService'
-import { createExpense } from '../../services/expenseService'
-import { createServiceIncome } from '../../services/incomeService'
+import { createExpense, getExpenseByAssistantProposalId } from '../../services/expenseService'
+import { createServiceIncome, getServiceIncomeByAssistantProposalId } from '../../services/incomeService'
+import {
+  FINANCIAL_QUOTE_UNAVAILABLE,
+  prepareFinancialConversionSnapshot,
+} from '../../services/financialConversionSnapshotService'
 import { getSettings } from '../../services/settingsService'
 import { markIncomeAsReported } from '../../services/incomeReport.service'
 import { financialGoalService } from '../../services/financialGoalService'
@@ -9,6 +12,7 @@ import { exportCopilotPeriodReport } from '../../services/copilotReportExportSer
 import { createDefaultAppointmentReminders } from '../../utils/appointmentReminders'
 import { calculateStoredRealGain } from '../../utils/realGain'
 import { resolveActiveUsageMode } from '../../utils/usageMode'
+import { FINANCIAL_CONVERSION_INCOMPLETE } from '../../utils/financialConversionValidation'
 import { recordAssistantAudit } from './assistantAuditLog'
 import { assertProposalReadyForExecution } from './assistantExecutionGuard'
 import type { AssistantProposalRecord } from './assistantProposalContracts'
@@ -69,7 +73,14 @@ export async function executeAssistantProposal(
     })
     return {
       ok: false,
-      safeMessage: error instanceof Error ? error.message : 'No se pudo completar la operación.',
+      safeMessage: error instanceof Error && (
+        error.message === FINANCIAL_QUOTE_UNAVAILABLE ||
+        error.message === FINANCIAL_CONVERSION_INCOMPLETE
+      )
+        ? 'No se registró el movimiento porque falta una cotización válida para esa fecha y esas monedas. Conéctate para obtenerla o guarda primero una tasa manual y vuelve a confirmar.'
+        : error instanceof Error
+          ? error.message
+          : 'No se pudo completar la operación.',
     }
   }
 }
@@ -105,18 +116,26 @@ async function executeByKind(proposal: AssistantProposalRecord): Promise<number 
   const settings = await getSettings()
 
   if (proposal.kind === 'register_income') {
+    const existing = await getServiceIncomeByAssistantProposalId(proposal.proposalId)
+    if (existing?.id !== undefined) return existing.id
     const { amount, currency, date } = proposal.fields
     const totalAmount = amount as number
     const resolvedCurrency = (currency ?? settings.defaultCurrency)
-    const { eurValue, copValue, eurCopRate } = await convertCurrencyToEurCop(totalAmount, resolvedCurrency)
     const realGain = calculateStoredRealGain({
       totalAmount,
       percentage: 0,
       usageMode: resolveActiveUsageMode(settings),
       incomeType: 'otro',
     })
+    const conversion = await prepareFinancialConversionSnapshot({
+      amount: realGain,
+      currency: resolvedCurrency,
+      date: date as string,
+      settings,
+    })
 
     return createServiceIncome({
+      assistantProposalId: proposal.proposalId,
       type: 'otro',
       date: date as string,
       duration: 0,
@@ -124,27 +143,52 @@ async function executeByKind(proposal: AssistantProposalRecord): Promise<number 
       currency: resolvedCurrency,
       percentage: 0,
       realGain,
-      eurValue,
-      copValue,
-      exchangeRateUsed: eurCopRate,
-      notes: 'Registrado por el Asistente',
+      eurValue: conversion.eurValue,
+      copValue: conversion.copValue,
+      exchangeRateUsed: conversion.exchangeRateUsed,
+      baseCurrency: conversion.baseCurrency,
+      secondaryCurrency: conversion.secondaryCurrency,
+      baseCurrencyValue: conversion.baseCurrencyValue,
+      secondaryCurrencyValue: conversion.secondaryCurrencyValue,
+      exchangeRateBaseToSecondary: conversion.exchangeRateBaseToSecondary,
+      seasonStayId: proposal.fields.seasonStayId,
+      travelDestination: proposal.fields.travelDestination,
+      notes: proposal.fields.description?.trim() || 'Registrado por el Asistente',
     })
   }
 
   if (proposal.kind === 'register_expense') {
+    const existing = await getExpenseByAssistantProposalId(proposal.proposalId)
+    if (existing?.id !== undefined) return existing.id
     const { amount, currency, date, category } = proposal.fields
     const totalAmount = amount as number
     const resolvedCurrency = (currency ?? settings.defaultCurrency)
-    const { eurValue, copValue } = await convertCurrencyToEurCop(totalAmount, resolvedCurrency)
+    const conversion = await prepareFinancialConversionSnapshot({
+      amount: totalAmount,
+      currency: resolvedCurrency,
+      date: date as string,
+      settings,
+    })
 
     return createExpense({
+      assistantProposalId: proposal.proposalId,
       type: 'gasto',
       date: date as string,
       category: (category as string) ?? 'General',
       amount: totalAmount,
       currency: resolvedCurrency,
-      eurValue,
-      copValue,
+      eurValue: conversion.eurValue,
+      copValue: conversion.copValue,
+      baseCurrency: conversion.baseCurrency,
+      secondaryCurrency: conversion.secondaryCurrency,
+      baseCurrencyValue: conversion.baseCurrencyValue,
+      secondaryCurrencyValue: conversion.secondaryCurrencyValue,
+      exchangeRateBaseToSecondary: conversion.exchangeRateBaseToSecondary,
+      exchangeRateUsed: conversion.exchangeRateUsed,
+      eurCopExchangeRateUsed: conversion.eurCopExchangeRateUsed,
+      seasonStayId: proposal.fields.seasonStayId,
+      travelDestination: proposal.fields.travelDestination,
+      notes: 'Registrado por el Asistente',
     })
   }
 

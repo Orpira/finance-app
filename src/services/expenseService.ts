@@ -141,6 +141,12 @@ export async function createExpense(input: CreateExpenseInput) {
     db.personalExpenseCategories,
     db.wallets,
   ], async () => {
+    if (input.assistantProposalId) {
+      const existing = await db.expenses
+        .filter((expense) => expense.assistantProposalId === input.assistantProposalId)
+        .first()
+      if (existing?.id !== undefined) return existing.id
+    }
     assertFinancialConversionIsComplete(input, input.amount)
     const period = requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
     if (requiresSeason(settings) && !period) {
@@ -186,6 +192,12 @@ export async function createExpense(input: CreateExpenseInput) {
   scheduleAutomationOutboxFlush()
 
   return expenseId
+}
+
+export function getExpenseByAssistantProposalId(assistantProposalId: string) {
+  return db.expenses
+    .filter((expense) => expense.assistantProposalId === assistantProposalId)
+    .first()
 }
 
 export async function getExpenseById(id: number) {

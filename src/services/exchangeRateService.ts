@@ -14,13 +14,22 @@ export interface SaveExchangeRateInput {
 }
 
 export async function saveExchangeRate(input: SaveExchangeRateInput) {
-  const exchangeRate: ExchangeRate = {
-    ...input,
-    source: input.source ?? 'manual',
-    createdAt: new Date().toISOString(),
-  }
+  return db.transaction('rw', db.exchangeRates, async () => {
+    const source = input.source ?? 'manual'
+    const sameDate = await db.exchangeRates
+      .where('[baseCurrency+targetCurrency+date]')
+      .equals([input.baseCurrency, input.targetCurrency, input.date])
+      .toArray()
+    const duplicate = sameDate.find((rate) => rate.rate === input.rate && rate.source === source)
+    if (duplicate?.id !== undefined) return duplicate.id
 
-  return db.exchangeRates.add(exchangeRate)
+    const exchangeRate: ExchangeRate = {
+      ...input,
+      source,
+      createdAt: new Date().toISOString(),
+    }
+    return db.exchangeRates.add(exchangeRate)
+  })
 }
 
 export function listExchangeRates() {
@@ -32,17 +41,18 @@ export async function getExchangeRate(
   targetCurrency: CurrencyCode,
   date: string,
 ) {
-  return db.exchangeRates
+  const matches = await db.exchangeRates
     .where('[baseCurrency+targetCurrency+date]')
     .equals([baseCurrency, targetCurrency, date])
-    .first()
+    .toArray()
+  return matches.sort(compareNewestRate)[0]
 }
 
 export async function getLatestExchangeRate(
   baseCurrency: CurrencyCode,
   targetCurrency: CurrencyCode,
 ) {
-  return db.exchangeRates
+  const matches = await db.exchangeRates
     .where('[baseCurrency+targetCurrency+date]')
     .between(
       [baseCurrency, targetCurrency, ''],
@@ -50,7 +60,14 @@ export async function getLatestExchangeRate(
       true,
       true,
     )
-    .last()
+    .toArray()
+  return matches.sort(compareNewestRate)[0]
+}
+
+function compareNewestRate(left: ExchangeRate, right: ExchangeRate) {
+  return right.date.localeCompare(left.date) ||
+    right.createdAt.localeCompare(left.createdAt) ||
+    (right.id ?? 0) - (left.id ?? 0)
 }
 
 export function deleteExchangeRate(id: number) {

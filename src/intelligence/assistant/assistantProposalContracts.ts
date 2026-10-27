@@ -1,4 +1,5 @@
 import type { CurrencyCode } from '../../types/settings'
+import type { TravelDestination } from '../../types/travelDestination'
 
 /**
  * Máquina de estados de una propuesta del Asistente. `draft` existe mientras
@@ -36,6 +37,8 @@ export interface IncomeProposalFields {
   readonly currency: CurrencyCode | null
   readonly date: string | null
   readonly description: string | null
+  readonly seasonStayId?: number | null
+  readonly travelDestination?: TravelDestination | null
 }
 
 export interface ExpenseProposalFields {
@@ -43,6 +46,8 @@ export interface ExpenseProposalFields {
   readonly currency: CurrencyCode | null
   readonly date: string | null
   readonly category: string | null
+  readonly seasonStayId?: number | null
+  readonly travelDestination?: TravelDestination | null
 }
 
 export interface AppointmentProposalFields {

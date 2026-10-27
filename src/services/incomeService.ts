@@ -171,6 +171,12 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
     'rw',
     [db.services, db.automationOutbox, db.earningPeriods, db.seasonStays, db.wallets],
     async () => {
+      if (normalizedInput.assistantProposalId) {
+        const existing = await db.services
+          .filter((income) => income.assistantProposalId === normalizedInput.assistantProposalId)
+          .first()
+        if (existing?.id !== undefined) return existing.id
+      }
       assertFinancialConversionIsComplete(normalizedInput, normalizedInput.realGain)
       const earningPeriod =
         requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
@@ -228,6 +234,12 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
   scheduleAutomationOutboxFlush()
 
   return incomeId
+}
+
+export function getServiceIncomeByAssistantProposalId(assistantProposalId: string) {
+  return db.services
+    .filter((income) => income.assistantProposalId === assistantProposalId)
+    .first()
 }
 
 export async function getServiceIncomeById(id: number) {

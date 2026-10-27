@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const createServiceIncomeMock = vi.fn()
+const getServiceIncomeByAssistantProposalIdMock = vi.fn()
 vi.mock('../../services/incomeService', () => ({
   createServiceIncome: (...args: unknown[]) => createServiceIncomeMock(...args),
+  getServiceIncomeByAssistantProposalId: (...args: unknown[]) => getServiceIncomeByAssistantProposalIdMock(...args),
 }))
 
 const createExpenseMock = vi.fn()
+const getExpenseByAssistantProposalIdMock = vi.fn()
 vi.mock('../../services/expenseService', () => ({
   createExpense: (...args: unknown[]) => createExpenseMock(...args),
+  getExpenseByAssistantProposalId: (...args: unknown[]) => getExpenseByAssistantProposalIdMock(...args),
 }))
 
 const createAppointmentMock = vi.fn()
@@ -15,9 +19,10 @@ vi.mock('../../services/appointmentService', () => ({
   createAppointment: (...args: unknown[]) => createAppointmentMock(...args),
 }))
 
-const convertCurrencyToEurCopMock = vi.fn()
-vi.mock('../../services/currencyConversionService', () => ({
-  convertCurrencyToEurCop: (...args: unknown[]) => convertCurrencyToEurCopMock(...args),
+const prepareFinancialConversionSnapshotMock = vi.fn()
+vi.mock('../../services/financialConversionSnapshotService', () => ({
+  FINANCIAL_QUOTE_UNAVAILABLE: 'FINANCIAL_QUOTE_UNAVAILABLE',
+  prepareFinancialConversionSnapshot: (...args: unknown[]) => prepareFinancialConversionSnapshotMock(...args),
 }))
 
 const getSettingsMock = vi.fn()
@@ -58,8 +63,20 @@ function incomeProposal(overrides: Partial<AssistantProposalRecord> = {}): Assis
 }
 
 beforeEach(() => {
-  getSettingsMock.mockResolvedValue({ defaultCurrency: 'EUR', usageMode: 'professional' })
-  convertCurrencyToEurCopMock.mockResolvedValue({ eurValue: 120, copValue: 550000, eurCopRate: 4583 })
+  getSettingsMock.mockResolvedValue({ defaultCurrency: 'EUR', secondaryCurrency: 'COP', rateMode: 'automatic', usageMode: 'professional' })
+  getServiceIncomeByAssistantProposalIdMock.mockResolvedValue(undefined)
+  getExpenseByAssistantProposalIdMock.mockResolvedValue(undefined)
+  prepareFinancialConversionSnapshotMock.mockImplementation(({ amount }: { amount: number }) => Promise.resolve({
+    eurValue: amount,
+    copValue: amount * 4_583,
+    baseCurrency: 'EUR',
+    secondaryCurrency: 'COP',
+    baseCurrencyValue: amount,
+    secondaryCurrencyValue: amount * 4_583,
+    exchangeRateBaseToSecondary: 4_583,
+    exchangeRateUsed: 4_583,
+    eurCopExchangeRateUsed: 4_583,
+  }))
   clearAssistantAuditTrail()
 })
 
@@ -89,8 +106,11 @@ describe('executeAssistantProposal', () => {
     expect(call.date).toBe('2026-08-01')
     expect(call.percentage).toBe(0)
     expect(call.eurValue).toBe(120)
-    expect(call.copValue).toBe(550000)
+    expect(call.copValue).toBe(549960)
     expect(call.exchangeRateUsed).toBe(4583)
+    expect(call.baseCurrency).toBe('EUR')
+    expect(call.secondaryCurrency).toBe('COP')
+    expect(call.assistantProposalId).toBe('assistant-proposal:register_income:1')
   })
 
   it('registra un gasto reutilizando expenseService.createExpense', async () => {
@@ -114,6 +134,37 @@ describe('executeAssistantProposal', () => {
     expect(call.type).toBe('gasto')
     expect(call.amount).toBe(35)
     expect(call.category).toBe('Transporte')
+    expect(call.baseCurrencyValue).toBe(35)
+    expect(call.secondaryCurrencyValue).toBe(160405)
+    expect(call.assistantProposalId).toBe('assistant-proposal:register_expense:1')
+  })
+
+  it('devuelve el registro existente en un reintento sin volver a cotizar ni crear', async () => {
+    getServiceIncomeByAssistantProposalIdMock.mockResolvedValue({ id: 42 })
+
+    expect(await executeAssistantProposal(incomeProposal())).toEqual({ ok: true, recordId: 42 })
+    expect(prepareFinancialConversionSnapshotMock).not.toHaveBeenCalled()
+    expect(createServiceIncomeMock).not.toHaveBeenCalled()
+  })
+
+  it('explica una cotización ausente sin confirmar el movimiento', async () => {
+    prepareFinancialConversionSnapshotMock.mockRejectedValue(new Error('FINANCIAL_QUOTE_UNAVAILABLE'))
+
+    const result = await executeAssistantProposal(incomeProposal())
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected failure')
+    expect(result.safeMessage).toContain('No se registró')
+    expect(result.safeMessage).toContain('tasa manual')
+    expect(createServiceIncomeMock).not.toHaveBeenCalled()
+  })
+
+  it('traduce el rechazo transaccional de snapshot incompleto sin confirmar éxito', async () => {
+    createServiceIncomeMock.mockRejectedValue(new Error('FINANCIAL_CONVERSION_INCOMPLETE'))
+
+    const result = await executeAssistantProposal(incomeProposal())
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected failure')
+    expect(result.safeMessage).toContain('No se registró')
   })
 
   it('crea una cita reutilizando appointmentService.createAppointment', async () => {
