@@ -4,7 +4,9 @@ import {
   getStoredAdditionalsValue,
   getStoredExpenseValue,
   getStoredIncomePrincipalValue,
+  getStoredGrossIncomeValue,
   getStoredIncomeValue,
+  sumStoredGrossIncomeValue,
   sumIncomeAdditionalsValue,
 } from '../src/utils/financeStats'
 import type { Expense } from '../src/types/expense'
@@ -99,6 +101,36 @@ describe('getStoredIncomeValue', () => {
         'USD',
       ),
     ).toBe(30)
+  })
+})
+
+describe('gross income presentation', () => {
+  it('preserva el importe bruto anterior al porcentaje en la moneda original', () => {
+    expect(getStoredGrossIncomeValue(income(), 'EUR')).toBe(100)
+  })
+
+  it('convierte el bruto con la misma cotización histórica persistida', () => {
+    expect(getStoredGrossIncomeValue(income(), 'COP')).toBe(430000)
+  })
+
+  it('excluye ajustes del agregado bruto y no altera el neto persistido', () => {
+    const service = income()
+    const adjustment = income({ type: 'ajuste', totalAmount: 25, realGain: 25 })
+
+    expect(sumStoredGrossIncomeValue([service, adjustment], 'EUR')).toBe(100)
+    expect(service.realGain).toBe(50)
+  })
+
+  it('falla cerrado si un porcentaje cero no conserva conversión suficiente', () => {
+    expect(getStoredGrossIncomeValue(income({
+      currency: 'USD',
+      totalAmount: 100,
+      realGain: 0,
+      baseCurrency: 'USD',
+      baseCurrencyValue: 0,
+      secondaryCurrency: undefined,
+      exchangeRateBaseToSecondary: undefined,
+    }), 'EUR')).toBe(0)
   })
 })
 

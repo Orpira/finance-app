@@ -40,7 +40,7 @@ import type { Expense } from '../../types/expense'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { formatCurrency } from '../../utils/currency'
-import { calculateFinancialTotals, recordBelongsToEarningPeriod } from '../../utils/financeStats'
+import { calculateFinancialTotals, recordBelongsToEarningPeriod, sumStoredGrossIncomeValue } from '../../utils/financeStats'
 import { getExpenseDisplayName, getIncomeDisplayName } from '../../utils/activityLabels'
 import { getActiveEarningPeriod, getPreviousEarningPeriod, getSeasonGoalProgress, getSeasonStatistics, listSeasonRecords, type SeasonStatistics } from '../../services/earningPeriodService'
 import type { EarningPeriod } from '../../types/earningPeriod'
@@ -487,6 +487,14 @@ export function HomePage() {
         settings.defaultCurrency,
         settings.secondaryCurrency,
       ),
+      currentGrossIncome: sumStoredGrossIncomeValue(
+        summaryIncomes,
+        settings.defaultCurrency,
+      ),
+      previousGrossIncome: sumStoredGrossIncomeValue(
+        comparisonIncomes,
+        settings.defaultCurrency,
+      ),
     }
   }, [
     currentExpenses,
@@ -537,10 +545,10 @@ export function HomePage() {
     },
     {
       icon: PlusCircle,
-      label: 'Ingresos',
-      description: `Ingresos base ${summaryScopeLabel}`,
-      value: totals.current.primaryIncome,
-      previous: totals.previous.primaryIncome,
+      label: 'Ingresos brutos',
+      description: `Antes del porcentaje ${summaryScopeLabel}`,
+      value: totals.currentGrossIncome,
+      previous: totals.previousGrossIncome,
       sensitive: true,
       tone: 'text-emerald-700 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300',
     },

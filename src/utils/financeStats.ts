@@ -59,6 +59,55 @@ export function getStoredIncomePrincipalValue(
 }
 
 /**
+ * Importe bruto original convertido con la instantánea monetaria persistida.
+ * Se usa en superficies que lo rotulan explícitamente como "Ingresos brutos";
+ * no sustituye a `realGain` ni participa en Resultado, Meta o balances
+ * canónicos. Si el snapshot histórico no permite reconstruir la conversión,
+ * devuelve 0 en lugar de inventar una tasa.
+ */
+export function getStoredGrossIncomeValue(
+  income: ServiceIncome,
+  currency: CurrencyCode,
+) {
+  if (income.currency === currency) {
+    return roundMoney(income.totalAmount)
+  }
+
+  if (
+    income.secondaryCurrency === currency &&
+    Number.isFinite(income.exchangeRateBaseToSecondary) &&
+    income.exchangeRateBaseToSecondary! > 0
+  ) {
+    return roundMoney(income.totalAmount * income.exchangeRateBaseToSecondary!)
+  }
+
+  if (income.realGain === 0) {
+    return 0
+  }
+
+  const convertedNetValue = getStoredBaseIncomeValue(income, currency)
+  if (!Number.isFinite(convertedNetValue) || convertedNetValue === 0) {
+    return 0
+  }
+
+  return roundMoney(convertedNetValue * (income.totalAmount / income.realGain))
+}
+
+export function sumStoredGrossIncomeValue(
+  incomes: readonly ServiceIncome[],
+  currency: CurrencyCode,
+) {
+  return roundMoney(
+    incomes
+      .filter((income) => !isAdjustmentIncome(income))
+      .reduce(
+        (total, income) => total + getStoredGrossIncomeValue(income, currency),
+        0,
+      ),
+  )
+}
+
+/**
  * Porción de additionalsTotal ya convertida a `currency`, derivada
  * proporcionalmente del importe principal ya convertido (mismo tipo de
  * cambio implícito en baseCurrencyValue/eurValue/copValue), ya que
