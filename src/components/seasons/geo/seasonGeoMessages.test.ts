@@ -21,4 +21,10 @@ describe('seasonGeoMessages', () => {
     expect(describeSeasonGeoError(new Error('Fallo concreto'))).toBe('Fallo concreto')
     expect(describeSeasonGeoError('raro', 'Alternativo')).toBe('Alternativo')
   })
+
+  it('traduce FINANCIAL_CONVERSION_INCOMPLETE sin mostrar el código', () => {
+    const message = describeSeasonGeoError(new Error('FINANCIAL_CONVERSION_INCOMPLETE'))
+    expect(message).toMatch(/conversión monetaria está incompleta/)
+    expect(message).not.toContain('FINANCIAL_CONVERSION_INCOMPLETE')
+  })
 })

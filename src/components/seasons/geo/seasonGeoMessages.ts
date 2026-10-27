@@ -44,7 +44,13 @@ export function getErrorCode(error: unknown): string | undefined {
   return undefined
 }
 
+const MESSAGE_CODES: Record<string, string> = {
+  FINANCIAL_CONVERSION_INCOMPLETE: 'La conversión monetaria está incompleta y no se ha guardado nada. Espera a que se recalcule la conversión o revisa la cotización, y vuelve a guardar.',
+}
+
 export function describeSeasonGeoError(error: unknown, fallback = 'No se pudo completar la operación.') {
+  // Algunos servicios señalan el error con un código estable en el mensaje.
+  if (error instanceof Error && error.message in MESSAGE_CODES) return MESSAGE_CODES[error.message]
   const code = getErrorCode(error)
   if (code && code in SEASON_GEO_MESSAGES) return SEASON_GEO_MESSAGES[code as SeasonGeoErrorCode]
   if (code && code in COMPLETION_MESSAGES) return COMPLETION_MESSAGES[code]

@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react'
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -134,6 +134,9 @@ export function ExpensesPage() {
     status: 'pending' | 'ready' | 'error'
     subject?: string
   }>({ status: 'pending' })
+  // Incrementarlo vuelve a solicitar la conversión tras un fallo (acción explícita).
+  const [conversionAttempt, setConversionAttempt] = useState(0)
+  const latestConversionRun = useRef(0)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [geoDraft, setGeoDraft] = useState(() => createGeographyDraft())
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
@@ -277,7 +280,6 @@ export function ExpensesPage() {
       setExpenseCountry(currentExpense.country)
       setExpenseCity(currentExpense.city)
       setExpenseCreatedAt(currentExpense.createdAt)
-      setEditingExpense(currentExpense)
       setGeoDraft(createGeographyDraft(currentExpense))
       setCrossIncome(currentExpense.relatedIncomeId ? 'yes' : 'no')
       setRelatedIncomeId(
@@ -305,6 +307,9 @@ export function ExpensesPage() {
       if (currentExpense.exchangeRateBaseToSecondary) {
         setExchangeRate(currentExpense.exchangeRateBaseToSecondary)
       }
+      // Al final: abre la conversión del formulario solo cuando importe, fecha
+      // y tasa del egreso ya están cargados (ver convertExpenseValue).
+      setEditingExpense(currentExpense)
     }
 
     loadExpenseForEdit()
@@ -452,6 +457,12 @@ export function ExpensesPage() {
       if (!settings) {
         return
       }
+      // En edición no se convierte hasta cargar el registro: antes de eso la
+      // tasa y el importe son valores iniciales, no los del egreso.
+      if (isEditing && !editingExpense) {
+        return
+      }
+      const runId = ++latestConversionRun.current
 
       const subject = JSON.stringify([roundMoney(amount), currency, date, settings.secondaryCurrency])
       setConversionState({ status: 'pending' })
@@ -477,7 +488,10 @@ export function ExpensesPage() {
         ),
         convertCurrencyToEurCop(amount, currency, conversionOptions),
       ])
-      if (!isMounted) {
+      // Solo se aplica el resultado de la ejecución más reciente: el efecto lee
+      // y escribe exchangeRate, y una ejecución antigua no debe pisar la tasa
+      // vigente (provocaba un bucle de renderizado al editar en modo manual).
+      if (!isMounted || runId !== latestConversionRun.current) {
         return
       }
 
@@ -500,7 +514,7 @@ export function ExpensesPage() {
     return () => {
       isMounted = false
     }
-  }, [amount, currency, date, exchangeRate, isEditing, settings])
+  }, [amount, conversionAttempt, currency, date, editingExpense, exchangeRate, isEditing, settings])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -1056,6 +1070,20 @@ export function ExpensesPage() {
           </div>
         )}
 
+          {conversionState.status === 'error' ? (
+            <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-rose-700 dark:text-rose-300" role="alert">
+              No se pudo calcular la conversión monetaria. No se guardará hasta obtener una válida.
+              <button
+                className="inline-flex min-h-11 items-center rounded-md border border-rose-300 px-3 text-sm font-semibold text-rose-700 dark:border-rose-800 dark:text-rose-200"
+                onClick={() => setConversionAttempt((attempt) => attempt + 1)}
+                type="button"
+              >
+                Reintentar conversión
+              </button>
+            </span>
+          ) : settings && (conversionState.status === 'pending' || conversionState.subject !== conversionSubject) ? (
+            <span className="text-sm text-slate-500" role="status">Calculando la conversión monetaria…</span>
+          ) : null}
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-slate-500" role="status">
             {validationError || (saveStatus === 'error' && 'No se pudo guardar')}

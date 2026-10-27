@@ -216,5 +216,50 @@ describe('IncomePage — estancia y destino según el modo de uso (PB-GEO-002)',
     expect(updates).not.toHaveProperty('seasonStayId')
     expect(updates).not.toHaveProperty('syncLocationFromStay')
   })
+
+  it('conversión pendiente: indica el cálculo y Guardar queda deshabilitado', async () => {
+    arrange(professionalSettings(), professionalPeriod)
+    currencyConversionService.convertCurrencyPair.mockReturnValue(new Promise(() => undefined))
+    renderIncomePage()
+    expect(await screen.findByText('Calculando la conversión monetaria…')).toBeTruthy()
+    expect((screen.getByRole('button', { name: /Guardar ingreso/ }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('conversión fallida: explica el bloqueo y permite reintentar hasta recuperarla', async () => {
+    arrange(professionalSettings(), professionalPeriod)
+    currencyConversionService.convertCurrencyPair.mockRejectedValueOnce(new Error('sin tasa'))
+    renderIncomePage()
+    expect(await screen.findByText(/No se pudo calcular la conversión monetaria/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar conversión' }))
+    await waitFor(() => expect(screen.queryByText(/No se pudo calcular la conversión monetaria/)).toBeNull())
+    await waitFor(() => expect(screen.queryByText('Calculando la conversión monetaria…')).toBeNull())
+    expect(currencyConversionService.convertCurrencyPair.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('en edición no convierte con la tasa inicial antes de cargar el registro (sin bucle ni tasa por defecto)', async () => {
+    arrange({ ...professionalSettings(), rateMode: 'manual' } as AppSettings, professionalPeriod)
+    earningPeriodService.getEarningPeriodById.mockResolvedValue(professionalPeriod)
+    earningPeriodService.isEarningPeriodClosed.mockResolvedValue(false)
+    incomeAdditionalService.listIncomeAdditionals.mockResolvedValue([])
+    let resolveIncome: (value: unknown) => void = () => undefined
+    incomeService.getServiceIncomeById.mockReturnValue(new Promise((resolve) => { resolveIncome = resolve }))
+    currencyConversionService.convertCurrencyPair.mockImplementation(async (amount: number, _from: string, _to: string, options: { manualRate?: number }) => (
+      { primaryValue: amount, secondaryValue: amount * (options.manualRate ?? 1), rate: options.manualRate ?? 1, source: 'manual' }
+    ))
+
+    renderIncomePage('/income/41/editar')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(currencyConversionService.convertCurrencyPair).not.toHaveBeenCalled()
+
+    resolveIncome({
+      id: 41, type: 'otro', status: 'FINALIZADO', date: '2026-01-10', duration: 0,
+      totalAmount: 50, currency: 'EUR', percentage: 0, realGain: 50, eurValue: 50, copValue: 225000,
+      exchangeRateUsed: 4500, earningPeriodId: 7, usageMode: 'professional',
+    })
+    await waitFor(() => expect(currencyConversionService.convertCurrencyPair).toHaveBeenCalled())
+    await waitFor(() => expect((screen.getByRole('button', { name: /Actualizar/ }) as HTMLButtonElement).disabled).toBe(false))
+    const manualRates = currencyConversionService.convertCurrencyPair.mock.calls.map((call) => (call[3] as { manualRate?: number }).manualRate)
+    expect(manualRates.every((rate) => rate === 4500)).toBe(true)
+  })
 })
 

@@ -10,6 +10,19 @@ This project follows Keep a Changelog and uses the Constitution as the canonical
 
 ### Added
 
+- **Temporadas multiciudad — validación final de interfaz (PB-GEO-002, Etapa 5D)**:
+  los formularios de ingreso y egreso muestran el estado de la conversión
+  monetaria («Calculando la conversión monetaria…» o un aviso de fallo con
+  «Reintentar conversión») en lugar de dejar Guardar deshabilitado sin
+  explicación, y `FINANCIAL_CONVERSION_INCOMPLETE` se presenta como un mensaje
+  comprensible. Corrige una carrera al editar en modo de cotización manual: la
+  conversión podía empezar antes de cargar el registro y pisar su tasa con la
+  tasa por defecto, provocando un bucle de renderizado que impedía guardar;
+  ahora la conversión espera al registro y solo aplica la ejecución más
+  reciente. En modo oscuro, los conmutadores y chips seleccionados
+  (`bg-emerald-50` + `text-emerald-700/800`) recuperan contraste (aprox. 2:1 →
+  12:1). Sin cambios en fórmulas financieras, servicios de dominio ni esquema.
+
 - **Temporadas multiciudad — ajustes de interfaz (PB-GEO-002, Etapa 5B)**:
   el selector de estancia de ingresos, egresos y citas ya no asocia una
   estancia automáticamente; empieza en «Sin estancia» y ofrece «Usar estancia

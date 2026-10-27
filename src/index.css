@@ -46,6 +46,13 @@ html:not(.dark) {
   background-color: var(--color-emerald-900);
 }
 
+/* Conmutadores y chips seleccionados (bg-emerald-50 + text-emerald-700/800):
+   en oscuro el fondo pasa a emerald-950 y el texto verde oscuro perdía contraste. */
+.dark .bg-emerald-50.text-emerald-700,
+.dark .bg-emerald-50.text-emerald-800 {
+  color: var(--color-emerald-200);
+}
+
 .dark .border-slate-200,
 .dark .border-emerald-100 {
   border-color: var(--color-slate-800);

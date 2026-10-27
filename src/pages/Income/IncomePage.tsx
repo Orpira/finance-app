@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react'
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { ServiceDurationSelect } from '../../components/forms/ServiceDurationSelect'
@@ -244,6 +244,9 @@ export function IncomePage() {
     status: 'pending' | 'ready' | 'error'
     subject?: string
   }>({ status: 'pending' })
+  // Incrementarlo vuelve a solicitar la conversión tras un fallo (acción explícita).
+  const [conversionAttempt, setConversionAttempt] = useState(0)
+  const latestConversionRun = useRef(0)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState('')
   const [geoDraft, setGeoDraft] = useState(() => createGeographyDraft())
@@ -675,6 +678,12 @@ export function IncomePage() {
       if (!settings) {
         return
       }
+      // En edición no se convierte hasta cargar el registro: antes de eso la
+      // tasa y el importe son valores iniciales, no los del ingreso.
+      if (isEditing && !editingIncome) {
+        return
+      }
+      const runId = ++latestConversionRun.current
 
       const subject = JSON.stringify([roundMoney(realGain), currency, date, settings.secondaryCurrency])
       setConversionState({ status: 'pending' })
@@ -701,7 +710,10 @@ export function IncomePage() {
         convertCurrencyToEurCop(realGain, currency, conversionOptions),
       ])
 
-      if (!isMounted) {
+      // Solo se aplica el resultado de la ejecución más reciente: el efecto lee
+      // y escribe exchangeRate, y una ejecución antigua no debe pisar la tasa
+      // vigente (provocaba un bucle de renderizado al editar en modo manual).
+      if (!isMounted || runId !== latestConversionRun.current) {
         return
       }
 
@@ -723,7 +735,7 @@ export function IncomePage() {
     return () => {
       isMounted = false
     }
-  }, [currency, date, exchangeRate, isEditing, realGain, settings])
+  }, [conversionAttempt, currency, date, editingIncome, exchangeRate, isEditing, realGain, settings])
 
   function handleMethodOverrideChange(nextMethod: IncomeCalculationMethod) {
     setMethodOverride(nextMethod)
@@ -1495,6 +1507,20 @@ export function IncomePage() {
           />
         )}
 
+          {conversionState.status === 'error' ? (
+            <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-rose-700 dark:text-rose-300" role="alert">
+              No se pudo calcular la conversión monetaria. No se guardará hasta obtener una válida.
+              <button
+                className="inline-flex min-h-11 items-center rounded-md border border-rose-300 px-3 text-sm font-semibold text-rose-700 dark:border-rose-800 dark:text-rose-200"
+                onClick={() => setConversionAttempt((attempt) => attempt + 1)}
+                type="button"
+              >
+                Reintentar conversión
+              </button>
+            </span>
+          ) : settings && (conversionState.status === 'pending' || conversionState.subject !== conversionSubject) ? (
+            <span className="text-sm text-slate-500" role="status">Calculando la conversión monetaria…</span>
+          ) : null}
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-slate-500" role="status">
             {saveStatus === 'duplicateHour' &&

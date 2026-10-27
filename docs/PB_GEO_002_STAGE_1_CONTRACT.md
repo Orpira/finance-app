@@ -141,3 +141,12 @@ Componentes en `src/components/seasons/geo/`: `SeasonItinerary`, `SeasonRevision
 - La recuperación histórica automática no es segura cuando no existe una tasa persistida coherente para la fecha y el par. Cualquier reparación deberá ser explícita, mantener trazabilidad y no sobrescribir registros reportados.
 - `elapsedPercentage` admite tanto fechas civiles `YYYY-MM-DD` como instantes ISO completos. Las fechas civiles se evalúan en UTC como inicio y fin inclusivo del día; una fecha inválida o un intervalo no positivo devuelve `undefined`, nunca `NaN`.
 
+## Interfaz — Etapa 5D
+
+- Los formularios de ingreso y egreso muestran el estado de conversión pendiente o fallida, con reintento explícito; nunca se guardan ceros ni se reintenta guardando.
+- En edición, la conversión del formulario no se solicita hasta cargar el registro y solo se aplica el resultado de la ejecución más reciente. Así se evita que la tasa inicial por defecto sustituya a la del registro y el bucle de renderizado observado en modo manual.
+
+Hallazgo pendiente para dominio (no corregido en la interfaz):
+
+- `executeAssistantProposal` (`src/intelligence/assistant/assistantExecutionService.ts`) crea ingresos sin `baseCurrency`, `secondaryCurrency`, `baseCurrencyValue`, `secondaryCurrencyValue` ni `exchangeRateBaseToSecondary`, y egresos sin `exchangeRateUsed` ni el par. Desde la Etapa 5C, `createServiceIncome` y `createExpense` los rechazan con `FINANCIAL_CONVERSION_INCOMPLETE`, de modo que el registro por el Asistente falla siempre con servicios reales (sus pruebas usan dobles). Además, el resultado devuelve el código como `safeMessage`, visible para la usuaria.
+
