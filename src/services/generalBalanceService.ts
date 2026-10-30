@@ -22,7 +22,7 @@ import {
   getStoredIncomeValue,
   recordBelongsToEarningPeriod,
 } from '../utils/financeStats'
-import { isAdjustmentIncome } from '../utils/incomeTypes'
+import { getIncomeType, getIncomeTypeLabel, isAdjustmentIncome } from '../utils/incomeTypes'
 import { getPaymentTypeLabel } from '../utils/paymentTypes'
 import { recordBelongsToUsageMode } from '../utils/usageMode'
 
@@ -145,11 +145,46 @@ export interface ReportStatusRow {
 
 export interface GeneralBalanceMovement {
   readonly kind: 'income' | 'expense' | 'adjustment'
+  readonly origin: 'income' | 'expense'
   readonly id?: number
   readonly date: string
   readonly label: string
-  readonly detail: string
+  /** Importe con signo según su efecto en el balance. */
   readonly amount: number
+  readonly categoryKey: string
+  readonly categoryLabel: string
+  readonly walletId?: string
+  readonly walletName?: string
+  readonly paymentTypeLabel?: string
+  readonly locationLabel: string
+  readonly seasonId: number | null
+  readonly seasonName?: string
+  readonly reportStatusLabel: string
+  readonly notes?: string
+}
+
+export interface GeneralBalanceTransfer {
+  readonly id: string
+  readonly date: string
+  readonly fromWalletId: string
+  readonly fromWalletName: string
+  readonly toWalletId: string
+  readonly toWalletName: string
+  readonly amount: number
+  readonly currency: string
+  readonly notes?: string
+}
+
+export interface FacetOption {
+  readonly key: string
+  readonly label: string
+  readonly count: number
+}
+
+export interface GeneralBalanceFacets {
+  readonly categories: readonly (FacetOption & { readonly origin: 'income' | 'expense' })[]
+  readonly wallets: readonly FacetOption[]
+  readonly seasons: readonly FacetOption[]
 }
 
 export interface WalletReconciliation {
@@ -188,6 +223,9 @@ export interface GeneralBalanceResult {
   }
   readonly adjustments: readonly BalanceAdjustmentRecord[]
   readonly movements: readonly GeneralBalanceMovement[]
+  /** Transferencias internas del periodo (solo Personal). Nunca afectan al balance. */
+  readonly transfers: readonly GeneralBalanceTransfer[]
+  readonly facets: GeneralBalanceFacets
 }
 
 export class GeneralBalanceIntegrityError extends Error {}
@@ -258,6 +296,49 @@ function locationLabel(key: string) {
 
 function seasonKey(record: { earningPeriodId?: number; seasonPeriodId?: number }) {
   return record.earningPeriodId ?? record.seasonPeriodId ?? null
+}
+
+/** Clave estable de categoría para agrupar y filtrar (ingresos y egresos por separado). */
+export const NO_WALLET_KEY = '__none__'
+
+function incomeCategory(
+  income: ServiceIncome,
+  usageMode: 'basic' | 'professional',
+  names: ReadonlyMap<string, string>,
+): { key: string; label: string } {
+  if (isAdjustmentIncome(income)) return { key: 'in:adjustment', label: 'Ajuste' }
+  if (usageMode === 'basic') {
+    const id = income.personalCategoryId
+    return { key: `in:personal:${id ?? ''}`, label: id ? names.get(id) ?? 'Categoría eliminada' : 'Sin categoría' }
+  }
+  const type = getIncomeType(income)
+  return { key: `in:type:${type}`, label: getIncomeTypeLabel(income) }
+}
+
+function expenseCategory(
+  expense: Expense,
+  usageMode: 'basic' | 'professional',
+  names: ReadonlyMap<string, string>,
+): { key: string; label: string } {
+  if (expense.type === 'ajuste') return { key: 'ex:adjustment', label: 'Ajuste' }
+  if (usageMode === 'basic' && expense.personalCategoryId) {
+    return {
+      key: `ex:personal:${expense.personalCategoryId}`,
+      label: names.get(expense.personalCategoryId) ?? 'Categoría eliminada',
+    }
+  }
+  return { key: `ex:category:${expense.category || ''}`, label: expense.category || 'Sin categoría' }
+}
+
+function facetList<T>(items: readonly T[], keyOf: (item: T) => string, labelOf: (item: T) => string) {
+  const map = new Map<string, { key: string; label: string; count: number }>()
+  for (const item of items) {
+    const key = keyOf(item)
+    const current = map.get(key) ?? { key, label: labelOf(item), count: 0 }
+    current.count += 1
+    map.set(key, current)
+  }
+  return Array.from(map.values()).sort((left, right) => left.label.localeCompare(right.label, 'es'))
 }
 
 export function buildGeneralBalance(input: GeneralBalanceInput): GeneralBalanceResult {
@@ -438,24 +519,97 @@ export function buildGeneralBalance(input: GeneralBalanceInput): GeneralBalanceR
     }
   })
 
+  const walletNameById = new Map(input.wallets.map((item) => [item.id, item.name]))
+  const seasonNameById = new Map(
+    input.seasons.filter((season) => season.id !== undefined).map((season) => [season.id as number, season.name]),
+  )
+  const walletFields = (record: { walletId?: string }) =>
+    usageMode === 'basic'
+      ? {
+          walletId: record.walletId ?? NO_WALLET_KEY,
+          walletName: record.walletId ? walletNameById.get(record.walletId) ?? 'Wallet eliminada' : 'Sin wallet',
+        }
+      : {}
+  const seasonFields = (record: { earningPeriodId?: number; seasonPeriodId?: number }) => {
+    const seasonId = usageMode === 'professional' ? seasonKey(record) : null
+    return {
+      seasonId,
+      seasonName: usageMode !== 'professional'
+        ? undefined
+        : seasonId === null ? 'Sin temporada' : seasonNameById.get(seasonId) ?? `Temporada #${seasonId}`,
+    }
+  }
+  const cleanNotes = (notes?: string) => notes?.trim() || undefined
+
   const movements: GeneralBalanceMovement[] = [
-    ...periodIncomes.map((income): GeneralBalanceMovement => ({
-      kind: isAdjustmentIncome(income) ? 'adjustment' : 'income',
-      id: income.id,
-      date: civilDate(income.date),
-      label: getIncomeDisplayName(income),
-      detail: isAdjustmentIncome(income) ? 'Ajuste (ingreso)' : getPaymentTypeLabel(income.paymentType),
-      amount: incomeValue(income),
-    })),
-    ...periodExpenses.map((expense): GeneralBalanceMovement => ({
-      kind: expense.type === 'ajuste' ? 'adjustment' : 'expense',
-      id: expense.id,
-      date: civilDate(expense.date),
-      label: getExpenseDisplayName(expense),
-      detail: expense.type === 'ajuste' ? 'Ajuste (egreso)' : expense.category || 'Egreso',
-      amount: expense.type === 'ajuste' ? expenseValue(expense) : -expenseValue(expense),
-    })),
+    ...periodIncomes.map((income): GeneralBalanceMovement => {
+      const category = incomeCategory(income, usageMode, incomeCategoryName)
+      const adjustment = isAdjustmentIncome(income)
+      return {
+        kind: adjustment ? 'adjustment' : 'income',
+        origin: 'income',
+        id: income.id,
+        date: civilDate(income.date),
+        label: getIncomeDisplayName(income),
+        amount: incomeValue(income),
+        categoryKey: category.key,
+        categoryLabel: category.label,
+        ...walletFields(income),
+        paymentTypeLabel: adjustment ? undefined : getPaymentTypeLabel(income.paymentType),
+        locationLabel: locationLabel(locationKey(income)),
+        ...seasonFields(income),
+        reportStatusLabel: getReportStatusLabel(normalizeReportStatus(income).reportStatusCode),
+        notes: cleanNotes(income.notes),
+      }
+    }),
+    ...periodExpenses.map((expense): GeneralBalanceMovement => {
+      const category = expenseCategory(expense, usageMode, expenseCategoryName)
+      const adjustment = expense.type === 'ajuste'
+      return {
+        kind: adjustment ? 'adjustment' : 'expense',
+        origin: 'expense',
+        id: expense.id,
+        date: civilDate(expense.date),
+        label: getExpenseDisplayName(expense),
+        amount: adjustment ? expenseValue(expense) : -expenseValue(expense),
+        categoryKey: category.key,
+        categoryLabel: category.label,
+        ...walletFields(expense),
+        locationLabel: locationLabel(locationKey(expense)),
+        ...seasonFields(expense),
+        reportStatusLabel: getReportStatusLabel(normalizeReportStatus(expense).reportStatusCode),
+        notes: cleanNotes(expense.notes),
+      }
+    }),
   ].sort((left, right) => right.date.localeCompare(left.date) || (right.id ?? 0) - (left.id ?? 0))
+
+  const transfers: GeneralBalanceTransfer[] = usageMode !== 'basic'
+    ? []
+    : input.transfers
+        .filter((transfer) => civilDate(transfer.date) <= to && !isBefore(transfer.date))
+        .map((transfer) => ({
+          id: transfer.id,
+          date: civilDate(transfer.date),
+          fromWalletId: transfer.fromWalletId,
+          fromWalletName: walletNameById.get(transfer.fromWalletId) ?? 'Wallet eliminada',
+          toWalletId: transfer.toWalletId,
+          toWalletName: walletNameById.get(transfer.toWalletId) ?? 'Wallet eliminada',
+          amount: roundMoney(transfer.amount),
+          currency: transfer.currency,
+          notes: cleanNotes(transfer.note),
+        }))
+        .sort((left, right) => right.date.localeCompare(left.date))
+
+  const facets: GeneralBalanceFacets = {
+    categories: facetList(movements, (movement) => movement.categoryKey, (movement) => movement.categoryLabel)
+      .map((facet) => ({ ...facet, origin: facet.key.startsWith('in:') ? 'income' as const : 'expense' as const })),
+    wallets: usageMode === 'basic'
+      ? facetList(movements, (movement) => movement.walletId ?? NO_WALLET_KEY, (movement) => movement.walletName ?? 'Sin wallet')
+      : [],
+    seasons: usageMode === 'professional'
+      ? facetList(movements, (movement) => String(movement.seasonId ?? 'none'), (movement) => movement.seasonName ?? 'Sin temporada')
+      : [],
+  }
 
   return {
     currency,
@@ -486,5 +640,7 @@ export function buildGeneralBalance(input: GeneralBalanceInput): GeneralBalanceR
     },
     adjustments: periodEngine.balanceReport.adjustments,
     movements,
+    transfers,
+    facets,
   }
 }
