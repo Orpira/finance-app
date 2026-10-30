@@ -27,7 +27,6 @@ import TransferDetailPage from '../pages/Movements/TransferDetailPage'
 import ReportPreviewPage from '../pages/Reports/ReportPreviewPage'
 import ReportsPage from '../pages/Reports/ReportsPage'
 import FinancialBalancePage from '../pages/Reports/FinancialBalancePage'
-import GeneralBalancePage from '../pages/Reports/GeneralBalancePage'
 import SettingsBackupPage from '../pages/Settings/SettingsBackupPage'
 import SettingsBusinessPage from '../pages/Settings/SettingsBusinessPage'
 import SettingsPage from '../pages/Settings/SettingsPage'
@@ -100,7 +99,6 @@ export function RouterProvider() {
             <Route path="reports/preview" element={<ReportPreviewPage />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="reports/financial-balance" element={<FinancialBalancePage />} />
-            <Route path="reports/general-balance" element={<GeneralBalancePage />} />
             <Route path="temporadas/nueva" element={<UsageModeGuard allowed={['professional']}><SeasonFormPage /></UsageModeGuard>} />
             <Route path="temporadas/:id" element={<UsageModeGuard allowed={['professional']}><SeasonDetailPage /></UsageModeGuard>} />
             <Route path="temporadas" element={<UsageModeGuard allowed={['professional']}><SeasonsPage /></UsageModeGuard>} />
