@@ -8,6 +8,16 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 ### Added
 
+- `Balance general` permite parametrizar el detalle sin saturar la lectura:
+  plantillas Ejecutivo, Análisis y Auditoría más modo Personalizado (guardado
+  por modo en el dispositivo); secciones plegables con su cifra clave visible;
+  detalle de registros agrupable por mes, categoría, wallet, temporada, tipo
+  de pago o tipo de movimiento, con subtotales; datos por registro a elegir
+  (categoría, wallet, temporada, tipo de pago, ubicación, estado y notas);
+  filtros por tipo, categorías, wallets o temporadas que acotan solo el
+  detalle y lo indican; lista de transferencias internas con sus notas;
+  porcentajes sobre el total en los desgloses. El PDF incluye la
+  configuración usada y las mismas cifras. Sin cambios de cálculo ni de Dexie.
 - `Reportes` incorpora `Balance general`: estado de saldos del modo activo
   (saldo inicial + variación del periodo = saldo final) con rango de fechas o
   todo el historial y niveles de información seleccionables (1 General,

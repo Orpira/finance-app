@@ -2,8 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import { buildFinancialBalanceAsOf } from '../src/services/financialBalanceService'
 import {
+  buildGeneralBalanceBlocks,
   buildGeneralBalanceHtml,
   buildGeneralBalanceText,
+  buildTemplateOptions,
+  defaultDetailOptions,
+  normalizeReportOptions,
+  selectMovements,
+  type GeneralBalanceReportOptions,
 } from '../src/services/generalBalanceExport'
 import {
   buildGeneralBalance,
@@ -232,7 +238,17 @@ describe('generalBalanceService · Básico con wallets', () => {
   })
 })
 
-describe('niveles y exportación', () => {
+function opts(
+  usageMode: 'basic' | 'professional',
+  sections: GeneralBalanceReportOptions['sections'],
+  detail: Partial<GeneralBalanceReportOptions['detail']> = {},
+): GeneralBalanceReportOptions {
+  return { sections, detail: { ...defaultDetailOptions(usageMode), ...detail } }
+}
+
+const money = (value: number) => value.toFixed(2)
+
+describe('niveles, plantillas y exportación', () => {
   it('cada nivel incluye las secciones de los niveles anteriores', () => {
     expect(getSectionsForLevel(1, 'professional')).toEqual([])
     expect(getSectionsForLevel(2, 'professional')).toEqual(['components'])
@@ -243,36 +259,168 @@ describe('niveles y exportación', () => {
     expect(getSectionsForLevel(4, 'basic')).toContain('movements')
   })
 
+  it('las plantillas escalan de ejecutivo a auditoría', () => {
+    expect(buildTemplateOptions('executive', 'basic').sections).toEqual(['components'])
+    expect(buildTemplateOptions('analysis', 'basic').sections).not.toContain('movements')
+    const audit = buildTemplateOptions('audit', 'basic')
+    expect(audit.sections).toContain('movements')
+    expect(audit.detail.columns).toEqual(['category', 'wallet', 'paymentType', 'location', 'reportStatus', 'notes'])
+    expect(audit.detail.groupBy).toBe('category')
+    expect(audit.detail.showTransfers).toBe(true)
+    expect(buildTemplateOptions('audit', 'professional').detail.groupBy).toBe('season')
+  })
+
+  it('normaliza opciones que no existen en el modo activo', () => {
+    const normalized = normalizeReportOptions(
+      opts('professional', ['wallets', 'movements'], { groupBy: 'wallet', columns: ['wallet', 'notes'], showTransfers: true, walletIds: ['x'] }),
+      'professional',
+    )
+    expect(normalized.sections).toEqual(['movements'])
+    expect(normalized.detail.groupBy).toBe('none')
+    expect(normalized.detail.columns).toEqual(['notes'])
+    expect(normalized.detail.showTransfers).toBe(false)
+    expect(normalized.detail.walletIds).toBeNull()
+  })
+
   it('la exportación solo incluye las secciones elegidas con las mismas cifras', () => {
     const result = buildGeneralBalance(proInput({ from: '2026-06-01' }))
-    const money = (value: number) => value.toFixed(2)
-    const text = buildGeneralBalanceText(result, ['components'], money)
+    const text = buildGeneralBalanceText(result, opts('professional', ['components']), money)
     expect(text).toContain('Saldo inicial: 1500.00')
     expect(text).toContain('Saldo final: 4000.00')
     expect(text).toContain('COMPONENTES')
     expect(text).not.toContain('TEMPORADAS')
+    expect(text).not.toContain('-0.00')
 
-    const html = buildGeneralBalanceHtml(result, ['seasons', 'movements'], money)
+    const html = buildGeneralBalanceHtml(result, opts('professional', ['seasons', 'movements']), money)
     expect(html).toContain('Temporadas')
     expect(html).toContain('Movimientos')
-    expect(html).not.toContain('Componentes')
+    expect(html).not.toContain('<h2>Componentes')
   })
 
   it('escapa el texto de los registros en el HTML', () => {
     const result = buildGeneralBalance(proInput({
       expenses: [expense({ id: 5, type: 'ajuste', date: '2026-05-01', amount: 10, eurValue: 10, notes: '<script>x</script>' })],
     }))
-    const html = buildGeneralBalanceHtml(result, ['adjustments'], (value) => String(value))
+    const html = buildGeneralBalanceHtml(result, opts('professional', ['adjustments', 'movements'], { columns: ['notes'] }), (value) => String(value))
     expect(html).not.toContain('<script>x')
     expect(html).toContain('&lt;script&gt;')
   })
 })
 
-describe('formato de importes que restan', () => {
-  it('no muestra -0 cuando el importe es cero', () => {
-    const result = buildGeneralBalance(proInput({ from: '2026-06-01' }))
-    const text = buildGeneralBalanceText(result, ['components'], (value) => value.toFixed(2))
-    expect(text).toContain('Egresos (E): 0.00')
-    expect(text).not.toContain('-0.00')
+describe('detalle parametrizable · Personal', () => {
+  const wallets = [wallet('w-main', 'Principal', { isDefault: true }), wallet('w-save', 'Ahorro')]
+  const incomes = [
+    income({ id: 20, usageMode: 'basic', date: '2026-02-01', realGain: 1000, eurValue: 1000, walletId: 'w-main', personalCategoryId: 'c-salary', personalName: 'Nómina enero', notes: 'Incluye horas extra' }),
+    income({ id: 21, usageMode: 'basic', date: '2026-03-01', realGain: 200, eurValue: 200, walletId: 'w-save', personalCategoryId: 'c-gift', personalName: 'Regalo' }),
+  ]
+  const expenses = [
+    expense({ id: 20, usageMode: 'basic', date: '2026-02-10', amount: 300, eurValue: 300, walletId: 'w-main', personalCategoryId: 'e-food', category: 'Comida', personalName: 'Supermercado', notes: 'Compra mensual' }),
+    expense({ id: 21, usageMode: 'basic', date: '2026-03-05', amount: 50, eurValue: 50, walletId: 'w-main', personalCategoryId: 'e-fun', category: 'Ocio', personalName: 'Cine' }),
+  ]
+  const transfers: InternalTransfer[] = [
+    { id: 't1', fromWalletId: 'w-main', toWalletId: 'w-save', amount: 100, currency: 'EUR', date: '2026-02-15', note: 'Ahorro mensual', usageMode: 'basic', createdAt: '2026-02-15T10:00:00Z', updatedAt: '2026-02-15T10:00:00Z' },
+  ]
+  const category = (id: string, name: string) => ({ id, name, normalizedName: name.toLowerCase(), usageMode: 'basic' as const, isArchived: false, createdAt: '', updatedAt: '' })
+  const result = buildGeneralBalance({
+    incomes, expenses, transfers, wallets, seasons: [],
+    personalIncomeCategories: [category('c-salary', 'Nómina'), category('c-gift', 'Regalos')],
+    personalExpenseCategories: [category('e-food', 'Alimentación'), category('e-fun', 'Ocio')],
+    currency: 'EUR', usageMode: 'basic', from: null, to: '2026-10-30',
+  })
+
+  it('cada movimiento lleva categoría, wallet y notas', () => {
+    const nomina = result.movements.find((movement) => movement.id === 20 && movement.origin === 'income')!
+    expect(nomina).toMatchObject({ categoryLabel: 'Nómina', walletName: 'Principal', notes: 'Incluye horas extra', label: 'Nómina enero' })
+    expect(result.transfers).toEqual([
+      expect.objectContaining({ fromWalletName: 'Principal', toWalletName: 'Ahorro', amount: 100, notes: 'Ahorro mensual' }),
+    ])
+    expect(result.facets.wallets.map((facet) => facet.label)).toEqual(['Ahorro', 'Principal'])
+    expect(result.facets.categories.map((facet) => facet.label)).toEqual(['Alimentación', 'Nómina', 'Ocio', 'Regalos'])
+  })
+
+  it('agrupa por categoría con subtotales y sin repetir la categoría en cada fila', () => {
+    const block = buildGeneralBalanceBlocks(result, opts('basic', ['movements'], { groupBy: 'category', columns: ['category', 'wallet', 'notes'] }), money)
+      .find((item) => item.id === 'movements')!
+    const food = block.groups.find((group) => group.subtitle === 'Alimentación · egreso')!
+    expect(food.summary).toBe('1 registro · -300.00')
+    expect(food.rows[0]).toMatchObject({ value: '-300.00', secondary: ['Principal'], note: 'Compra mensual' })
+  })
+
+  it('agrupa por wallet y respeta el filtro de wallets y de tipos', () => {
+    const byWallet = selectMovements(result, { ...defaultDetailOptions('basic'), walletIds: ['w-save'] })
+    expect(byWallet.map((movement) => movement.id)).toEqual([21])
+    const onlyExpenses = selectMovements(result, { ...defaultDetailOptions('basic'), kinds: ['expense'] })
+    expect(onlyExpenses.every((movement) => movement.kind === 'expense')).toBe(true)
+  })
+
+  it('los filtros acotan el detalle pero no los saldos y lo indican', () => {
+    const options = opts('basic', ['movements'], { categoryKeys: ['ex:personal:e-food'] })
+    const blocks = buildGeneralBalanceBlocks(result, options, money)
+    const summary = blocks.find((item) => item.id === 'summary')!
+    expect(summary.headline).toBe(`Saldo final ${money(result.closing.balance)}`)
+    expect(result.closing.balance).toBe(850)
+    const movements = blocks.find((item) => item.id === 'movements')!
+    expect(movements.note).toContain('Detalle filtrado: 1 de 4 registros')
+  })
+
+  it('oculta notas y atributos cuando no se eligen columnas', () => {
+    const block = buildGeneralBalanceBlocks(result, opts('basic', ['movements'], { columns: [] }), money)
+      .find((item) => item.id === 'movements')!
+    expect(block.groups[0].rows.every((row) => row.secondary === undefined && row.note === undefined)).toBe(true)
+  })
+
+  it('ordena por importe y lista transferencias con notas solo si se piden', () => {
+    const sorted = selectMovements(result, { ...defaultDetailOptions('basic'), sort: 'amountDesc' })
+    expect(sorted.map((movement) => Math.abs(movement.amount))).toEqual([1000, 300, 200, 50])
+
+    const withTransfers = buildGeneralBalanceBlocks(result, opts('basic', ['wallets'], { showTransfers: true, columns: ['notes'] }), money)
+    const transfersBlock = withTransfers.find((item) => item.id === 'transfers')!
+    expect(transfersBlock.groups[0].rows[0]).toMatchObject({ label: '2026-02-15 · Principal → Ahorro', note: 'Ahorro mensual' })
+    expect(buildGeneralBalanceBlocks(result, opts('basic', ['wallets']), money).some((item) => item.id === 'transfers')).toBe(false)
+  })
+
+  it('muestra porcentajes sobre el total en los desgloses', () => {
+    const block = buildGeneralBalanceBlocks(result, opts('basic', ['expenseBreakdown'], { showShares: true }), money)
+      .find((item) => item.id === 'expenseBreakdown')!
+    expect(block.groups[0].rows[0].value).toBe('300.00 · 85.7 %')
+  })
+
+  it('el PDF describe la configuración y lleva notas y atributos', () => {
+    const text = buildGeneralBalanceText(result, buildTemplateOptions('audit', 'basic'), money)
+    expect(text).toContain('Detalle: agrupado por categoría')
+    expect(text).toContain('Nota: Incluye horas extra')
+    expect(text).toContain('TRANSFERENCIAS INTERNAS')
+    expect(text).toContain('Nota: Ahorro mensual')
+  })
+})
+
+describe('legibilidad', () => {
+  it('omite el desglose por ubicación cuando ningún registro la tiene', () => {
+    const result = buildGeneralBalance(proInput({
+      incomes: [income({ id: 1, date: '2026-03-01', realGain: 100, eurValue: 100 })],
+      expenses: [],
+    }))
+    const block = buildGeneralBalanceBlocks(result, opts('professional', ['incomeBreakdown']), money)
+      .find((item) => item.id === 'incomeBreakdown')!
+    expect(block.groups.map((group) => group.subtitle)).toEqual(['Por tipo', 'Por tipo de pago'])
+  })
+
+  it('el estado de reporte solo lista estados con registros', () => {
+    const result = buildGeneralBalance(proInput())
+    const block = buildGeneralBalanceBlocks(result, opts('professional', ['reportStatus']), money)
+      .find((item) => item.id === 'reportStatus')!
+    expect(block.groups[0].rows.map((row) => row.label)).toEqual([
+      'Reportado · ingresos (1)',
+      'Pendiente · ingresos (1)',
+      'Pendiente · egresos (1)',
+    ])
+    expect(block.headline).toBe('2 registros sin reportar')
+  })
+
+  it('al agrupar por categoría, ingresos primero, luego egresos y ajustes al final', () => {
+    const result = buildGeneralBalance(proInput())
+    const block = buildGeneralBalanceBlocks(result, opts('professional', ['movements'], { groupBy: 'category' }), money)
+      .find((item) => item.id === 'movements')!
+    expect(block.groups.map((group) => group.subtitle)).toEqual(['Servicio · ingreso', 'Alojamiento · egreso', 'Ajuste · egreso'])
   })
 })
