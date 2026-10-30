@@ -8,6 +8,19 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 ### Added
 
+- `Reportes` incorpora `Balance general`: estado de saldos del modo activo
+  (saldo inicial + variación del periodo = saldo final) con rango de fechas o
+  todo el historial y niveles de información seleccionables (1 General,
+  2 Componentes, 3 Desglose, 4 Detalle o Personalizado por secciones):
+  componentes P/A/E/ajustes, ingresos por tipo, tipo de pago, categoría y
+  ubicación, egresos por categoría y ubicación, temporadas con meta
+  (Profesional), wallets con transferencias y conciliación (Básico), estado de
+  reporte, actividad, ajustes y movimientos. Exporta a PDF solo las secciones
+  elegidas, con las mismas cifras de pantalla. Reutiliza `runFinancialEngine`
+  y `buildWalletReportModel` sin cambiar fórmulas y rechaza el cálculo si el
+  saldo inicial más el periodo no cuadra con el final. No es un estado NIIF:
+  no se inventan activos, pasivos ni patrimonio. La tarjeta Personal
+  "Balance general" del generador pasa a llamarse "Balance por periodo".
 - `Reportes` incorpora `Balance financiero`: balance neto acumulado hasta una
   fecha de corte (fecha civil inclusive), con cuatro niveles de detalle
   (general, componentes P/A/E/ajustes, desglose por tipo y trazabilidad de
