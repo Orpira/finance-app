@@ -1,4 +1,4 @@
-import { Download, Eye, FileSpreadsheet, Landmark, Scale } from 'lucide-react'
+import { Download, Eye, FileSpreadsheet, Scale } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useDialog } from '../../components/dialogs/useDialog'
@@ -113,7 +113,7 @@ function getReportCards(isBasicUser: boolean) {
         ? 'Balance general por rango de fechas, con impacto de ajustes separado.'
         : 'Balance por temporadas, con impacto de ajustes separado y trazable.',
       kind: 'balance' as const,
-      title: isBasicUser ? 'Balance por periodo' : 'Balance por temporadas',
+      title: isBasicUser ? 'Balance general' : 'Balance por temporadas',
     },
     // Wallets es exclusivo de Personal (spec §15/§16): esta tarjeta nunca se
     // ofrece en modo Profesional.
@@ -2038,28 +2038,16 @@ export function ReportsPage() {
         />
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Link
-          className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-800"
-          to="/reports/general-balance"
-        >
-          <Landmark aria-hidden="true" className="size-5 shrink-0 text-emerald-700 dark:text-emerald-400" />
-          <span className="flex flex-col">
-            <span className="text-sm font-semibold text-slate-950 dark:text-white">Balance general</span>
-            <span className="text-xs text-slate-500">Saldo inicial, periodo y saldo final, con niveles de información a elegir.</span>
-          </span>
-        </Link>
-        <Link
-          className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-800"
-          to="/reports/financial-balance"
-        >
-          <Scale aria-hidden="true" className="size-5 shrink-0 text-emerald-700 dark:text-emerald-400" />
-          <span className="flex flex-col">
-            <span className="text-sm font-semibold text-slate-950 dark:text-white">Balance financiero</span>
-            <span className="text-xs text-slate-500">Balance acumulado a una fecha de corte, con cuatro niveles de detalle.</span>
-          </span>
-        </Link>
-      </div>
+      <Link
+        className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-800"
+        to="/reports/financial-balance"
+      >
+        <Scale aria-hidden="true" className="size-5 shrink-0 text-emerald-700 dark:text-emerald-400" />
+        <span className="flex flex-col">
+          <span className="text-sm font-semibold text-slate-950 dark:text-white">Balance financiero</span>
+          <span className="text-xs text-slate-500">Balance acumulado a una fecha de corte, con cuatro niveles de detalle.</span>
+        </span>
+      </Link>
 
       <section aria-labelledby="report-builder-title" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-lg font-semibold text-slate-950 dark:text-white" id="report-builder-title">Configurar reporte</h2>

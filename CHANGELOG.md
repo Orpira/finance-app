@@ -8,29 +8,6 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 ### Added
 
-- `Balance general` permite parametrizar el detalle sin saturar la lectura:
-  plantillas Ejecutivo, Análisis y Auditoría más modo Personalizado (guardado
-  por modo en el dispositivo); secciones plegables con su cifra clave visible;
-  detalle de registros agrupable por mes, categoría, wallet, temporada, tipo
-  de pago o tipo de movimiento, con subtotales; datos por registro a elegir
-  (categoría, wallet, temporada, tipo de pago, ubicación, estado y notas);
-  filtros por tipo, categorías, wallets o temporadas que acotan solo el
-  detalle y lo indican; lista de transferencias internas con sus notas;
-  porcentajes sobre el total en los desgloses. El PDF incluye la
-  configuración usada y las mismas cifras. Sin cambios de cálculo ni de Dexie.
-- `Reportes` incorpora `Balance general`: estado de saldos del modo activo
-  (saldo inicial + variación del periodo = saldo final) con rango de fechas o
-  todo el historial y niveles de información seleccionables (1 General,
-  2 Componentes, 3 Desglose, 4 Detalle o Personalizado por secciones):
-  componentes P/A/E/ajustes, ingresos por tipo, tipo de pago, categoría y
-  ubicación, egresos por categoría y ubicación, temporadas con meta
-  (Profesional), wallets con transferencias y conciliación (Básico), estado de
-  reporte, actividad, ajustes y movimientos. Exporta a PDF solo las secciones
-  elegidas, con las mismas cifras de pantalla. Reutiliza `runFinancialEngine`
-  y `buildWalletReportModel` sin cambiar fórmulas y rechaza el cálculo si el
-  saldo inicial más el periodo no cuadra con el final. No es un estado NIIF:
-  no se inventan activos, pasivos ni patrimonio. La tarjeta Personal
-  "Balance general" del generador pasa a llamarse "Balance por periodo".
 - `Reportes` incorpora `Balance financiero`: balance neto acumulado hasta una
   fecha de corte (fecha civil inclusive), con cuatro niveles de detalle
   (general, componentes P/A/E/ajustes, desglose por tipo y trazabilidad de
