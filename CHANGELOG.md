@@ -8,6 +8,15 @@ Para el historial completo de commits, usa `git log`. No se reconstruye aquí un
 
 ### Added
 
+- `Reportes` incorpora `Balance financiero`: balance neto acumulado hasta una
+  fecha de corte (fecha civil inclusive), con cuatro niveles de detalle
+  (general, componentes P/A/E/ajustes, desglose por tipo y trazabilidad de
+  ajustes) y exportación a PDF con las mismas cifras de pantalla. Reutiliza
+  `runFinancialEngine`/`buildBalanceReport` sin cambiar fórmulas, respeta el
+  modo activo y no cuenta transferencias entre Wallets. Es de solo lectura; no
+  es un estado financiero NIIF ni un saldo bancario. Gates: 263 archivos /
+  2.844 PASS / 1 `todo`, lint, typecheck y build aprobados; validación visual
+  en dispositivo pendiente.
 - Configuración permite mostrar u ocultar la experiencia de ingresos sin
   reportar en Inicio y Movimientos: aviso, selección visible, checkboxes y badge
   pendiente. La opción parte activada, persiste en backups y no modifica

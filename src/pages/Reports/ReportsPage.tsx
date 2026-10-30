@@ -1,6 +1,6 @@
-import { Download, Eye, FileSpreadsheet } from 'lucide-react'
+import { Download, Eye, FileSpreadsheet, Scale } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useDialog } from '../../components/dialogs/useDialog'
 
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
@@ -2037,6 +2037,17 @@ export function ReportsPage() {
           progress={selectedSeasonGoalProgress}
         />
       )}
+
+      <Link
+        className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-800"
+        to="/reports/financial-balance"
+      >
+        <Scale aria-hidden="true" className="size-5 shrink-0 text-emerald-700 dark:text-emerald-400" />
+        <span className="flex flex-col">
+          <span className="text-sm font-semibold text-slate-950 dark:text-white">Balance financiero</span>
+          <span className="text-xs text-slate-500">Balance acumulado a una fecha de corte, con cuatro niveles de detalle.</span>
+        </span>
+      </Link>
 
       <section aria-labelledby="report-builder-title" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-lg font-semibold text-slate-950 dark:text-white" id="report-builder-title">Configurar reporte</h2>
