@@ -32,7 +32,6 @@ import SettingsBusinessPage from '../pages/Settings/SettingsBusinessPage'
 import SettingsPage from '../pages/Settings/SettingsPage'
 import SettingsCategoriesPage from '../pages/Settings/SettingsCategoriesPage'
 import SettingsWalletsPage from '../pages/Settings/SettingsWalletsPage'
-import SettingsPersonalIncomeCategoriesPage from '../pages/Settings/SettingsPersonalIncomeCategoriesPage'
 import SettingsPersonalExpenseCategoriesPage from '../pages/Settings/SettingsPersonalExpenseCategoriesPage'
 import SettingsSecurityPage from '../pages/Settings/SettingsSecurityPage'
 import SettingsUsageModePage from '../pages/Settings/SettingsUsageModePage'
@@ -113,7 +112,7 @@ export function RouterProvider() {
             />
             <Route
               path="settings/personal-income-categories"
-              element={<UsageModeGuard allowed={['basic']}><SettingsPersonalIncomeCategoriesPage /></UsageModeGuard>}
+              element={<Navigate to="/settings/categories" replace />}
             />
             <Route
               path="settings/personal-expense-categories"

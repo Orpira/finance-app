@@ -10,7 +10,6 @@ import { getIncomeTypeLabel } from '../../utils/incomeTypes'
 import {
   getExpenseCategoryBadgeLabel,
   getExpenseDisplayName,
-  getIncomeCategoryBadgeLabel,
   getIncomeDisplayName,
 } from '../../utils/activityLabels'
 import { getRecordReportBadge } from '../../utils/reportStatus'
@@ -45,11 +44,13 @@ export function shouldShowMovementReportBadge(
 export function toUnifiedMovements(
   incomes: ServiceIncome[],
   expenses: Expense[],
-  personalIncomeCategories: readonly PersonalIncomeCategory[] = [],
+  _personalIncomeCategories: readonly PersonalIncomeCategory[] = [],
   personalExpenseCategories: readonly PersonalExpenseCategory[] = [],
   transfers: readonly InternalTransfer[] = [],
   wallets: readonly Wallet[] = [],
 ): UnifiedMovement[] {
+  // Retain the positional argument for callers and historical integrations.
+  void _personalIncomeCategories
   const incomeMovements: UnifiedMovement[] = incomes.map((income) => ({
     key: `income-${income.id}`,
     kind: 'income',
@@ -60,7 +61,6 @@ export function toUnifiedMovements(
     href: `/income/${income.id}`,
     reportBadge: getRecordReportBadge(income),
     category: getIncomeTypeLabel(income),
-    personalCategoryLabel: getIncomeCategoryBadgeLabel(income, personalIncomeCategories),
     walletLabel: getWalletName(income, wallets),
     reported: getRecordReportBadge(income).isReported,
     searchText: [getIncomeDisplayName(income), income.notes].filter(Boolean).join(' '),
