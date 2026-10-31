@@ -108,3 +108,15 @@ describe('toUnifiedMovements — transferencias (spec §12/§13)', () => {
     expect(movements.every((movement) => movement.walletLabel === undefined)).toBe(true)
   })
 })
+
+// Historical category metadata must not reappear in the movement list.
+it('muestra un ingreso histórico por nombre sin etiqueta de categoría', () => {
+  const [movement] = toUnifiedMovements(
+    [income({ personalName: 'Salario', personalCategoryId: 'old-category' })],
+    [],
+    [{ id: 'old-category', name: 'Nómina', normalizedName: 'nomina', usageMode: 'basic', isArchived: false, createdAt: '', updatedAt: '' }],
+  )
+  expect(movement.label).toBe('Salario')
+  expect(movement.personalCategoryLabel).toBeUndefined()
+  expect(movement.amount).toBe(500)
+})

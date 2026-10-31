@@ -30,7 +30,7 @@ const settingsLinks = [
     label: 'Licencia',
     },
   {
-    description: 'Gestiona por separado las categorías de ingresos y egresos personales.',
+    description: 'Gestiona las categorías de tus egresos personales.',
     href: '/settings/categories',
     icon: Layers,
     label: 'Categorías',

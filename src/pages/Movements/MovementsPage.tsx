@@ -19,10 +19,6 @@ import { INTERNAL_TRANSFERS_CHANGED_EVENT, listInternalTransfers } from '../../s
 import { listWallets, WALLETS_CHANGED_EVENT } from '../../services/walletService'
 import { getSettings } from '../../services/settingsService'
 import {
-  listPersonalIncomeCategories,
-  PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT,
-} from '../../services/personalIncomeCategoryService'
-import {
   listPersonalExpenseCategories,
   PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT,
 } from '../../services/personalExpenseCategoryService'
@@ -114,20 +110,19 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
           listExpenses({ newestFirst: true }),
           getSettings(),
         ])
-        const [personalIncomeCategories, personalExpenseCategories, transfers, wallets] = isBasicMode(settings)
+        const [personalExpenseCategories, transfers, wallets] = isBasicMode(settings)
           ? await Promise.all([
-              listPersonalIncomeCategories({ archived: 'all' }),
               listPersonalExpenseCategories({ archived: 'all' }),
               listInternalTransfers(),
               listWallets({ archived: 'all' }),
             ])
-          : [[], [], [], []]
+          : [[], [], []]
         if (cancelled) return
         const activeUsageMode = resolveActiveUsageMode(settings)
         const scopedIncomes = scopeRecordsByUsageMode(incomes, activeUsageMode)
         const scopedExpenses = scopeRecordsByUsageMode(expenses, activeUsageMode)
         const scopedTransfers = scopeRecordsByUsageMode(transfers, activeUsageMode)
-        setMovements(toUnifiedMovements(scopedIncomes, scopedExpenses, personalIncomeCategories, personalExpenseCategories, scopedTransfers, wallets))
+        setMovements(toUnifiedMovements(scopedIncomes, scopedExpenses, [], personalExpenseCategories, scopedTransfers, wallets))
         setShowUnreportedIncome(settings.showUnreportedIncome)
       } catch (error) {
         console.warn('No se pudieron cargar los movimientos.', error)
@@ -146,7 +141,6 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
     }
 
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
-    window.addEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, loadMovements)
     window.addEventListener(PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT, loadMovements)
     window.addEventListener(INTERNAL_TRANSFERS_CHANGED_EVENT, loadMovements)
     window.addEventListener(WALLETS_CHANGED_EVENT, loadMovements)
@@ -154,7 +148,6 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
     return () => {
       cancelled = true
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
-      window.removeEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, loadMovements)
       window.removeEventListener(PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT, loadMovements)
       window.removeEventListener(INTERNAL_TRANSFERS_CHANGED_EVENT, loadMovements)
       window.removeEventListener(WALLETS_CHANGED_EVENT, loadMovements)

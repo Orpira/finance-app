@@ -21,13 +21,6 @@ import {
   listIncomeAdditionals,
 } from '../../services/incomeAdditionalService'
 import {
-  createPersonalIncomeCategory,
-  getPersonalIncomeCategoryById,
-  listPersonalIncomeCategories,
-  normalizePersonalIncomeCategoryName,
-  PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT,
-} from '../../services/personalIncomeCategoryService'
-import {
   createWallet,
   getWalletById,
   listWallets,
@@ -87,7 +80,6 @@ import { runIncomeCalculation } from '../../utils/incomeCalculation/incomeCalcul
 import { isReported } from '../../catalogs/reportStatuses'
 import { useDialog } from '../../components/dialogs/useDialog'
 import { MAX_PERSONAL_INCOME_NAME_LENGTH } from '../../utils/personalIncomeName'
-import type { PersonalIncomeCategory } from '../../types/personalIncomeCategory'
 
 type SaveStatus = 'idle' | 'saving' | 'error' | 'duplicateHour'
 
@@ -185,9 +177,6 @@ export function IncomePage() {
   const [editingIncome, setEditingIncome] = useState<ServiceIncome | null>(null)
   const [incomeType, setIncomeType] = useState<ServiceIncomeType>('ingreso')
   const [personalName, setPersonalName] = useState('')
-  const [personalCategoryId, setPersonalCategoryId] = useState('')
-  const [personalCategoryOptions, setPersonalCategoryOptions] = useState<PersonalIncomeCategory[]>([])
-  const [assignedArchivedCategory, setAssignedArchivedCategory] = useState<PersonalIncomeCategory | null>(null)
   const [walletId, setWalletId] = useState('')
   const [walletOptions, setWalletOptions] = useState<Wallet[]>([])
   const [assignedArchivedWallet, setAssignedArchivedWallet] = useState<Wallet | null>(null)
@@ -249,16 +238,6 @@ export function IncomePage() {
       const currentIncomePeriod = currentIncomePeriodId
         ? await getEarningPeriodById(currentIncomePeriodId)
         : undefined
-      const currentPersonalCategories = isBasicMode(currentSettings)
-        ? await listPersonalIncomeCategories({ archived: 'active' })
-        : []
-      const assignedCategoryId = currentIncome?.personalCategoryId
-      const assignedCategoryIsMissingFromActiveList =
-        assignedCategoryId !== undefined &&
-        !currentPersonalCategories.some((category) => category.id === assignedCategoryId)
-      const currentAssignedArchivedCategory = assignedCategoryIsMissingFromActiveList
-        ? await getPersonalIncomeCategoryById(assignedCategoryId)
-        : undefined
       const currentWallets = isBasicMode(currentSettings)
         ? await listWallets({ archived: 'active' })
         : []
@@ -279,8 +258,6 @@ export function IncomePage() {
       setApplySeasonPercentageToHourly(false)
       setActivePeriod(currentPeriod ?? null)
       setEditingPeriod(currentIncomePeriod ?? null)
-      setPersonalCategoryOptions(currentPersonalCategories)
-      setAssignedArchivedCategory(currentAssignedArchivedCategory ?? null)
       setWalletOptions(currentWallets)
       setAssignedArchivedWallet(currentAssignedArchivedWallet ?? null)
       setIncomes(
@@ -336,7 +313,6 @@ export function IncomePage() {
 
         setEditingIncome(currentIncome)
         setPersonalName(currentIncome.personalName ?? '')
-        setPersonalCategoryId(currentIncome.personalCategoryId ?? '')
         setWalletId(currentIncome.walletId ?? '')
         setIncomeType(getIncomeType(currentIncome))
         setDate(currentIncome.date)
@@ -377,7 +353,6 @@ export function IncomePage() {
             currentSettings.defaultCurrency,
         )
         setHourlyRateApplied(currentSettings.hourlyRate)
-        setPersonalCategoryId('')
         setWalletId(currentWallets.find((wallet) => wallet.isDefault)?.id ?? '')
       }
     }
@@ -388,25 +363,6 @@ export function IncomePage() {
       isMounted = false
     }
   }, [alert, navigate, parsedIncomeId])
-
-  useEffect(() => {
-    let isMounted = true
-
-    function handlePersonalIncomeCategoriesChanged() {
-      listPersonalIncomeCategories({ archived: 'active' }).then((nextCategories) => {
-        if (isMounted) {
-          setPersonalCategoryOptions(nextCategories)
-        }
-      })
-    }
-
-    window.addEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, handlePersonalIncomeCategoriesChanged)
-
-    return () => {
-      isMounted = false
-      window.removeEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, handlePersonalIncomeCategoriesChanged)
-    }
-  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -473,21 +429,7 @@ export function IncomePage() {
   }
 
   const isBasicUser = isBasicMode(settings ?? undefined)
-  // The currently-assigned category stays selectable even once archived (so an
-  // existing income can keep or drop it), but it is never offered for a
-  // different income: it only ever comes from `assignedArchivedCategory`.
-  const personalCategorySelectOptions = useMemo(() => {
-    if (
-      assignedArchivedCategory === null ||
-      personalCategoryOptions.some((category) => category.id === assignedArchivedCategory.id)
-    ) {
-      return personalCategoryOptions
-    }
-    return [...personalCategoryOptions, assignedArchivedCategory].sort((a, b) =>
-      a.name.localeCompare(b.name, 'es'),
-    )
-  }, [personalCategoryOptions, assignedArchivedCategory])
-  // Same "keep the currently-assigned wallet selectable even once archived" rule as categories.
+  // Keep the assigned wallet selectable when archived.
   const walletSelectOptions = useMemo(() => {
     if (
       assignedArchivedWallet === null ||
@@ -499,42 +441,6 @@ export function IncomePage() {
       a.name.localeCompare(b.name, 'es'),
     )
   }, [walletOptions, assignedArchivedWallet])
-
-  async function handleQuickCreatePersonalCategory() {
-    const name = await prompt({
-      title: 'Nueva categoría',
-      message: 'Escribe el nombre de la nueva categoría de ingreso personal.',
-      placeholder: 'Ej. Nómina, reembolso, venta',
-      confirmLabel: 'Crear',
-      validate: (value) => {
-        try {
-          normalizePersonalIncomeCategoryName(value)
-          return undefined
-        } catch (error) {
-          return error instanceof Error ? error.message : 'Nombre inválido.'
-        }
-      },
-    })
-
-    if (!name) {
-      return
-    }
-
-    try {
-      const created = await createPersonalIncomeCategory({ name })
-      setPersonalCategoryOptions((current) =>
-        [...current, created].sort((a, b) => a.name.localeCompare(b.name, 'es')),
-      )
-      setPersonalCategoryId(created.id)
-      setSaveError('')
-    } catch (error) {
-      await alert({
-        type: 'error',
-        title: 'No se pudo crear la categoría',
-        message: error instanceof Error ? error.message : 'La categoría no se pudo crear.',
-      })
-    }
-  }
 
   async function handleQuickCreateWallet() {
     const name = await prompt({
@@ -812,7 +718,6 @@ export function IncomePage() {
         status: editingIncome?.status ?? 'FINALIZADO',
         type: isBasicUser ? 'ingreso' : incomeType,
         ...(isBasicUser ? { personalName } : {}),
-        ...(isBasicUser ? { personalCategoryId: personalCategoryId || undefined } : {}),
         ...(isBasicUser ? { walletId: walletId || undefined } : {}),
         date: registrationDate,
         // Personal nunca captura ni persiste tipo de pago (Bloque 3, modos de
@@ -1048,38 +953,6 @@ export function IncomePage() {
                 </span>
               </span>
             </label>
-
-            <div className="flex flex-col gap-2 md:col-span-2">
-              <div className="flex items-center justify-between gap-3">
-                <label className="text-sm font-medium text-slate-700" htmlFor="personal-income-category">
-                  Categoría
-                </label>
-                <button
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
-                  onClick={handleQuickCreatePersonalCategory}
-                  type="button"
-                >
-                  <Plus className="size-3.5" aria-hidden="true" />
-                  Nueva categoría
-                </button>
-              </div>
-              <select
-                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                id="personal-income-category"
-                onChange={(event) => {
-                  setPersonalCategoryId(event.target.value)
-                  setSaveError('')
-                }}
-                value={personalCategoryId}
-              >
-                <option value="">Sin categoría</option>
-                {personalCategorySelectOptions.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.isArchived ? `${category.name} · Archivada` : category.name}
-                  </option>
-                ))}
-              </select>
-            </div>
 
             <div className="flex flex-col gap-2 md:col-span-2">
               <div className="flex items-center justify-between gap-3">
