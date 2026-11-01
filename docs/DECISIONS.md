@@ -115,3 +115,9 @@ Format used: one ADR per section with Context, Decision, Status and Consequences
 - Solicitud: añadir Modificar transferencia en el detalle y reutilizar el formulario precargado para origen, destino, importe, fecha y nota.
 - Guardado atómico sobre el mismo registro e ID, preservando moneda y fecha de creación. Validación de todas las wallets afectadas sin duplicar el efecto anterior: no permite nuevos saldos negativos ni empeorar déficits históricos. Detecta edición obsoleta mediante updatedAt y emite el evento de actualización existente solo tras guardar.
 - Exclusivo de Personal y contexto Personal de Híbrido. Conserva wallets archivadas previamente asignadas; no permite nuevas asignaciones a archivadas. No genera ingresos/egresos ni cambia el esquema.
+
+## Selectores de wallets con saldo positivo — 2026-11-01
+
+- Solicitud explícita: ingresos y egresos personales solo ofrecen wallets con saldo mayor que cero. Se usa el saldo acumulado canónico en moneda principal; se excluyen archivadas y saldos cero, negativos o no finitos. El valor predeterminado también respeta el filtro.
+- Edición: una asignación histórica que ya no cumple el filtro puede conservarse mediante una opción separada, sin ofrecer esa wallet como destino de una nueva asignación. No se reasignan movimientos automáticamente.
+- Crear una wallet desde el formulario ya no la selecciona automáticamente: nace sin saldo y queda fuera del selector hasta tener saldo positivo. No cambia el registro ni el cálculo de saldos.
