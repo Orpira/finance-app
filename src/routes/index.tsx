@@ -88,6 +88,7 @@ export function RouterProvider() {
             <Route path="expenses" element={<ExpenseListPage />} />
             <Route path="movements" element={<MovementsPage />} />
             <Route path="transfers/nuevo" element={<UsageModeGuard allowed={['basic']}><TransferFormPage /></UsageModeGuard>} />
+            <Route path="transfers/:id/editar" element={<UsageModeGuard allowed={['basic']}><TransferFormPage /></UsageModeGuard>} />
             <Route path="transfers/:id" element={<UsageModeGuard allowed={['basic']}><TransferDetailPage /></UsageModeGuard>} />
             <Route path="agenda/nueva" element={<UsageModeGuard allowed={['professional']}><AppointmentFormPage /></UsageModeGuard>} />
             <Route
