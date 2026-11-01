@@ -91,3 +91,12 @@ describe('formatServiceDuration', () => {
     expect(formatServiceDuration(duration, unit)).toBe(expected)
   })
 })
+
+
+describe('duración personalizada', () => {
+  it('utiliza los minutos ingresados para el cronómetro y los reportes', () => {
+    expect(calculateEffectiveDuration({ duration: 75, durationLabel: 'Personalizado' })).toBe(75)
+    expect(getIncomeDurationDisplay({ duration: 75, durationLabel: 'Personalizado' })).toBe('75 minutos')
+    expect(getIncomeDurationDisplay({ duration: 75, durationLabel: 'Personalizado', workedTimeUnit: 'hours' })).toBe('1,25 horas')
+  })
+})

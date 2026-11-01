@@ -2,7 +2,7 @@ import type { ServiceIncome } from '../types/service'
 import type { IncomeCalculationMethod, WorkedTimeUnit } from '../catalogs/incomeCalculationMethods'
 import { DEFAULT_EXIT_DURATION_MINUTES } from '../config/serviceTimer'
 
-export type ServiceDurationLabel = '15' | '30' | '60' | '120' | 'Salida'
+export type ServiceDurationLabel = '15' | '30' | '60' | '120' | 'Salida' | 'Personalizado'
 
 export interface ServiceDurationOption {
   durationMinutes: number
@@ -54,7 +54,7 @@ export function calculateEffectiveDuration(input: Pick<ServiceIncome, 'duration'
 export function isServiceDurationLabel(
   value: string | undefined,
 ): value is ServiceDurationLabel {
-  return SERVICE_DURATION_OPTIONS.some(
+  return value === 'Personalizado' || SERVICE_DURATION_OPTIONS.some(
     (option) => option.durationLabel === value,
   )
 }
@@ -72,7 +72,7 @@ export function getNumericDurationLabel(
 ): ServiceDurationLabel | undefined {
   const durationLabel = String(durationMinutes)
 
-  return isServiceDurationLabel(durationLabel) && durationLabel !== 'Salida'
+  return isServiceDurationLabel(durationLabel) && durationLabel !== 'Salida' && durationLabel !== 'Personalizado'
     ? durationLabel
     : undefined
 }
@@ -86,7 +86,9 @@ export function getDurationDisplay(
     return 'Salida'
   }
 
-  const displayMinutes = durationLabel?.trim() || String(durationMinutes)
+  const displayMinutes = durationLabel === 'Personalizado'
+    ? String(durationMinutes)
+    : durationLabel?.trim() || String(durationMinutes)
 
   if (workedTimeUnit === 'hours') {
     const labeledDurationMinutes = Number(displayMinutes)
