@@ -1,6 +1,6 @@
-import { Download, Eye, FileSpreadsheet } from 'lucide-react'
+import { Download, Eye, FileSpreadsheet, Scale } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useDialog } from '../../components/dialogs/useDialog'
 
 import { CollapsibleFilters } from '../../components/filters/CollapsibleFilters'
@@ -23,7 +23,6 @@ import { runFinancialEngineShadowMode } from '../../services/financialEngineShad
 import { groupReportableIncomesByPaymentType } from '../../services/paymentTypeReportService'
 import { listInternalTransfers } from '../../services/internalTransferService'
 import { listWallets } from '../../services/walletService'
-import { listPersonalIncomeCategories } from '../../services/personalIncomeCategoryService'
 import { listPersonalExpenseCategories } from '../../services/personalExpenseCategoryService'
 import { buildWalletReportModel, type WalletReportSection, type WalletTransferReportItem } from '../../services/walletReportService'
 import type { EarningPeriod } from '../../types/earningPeriod'
@@ -32,7 +31,6 @@ import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CountryCode, CurrencyCode } from '../../types/settings'
 import type { InternalTransfer } from '../../types/internalTransfer'
 import type { Wallet } from '../../types/wallet'
-import type { PersonalIncomeCategory } from '../../types/personalIncomeCategory'
 import type { PersonalExpenseCategory } from '../../types/personalExpenseCategory'
 import {
   isBasicMode,
@@ -42,7 +40,6 @@ import {
 import {
   getExpenseCategoryBadgeLabel,
   getExpenseDisplayName,
-  getIncomeCategoryBadgeLabel,
   getIncomeDisplayName,
 } from '../../utils/activityLabels'
 import {
@@ -120,7 +117,7 @@ function getReportCards(isBasicUser: boolean) {
     ...(isBasicUser
       ? [
           {
-            description: 'Saldo por wallet, ingresos y egresos agrupados por categoría, y transferencias internas.',
+            description: 'Saldo por wallet, ingresos por concepto, egresos por categoría y transferencias internas.',
             kind: 'wallet' as const,
             title: 'Reporte de wallets',
           },
@@ -287,7 +284,6 @@ export function ReportsPage() {
   const [wallets, setWallets] = useState<Wallet[]>([])
   const [allTransfers, setAllTransfers] = useState<InternalTransfer[]>([])
   const [periodTransfers, setPeriodTransfers] = useState<InternalTransfer[]>([])
-  const [personalIncomeCategories, setPersonalIncomeCategories] = useState<PersonalIncomeCategory[]>([])
   const [personalExpenseCategories, setPersonalExpenseCategories] = useState<PersonalExpenseCategory[]>([])
   const isBasicUser = isBasicMode(settings ?? undefined)
   const activeUsageMode = resolveActiveUsageMode(settings ?? undefined)
@@ -323,16 +319,14 @@ export function ReportsPage() {
         const [
           currentWallets,
           currentTransfers,
-          currentPersonalIncomeCategories,
           currentPersonalExpenseCategories,
         ] = isBasicMode(currentSettings)
           ? await Promise.all([
               listWallets({ archived: 'all' }),
               listInternalTransfers(),
-              listPersonalIncomeCategories({ archived: 'all' }),
               listPersonalExpenseCategories({ archived: 'all' }),
             ])
-          : [[], [], [], []]
+          : [[], [], []]
 
         if (!isMounted) {
           return
@@ -346,7 +340,6 @@ export function ReportsPage() {
             (transfer) => (!range.from || transfer.date >= range.from) && (!range.to || transfer.date <= range.to),
           ),
         )
-        setPersonalIncomeCategories(currentPersonalIncomeCategories)
         setPersonalExpenseCategories(currentPersonalExpenseCategories)
         setPeriodIncomes(
           currentIncomes.filter((income) =>
@@ -1466,7 +1459,7 @@ export function ReportsPage() {
         return `Wallet: ${section.walletName}${section.isDefault ? ' · Predeterminada' : ''}${section.isArchived ? ' · Archivada' : ''}`
       }
 
-      // Ingresos externos / egresos por categoría (spec §10/§11) siguen
+      // Ingresos externos por concepto y egresos por categoría siguen
       // respetando los filtros adicionales de la página (país/ciudad/tipo de
       // pago/categoría/temporada) — comportamiento heredado, solo para el
       // detalle. El resumen numérico de cada wallet (saldo inicial/final,
@@ -1600,9 +1593,9 @@ export function ReportsPage() {
         }
 
         const perWalletSections = model.wallets.map((section) => {
-          const incomeByCategory = buildGroupedByNameRows(
+          const incomeByConcept = buildGroupedByNameRows(
             walletIncomesById.get(section.walletId) ?? [],
-            (income) => getIncomeCategoryBadgeLabel(income, personalIncomeCategories) ?? 'Sin categoría',
+            getIncomeDisplayName,
             (income) => getIncomeValue(income, primaryCurrency),
           )
           const expenseByCategory = buildGroupedByNameRows(
@@ -1610,9 +1603,9 @@ export function ReportsPage() {
             (expense) => getExpenseCategoryBadgeLabel(expense, personalExpenseCategories) ?? 'Sin categoría',
             (expense) => getExpenseValue(expense, primaryCurrency),
           )
-          const incomeCategoryDetails = buildGroupedCategoryDetails(
+          const incomeConceptDetails = buildGroupedCategoryDetails(
             walletIncomesById.get(section.walletId) ?? [],
-            (income) => getIncomeCategoryBadgeLabel(income, personalIncomeCategories) ?? 'Sin categoría',
+            getIncomeDisplayName,
             (income) => getIncomeValue(income, primaryCurrency),
             (income) => ({ date: income.date, label: getIncomeDisplayName(income), note: income.notes }),
           )
@@ -1627,9 +1620,9 @@ export function ReportsPage() {
           const currencyNoteHtml = section.hasCurrencyMismatchTransfers
             ? `<p class="meta">Esta wallet tiene transferencias en otra moneda no incluidas en estos totales.</p>`
             : ''
-          const incomeSectionHtml = incomeByCategory.length === 0
-            ? `<h2>Ingresos externos por categoría</h2><p class="empty">Sin ingresos externos en este periodo.</p>`
-            : `${buildGroupedTotalsTable('Ingresos externos por categoría', incomeByCategory, 'Categoría')}${buildGroupedCategoryDetailsTable('Detalle de ingresos externos por categoría', incomeCategoryDetails)}`
+          const incomeSectionHtml = incomeByConcept.length === 0
+            ? `<h2>Ingresos externos por concepto</h2><p class="empty">Sin ingresos externos en este periodo.</p>`
+            : `${buildGroupedTotalsTable('Ingresos externos por concepto', incomeByConcept, 'Concepto')}${buildGroupedCategoryDetailsTable('Detalle de ingresos externos por concepto', incomeConceptDetails)}`
           const expenseSectionHtml = expenseByCategory.length === 0
             ? `<h2>Egresos por categoría</h2><p class="empty">Sin egresos en este periodo.</p>`
             : `${buildGroupedTotalsTable('Egresos por categoría', expenseByCategory, 'Categoría')}${buildGroupedCategoryDetailsTable('Detalle de egresos por categoría', expenseCategoryDetails)}`
@@ -1663,10 +1656,10 @@ export function ReportsPage() {
             `Ajustes netos: ${formatCurrency(section.adjustmentTotal, primaryCurrency)}`,
             `Saldo final: ${formatCurrency(section.closingBalance, primaryCurrency)}`,
             section.hasCurrencyMismatchTransfers ? 'Esta wallet tiene transferencias en otra moneda no incluidas en estos totales.' : '',
-            'Ingresos externos por categoría',
-            incomeByCategory.length === 0
+            'Ingresos externos por concepto',
+            incomeByConcept.length === 0
               ? 'Sin ingresos externos en este periodo.'
-              : incomeByCategory.map((row) => `${row.label}: ${row.count} | ${formatCurrency(row.total, primaryCurrency)}`).join('\n'),
+              : incomeByConcept.map((row) => `${row.label}: ${row.count} | ${formatCurrency(row.total, primaryCurrency)}`).join('\n'),
             receivedBlock.text,
             'Egresos por categoría',
             expenseByCategory.length === 0
@@ -2037,6 +2030,17 @@ export function ReportsPage() {
           progress={selectedSeasonGoalProgress}
         />
       )}
+
+      <Link
+        className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-800"
+        to="/reports/financial-balance"
+      >
+        <Scale aria-hidden="true" className="size-5 shrink-0 text-emerald-700 dark:text-emerald-400" />
+        <span className="flex flex-col">
+          <span className="text-sm font-semibold text-slate-950 dark:text-white">Balance financiero</span>
+          <span className="text-xs text-slate-500">Balance acumulado a una fecha de corte, con cuatro niveles de detalle.</span>
+        </span>
+      </Link>
 
       <section aria-labelledby="report-builder-title" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-lg font-semibold text-slate-950 dark:text-white" id="report-builder-title">Configurar reporte</h2>

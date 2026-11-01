@@ -84,7 +84,7 @@ vi.mock('../../services/personalIncomeCategoryService', async (importOriginal) =
 // this jsdom environment doesn't provide.
 vi.mock('../../services/walletService', () => ({
   getWalletById: async () => undefined,
-  listWallets: async () => [],
+  listWalletsWithBalances: async () => [],
   WALLETS_CHANGED_EVENT: 'finance-app:wallets-changed',
 }))
 
@@ -159,7 +159,7 @@ describe('IncomePage — estancia y destino según el modo de uso (PB-GEO-002)',
   it('Personal no muestra ni consulta estancias', async () => {
     arrange(basicSettings(), null)
     renderIncomePage()
-    await screen.findByText('Categoría')
+    await screen.findByText('Wallet de destino')
     expect(screen.queryByText('Ubicación')).toBeNull()
     expect(seasonStayService.listSelectableSeasonStays).not.toHaveBeenCalled()
   })
@@ -177,7 +177,7 @@ describe('IncomePage — estancia y destino según el modo de uso (PB-GEO-002)',
   it('Híbrido en contexto Personal no muestra campos profesionales', async () => {
     arrange({ ...basicSettings(), usageMode: 'hybrid', activeContext: 'basic' } as AppSettings, null)
     renderIncomePage()
-    await screen.findByText('Categoría')
+    await screen.findByText('Wallet de destino')
     expect(screen.queryByText('Ubicación')).toBeNull()
     expect(seasonStayService.listSelectableSeasonStays).not.toHaveBeenCalled()
   })
@@ -262,4 +262,3 @@ describe('IncomePage — estancia y destino según el modo de uso (PB-GEO-002)',
     expect(manualRates.every((rate) => rate === 4500)).toBe(true)
   })
 })
-

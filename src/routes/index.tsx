@@ -26,12 +26,12 @@ import TransferFormPage from '../pages/Movements/TransferFormPage'
 import TransferDetailPage from '../pages/Movements/TransferDetailPage'
 import ReportPreviewPage from '../pages/Reports/ReportPreviewPage'
 import ReportsPage from '../pages/Reports/ReportsPage'
+import FinancialBalancePage from '../pages/Reports/FinancialBalancePage'
 import SettingsBackupPage from '../pages/Settings/SettingsBackupPage'
 import SettingsBusinessPage from '../pages/Settings/SettingsBusinessPage'
 import SettingsPage from '../pages/Settings/SettingsPage'
 import SettingsCategoriesPage from '../pages/Settings/SettingsCategoriesPage'
 import SettingsWalletsPage from '../pages/Settings/SettingsWalletsPage'
-import SettingsPersonalIncomeCategoriesPage from '../pages/Settings/SettingsPersonalIncomeCategoriesPage'
 import SettingsPersonalExpenseCategoriesPage from '../pages/Settings/SettingsPersonalExpenseCategoriesPage'
 import SettingsSecurityPage from '../pages/Settings/SettingsSecurityPage'
 import SettingsUsageModePage from '../pages/Settings/SettingsUsageModePage'
@@ -88,6 +88,7 @@ export function RouterProvider() {
             <Route path="expenses" element={<ExpenseListPage />} />
             <Route path="movements" element={<MovementsPage />} />
             <Route path="transfers/nuevo" element={<UsageModeGuard allowed={['basic']}><TransferFormPage /></UsageModeGuard>} />
+            <Route path="transfers/:id/editar" element={<UsageModeGuard allowed={['basic']}><TransferFormPage /></UsageModeGuard>} />
             <Route path="transfers/:id" element={<UsageModeGuard allowed={['basic']}><TransferDetailPage /></UsageModeGuard>} />
             <Route path="agenda/nueva" element={<UsageModeGuard allowed={['professional']}><AppointmentFormPage /></UsageModeGuard>} />
             <Route
@@ -97,6 +98,7 @@ export function RouterProvider() {
             <Route path="agenda" element={<UsageModeGuard allowed={['professional']}><AgendaPage /></UsageModeGuard>} />
             <Route path="reports/preview" element={<ReportPreviewPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="reports/financial-balance" element={<FinancialBalancePage />} />
             <Route path="temporadas/nueva" element={<UsageModeGuard allowed={['professional']}><SeasonFormPage /></UsageModeGuard>} />
             <Route path="temporadas/:id" element={<UsageModeGuard allowed={['professional']}><SeasonDetailPage /></UsageModeGuard>} />
             <Route path="temporadas" element={<UsageModeGuard allowed={['professional']}><SeasonsPage /></UsageModeGuard>} />
@@ -111,7 +113,7 @@ export function RouterProvider() {
             />
             <Route
               path="settings/personal-income-categories"
-              element={<UsageModeGuard allowed={['basic']}><SettingsPersonalIncomeCategoriesPage /></UsageModeGuard>}
+              element={<Navigate to="/settings/categories" replace />}
             />
             <Route
               path="settings/personal-expense-categories"

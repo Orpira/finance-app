@@ -195,3 +195,16 @@ describe('movement filters', () => {
     ])
   })
 })
+
+// Transfer history ignores filters that apply only to incomes or expenses.
+it('limita la vista de transferencias y conserva fecha, moneda y búsqueda', async () => {
+  const { restrictToTransferFilters } = await import('../src/pages/Movements/movementFilters')
+  const original = readMovementFilters(new URLSearchParams('type=income&category=Comida&reported=reported&q=casa&currency=EUR'))
+  const filters = restrictToTransferFilters(original)
+  expect(filters).toEqual({ ...original, type: 'transfer', category: '', reported: 'all' })
+  const rows = [
+    { key: 'transfer-1', kind: 'transfer' as const, date: '2026-11-01', category: '', amount: 10, currency: 'EUR', searchText: 'Banco Casa' },
+    { key: 'income-1', kind: 'income' as const, date: '2026-11-01', category: '', amount: 10, currency: 'EUR', searchText: 'Casa' },
+  ]
+  expect(applyMovementFilters(rows, filters).map((row) => row.key)).toEqual(['transfer-1'])
+})

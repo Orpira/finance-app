@@ -6,7 +6,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { ActionableEmptyState } from '../../components/ActionableEmptyState'
 import { PeriodNavigator } from '../../components/PeriodNavigator'
@@ -18,10 +18,6 @@ import { listServiceIncomes } from '../../services/incomeService'
 import { INTERNAL_TRANSFERS_CHANGED_EVENT, listInternalTransfers } from '../../services/internalTransferService'
 import { listWallets, WALLETS_CHANGED_EVENT } from '../../services/walletService'
 import { getSettings } from '../../services/settingsService'
-import {
-  listPersonalIncomeCategories,
-  PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT,
-} from '../../services/personalIncomeCategoryService'
 import {
   listPersonalExpenseCategories,
   PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT,
@@ -35,6 +31,7 @@ import { MovementCreateSheet } from './MovementCreateSheet'
 import { MovementFiltersSheet } from './MovementFiltersSheet'
 import {
   applyMovementFilters,
+  restrictToTransferFilters,
   countActiveMovementFilters,
   getMovementPeriodLabel,
   hasActiveMovementFilters,
@@ -50,7 +47,7 @@ import {
   type UnifiedMovement,
 } from './movementPresentation'
 
-type MovementTab = 'todos' | 'ingresos' | 'egresos'
+type MovementTab = 'todos' | 'ingresos' | 'egresos' | 'transferencias'
 
 const TABS: { id: MovementTab; label: string }[] = [
   { id: 'todos', label: 'Todos' },
@@ -65,17 +62,23 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${value}T00:00`))
 }
 
-function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () => void }) {
+function AllMovementsTab({ onCreateMovement, transfersOnly = false }: { readonly onCreateMovement: () => void; readonly transfersOnly?: boolean }) {
   const { hidden } = useSensitiveValues()
   const [movements, setMovements] = useState<UnifiedMovement[] | null>(null)
   const [showUnreportedIncome, setShowUnreportedIncome] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
-  const filters = useMemo(() => readMovementFilters(searchParams), [searchParams])
+  const filters = useMemo(() => {
+    const current = readMovementFilters(searchParams)
+    return transfersOnly ? restrictToTransferFilters(current) : current
+  }, [searchParams, transfersOnly])
   const defaultFilters = useMemo(
-    () => readMovementFilters(new URLSearchParams()),
-    [],
+    () => transfersOnly
+      ? restrictToTransferFilters(readMovementFilters(new URLSearchParams()))
+      : readMovementFilters(new URLSearchParams()),
+    [transfersOnly],
   )
+  const sessionKey = transfersOnly ? `${MOVEMENT_FILTERS_SESSION_KEY}:transfers` : MOVEMENT_FILTERS_SESSION_KEY
   const sessionCheckedRef = useRef(false)
 
   useEffect(() => {
@@ -83,7 +86,7 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
       sessionCheckedRef.current = true
 
       if (!hasMovementFilterParams(searchParams)) {
-        const storedFilters = window.sessionStorage.getItem(MOVEMENT_FILTERS_SESSION_KEY)
+        const storedFilters = window.sessionStorage.getItem(sessionKey)
         if (storedFilters) {
           const restoredFilters = new URLSearchParams(storedFilters)
           if (hasMovementFilterParams(restoredFilters)) {
@@ -98,11 +101,11 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
 
     const sessionFilters = writeMovementFilters(filters)
     if (hasMovementFilterParams(sessionFilters)) {
-      window.sessionStorage.setItem(MOVEMENT_FILTERS_SESSION_KEY, sessionFilters.toString())
+      window.sessionStorage.setItem(sessionKey, sessionFilters.toString())
     } else {
-      window.sessionStorage.removeItem(MOVEMENT_FILTERS_SESSION_KEY)
+      window.sessionStorage.removeItem(sessionKey)
     }
-  }, [filters, searchParams, setSearchParams])
+  }, [filters, searchParams, setSearchParams, sessionKey])
 
   useEffect(() => {
     let cancelled = false
@@ -114,20 +117,23 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
           listExpenses({ newestFirst: true }),
           getSettings(),
         ])
-        const [personalIncomeCategories, personalExpenseCategories, transfers, wallets] = isBasicMode(settings)
+        const [personalExpenseCategories, transfers, wallets] = isBasicMode(settings)
           ? await Promise.all([
-              listPersonalIncomeCategories({ archived: 'all' }),
               listPersonalExpenseCategories({ archived: 'all' }),
               listInternalTransfers(),
               listWallets({ archived: 'all' }),
             ])
-          : [[], [], [], []]
+          : [[], [], []]
         if (cancelled) return
         const activeUsageMode = resolveActiveUsageMode(settings)
         const scopedIncomes = scopeRecordsByUsageMode(incomes, activeUsageMode)
         const scopedExpenses = scopeRecordsByUsageMode(expenses, activeUsageMode)
         const scopedTransfers = scopeRecordsByUsageMode(transfers, activeUsageMode)
-        setMovements(toUnifiedMovements(scopedIncomes, scopedExpenses, personalIncomeCategories, personalExpenseCategories, scopedTransfers, wallets))
+        setMovements(toUnifiedMovements(
+          transfersOnly ? [] : scopedIncomes,
+          transfersOnly ? [] : scopedExpenses,
+          [], personalExpenseCategories, scopedTransfers, wallets,
+        ))
         setShowUnreportedIncome(settings.showUnreportedIncome)
       } catch (error) {
         console.warn('No se pudieron cargar los movimientos.', error)
@@ -146,7 +152,6 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
     }
 
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
-    window.addEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, loadMovements)
     window.addEventListener(PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT, loadMovements)
     window.addEventListener(INTERNAL_TRANSFERS_CHANGED_EVENT, loadMovements)
     window.addEventListener(WALLETS_CHANGED_EVENT, loadMovements)
@@ -154,12 +159,11 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
     return () => {
       cancelled = true
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
-      window.removeEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, loadMovements)
       window.removeEventListener(PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT, loadMovements)
       window.removeEventListener(INTERNAL_TRANSFERS_CHANGED_EVENT, loadMovements)
       window.removeEventListener(WALLETS_CHANGED_EVENT, loadMovements)
     }
-  }, [])
+  }, [transfersOnly])
 
   const filtered = useMemo(() => {
     if (!movements) return null
@@ -168,7 +172,7 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
 
   const categories = useMemo(() => [...new Set((movements ?? []).map((movement) => movement.category))].sort((a, b) => a.localeCompare(b, 'es')), [movements])
   const currencies = useMemo(() => [...new Set((movements ?? []).map((movement) => movement.currency))].sort(), [movements])
-  const activeFilterCount = countActiveMovementFilters(filters)
+  const activeFilterCount = countActiveMovementFilters(transfersOnly ? { ...filters, type: 'all' } : filters)
   const periodCanMove = filters.period !== 'all' && filters.period !== 'custom'
 
   function applyFilters(nextFilters: typeof filters) {
@@ -177,7 +181,7 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
   }
 
   function clearFilters() {
-    window.sessionStorage.removeItem(MOVEMENT_FILTERS_SESSION_KEY)
+    window.sessionStorage.removeItem(sessionKey)
     setSearchParams(writeMovementFilters(defaultFilters, searchParams), { replace: true })
     setFiltersOpen(false)
   }
@@ -244,6 +248,7 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
 
       {filtersOpen && (
         <MovementFiltersSheet
+          transfersOnly={transfersOnly}
           categories={categories}
           currencies={currencies}
           defaultFilters={defaultFilters}
@@ -258,9 +263,9 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
       ) : filtered.length === 0 ? (
         movements?.length === 0 ? (
           <ActionableEmptyState
-            action={{ label: 'Registrar movimiento', onClick: onCreateMovement }}
-            description="Añade tu primer ingreso o egreso para construir el historial de movimientos."
-            title="Aún no hay movimientos"
+            action={{ label: transfersOnly ? 'Transferir entre wallets' : 'Registrar movimiento', onClick: onCreateMovement }}
+            description={transfersOnly ? 'Mueve dinero de una wallet a otra sin cambiar tu saldo total.' : 'Añade tu primer ingreso o egreso para construir el historial de movimientos.'}
+            title={transfersOnly ? 'Aún no hay transferencias' : 'Aún no hay movimientos'}
           />
         ) : (
           <ActionableEmptyState
@@ -335,14 +340,39 @@ function AllMovementsTab({ onCreateMovement }: { readonly onCreateMovement: () =
 }
 
 export function MovementsPage() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [createSheetOpen, setCreateSheetOpen] = useState(false)
+  const [showTransfers, setShowTransfers] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    const applySettings = (settings: AppSettings) => {
+      if (!cancelled) setShowTransfers(isBasicMode(settings))
+    }
+    const handleSettingsChanged = (event: Event) => applySettings((event as CustomEvent<AppSettings>).detail)
+    window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
+    getSettings().then(applySettings)
+    return () => {
+      cancelled = true
+      window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
+    }
+  }, [])
+  const tabs = showTransfers
+    ? [...TABS, { id: 'transferencias' as const, label: 'Transferencias' }]
+    : TABS
   const requestedTab = searchParams.get('tab')
   const activeTab: MovementTab =
-    requestedTab === 'ingresos' || requestedTab === 'egresos' ? requestedTab : 'todos'
+    requestedTab === 'ingresos' || requestedTab === 'egresos'
+      ? requestedTab
+      : requestedTab === 'transferencias' && showTransfers ? 'transferencias' : 'todos'
 
   function selectTab(tab: MovementTab) {
     const next = new URLSearchParams(searchParams)
+    if (tab === 'transferencias' || activeTab === 'transferencias') {
+      next.delete('type')
+      next.delete('category')
+      next.delete('reported')
+    }
     if (tab === 'todos') next.delete('tab')
     else next.set('tab', tab)
     setSearchParams(next, { replace: true })
@@ -350,9 +380,16 @@ export function MovementsPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-      {activeTab === 'todos' ? (
+      {activeTab === 'todos' || activeTab === 'transferencias' ? (
         <>
-          <PageHeader eyebrow="Movimientos" title="Ingresos y egresos" />
+          <PageHeader eyebrow="Movimientos" title={activeTab === 'transferencias' ? 'Transferencias entre wallets' : showTransfers ? 'Ingresos, egresos y transferencias' : 'Ingresos y egresos'}>
+            {showTransfers && (
+              <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white" to="/transfers/nuevo">
+                <ArrowLeftRight aria-hidden="true" className="size-4" />
+                Transferir entre wallets
+              </Link>
+            )}
+          </PageHeader>
           {createSheetOpen && (
             <MovementCreateSheet onCancel={() => setCreateSheetOpen(false)} />
           )}
@@ -361,7 +398,7 @@ export function MovementsPage() {
             role="tablist"
             aria-label="Tipo de movimiento"
           >
-            {TABS.map((tab) => (
+            {tabs.map((tab) => (
               <button
                 aria-selected={activeTab === tab.id}
                 className={[
@@ -379,12 +416,16 @@ export function MovementsPage() {
               </button>
             ))}
           </div>
-          <AllMovementsTab onCreateMovement={() => setCreateSheetOpen(true)} />
+          <AllMovementsTab
+            key={activeTab}
+            transfersOnly={activeTab === 'transferencias'}
+            onCreateMovement={() => activeTab === 'transferencias' ? navigate('/transfers/nuevo') : setCreateSheetOpen(true)}
+          />
         </>
       ) : (
         <div className="-mx-4">
           <div className="mx-4 mb-2 flex gap-1 rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900" role="tablist" aria-label="Tipo de movimiento">
-            {TABS.map((tab) => (
+            {tabs.map((tab) => (
               <button
                 aria-selected={activeTab === tab.id}
                 className={[

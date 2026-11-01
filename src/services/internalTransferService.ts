@@ -6,6 +6,8 @@ import { getStoredExpenseValue, getStoredIncomeValue } from '../utils/financeSta
 import type { Expense } from '../types/expense'
 import type { ServiceIncome } from '../types/service'
 import type { CurrencyCode } from '../types/settings'
+import { roundMoney } from '../utils/currency'
+import { currencies } from '../utils/countries'
 
 /** Mirrors WALLETS_CHANGED_EVENT: open balances/movements refresh without a full reload. */
 export const INTERNAL_TRANSFERS_CHANGED_EVENT = 'finance-app:internal-transfers-changed'
@@ -215,4 +217,69 @@ export async function deleteInternalTransfer(id: string) {
   })
   notifyInternalTransfersChanged()
   return result
+}
+
+/** Replace a transfer atomically, valuing the ledger without its old effect. */
+export async function updateInternalTransfer(
+  id: string,
+  input: CreateInternalTransferInput,
+  expectedUpdatedAt: string,
+): Promise<InternalTransfer> {
+  const settings = await getSettings()
+  if (resolveActiveUsageMode(settings) !== 'basic') {
+    throw new Error('Las transferencias entre wallets solo están disponibles en el modo Personal.')
+  }
+  if (input.fromWalletId === input.toWalletId) {
+    throw new Error('La wallet de origen y destino no pueden ser la misma.')
+  }
+  if (!Number.isFinite(input.amount) || input.amount <= 0 || roundMoney(input.amount) <= 0) {
+    throw new Error('El importe de la transferencia debe ser mayor que cero.')
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) ||
+      !Number.isFinite(Date.parse(input.date)) ||
+      new Date(input.date).toISOString().slice(0, 10) !== input.date) {
+    throw new Error('Debes indicar una fecha válida para la transferencia.')
+  }
+
+  const updated = await db.transaction('rw', [db.wallets, db.internalTransfers, db.services, db.expenses], async () => {
+    const original = await db.internalTransfers.get(id)
+    if (!original || original.usageMode !== 'basic') throw new Error('La transferencia no existe.')
+    const transferCurrency = currencies.find((currency) => currency.value === original.currency)?.value
+    if (!transferCurrency) throw new Error('La moneda de la transferencia no es válida.')
+    if (original.updatedAt !== expectedUpdatedAt) {
+      throw new Error('La transferencia cambió. Vuelve a abrirla antes de modificarla.')
+    }
+    const [fromWallet, toWallet, incomes, expenses, transfers] = await Promise.all([
+      db.wallets.get(input.fromWalletId), db.wallets.get(input.toWalletId),
+      db.services.toArray(), db.expenses.toArray(), db.internalTransfers.toArray(),
+    ])
+    if (!fromWallet || fromWallet.usageMode !== 'basic' ||
+        (fromWallet.isArchived && fromWallet.id !== original.fromWalletId)) {
+      throw new Error('La wallet de origen no es válida.')
+    }
+    if (!toWallet || toWallet.usageMode !== 'basic' ||
+        (toWallet.isArchived && toWallet.id !== original.toWalletId)) {
+      throw new Error('La wallet de destino no es válida.')
+    }
+    const next: InternalTransfer = {
+      ...original,
+      fromWalletId: input.fromWalletId, toWalletId: input.toWalletId,
+      amount: roundMoney(input.amount), date: input.date, note: input.note?.trim() || undefined,
+      updatedAt: new Date(Math.max(Date.now(), Date.parse(original.updatedAt) + 1)).toISOString(),
+    }
+    const proposed = [...transfers.filter((transfer) => transfer.id !== id), next]
+    const affectedIds = new Set([original.fromWalletId, original.toWalletId, next.fromWalletId, next.toWalletId])
+    for (const walletId of affectedIds) {
+      const before = roundMoney(calculateWalletBalance(walletId, transferCurrency, incomes, expenses, transfers))
+      const after = roundMoney(calculateWalletBalance(walletId, transferCurrency, incomes, expenses, proposed))
+      // Existing legacy deficits can be corrected or kept, never made worse.
+      if (after < Math.min(0, before)) {
+        throw new Error('La modificación dejaría una wallet con saldo negativo o aumentaría su déficit.')
+      }
+    }
+    await db.internalTransfers.put(next)
+    return next
+  })
+  notifyInternalTransfersChanged()
+  return updated
 }

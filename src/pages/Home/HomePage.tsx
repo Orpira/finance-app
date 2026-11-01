@@ -51,6 +51,7 @@ import { HOME_SECTION_ORDER } from './homeSectionOrder'
 import { selectHomeCopilotPresentation } from './homePendingIncomePresentation'
 import { WalletsSummaryCard } from './WalletsSummaryCard'
 import { WalletActivityCard } from './WalletActivityCard'
+import { calculatePersonalHomeTotals } from './personalHomeTotals'
 import { HomeMainPriority } from './HomeMainPriority'
 import type {
   CivilDate,
@@ -174,6 +175,8 @@ export function HomePage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [currentIncomes, setCurrentIncomes] = useState<ServiceIncome[]>([])
   const [currentExpenses, setCurrentExpenses] = useState<Expense[]>([])
+  const [historyIncomes, setHistoryIncomes] = useState<ServiceIncome[]>([])
+  const [historyExpenses, setHistoryExpenses] = useState<Expense[]>([])
   const [previousIncomes, setPreviousIncomes] = useState<ServiceIncome[]>([])
   const [previousExpenses, setPreviousExpenses] = useState<Expense[]>([])
   // Fuente canónica de "movimientos de la temporada activa" (misma que usa
@@ -334,6 +337,8 @@ export function HomePage() {
       })
       setActivePeriod(period ?? null)
       setActivePeriodStats(periodStats)
+      setHistoryIncomes(allIncomes)
+      setHistoryExpenses(allExpenses)
       setCurrentIncomes(contextualIncomes)
       setCurrentExpenses(contextualExpenses)
       setSeasonIncomes(seasonModeIncomes)
@@ -462,25 +467,23 @@ export function HomePage() {
 
   const totals = useMemo(() => {
     if (!settings) return null
-    // Las tarjetas de Resumen financiero (Resultado de la temporada/Ingresos/
-    // Egresos/Adicionales) usan el scope de TEMPORADA ACTIVA en modo profesional
-    // (mismo universo de movimientos que Meta de temporada), no el mes
-    // calendario: una temporada activa que atraviesa varios meses no debe
-    // perder sus acumulados al cambiar de mes. La comparativa ("previous")
-    // sigue la misma unidad: temporada anterior en profesional, mes
-    // anterior en Personal — nunca se mezclan las dos unidades.
+    // Personal: saldo de todo el historial, sin filtro mensual ni temporadas.
+    // Profesional: temporada activa y comparación con la temporada anterior.
+    // Los datos mensuales del Copiloto y snapshots conservan su scope explícito.
     const isBasicUser = isBasicMode(settings)
-    const summaryIncomes = isBasicUser ? currentIncomes : seasonIncomes
-    const summaryExpenses = isBasicUser ? currentExpenses : seasonExpenses
+    const summaryIncomes = seasonIncomes
+    const summaryExpenses = seasonExpenses
     const comparisonIncomes = isBasicUser ? previousIncomes : previousSeasonIncomes
     const comparisonExpenses = isBasicUser ? previousExpenses : previousSeasonExpenses
     return {
-      current: calculateFinancialTotals(
-        summaryIncomes,
-        summaryExpenses,
-        settings.defaultCurrency,
-        settings.secondaryCurrency,
-      ),
+      current: isBasicUser
+        ? calculatePersonalHomeTotals(historyIncomes, historyExpenses, settings.defaultCurrency, settings.secondaryCurrency)
+        : calculateFinancialTotals(
+            summaryIncomes,
+            summaryExpenses,
+            settings.defaultCurrency,
+            settings.secondaryCurrency,
+          ),
       previous: calculateFinancialTotals(
         comparisonIncomes,
         comparisonExpenses,
@@ -497,8 +500,8 @@ export function HomePage() {
       ),
     }
   }, [
-    currentExpenses,
-    currentIncomes,
+    historyIncomes,
+    historyExpenses,
     previousExpenses,
     previousIncomes,
     previousSeasonExpenses,
@@ -531,13 +534,13 @@ export function HomePage() {
     settings.showUnreportedIncome,
   )
   const isBasicUser = isBasicMode(settings)
-  const summaryScopeLabel = isBasicUser ? 'del mes' : 'de la temporada'
+  const summaryScopeLabel = isBasicUser ? 'acumulados' : 'de la temporada'
 
   const cards = [
     {
       icon: TrendingUp,
       label: isBasicMode(settings) ? 'Balance' : 'Resultado de la temporada',
-      description: 'Ingresos − egresos',
+      description: isBasicUser ? 'Saldo acumulado · Ingresos − egresos' : 'Ingresos − egresos',
       value: totals.current.primaryNet,
       previous: totals.previous.primaryNet,
       sensitive: true,
@@ -592,7 +595,7 @@ export function HomePage() {
             <p className="text-sm font-medium text-emerald-300">{settings.businessName || 'Private Balance'}</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">Inicio</h1>
             <p className="mt-2 text-sm text-slate-300">
-              {isBasicUser ? 'Resumen financiero del mes actual' : 'Resumen financiero de la temporada activa'}
+              {isBasicUser ? 'Saldos acumulados de tus movimientos' : 'Resumen financiero de la temporada activa'}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -625,7 +628,7 @@ export function HomePage() {
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900" key={label}>
             <div className="flex items-center justify-between gap-3">
               <span className={`flex size-11 items-center justify-center rounded-xl ${tone}`}><Icon className="size-5" aria-hidden="true" /></span>
-              <Variation current={value} previous={previous} scope={isBasicUser ? 'month' : 'season'} />
+              {!isBasicUser && <Variation current={value} previous={previous} scope="season" />}
             </div>
             <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
             <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">

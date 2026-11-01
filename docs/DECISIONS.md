@@ -90,3 +90,34 @@ Format used: one ADR per section with Context, Decision, Status and Consequences
 - Context: the Copilot can detect relevant situations (goal risk, unusual expenses, income drops, season closing, agenda actions, data inconsistencies) without the user asking first, but no architectural decision defined when a detected insight is allowed to become a proactive notification.
 - Decision: every candidate notification must pass through a mandatory `Notification Policy Engine` (relevance, priority P0–P3, confidence ≥ 0.70, user preferences, deduplication via `dedupKey`, frequency caps, cooldown, revalidation against current state, expiration, privacy) before it can be shown; the Copilot itself never emits a notification directly. `Insight ≠ Notification`. The Copilot may detect, explain and recommend, but a notification can never execute a financial action automatically, and `P1` notifications must always carry an associated action.
 - Consequences: introduces a new `Notification Policy Engine` and local notification state/repository (IndexedDB) that any future proactive-notification feature must go through; implementation is staged (Fase 1 deterministic season/agenda events, Fase 2 financial insights, Fase 3 complex Copilot-detected relationships) and this ADR does not itself require immediate implementation of any phase.
+
+## Retirada de categorías de ingresos — 2026-10-31
+
+- Estado: aceptada por solicitud explícita del usuario.
+- Decisión: eliminar las categorías de ingresos del registro/edición, listado, detalle, movimientos y configuración. Los reportes de wallets agrupan ingresos por nombre o concepto, tanto en HTML/impresión/PDF como en el fallback textual. Las categorías de egresos siguen vigentes.
+- Compatibilidad: conservar el catálogo y las referencias históricas en IndexedDB y backups; no borrar ni migrar movimientos, importes, saldos o asignaciones de wallets. Los ingresos nuevos creados por el formulario no asignan categoría. La ruta antigua de gestión redirige a categorías de egresos.
+- Impacto: simplificación inmediata del formulario y coherencia a largo plazo entre pantallas y exportaciones. No cambia el esquema ni los cálculos financieros; no requiere migración.
+
+## Transferencias en Movimientos Personal — 2026-11-01
+
+- Solicitud: presentar transferencias entre wallets junto a ingresos y egresos.
+- Decisión: añadir la pestaña Transferencias y acceso directo a crear transferencias en Personal, incluido el contexto Personal de Híbrido. Profesional conserva sus pestañas.
+- La pestaña reutiliza el historial y el formulario existentes, con búsqueda, fechas, moneda y orden; excluye filtros de categoría y reporte y mantiene separadas las preferencias de filtros. Las transferencias siguen siendo internas y no cambian el saldo total ni los ingresos/egresos. No hay cambios de persistencia ni cálculos.
+
+## Inicio Personal con saldos acumulados — 2026-11-01
+
+- Solicitud explícita: Personal no usa periodos ni temporadas para sus saldos.
+- Decisión: las tarjetas de Ingresos, Egresos y Balance usan todo el historial Personal y mantienen los cálculos financieros existentes. La actividad de wallets también es acumulada. Se retira la variación mensual de estas tarjetas para no comparar acumulados con un solo mes. Profesional conserva temporada activa y comparación contra temporada anterior.
+- Los datos mensuales usados para análisis del Copiloto y snapshots siguen separados y no se convierten en acumulados. Sin cambios de esquema, registros, importes, monedas ni transferencias.
+
+## Modificación de transferencias — 2026-11-01
+
+- Solicitud: añadir Modificar transferencia en el detalle y reutilizar el formulario precargado para origen, destino, importe, fecha y nota.
+- Guardado atómico sobre el mismo registro e ID, preservando moneda y fecha de creación. Validación de todas las wallets afectadas sin duplicar el efecto anterior: no permite nuevos saldos negativos ni empeorar déficits históricos. Detecta edición obsoleta mediante updatedAt y emite el evento de actualización existente solo tras guardar.
+- Exclusivo de Personal y contexto Personal de Híbrido. Conserva wallets archivadas previamente asignadas; no permite nuevas asignaciones a archivadas. No genera ingresos/egresos ni cambia el esquema.
+
+## Selectores de wallets con saldo positivo — 2026-11-01
+
+- Solicitud explícita: ingresos y egresos personales solo ofrecen wallets con saldo mayor que cero. Se usa el saldo acumulado canónico en moneda principal; se excluyen archivadas y saldos cero, negativos o no finitos. El valor predeterminado también respeta el filtro.
+- Edición: una asignación histórica que ya no cumple el filtro puede conservarse mediante una opción separada, sin ofrecer esa wallet como destino de una nueva asignación. No se reasignan movimientos automáticamente.
+- Crear una wallet desde el formulario ya no la selecciona automáticamente: nace sin saldo y queda fuera del selector hasta tener saldo positivo. No cambia el registro ni el cálculo de saldos.

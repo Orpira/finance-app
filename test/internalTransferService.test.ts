@@ -77,7 +77,7 @@ vi.mock('../src/services/settingsService', () => ({
 
 vi.stubGlobal('window', { dispatchEvent: () => true })
 
-const { createInternalTransfer, deleteInternalTransfer, listInternalTransfers } = await import(
+const { createInternalTransfer, deleteInternalTransfer, listInternalTransfers, updateInternalTransfer } = await import(
   '../src/services/internalTransferService'
 )
 
@@ -197,5 +197,73 @@ describe('listInternalTransfers / deleteInternalTransfer', () => {
 
   it('rechaza eliminar una transferencia inexistente', async () => {
     await expect(deleteInternalTransfer('itx-nope')).rejects.toThrow('no existe')
+  })
+})
+
+
+describe('updateInternalTransfer', () => {
+  async function seed(amount = 60) {
+    incomes.push({ walletId: 'wal-1', eurValue: 100, currency: 'EUR' })
+    return createInternalTransfer({ fromWalletId: 'wal-1', toWalletId: 'wal-2', amount, date: '2026-10-31' })
+  }
+  it('reemplaza sin duplicar, conserva identidad, moneda y creación y no toca ingresos/egresos', async () => {
+    const original = await seed()
+    settingsRow.defaultCurrency = 'COP'
+    const updated = await updateInternalTransfer(original.id, {
+      fromWalletId: 'wal-1', toWalletId: 'wal-2', amount: 80, date: '2026-11-01', note: ' Nueva nota ',
+    }, original.updatedAt)
+    expect(updated).toMatchObject({ id: original.id, createdAt: original.createdAt, currency: 'EUR', amount: 80, note: 'Nueva nota' })
+    expect(updated.updatedAt).not.toBe(original.updatedAt)
+    expect(transfers).toHaveLength(1)
+    expect(incomes).toHaveLength(1)
+    expect(expenses).toHaveLength(0)
+  })
+  it('rechaza aumentos por encima del saldo disponible sin cambiar el registro', async () => {
+    const original = await seed()
+    await expect(updateInternalTransfer(original.id, { ...original, amount: 101 }, original.updatedAt)).rejects.toThrow('saldo negativo')
+    expect(transfers[0]).toEqual(original)
+  })
+  it('rechaza reducir el destino cuando ese dinero ya se gastó', async () => {
+    const original = await seed()
+    expenses.push({ walletId: 'wal-2', eurValue: 50, currency: 'EUR' })
+    await expect(updateInternalTransfer(original.id, { ...original, amount: 40 }, original.updatedAt)).rejects.toThrow('saldo negativo')
+    expect(transfers[0]).toEqual(original)
+  })
+  it('permite cambiar ambas wallets, retirando primero el efecto anterior', async () => {
+    const original = await seed()
+    wallets.push({ id: 'wal-3', name: 'Otra', usageMode: 'basic', isArchived: false })
+    incomes.push({ walletId: 'wal-2', eurValue: 20, currency: 'EUR' })
+    const updated = await updateInternalTransfer(original.id, { ...original, fromWalletId: 'wal-2', toWalletId: 'wal-3', amount: 20 }, original.updatedAt)
+    expect(updated).toMatchObject({ fromWalletId: 'wal-2', toWalletId: 'wal-3', amount: 20 })
+    expect(transfers).toHaveLength(1)
+  })
+  it('rechaza una edición obsoleta y una transferencia eliminada', async () => {
+    const original = await seed()
+    await updateInternalTransfer(original.id, { ...original, note: 'Nueva' }, original.updatedAt)
+    await expect(updateInternalTransfer(original.id, original, original.updatedAt)).rejects.toThrow('cambió')
+    await deleteInternalTransfer(original.id)
+    await expect(updateInternalTransfer(original.id, original, original.updatedAt)).rejects.toThrow('no existe')
+  })
+  it('rechaza Profesional y acepta el contexto Personal de Híbrido', async () => {
+    const original = await seed()
+    settingsRow.usageMode = 'professional'
+    await expect(updateInternalTransfer(original.id, original, original.updatedAt)).rejects.toThrow('modo Personal')
+    settingsRow = { defaultCurrency: 'EUR', usageMode: 'hybrid', activeContext: 'basic' }
+    expect(await updateInternalTransfer(original.id, { ...original, note: 'Híbrido' }, original.updatedAt)).toMatchObject({ note: 'Híbrido' })
+  })
+  it('rechaza importes inválidos, fecha inválida, wallets iguales o ajenas', async () => {
+    const original = await seed()
+    for (const amount of [0, -1, NaN, Infinity, 0.001]) {
+      await expect(updateInternalTransfer(original.id, { ...original, amount }, original.updatedAt)).rejects.toThrow('mayor que cero')
+    }
+    await expect(updateInternalTransfer(original.id, { ...original, date: '2026-02-30' }, original.updatedAt)).rejects.toThrow('fecha válida')
+    await expect(updateInternalTransfer(original.id, { ...original, toWalletId: 'wal-1' }, original.updatedAt)).rejects.toThrow('misma')
+    await expect(updateInternalTransfer(original.id, { ...original, toWalletId: 'missing' }, original.updatedAt)).rejects.toThrow('destino no es válida')
+    await expect(updateInternalTransfer(original.id, { ...original, toWalletId: 'wal-archived' }, original.updatedAt)).rejects.toThrow('destino no es válida')
+  })
+  it('permite conservar wallets archivadas ya asignadas', async () => {
+    const original = await seed()
+    wallets[1].isArchived = true
+    expect(await updateInternalTransfer(original.id, { ...original, note: 'Nota' }, original.updatedAt)).toMatchObject({ note: 'Nota' })
   })
 })

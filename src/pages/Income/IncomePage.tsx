@@ -21,20 +21,15 @@ import {
   listIncomeAdditionals,
 } from '../../services/incomeAdditionalService'
 import {
-  createPersonalIncomeCategory,
-  getPersonalIncomeCategoryById,
-  listPersonalIncomeCategories,
-  normalizePersonalIncomeCategoryName,
-  PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT,
-} from '../../services/personalIncomeCategoryService'
-import {
   createWallet,
   getWalletById,
-  listWallets,
+  listWalletsWithBalances,
+  type WalletWithBalance,
   normalizeWalletName,
   WALLETS_CHANGED_EVENT,
 } from '../../services/walletService'
 import type { Wallet } from '../../types/wallet'
+import { positiveWalletOptions } from '../../utils/positiveWalletOptions'
 import {
   createServiceIncome,
   getServiceIncomeById,
@@ -95,7 +90,6 @@ import {
 import { describeSeasonGeoError } from '../../components/seasons/geo/seasonGeoMessages'
 import { useDialog } from '../../components/dialogs/useDialog'
 import { MAX_PERSONAL_INCOME_NAME_LENGTH } from '../../utils/personalIncomeName'
-import type { PersonalIncomeCategory } from '../../types/personalIncomeCategory'
 
 type SaveStatus = 'idle' | 'saving' | 'error' | 'duplicateHour'
 
@@ -193,11 +187,8 @@ export function IncomePage() {
   const [editingIncome, setEditingIncome] = useState<ServiceIncome | null>(null)
   const [incomeType, setIncomeType] = useState<ServiceIncomeType>('ingreso')
   const [personalName, setPersonalName] = useState('')
-  const [personalCategoryId, setPersonalCategoryId] = useState('')
-  const [personalCategoryOptions, setPersonalCategoryOptions] = useState<PersonalIncomeCategory[]>([])
-  const [assignedArchivedCategory, setAssignedArchivedCategory] = useState<PersonalIncomeCategory | null>(null)
   const [walletId, setWalletId] = useState('')
-  const [walletOptions, setWalletOptions] = useState<Wallet[]>([])
+  const [walletOptions, setWalletOptions] = useState<WalletWithBalance[]>([])
   const [assignedArchivedWallet, setAssignedArchivedWallet] = useState<Wallet | null>(null)
   const [date, setDate] = useState(() => formatInputDate(new Date()))
   const [duration, setDuration] = useState(0)
@@ -265,18 +256,8 @@ export function IncomePage() {
       const currentIncomePeriod = currentIncomePeriodId
         ? await getEarningPeriodById(currentIncomePeriodId)
         : undefined
-      const currentPersonalCategories = isBasicMode(currentSettings)
-        ? await listPersonalIncomeCategories({ archived: 'active' })
-        : []
-      const assignedCategoryId = currentIncome?.personalCategoryId
-      const assignedCategoryIsMissingFromActiveList =
-        assignedCategoryId !== undefined &&
-        !currentPersonalCategories.some((category) => category.id === assignedCategoryId)
-      const currentAssignedArchivedCategory = assignedCategoryIsMissingFromActiveList
-        ? await getPersonalIncomeCategoryById(assignedCategoryId)
-        : undefined
       const currentWallets = isBasicMode(currentSettings)
-        ? await listWallets({ archived: 'active' })
+        ? await listWalletsWithBalances(currentSettings.defaultCurrency, { archived: 'active' })
         : []
       const assignedWalletId = currentIncome?.walletId
       const assignedWalletIsMissingFromActiveList =
@@ -296,8 +277,6 @@ export function IncomePage() {
       setApplySeasonPercentageToHourly(false)
       setActivePeriod(currentPeriod ?? null)
       setEditingPeriod(currentIncomePeriod ?? null)
-      setPersonalCategoryOptions(currentPersonalCategories)
-      setAssignedArchivedCategory(currentAssignedArchivedCategory ?? null)
       setWalletOptions(currentWallets)
       setAssignedArchivedWallet(currentAssignedArchivedWallet ?? null)
       setIncomes(
@@ -354,16 +333,17 @@ export function IncomePage() {
         setEditingIncome(currentIncome)
         setGeoDraft(createGeographyDraft(currentIncome, (currentIncomePeriod ?? currentPeriod)?.countryCode))
         setPersonalName(currentIncome.personalName ?? '')
-        setPersonalCategoryId(currentIncome.personalCategoryId ?? '')
         setWalletId(currentIncome.walletId ?? '')
         setIncomeType(getIncomeType(currentIncome))
         setDate(currentIncome.date)
         const currentDuration = getEffectiveFinancialDuration(currentIncome) ?? 0
         setDuration(currentDuration)
         setDurationLabel(
-          isServiceDurationLabel(currentIncome.durationLabel)
-            ? currentIncome.durationLabel
-            : getNumericDurationLabel(currentDuration) ?? '',
+          currentIncome.durationLabel === 'Salida' || currentIncome.durationLabel === '120'
+            ? 'Personalizado'
+            : isServiceDurationLabel(currentIncome.durationLabel)
+              ? currentIncome.durationLabel
+              : getNumericDurationLabel(currentDuration) ?? 'Personalizado',
         )
         setDurationSelectionChanged(false)
         setTotalAmount(currentIncome.totalAmount)
@@ -395,8 +375,7 @@ export function IncomePage() {
             currentSettings.defaultCurrency,
         )
         setHourlyRateApplied(currentSettings.hourlyRate)
-        setPersonalCategoryId('')
-        setWalletId(currentWallets.find((wallet) => wallet.isDefault)?.id ?? '')
+        setWalletId(positiveWalletOptions(currentWallets).find((wallet) => wallet.isDefault)?.id ?? '')
       }
     }
 
@@ -410,31 +389,10 @@ export function IncomePage() {
   useEffect(() => {
     let isMounted = true
 
-    function handlePersonalIncomeCategoriesChanged() {
-      listPersonalIncomeCategories({ archived: 'active' }).then((nextCategories) => {
-        if (isMounted) {
-          setPersonalCategoryOptions(nextCategories)
-        }
-      })
-    }
-
-    window.addEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, handlePersonalIncomeCategoriesChanged)
-
-    return () => {
-      isMounted = false
-      window.removeEventListener(PERSONAL_INCOME_CATEGORIES_CHANGED_EVENT, handlePersonalIncomeCategoriesChanged)
-    }
-  }, [])
-
-  useEffect(() => {
-    let isMounted = true
-
-    function handleWalletsChanged() {
-      listWallets({ archived: 'active' }).then((nextWallets) => {
-        if (isMounted) {
-          setWalletOptions(nextWallets)
-        }
-      })
+    async function handleWalletsChanged() {
+      const currentSettings = await getSettings()
+      const nextWallets = await listWalletsWithBalances(currentSettings.defaultCurrency, { archived: 'active' })
+      if (isMounted) setWalletOptions(nextWallets)
     }
 
     window.addEventListener(WALLETS_CHANGED_EVENT, handleWalletsChanged)
@@ -491,68 +449,12 @@ export function IncomePage() {
   }
 
   const isBasicUser = isBasicMode(settings ?? undefined)
-  // The currently-assigned category stays selectable even once archived (so an
-  // existing income can keep or drop it), but it is never offered for a
-  // different income: it only ever comes from `assignedArchivedCategory`.
-  const personalCategorySelectOptions = useMemo(() => {
-    if (
-      assignedArchivedCategory === null ||
-      personalCategoryOptions.some((category) => category.id === assignedArchivedCategory.id)
-    ) {
-      return personalCategoryOptions
-    }
-    return [...personalCategoryOptions, assignedArchivedCategory].sort((a, b) =>
-      a.name.localeCompare(b.name, 'es'),
-    )
-  }, [personalCategoryOptions, assignedArchivedCategory])
-  // Same "keep the currently-assigned wallet selectable even once archived" rule as categories.
-  const walletSelectOptions = useMemo(() => {
-    if (
-      assignedArchivedWallet === null ||
-      walletOptions.some((wallet) => wallet.id === assignedArchivedWallet.id)
-    ) {
-      return walletOptions
-    }
-    return [...walletOptions, assignedArchivedWallet].sort((a, b) =>
-      a.name.localeCompare(b.name, 'es'),
-    )
-  }, [walletOptions, assignedArchivedWallet])
+  // Keep the assigned wallet selectable when archived.
+  const walletSelectOptions = useMemo(() => positiveWalletOptions(walletOptions), [walletOptions])
+  const retainedWalletId = editingIncome?.walletId
+  const retainedWallet = walletOptions.find((wallet) => wallet.id === retainedWalletId) ?? assignedArchivedWallet
+  const retainCurrentWallet = Boolean(retainedWalletId && !walletSelectOptions.some((wallet) => wallet.id === retainedWalletId))
 
-  async function handleQuickCreatePersonalCategory() {
-    const name = await prompt({
-      title: 'Nueva categoría',
-      message: 'Escribe el nombre de la nueva categoría de ingreso personal.',
-      placeholder: 'Ej. Nómina, reembolso, venta',
-      confirmLabel: 'Crear',
-      validate: (value) => {
-        try {
-          normalizePersonalIncomeCategoryName(value)
-          return undefined
-        } catch (error) {
-          return error instanceof Error ? error.message : 'Nombre inválido.'
-        }
-      },
-    })
-
-    if (!name) {
-      return
-    }
-
-    try {
-      const created = await createPersonalIncomeCategory({ name })
-      setPersonalCategoryOptions((current) =>
-        [...current, created].sort((a, b) => a.name.localeCompare(b.name, 'es')),
-      )
-      setPersonalCategoryId(created.id)
-      setSaveError('')
-    } catch (error) {
-      await alert({
-        type: 'error',
-        title: 'No se pudo crear la categoría',
-        message: error instanceof Error ? error.message : 'La categoría no se pudo crear.',
-      })
-    }
-  }
 
   async function handleQuickCreateWallet() {
     const name = await prompt({
@@ -573,12 +475,10 @@ export function IncomePage() {
     if (!name) return
 
     try {
-      const created = await createWallet({ name })
-      setWalletOptions((current) =>
-        [...current.filter((wallet) => wallet.id !== created.id), created]
-          .sort((left, right) => left.name.localeCompare(right.name, 'es')),
-      )
-      setWalletId(created.id)
+      await createWallet({ name })
+      const currentSettings = await getSettings()
+      setWalletOptions(await listWalletsWithBalances(currentSettings.defaultCurrency, { archived: 'active' }))
+      await alert({ type: 'info', title: 'Wallet creada', message: 'Aparecerá en el selector cuando tenga saldo mayor que 0.' })
       setSaveError('')
     } catch (error) {
       await alert({
@@ -758,6 +658,14 @@ export function IncomePage() {
   }
 
   function handleDurationChange(nextLabel: ServiceDurationLabel) {
+    if (nextLabel === 'Personalizado') {
+      setDuration(0)
+      setDurationLabel(nextLabel)
+      setDurationSelectionChanged(true)
+      setSaveError('')
+      return
+    }
+
     const selectedOption = getServiceDurationOption(nextLabel)
 
     if (!selectedOption) {
@@ -780,6 +688,12 @@ export function IncomePage() {
     if (usesServiceDuration && !durationLabel) {
       setSaveStatus('error')
       setSaveError('Selecciona una duración antes de guardar.')
+      return
+    }
+
+    if (usesServiceDuration && durationLabel === 'Personalizado' && (!Number.isSafeInteger(duration) || duration <= 0)) {
+      setSaveStatus('error')
+      setSaveError('Ingresa una duración válida en minutos enteros mayor a cero.')
       return
     }
 
@@ -863,7 +777,6 @@ export function IncomePage() {
         status: editingIncome?.status ?? 'FINALIZADO',
         type: isBasicUser ? 'ingreso' : incomeType,
         ...(isBasicUser ? { personalName } : {}),
-        ...(isBasicUser ? { personalCategoryId: personalCategoryId || undefined } : {}),
         ...(isBasicUser ? { walletId: walletId || undefined } : {}),
         date: registrationDate,
         // Personal nunca captura ni persiste tipo de pago (Bloque 3, modos de
@@ -1108,38 +1021,6 @@ export function IncomePage() {
 
             <div className="flex flex-col gap-2 md:col-span-2">
               <div className="flex items-center justify-between gap-3">
-                <label className="text-sm font-medium text-slate-700" htmlFor="personal-income-category">
-                  Categoría
-                </label>
-                <button
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
-                  onClick={handleQuickCreatePersonalCategory}
-                  type="button"
-                >
-                  <Plus className="size-3.5" aria-hidden="true" />
-                  Nueva categoría
-                </button>
-              </div>
-              <select
-                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                id="personal-income-category"
-                onChange={(event) => {
-                  setPersonalCategoryId(event.target.value)
-                  setSaveError('')
-                }}
-                value={personalCategoryId}
-              >
-                <option value="">Sin categoría</option>
-                {personalCategorySelectOptions.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.isArchived ? `${category.name} · Archivada` : category.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-col gap-2 md:col-span-2">
-              <div className="flex items-center justify-between gap-3">
                 <label className="text-sm font-medium text-slate-700" htmlFor="income-wallet">
                   Wallet de destino
                 </label>
@@ -1162,12 +1043,15 @@ export function IncomePage() {
                 value={walletId}
               >
                 <option value="">Sin wallet</option>
+                {retainCurrentWallet && <option value={retainedWalletId}>Conservar asignación actual</option>}
                 {walletSelectOptions.map((wallet) => (
                   <option key={wallet.id} value={wallet.id}>
                     {wallet.isArchived ? `${wallet.name} · Archivada` : wallet.name}
                   </option>
                 ))}
               </select>
+              {retainCurrentWallet && <p className="text-xs text-slate-500">Wallet del movimiento: {retainedWallet?.name ?? 'Asignación guardada'}. Se conserva si no eliges otra.</p>}
+              {walletSelectOptions.length === 0 && <p className="text-xs text-slate-500">No hay wallets con saldo mayor que 0.</p>}
               <span className="text-xs text-slate-500">Opcional. Indica dónde quedó este dinero.</span>
             </div>
           </div>
@@ -1255,6 +1139,12 @@ export function IncomePage() {
 
         {usesServiceDuration && (
           <ServiceDurationSelect
+            customMinutes={duration}
+            onCustomMinutesChange={(minutes) => {
+              setDuration(minutes)
+              setDurationSelectionChanged(true)
+              setSaveError('')
+            }}
             onChange={handleDurationChange}
             unit={effectiveWorkedTimeUnit}
             value={durationLabel}

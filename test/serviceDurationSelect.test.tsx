@@ -24,3 +24,17 @@ describe('ServiceDurationSelect', () => {
     expect(markup).toContain('30 minutos')
   })
 })
+
+describe('duración personalizada en ingresos', () => {
+  it('reemplaza Salida y solicita minutos positivos enteros incluso con unidad horas', () => {
+    const markup = renderToStaticMarkup(
+      <ServiceDurationSelect onChange={() => undefined} onCustomMinutesChange={() => undefined} customMinutes={75} unit="hours" value="Personalizado" />,
+    )
+    expect(markup).toContain('Personalizado')
+    expect(markup).not.toContain('Salida')
+    expect(markup).toContain('Duración personalizada (minutos)')
+    expect(markup).toContain('value="75"')
+    expect(markup).toContain('min="1"')
+    expect(markup).toContain('step="1"')
+  })
+})

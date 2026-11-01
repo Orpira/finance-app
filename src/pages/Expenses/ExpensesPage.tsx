@@ -28,13 +28,15 @@ import { getSettings } from '../../services/settingsService'
 import {
   createWallet,
   getWalletById,
-  listWallets,
+  listWalletsWithBalances,
+  type WalletWithBalance,
   normalizeWalletName,
   WALLETS_CHANGED_EVENT,
 } from '../../services/walletService'
 import type { ExpenseType } from '../../types/expense'
 import type { PersonalExpenseCategory } from '../../types/personalExpenseCategory'
 import type { Wallet } from '../../types/wallet'
+import { positiveWalletOptions } from '../../utils/positiveWalletOptions'
 import type { ServiceIncome } from '../../types/service'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import {
@@ -117,7 +119,8 @@ export function ExpensesPage() {
   const [personalCategoryOptions, setPersonalCategoryOptions] = useState<PersonalExpenseCategory[]>([])
   const [assignedArchivedCategory, setAssignedArchivedCategory] = useState<PersonalExpenseCategory | null>(null)
   const [walletId, setWalletId] = useState('')
-  const [walletOptions, setWalletOptions] = useState<Wallet[]>([])
+  const [retainedWalletId, setRetainedWalletId] = useState('')
+  const [walletOptions, setWalletOptions] = useState<WalletWithBalance[]>([])
   const [assignedArchivedWallet, setAssignedArchivedWallet] = useState<Wallet | null>(null)
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [exchangeRate, setExchangeRate] = useState(EUR_COP_DEFAULT_RATE)
@@ -185,10 +188,10 @@ export function ExpensesPage() {
       setSettings(currentSettings)
       if (isBasicMode(currentSettings)) {
         setPersonalCategoryOptions(await listPersonalExpenseCategories({ archived: 'active' }))
-        const currentWallets = await listWallets({ archived: 'active' })
+        const currentWallets = await listWalletsWithBalances(currentSettings.defaultCurrency, { archived: 'active' })
         setWalletOptions(currentWallets)
         if (!parsedExpenseId) {
-          setWalletId(currentWallets.find((wallet) => wallet.isDefault)?.id ?? '')
+          setWalletId(positiveWalletOptions(currentWallets).find((wallet) => wallet.isDefault)?.id ?? '')
         }
       }
       setCurrency(
@@ -297,6 +300,7 @@ export function ExpensesPage() {
         }
       }
       setWalletId(currentExpense.walletId ?? '')
+      setRetainedWalletId(currentExpense.walletId ?? '')
       if (isBasicMode(currentSettings) && currentExpense.walletId) {
         const assignedWallet = await getWalletById(currentExpense.walletId)
         if (assignedWallet?.isArchived) {
@@ -331,24 +335,22 @@ export function ExpensesPage() {
     )
   }, [assignedArchivedCategory, personalCategoryOptions])
 
-  const walletSelectOptions = useMemo(() => {
-    if (
-      assignedArchivedWallet === null ||
-      walletOptions.some((walletOption) => walletOption.id === assignedArchivedWallet.id)
-    ) {
-      return walletOptions
-    }
-    return [...walletOptions, assignedArchivedWallet].sort((left, right) =>
-      left.name.localeCompare(right.name, 'es'),
-    )
-  }, [assignedArchivedWallet, walletOptions])
+  const walletSelectOptions = useMemo(() => positiveWalletOptions(walletOptions), [walletOptions])
+  const retainedWallet = walletOptions.find((wallet) => wallet.id === retainedWalletId) ?? assignedArchivedWallet
+  const retainCurrentWallet = Boolean(retainedWalletId && !walletSelectOptions.some((wallet) => wallet.id === retainedWalletId))
 
   useEffect(() => {
-    function handleWalletsChanged() {
-      listWallets({ archived: 'active' }).then(setWalletOptions)
+    let mounted = true
+    async function handleWalletsChanged() {
+      const currentSettings = await getSettings()
+      const nextWallets = await listWalletsWithBalances(currentSettings.defaultCurrency, { archived: 'active' })
+      if (mounted) setWalletOptions(nextWallets)
     }
     window.addEventListener(WALLETS_CHANGED_EVENT, handleWalletsChanged)
-    return () => window.removeEventListener(WALLETS_CHANGED_EVENT, handleWalletsChanged)
+    return () => {
+      mounted = false
+      window.removeEventListener(WALLETS_CHANGED_EVENT, handleWalletsChanged)
+    }
   }, [])
 
   async function handleQuickCreatePersonalCategory() {
@@ -404,12 +406,10 @@ export function ExpensesPage() {
     if (!name) return
 
     try {
-      const created = await createWallet({ name })
-      setWalletOptions((current) =>
-        [...current.filter((wallet) => wallet.id !== created.id), created]
-          .sort((left, right) => left.name.localeCompare(right.name, 'es')),
-      )
-      setWalletId(created.id)
+      await createWallet({ name })
+      const currentSettings = await getSettings()
+      setWalletOptions(await listWalletsWithBalances(currentSettings.defaultCurrency, { archived: 'active' }))
+      await alert({ type: 'info', title: 'Wallet creada', message: 'Aparecerá en el selector cuando tenga saldo mayor que 0.' })
       setValidationError('')
     } catch (error) {
       await alert({
@@ -794,12 +794,15 @@ export function ExpensesPage() {
               value={walletId}
             >
               <option value="">Sin wallet</option>
+              {retainCurrentWallet && <option value={retainedWalletId}>Conservar asignación actual</option>}
               {walletSelectOptions.map((walletOption) => (
                 <option key={walletOption.id} value={walletOption.id}>
                   {walletOption.isArchived ? `${walletOption.name} · Archivada` : walletOption.name}
                 </option>
               ))}
             </select>
+            {retainCurrentWallet && <p className="text-xs text-slate-500">Wallet del movimiento: {retainedWallet?.name ?? 'Asignación guardada'}. Se conserva si no eliges otra.</p>}
+            {walletSelectOptions.length === 0 && <p className="text-xs text-slate-500">No hay wallets con saldo mayor que 0.</p>}
             <span className="text-xs text-slate-500">Opcional. Indica de dónde salió el dinero.</span>
           </div>
           </div>

@@ -1,12 +1,11 @@
-import { Trash2 } from 'lucide-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import { useDialog } from '../../components/dialogs/useDialog'
 import { deleteInternalTransfer, getInternalTransferById } from '../../services/internalTransferService'
 import { getWalletById } from '../../services/walletService'
-import { getSettings } from '../../services/settingsService'
 import type { InternalTransfer } from '../../types/internalTransfer'
 import type { Wallet } from '../../types/wallet'
 import type { CurrencyCode } from '../../types/settings'
@@ -19,7 +18,6 @@ export function TransferDetailPage() {
   const [transfer, setTransfer] = useState<InternalTransfer | null>(null)
   const [fromWallet, setFromWallet] = useState<Wallet | null>(null)
   const [toWallet, setToWallet] = useState<Wallet | null>(null)
-  const [currency, setCurrency] = useState<CurrencyCode>('EUR')
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -29,10 +27,9 @@ export function TransferDetailPage() {
       if (!id) return
       setIsLoading(true)
       try {
-        const [record, settings] = await Promise.all([getInternalTransferById(id), getSettings()])
+        const record = await getInternalTransferById(id)
         if (cancelled) return
         setTransfer(record ?? null)
-        setCurrency(settings.defaultCurrency)
         if (record) {
           const [origin, destination] = await Promise.all([
             getWalletById(record.fromWalletId),
@@ -90,7 +87,7 @@ export function TransferDetailPage() {
           <div className="flex items-center justify-between">
             <span className="text-sm text-slate-500">Importe</span>
             <span className="text-lg font-semibold text-slate-950">
-              {formatCurrency(transfer.amount, currency)}
+              {formatCurrency(transfer.amount, transfer.currency as CurrencyCode)}
             </span>
           </div>
           <div className="flex items-center justify-between">
@@ -114,6 +111,13 @@ export function TransferDetailPage() {
             </div>
           ) : null}
 
+          {!isDeleting && <Link
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-emerald-200 px-4 text-sm font-semibold text-emerald-700"
+            to={`/transfers/${transfer.id}/editar`}
+          >
+            <Pencil className="size-4" aria-hidden="true" />
+            Modificar transferencia
+          </Link>}
           <button
             className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={isDeleting}

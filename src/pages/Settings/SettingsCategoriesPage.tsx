@@ -1,15 +1,9 @@
-import { ArrowDownToLine, ArrowUpFromLine, ChevronRight, Layers } from 'lucide-react'
+import { ArrowDownToLine, ChevronRight, Layers } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 
 const categorySections = [
-  {
-    description: 'Crea, renombra, archiva y reactiva categorías para clasificar tus ingresos personales.',
-    href: '/settings/personal-income-categories',
-    icon: ArrowUpFromLine,
-    label: 'Ingresos personales',
-  },
   {
     description: 'Crea, renombra, archiva y reactiva categorías para clasificar tus egresos personales.',
     href: '/settings/personal-expense-categories',
@@ -36,7 +30,7 @@ export function SettingsCategoriesPage() {
           <div>
             <h2 className="font-semibold text-slate-950">Clasificación personal</h2>
             <p className="text-sm text-slate-500">
-              Los catálogos de ingresos y egresos se gestionan por separado.
+              Organiza tus egresos personales por categorías.
             </p>
           </div>
         </div>
