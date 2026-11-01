@@ -109,3 +109,9 @@ Format used: one ADR per section with Context, Decision, Status and Consequences
 - Solicitud explícita: Personal no usa periodos ni temporadas para sus saldos.
 - Decisión: las tarjetas de Ingresos, Egresos y Balance usan todo el historial Personal y mantienen los cálculos financieros existentes. La actividad de wallets también es acumulada. Se retira la variación mensual de estas tarjetas para no comparar acumulados con un solo mes. Profesional conserva temporada activa y comparación contra temporada anterior.
 - Los datos mensuales usados para análisis del Copiloto y snapshots siguen separados y no se convierten en acumulados. Sin cambios de esquema, registros, importes, monedas ni transferencias.
+
+## Modificación de transferencias — 2026-11-01
+
+- Solicitud: añadir Modificar transferencia en el detalle y reutilizar el formulario precargado para origen, destino, importe, fecha y nota.
+- Guardado atómico sobre el mismo registro e ID, preservando moneda y fecha de creación. Validación de todas las wallets afectadas sin duplicar el efecto anterior: no permite nuevos saldos negativos ni empeorar déficits históricos. Detecta edición obsoleta mediante updatedAt y emite el evento de actualización existente solo tras guardar.
+- Exclusivo de Personal y contexto Personal de Híbrido. Conserva wallets archivadas previamente asignadas; no permite nuevas asignaciones a archivadas. No genera ingresos/egresos ni cambia el esquema.

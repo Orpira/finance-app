@@ -1,18 +1,23 @@
 import { ArrowRight, ArrowLeftRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import { useDialog } from '../../components/dialogs/useDialog'
-import { createInternalTransfer } from '../../services/internalTransferService'
+import { createInternalTransfer, getInternalTransferById, updateInternalTransfer } from '../../services/internalTransferService'
 import { getSettings } from '../../services/settingsService'
 import { listWalletsWithBalances, WALLETS_CHANGED_EVENT } from '../../services/walletService'
 import type { WalletWithBalance } from '../../services/walletService'
+import type { InternalTransfer } from '../../types/internalTransfer'
 import type { CurrencyCode } from '../../types/settings'
 import { formatCurrency, getLocalDateKey } from '../../utils/currency'
 
 export function TransferFormPage() {
   const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
+  const isEditing = Boolean(id)
+  const [editingTransfer, setEditingTransfer] = useState<InternalTransfer | null>(null)
+  const [loadError, setLoadError] = useState('')
   const { alert } = useDialog()
   const [wallets, setWallets] = useState<WalletWithBalance[]>([])
   const [currency, setCurrency] = useState<CurrencyCode>('EUR')
@@ -24,29 +29,55 @@ export function TransferFormPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  async function loadWallets() {
-    setIsLoading(true)
-    try {
-      const settings = await getSettings()
-      setCurrency(settings.defaultCurrency)
-      const activeWallets = await listWalletsWithBalances(settings.defaultCurrency, { archived: 'active' })
-      setWallets(activeWallets)
-    } finally {
-      setIsLoading(false)
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setIsLoading(true)
+      try {
+        const [settings, record] = await Promise.all([
+          getSettings(), id ? getInternalTransferById(id) : Promise.resolve(undefined),
+        ])
+        if (id && !record) throw new Error('Esta transferencia ya no existe.')
+        const recordCurrency = (record?.currency ?? settings.defaultCurrency) as CurrencyCode
+        const allWallets = await listWalletsWithBalances(recordCurrency, { archived: record ? 'all' : 'active' })
+        if (cancelled) return
+        setCurrency(recordCurrency)
+        setWallets(allWallets.filter((wallet) => !wallet.isArchived || wallet.id === record?.fromWalletId || wallet.id === record?.toWalletId))
+        setEditingTransfer(record ?? null)
+        if (record) {
+          setFromWalletId(record.fromWalletId)
+          setToWalletId(record.toWalletId)
+          setAmount(String(record.amount))
+          setDate(record.date)
+          setNote(record.note ?? '')
+        }
+        setLoadError('')
+      } catch (error) {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : 'No se pudo cargar la transferencia.')
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
     }
-  }
+    void load()
+    return () => { cancelled = true }
+  }, [id])
 
   useEffect(() => {
-    async function initialLoad() {
-      await loadWallets()
+    let cancelled = false
+    async function refreshWalletBalances() {
+      try {
+        const nextWallets = await listWalletsWithBalances(currency, { archived: editingTransfer ? 'all' : 'active' })
+        if (!cancelled) setWallets(nextWallets.filter((wallet) => !wallet.isArchived || wallet.id === editingTransfer?.fromWalletId || wallet.id === editingTransfer?.toWalletId))
+      } catch (error) {
+        console.warn('No se pudieron actualizar las wallets.', error)
+      }
     }
-    void initialLoad()
-    function handleExternalChange() {
-      void loadWallets()
+    window.addEventListener(WALLETS_CHANGED_EVENT, refreshWalletBalances)
+    return () => {
+      cancelled = true
+      window.removeEventListener(WALLETS_CHANGED_EVENT, refreshWalletBalances)
     }
-    window.addEventListener(WALLETS_CHANGED_EVENT, handleExternalChange)
-    return () => window.removeEventListener(WALLETS_CHANGED_EVENT, handleExternalChange)
-  }, [])
+  }, [currency, editingTransfer])
 
   const parsedAmount = Number(amount.replace(',', '.'))
   const canSubmit =
@@ -56,7 +87,7 @@ export function TransferFormPage() {
     Number.isFinite(parsedAmount) &&
     parsedAmount > 0 &&
     date !== '' &&
-    !isSubmitting
+    !isSubmitting && !isLoading && !loadError && (!isEditing || editingTransfer !== null)
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -64,18 +95,24 @@ export function TransferFormPage() {
 
     setIsSubmitting(true)
     try {
-      await createInternalTransfer({
+      const input = {
         fromWalletId,
         toWalletId,
         amount: parsedAmount,
         date,
         note: note.trim() || undefined,
-      })
-      navigate('/movements')
+      }
+      if (id && editingTransfer) {
+        await updateInternalTransfer(id, input, editingTransfer.updatedAt)
+        navigate(`/transfers/${id}`)
+      } else {
+        await createInternalTransfer(input)
+        navigate('/movements?tab=transferencias')
+      }
     } catch (error) {
       await alert({
         type: 'error',
-        title: 'No se pudo transferir',
+        title: isEditing ? 'No se pudo modificar' : 'No se pudo transferir',
         message: error instanceof Error ? error.message : 'No se pudo registrar la transferencia.',
       })
     } finally {
@@ -83,10 +120,17 @@ export function TransferFormPage() {
     }
   }
 
-  if (!isLoading && wallets.length < 2) {
+  if (isLoading || loadError) {
+    return <section className="mx-auto flex w-full max-w-xl flex-col gap-6">
+      <PageHeader backLabel="Movimientos" backTo="/movements?tab=transferencias" eyebrow="Personal" title={isEditing ? 'Modificar transferencia' : 'Transferir dinero'} />
+      <p role={loadError ? 'alert' : 'status'}>{loadError || 'Cargando…'}</p>
+    </section>
+  }
+
+  if (wallets.length < 2) {
     return (
       <section className="mx-auto flex w-full max-w-xl flex-col gap-6">
-        <PageHeader backLabel="Movimientos" backTo="/movements" eyebrow="Personal" title="Transferir dinero" />
+        <PageHeader backLabel="Movimientos" backTo="/movements" eyebrow="Personal" title={isEditing ? 'Modificar transferencia' : 'Transferir dinero'} />
         <div className="rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">
           <ArrowLeftRight className="mx-auto size-8 text-slate-400" aria-hidden="true" />
           <p className="mt-3 text-sm text-slate-600">
@@ -106,7 +150,7 @@ export function TransferFormPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-xl flex-col gap-6">
-      <PageHeader backLabel="Movimientos" backTo="/movements" eyebrow="Personal" title="Transferir dinero" />
+      <PageHeader backLabel="Movimientos" backTo="/movements" eyebrow="Personal" title={isEditing ? 'Modificar transferencia' : 'Transferir dinero'} />
 
       <form className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" onSubmit={handleSubmit}>
         <div className="flex flex-col gap-1.5">
@@ -121,7 +165,7 @@ export function TransferFormPage() {
           >
             <option value="">Selecciona una wallet</option>
             {wallets.map((wallet) => (
-              <option key={wallet.id} value={wallet.id}>
+              <option key={wallet.id} value={wallet.id} disabled={wallet.isArchived && wallet.id !== editingTransfer?.fromWalletId}>
                 {wallet.name} · {formatCurrency(wallet.balance, currency)}
               </option>
             ))}
@@ -146,7 +190,7 @@ export function TransferFormPage() {
             {wallets
               .filter((wallet) => wallet.id !== fromWalletId)
               .map((wallet) => (
-                <option key={wallet.id} value={wallet.id}>
+                <option key={wallet.id} value={wallet.id} disabled={wallet.isArchived && wallet.id !== editingTransfer?.toWalletId}>
                   {wallet.name} · {formatCurrency(wallet.balance, currency)}
                 </option>
               ))}
@@ -202,7 +246,7 @@ export function TransferFormPage() {
           disabled={!canSubmit}
           type="submit"
         >
-          {isSubmitting ? 'Transfiriendo...' : 'Transferir'}
+          {isSubmitting ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Transferir'}
         </button>
         <p className="text-center text-xs text-slate-500">
           Esto no cuenta como ingreso ni egreso: es un movimiento interno entre tus propias wallets.
