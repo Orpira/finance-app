@@ -22,11 +22,6 @@ vi.mock('../../services/walletService', () => ({
 
 const { WalletActivityCard } = await import('./WalletActivityCard')
 
-function currentMonthDate() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-05`
-}
-
 function renderCard() {
   return render(
     <MemoryRouter>
@@ -41,7 +36,7 @@ afterEach(() => {
 })
 
 describe('WalletActivityCard', () => {
-  it('muestra el estado vacío del mes sin transferencias', async () => {
+  it('muestra el estado vacío acumulado sin transferencias', async () => {
     transferService.listInternalTransfers.mockResolvedValue([])
     walletService.listWallets.mockResolvedValue([])
 
@@ -51,7 +46,7 @@ describe('WalletActivityCard', () => {
     expect(screen.getByText('Sin movimientos entre ubicaciones')).toBeTruthy()
   })
 
-  it('muestra cantidad y última ruta de transferencia del mes sin duplicar el total', async () => {
+  it('muestra cantidad y última ruta de transferencia acumulado sin duplicar el total', async () => {
     transferService.listInternalTransfers.mockResolvedValue([
       {
         id: 'itx-1',
@@ -59,7 +54,7 @@ describe('WalletActivityCard', () => {
         toWalletId: 'wal-home',
         amount: 150,
         currency: 'EUR',
-        date: currentMonthDate(),
+        date: '2020-01-01',
         usageMode: 'basic',
       },
     ])

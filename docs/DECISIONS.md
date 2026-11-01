@@ -103,3 +103,9 @@ Format used: one ADR per section with Context, Decision, Status and Consequences
 - Solicitud: presentar transferencias entre wallets junto a ingresos y egresos.
 - Decisión: añadir la pestaña Transferencias y acceso directo a crear transferencias en Personal, incluido el contexto Personal de Híbrido. Profesional conserva sus pestañas.
 - La pestaña reutiliza el historial y el formulario existentes, con búsqueda, fechas, moneda y orden; excluye filtros de categoría y reporte y mantiene separadas las preferencias de filtros. Las transferencias siguen siendo internas y no cambian el saldo total ni los ingresos/egresos. No hay cambios de persistencia ni cálculos.
+
+## Inicio Personal con saldos acumulados — 2026-11-01
+
+- Solicitud explícita: Personal no usa periodos ni temporadas para sus saldos.
+- Decisión: las tarjetas de Ingresos, Egresos y Balance usan todo el historial Personal y mantienen los cálculos financieros existentes. La actividad de wallets también es acumulada. Se retira la variación mensual de estas tarjetas para no comparar acumulados con un solo mes. Profesional conserva temporada activa y comparación contra temporada anterior.
+- Los datos mensuales usados para análisis del Copiloto y snapshots siguen separados y no se convierten en acumulados. Sin cambios de esquema, registros, importes, monedas ni transferencias.
