@@ -23,11 +23,13 @@ import {
 import {
   createWallet,
   getWalletById,
-  listWallets,
+  listWalletsWithBalances,
+  type WalletWithBalance,
   normalizeWalletName,
   WALLETS_CHANGED_EVENT,
 } from '../../services/walletService'
 import type { Wallet } from '../../types/wallet'
+import { positiveWalletOptions } from '../../utils/positiveWalletOptions'
 import {
   createServiceIncome,
   getServiceIncomeById,
@@ -178,7 +180,7 @@ export function IncomePage() {
   const [incomeType, setIncomeType] = useState<ServiceIncomeType>('ingreso')
   const [personalName, setPersonalName] = useState('')
   const [walletId, setWalletId] = useState('')
-  const [walletOptions, setWalletOptions] = useState<Wallet[]>([])
+  const [walletOptions, setWalletOptions] = useState<WalletWithBalance[]>([])
   const [assignedArchivedWallet, setAssignedArchivedWallet] = useState<Wallet | null>(null)
   const [date, setDate] = useState(() => formatInputDate(new Date()))
   const [duration, setDuration] = useState(0)
@@ -239,7 +241,7 @@ export function IncomePage() {
         ? await getEarningPeriodById(currentIncomePeriodId)
         : undefined
       const currentWallets = isBasicMode(currentSettings)
-        ? await listWallets({ archived: 'active' })
+        ? await listWalletsWithBalances(currentSettings.defaultCurrency, { archived: 'active' })
         : []
       const assignedWalletId = currentIncome?.walletId
       const assignedWalletIsMissingFromActiveList =
@@ -353,7 +355,7 @@ export function IncomePage() {
             currentSettings.defaultCurrency,
         )
         setHourlyRateApplied(currentSettings.hourlyRate)
-        setWalletId(currentWallets.find((wallet) => wallet.isDefault)?.id ?? '')
+        setWalletId(positiveWalletOptions(currentWallets).find((wallet) => wallet.isDefault)?.id ?? '')
       }
     }
 
@@ -367,12 +369,10 @@ export function IncomePage() {
   useEffect(() => {
     let isMounted = true
 
-    function handleWalletsChanged() {
-      listWallets({ archived: 'active' }).then((nextWallets) => {
-        if (isMounted) {
-          setWalletOptions(nextWallets)
-        }
-      })
+    async function handleWalletsChanged() {
+      const currentSettings = await getSettings()
+      const nextWallets = await listWalletsWithBalances(currentSettings.defaultCurrency, { archived: 'active' })
+      if (isMounted) setWalletOptions(nextWallets)
     }
 
     window.addEventListener(WALLETS_CHANGED_EVENT, handleWalletsChanged)
@@ -430,17 +430,11 @@ export function IncomePage() {
 
   const isBasicUser = isBasicMode(settings ?? undefined)
   // Keep the assigned wallet selectable when archived.
-  const walletSelectOptions = useMemo(() => {
-    if (
-      assignedArchivedWallet === null ||
-      walletOptions.some((wallet) => wallet.id === assignedArchivedWallet.id)
-    ) {
-      return walletOptions
-    }
-    return [...walletOptions, assignedArchivedWallet].sort((a, b) =>
-      a.name.localeCompare(b.name, 'es'),
-    )
-  }, [walletOptions, assignedArchivedWallet])
+  const walletSelectOptions = useMemo(() => positiveWalletOptions(walletOptions), [walletOptions])
+  const retainedWalletId = editingIncome?.walletId
+  const retainedWallet = walletOptions.find((wallet) => wallet.id === retainedWalletId) ?? assignedArchivedWallet
+  const retainCurrentWallet = Boolean(retainedWalletId && !walletSelectOptions.some((wallet) => wallet.id === retainedWalletId))
+
 
   async function handleQuickCreateWallet() {
     const name = await prompt({
@@ -461,12 +455,10 @@ export function IncomePage() {
     if (!name) return
 
     try {
-      const created = await createWallet({ name })
-      setWalletOptions((current) =>
-        [...current.filter((wallet) => wallet.id !== created.id), created]
-          .sort((left, right) => left.name.localeCompare(right.name, 'es')),
-      )
-      setWalletId(created.id)
+      await createWallet({ name })
+      const currentSettings = await getSettings()
+      setWalletOptions(await listWalletsWithBalances(currentSettings.defaultCurrency, { archived: 'active' }))
+      await alert({ type: 'info', title: 'Wallet creada', message: 'Aparecerá en el selector cuando tenga saldo mayor que 0.' })
       setSaveError('')
     } catch (error) {
       await alert({
@@ -978,12 +970,15 @@ export function IncomePage() {
                 value={walletId}
               >
                 <option value="">Sin wallet</option>
+                {retainCurrentWallet && <option value={retainedWalletId}>Conservar asignación actual</option>}
                 {walletSelectOptions.map((wallet) => (
                   <option key={wallet.id} value={wallet.id}>
                     {wallet.isArchived ? `${wallet.name} · Archivada` : wallet.name}
                   </option>
                 ))}
               </select>
+              {retainCurrentWallet && <p className="text-xs text-slate-500">Wallet del movimiento: {retainedWallet?.name ?? 'Asignación guardada'}. Se conserva si no eliges otra.</p>}
+              {walletSelectOptions.length === 0 && <p className="text-xs text-slate-500">No hay wallets con saldo mayor que 0.</p>}
               <span className="text-xs text-slate-500">Opcional. Indica dónde quedó este dinero.</span>
             </div>
           </div>

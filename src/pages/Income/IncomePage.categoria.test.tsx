@@ -84,7 +84,7 @@ vi.mock('../../services/personalIncomeCategoryService', async (importOriginal) =
 // this jsdom environment doesn't provide.
 vi.mock('../../services/walletService', () => ({
   getWalletById: async () => undefined,
-  listWallets: async () => [],
+  listWalletsWithBalances: async () => [],
   WALLETS_CHANGED_EVENT: 'finance-app:wallets-changed',
 }))
 
