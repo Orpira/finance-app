@@ -5,6 +5,7 @@ import { DialogFrame } from '../../components/dialogs/DialogFrame'
 import type { MovementFilters, MovementPeriod } from './movementFilters'
 
 interface MovementFiltersSheetProps {
+  readonly transfersOnly?: boolean
   readonly categories: readonly string[]
   readonly currencies: readonly string[]
   readonly defaultFilters: MovementFilters
@@ -17,6 +18,7 @@ const fieldClassName =
   'h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:ring-emerald-900'
 
 export function MovementFiltersSheet({
+  transfersOnly = false,
   categories,
   currencies,
   defaultFilters,
@@ -135,6 +137,7 @@ export function MovementFiltersSheet({
         )}
 
         <div className="grid gap-4 sm:grid-cols-2">
+          {!transfersOnly && (
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Tipo</span>
             <select
@@ -148,7 +151,9 @@ export function MovementFiltersSheet({
               <option value="transfer">Transferencias</option>
             </select>
           </label>
+          )}
 
+          {!transfersOnly && (
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Categoría</span>
             <select
@@ -162,6 +167,7 @@ export function MovementFiltersSheet({
               ))}
             </select>
           </label>
+          )}
 
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Moneda</span>
@@ -177,6 +183,7 @@ export function MovementFiltersSheet({
             </select>
           </label>
 
+          {!transfersOnly && (
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Estado de reporte</span>
             <select
@@ -189,6 +196,7 @@ export function MovementFiltersSheet({
               <option value="unreported">Sin reportar</option>
             </select>
           </label>
+          )}
         </div>
 
         <label className="flex flex-col gap-2">
