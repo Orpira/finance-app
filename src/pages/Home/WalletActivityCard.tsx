@@ -8,16 +8,7 @@ import {
 import { listWallets, WALLETS_CHANGED_EVENT } from '../../services/walletService'
 import type { InternalTransfer } from '../../types/internalTransfer'
 import type { Wallet } from '../../types/wallet'
-
-function getCurrentMonthRange() {
-  const now = new Date()
-  const from = new Date(now.getFullYear(), now.getMonth(), 1)
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return {
-    from: from.toLocaleDateString('en-CA'),
-    to: to.toLocaleDateString('en-CA'),
-  }
-}
+import { recordBelongsToUsageMode } from '../../utils/usageMode'
 
 function getWalletName(wallets: readonly Wallet[], id: string) {
   return wallets.find((wallet) => wallet.id === id)?.name ?? 'Wallet no disponible'
@@ -31,13 +22,12 @@ export function WalletActivityCard() {
     let cancelled = false
 
     async function load() {
-      const range = getCurrentMonthRange()
       const [allTransfers, allWallets] = await Promise.all([
         listInternalTransfers(),
         listWallets({ archived: 'all' }),
       ])
       if (cancelled) return
-      setTransfers(allTransfers.filter((transfer) => transfer.date >= range.from && transfer.date <= range.to))
+      setTransfers(allTransfers.filter((transfer) => recordBelongsToUsageMode(transfer, 'basic')))
       setWallets(allWallets)
     }
 
@@ -60,7 +50,7 @@ export function WalletActivityCard() {
           <ArrowLeftRight className="size-5" aria-hidden="true" />
         </span>
         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-          Este mes
+          Acumulado
         </span>
       </div>
       <p className="mt-6 text-sm font-medium text-slate-500 dark:text-slate-400">Actividad de wallets</p>

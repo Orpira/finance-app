@@ -25,10 +25,10 @@ describe('HomePage.tsx — scope de temporada activa (regresión de código fuen
     // currentIncomes/currentExpenses (esos siguen siendo mensuales, para el
     // snapshot 'home.current-month' y el Copiloto).
     expect(source).toContain(
-      'const summaryIncomes = isBasicUser ? currentIncomes : seasonIncomes',
+      'const summaryIncomes = seasonIncomes',
     )
     expect(source).toContain(
-      'const summaryExpenses = isBasicUser ? currentExpenses : seasonExpenses',
+      'const summaryExpenses = seasonExpenses',
     )
     expect(source).toContain(
       'const comparisonIncomes = isBasicUser ? previousIncomes : previousSeasonIncomes',
@@ -38,10 +38,11 @@ describe('HomePage.tsx — scope de temporada activa (regresión de código fuen
     )
   })
 
-  it('HOME-SEASON-010: el modo Personal (Basic) nunca usa seasonIncomes/seasonExpenses — conserva su scope mensual existente', () => {
+  it('HOME-SEASON-010: el modo Personal (Basic) nunca usa seasonIncomes/seasonExpenses — usa su historial acumulado', () => {
     // seasonRecords solo se resuelve cuando !isBasicUser: en modo Personal
     // seasonIncomes/seasonExpenses quedan siempre en [] y summaryIncomes/
     // summaryExpenses caen al branch mensual (currentIncomes/currentExpenses).
+    expect(source).toContain('calculatePersonalHomeTotals(historyIncomes, historyExpenses')
     expect(source).toContain('!isBasicUser && period?.id ? listSeasonRecords(period.id)')
     expect(source).toContain('!isBasicUser && activePeriod && activePeriodStats')
     expect(source).toContain('{!isBasicUser && seasonGoalProgress && activePeriod && (')
@@ -49,11 +50,12 @@ describe('HomePage.tsx — scope de temporada activa (regresión de código fuen
 
   it('el header de Inicio distingue el texto según el modo, en vez de anunciar siempre "mes actual"', () => {
     expect(source).toContain('Resumen financiero de la temporada activa')
-    expect(source).toContain('Resumen financiero del mes actual')
+    expect(source).toContain('Saldos acumulados de tus movimientos')
   })
 
   it('las tarjetas comparan contra la temporada anterior (no el mes anterior) en modo profesional', () => {
-    expect(source).toContain("scope={isBasicUser ? 'month' : 'season'}")
+    expect(source).toContain('!isBasicUser && <Variation')
+    expect(source).toContain('scope="season"')
     expect(source).toContain('getPreviousEarningPeriod')
     expect(source).toContain("scope === 'month' ? 'mes anterior' : 'temporada anterior'")
   })
