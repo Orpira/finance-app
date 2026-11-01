@@ -276,3 +276,8 @@ export function applyMovementFilters<T extends FilterableMovement>(
       return right.date.localeCompare(left.date)
     })
 }
+
+/** Transfers have no income reporting status or expense category. */
+export function restrictToTransferFilters(filters: MovementFilters): MovementFilters {
+  return { ...filters, type: 'transfer', category: '', reported: 'all' }
+}

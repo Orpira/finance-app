@@ -97,3 +97,9 @@ Format used: one ADR per section with Context, Decision, Status and Consequences
 - Decisión: eliminar las categorías de ingresos del registro/edición, listado, detalle, movimientos y configuración. Los reportes de wallets agrupan ingresos por nombre o concepto, tanto en HTML/impresión/PDF como en el fallback textual. Las categorías de egresos siguen vigentes.
 - Compatibilidad: conservar el catálogo y las referencias históricas en IndexedDB y backups; no borrar ni migrar movimientos, importes, saldos o asignaciones de wallets. Los ingresos nuevos creados por el formulario no asignan categoría. La ruta antigua de gestión redirige a categorías de egresos.
 - Impacto: simplificación inmediata del formulario y coherencia a largo plazo entre pantallas y exportaciones. No cambia el esquema ni los cálculos financieros; no requiere migración.
+
+## Transferencias en Movimientos Personal — 2026-11-01
+
+- Solicitud: presentar transferencias entre wallets junto a ingresos y egresos.
+- Decisión: añadir la pestaña Transferencias y acceso directo a crear transferencias en Personal, incluido el contexto Personal de Híbrido. Profesional conserva sus pestañas.
+- La pestaña reutiliza el historial y el formulario existentes, con búsqueda, fechas, moneda y orden; excluye filtros de categoría y reporte y mantiene separadas las preferencias de filtros. Las transferencias siguen siendo internas y no cambian el saldo total ni los ingresos/egresos. No hay cambios de persistencia ni cálculos.
