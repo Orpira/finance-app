@@ -2,7 +2,7 @@ import type { ServiceIncome } from '../types/service'
 import type { IncomeCalculationMethod, WorkedTimeUnit } from '../catalogs/incomeCalculationMethods'
 import { DEFAULT_EXIT_DURATION_MINUTES } from '../config/serviceTimer'
 
-export type ServiceDurationLabel = '15' | '30' | '60' | '120' | 'Salida' | 'Personalizado'
+export type ServiceDurationLabel = '15' | '30' | '45' | '60' | '120' | 'Salida' | 'Personalizado'
 
 export interface ServiceDurationOption {
   durationMinutes: number
@@ -12,6 +12,7 @@ export interface ServiceDurationOption {
 export const SERVICE_DURATION_OPTIONS: readonly ServiceDurationOption[] = [
   { durationMinutes: 15, durationLabel: '15' },
   { durationMinutes: 30, durationLabel: '30' },
+  { durationMinutes: 45, durationLabel: '45' },
   { durationMinutes: 60, durationLabel: '60' },
   { durationMinutes: 120, durationLabel: '120' },
   { durationMinutes: DEFAULT_EXIT_DURATION_MINUTES, durationLabel: 'Salida' },
