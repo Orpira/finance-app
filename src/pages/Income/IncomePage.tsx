@@ -321,7 +321,7 @@ export function IncomePage() {
         const currentDuration = getEffectiveFinancialDuration(currentIncome) ?? 0
         setDuration(currentDuration)
         setDurationLabel(
-          currentIncome.durationLabel === 'Salida'
+          currentIncome.durationLabel === 'Salida' || currentIncome.durationLabel === '120'
             ? 'Personalizado'
             : isServiceDurationLabel(currentIncome.durationLabel)
               ? currentIncome.durationLabel

@@ -37,7 +37,9 @@ export function ServiceDurationSelect({
         <option disabled value="">
           Selecciona una duración
         </option>
-        {SERVICE_DURATION_OPTIONS.filter((option) => !onCustomMinutesChange || option.durationLabel !== 'Salida').map((option) => (
+        {SERVICE_DURATION_OPTIONS.filter((option) => onCustomMinutesChange
+          ? option.durationLabel !== 'Salida' && option.durationLabel !== '120'
+          : option.durationLabel !== '45').map((option) => (
           <option key={option.durationLabel} value={option.durationLabel}>
             {option.durationLabel === 'Salida'
               ? option.durationLabel
