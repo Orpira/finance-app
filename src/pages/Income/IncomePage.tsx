@@ -321,9 +321,11 @@ export function IncomePage() {
         const currentDuration = getEffectiveFinancialDuration(currentIncome) ?? 0
         setDuration(currentDuration)
         setDurationLabel(
-          isServiceDurationLabel(currentIncome.durationLabel)
-            ? currentIncome.durationLabel
-            : getNumericDurationLabel(currentDuration) ?? '',
+          currentIncome.durationLabel === 'Salida'
+            ? 'Personalizado'
+            : isServiceDurationLabel(currentIncome.durationLabel)
+              ? currentIncome.durationLabel
+              : getNumericDurationLabel(currentDuration) ?? 'Personalizado',
         )
         setDurationSelectionChanged(false)
         setTotalAmount(currentIncome.totalAmount)
@@ -620,6 +622,14 @@ export function IncomePage() {
   }
 
   function handleDurationChange(nextLabel: ServiceDurationLabel) {
+    if (nextLabel === 'Personalizado') {
+      setDuration(0)
+      setDurationLabel(nextLabel)
+      setDurationSelectionChanged(true)
+      setSaveError('')
+      return
+    }
+
     const selectedOption = getServiceDurationOption(nextLabel)
 
     if (!selectedOption) {
@@ -642,6 +652,12 @@ export function IncomePage() {
     if (usesServiceDuration && !durationLabel) {
       setSaveStatus('error')
       setSaveError('Selecciona una duración antes de guardar.')
+      return
+    }
+
+    if (usesServiceDuration && durationLabel === 'Personalizado' && (!Number.isSafeInteger(duration) || duration <= 0)) {
+      setSaveStatus('error')
+      setSaveError('Ingresa una duración válida en minutos enteros mayor a cero.')
       return
     }
 
@@ -1066,6 +1082,12 @@ export function IncomePage() {
 
         {usesServiceDuration && (
           <ServiceDurationSelect
+            customMinutes={duration}
+            onCustomMinutesChange={(minutes) => {
+              setDuration(minutes)
+              setDurationSelectionChanged(true)
+              setSaveError('')
+            }}
             onChange={handleDurationChange}
             unit={effectiveWorkedTimeUnit}
             value={durationLabel}
