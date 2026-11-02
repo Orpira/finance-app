@@ -197,6 +197,20 @@ export function MovementFiltersSheet({
             </select>
           </label>
           )}
+
+          {!transfersOnly && (
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Estado de pago</span>
+            <select
+              className={fieldClassName}
+              onChange={(event) => updateDraft({ physicallyPaidOnly: event.target.value === 'paid' })}
+              value={draft.physicallyPaidOnly ? 'paid' : 'all'}
+            >
+              <option value="all">Todos</option>
+              <option value="paid">Egresos pagados</option>
+            </select>
+          </label>
+          )}
         </div>
 
         <label className="flex flex-col gap-2">

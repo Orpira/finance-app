@@ -81,3 +81,48 @@ it('tacha el egreso pagado físicamente en la pestaña Todos', async () => {
   expect(expenseLabel.classList.contains('line-through')).toBe(true)
   expect(await screen.findByText(/Pagado físicamente/)).toBeTruthy()
 })
+
+it('filtra los movimientos para mostrar solo egresos pagados físicamente', async () => {
+  getSettings.mockResolvedValue({ usageMode: 'basic' })
+  listExpenses.mockResolvedValue([
+    {
+      id: 8,
+      type: 'gasto',
+      usageMode: 'basic',
+      personalName: 'Egreso pagado',
+      date: '2026-10-25',
+      category: 'Alimentación',
+      amount: 25,
+      currency: 'EUR',
+      eurValue: 25,
+      copValue: 100_000,
+      isPhysicallyPaid: true,
+    },
+    {
+      id: 9,
+      type: 'gasto',
+      usageMode: 'basic',
+      personalName: 'Egreso pendiente',
+      date: '2026-10-24',
+      category: 'Alimentación',
+      amount: 15,
+      currency: 'EUR',
+      eurValue: 15,
+      copValue: 60_000,
+      isPhysicallyPaid: false,
+    },
+  ])
+
+  render(<MemoryRouter><MovementsPage /></MemoryRouter>)
+
+  expect(await screen.findByText('Egreso pagado')).toBeTruthy()
+  expect(await screen.findByText('Egreso pendiente')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: /Filtros/ }))
+  fireEvent.change(screen.getByLabelText('Estado de pago'), {
+    target: { value: 'paid' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }))
+
+  expect(await screen.findByText('Egreso pagado')).toBeTruthy()
+  await waitFor(() => expect(screen.queryByText('Egreso pendiente')).toBeNull())
+})

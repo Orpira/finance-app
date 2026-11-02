@@ -14,6 +14,7 @@ export interface MovementFilters {
   readonly category: string
   readonly currency: string
   readonly reported: MovementReportFilter
+  readonly physicallyPaidOnly: boolean
   readonly query: string
   readonly order: MovementOrder
 }
@@ -26,6 +27,7 @@ export interface FilterableMovement {
   readonly amount: number
   readonly currency: string
   readonly reported?: boolean
+  readonly isPhysicallyPaid?: boolean
   readonly searchText: string
 }
 
@@ -38,6 +40,7 @@ const MOVEMENT_FILTER_PARAM_KEYS = [
   'category',
   'currency',
   'reported',
+  'physicallyPaid',
   'q',
   'order',
 ] as const
@@ -153,6 +156,7 @@ export function readMovementFilters(params: URLSearchParams, now = new Date()): 
     category: params.get('category') ?? '',
     currency: params.get('currency') ?? '',
     reported: valid(params.get('reported'), ['all', 'reported', 'unreported'], 'all'),
+    physicallyPaidOnly: params.get('physicallyPaid') === 'true',
     query: params.get('q') ?? '',
     order: valid(params.get('order'), ['newest', 'oldest', 'amount_desc', 'amount_asc'], 'newest'),
   }
@@ -182,6 +186,7 @@ export function writeMovementFilters(
   if (filters.category) next.set('category', filters.category)
   if (filters.currency) next.set('currency', filters.currency)
   if (filters.reported !== 'all') next.set('reported', filters.reported)
+  if (filters.physicallyPaidOnly) next.set('physicallyPaid', 'true')
   if (filters.query.trim()) next.set('q', filters.query.trim())
   if (filters.order !== 'newest') next.set('order', filters.order)
 
@@ -194,6 +199,7 @@ export function countActiveMovementFilters(filters: MovementFilters): number {
     Number(filters.category !== '') +
     Number(filters.currency !== '') +
     Number(filters.reported !== 'all') +
+    Number(filters.physicallyPaidOnly) +
     Number(filters.query.trim() !== '') +
     Number(filters.order !== 'newest')
 }
@@ -268,6 +274,9 @@ export function applyMovementFilters<T extends FilterableMovement>(
     .filter((movement) => !filters.category || movement.category === filters.category)
     .filter((movement) => !filters.currency || movement.currency === filters.currency)
     .filter((movement) => filters.reported === 'all' || (movement.kind === 'income' && movement.reported === (filters.reported === 'reported')))
+    .filter((movement) => !filters.physicallyPaidOnly || (
+      movement.kind === 'expense' && movement.isPhysicallyPaid === true
+    ))
     .filter((movement) => !normalizedQuery || movement.searchText.toLocaleLowerCase('es').includes(normalizedQuery))
     .sort((left, right) => {
       if (filters.order === 'amount_desc') return right.amount - left.amount
@@ -279,5 +288,5 @@ export function applyMovementFilters<T extends FilterableMovement>(
 
 /** Transfers have no income reporting status or expense category. */
 export function restrictToTransferFilters(filters: MovementFilters): MovementFilters {
-  return { ...filters, type: 'transfer', category: '', reported: 'all' }
+  return { ...filters, type: 'transfer', category: '', reported: 'all', physicallyPaidOnly: false }
 }
