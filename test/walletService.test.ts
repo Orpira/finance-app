@@ -235,3 +235,15 @@ describe('walletService — getWalletBalance (spec §9/§24)', () => {
     expect(await getWalletBalance(wallet.id, 'EUR')).toBe(0)
   })
 })
+
+
+it('permite trasladar el saldo visible completo y deja el origen en cero exacto', async () => {
+  const source = await createWallet({ name: 'Obligaciones' })
+  const target = await createWallet({ name: 'Minucias' })
+  incomes.push({ id: 1, walletId: source.id, currency: 'EUR', eurValue: 20 })
+  expenses.push({ id: 1, walletId: source.id, currency: 'EUR', eurValue: 17.37 })
+  expect(await getWalletBalance(source.id, 'EUR')).toBe(2.63)
+  await createInternalTransfer({ fromWalletId: source.id, toWalletId: target.id, amount: 2.63, date: '2026-11-02' })
+  expect(await getWalletBalance(source.id, 'EUR')).toBe(0)
+  expect(await getWalletBalance(target.id, 'EUR')).toBe(2.63)
+})

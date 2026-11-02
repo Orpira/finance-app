@@ -1,3 +1,4 @@
+import { roundMoney } from '../utils/currency'
 import { db } from '../database/db'
 import type { Wallet } from '../types/wallet'
 import type { CurrencyCode } from '../types/settings'
@@ -260,7 +261,7 @@ export async function getWalletBalance(walletId: string, currency: CurrencyCode)
   const transfersOutTotal = transfersOut.reduce((total, transfer) => total + transfer.amount, 0)
   const transfersInTotal = transfersIn.reduce((total, transfer) => total + transfer.amount, 0)
 
-  return incomeTotal - expenseTotal + transfersInTotal - transfersOutTotal
+  return roundMoney(incomeTotal - expenseTotal + transfersInTotal - transfersOutTotal) || 0
 }
 
 export interface WalletWithBalance extends Wallet {

@@ -7,6 +7,7 @@ const { getTransfer, updateTransfer, createTransfer, alert } = vi.hoisted(() => 
   getTransfer: vi.fn(), updateTransfer: vi.fn(), createTransfer: vi.fn(), alert: vi.fn(),
 }))
 vi.mock('../../services/internalTransferService', () => ({
+  INTERNAL_TRANSFERS_CHANGED_EVENT: 'transfers',
   getInternalTransferById: getTransfer, updateInternalTransfer: updateTransfer, createInternalTransfer: createTransfer,
 }))
 vi.mock('../../services/settingsService', () => ({ getSettings: async () => ({ usageMode: 'basic', defaultCurrency: 'COP' }) }))
@@ -59,4 +60,37 @@ it('no permite guardar si la transferencia se eliminó', async () => {
   show()
   expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Esta transferencia ya no existe.')
   expect(screen.queryByRole('button', { name: 'Guardar cambios' })).toBeNull()
+})
+
+it('Trasladar todo repone la transferencia anterior al calcular el disponible en edición', async () => {
+  show()
+  await screen.findByDisplayValue('60')
+  fireEvent.click(screen.getByRole('button', { name: 'Trasladar todo' }))
+  expect(screen.getByLabelText('Importe')).toHaveProperty('value', '100.00')
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+  await screen.findByText('Detalle actualizado')
+  expect(updateTransfer).toHaveBeenCalledWith('t1', expect.objectContaining({ amount: 100 }), original.updatedAt)
+})
+
+it('recalcula el importe de Trasladar todo al cambiar la wallet de origen', async () => {
+  show()
+  await screen.findByDisplayValue('60')
+  fireEvent.change(screen.getByLabelText('Origen'), { target: { value: 'home' } })
+  expect(screen.getByRole('button', { name: 'Trasladar todo' })).toHaveProperty('disabled', true)
+})
+
+it('Trasladar todo en una transferencia nueva utiliza el saldo de origen', async () => {
+  render(<MemoryRouter initialEntries={['/transfers/nuevo']}><Routes>
+    <Route path="/transfers/nuevo" element={<TransferFormPage />} />
+    <Route path="/movements" element={<p>Transferencia registrada</p>} />
+  </Routes></MemoryRouter>)
+  await screen.findByLabelText('Origen')
+  expect(screen.getByRole('button', { name: 'Trasladar todo' })).toHaveProperty('disabled', true)
+  fireEvent.change(screen.getByLabelText('Origen'), { target: { value: 'bank' } })
+  fireEvent.change(screen.getByLabelText('Destino'), { target: { value: 'home' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Trasladar todo' }))
+  expect(screen.getByLabelText('Importe')).toHaveProperty('value', '40.00')
+  fireEvent.click(screen.getByRole('button', { name: 'Transferir' }))
+  await screen.findByText('Transferencia registrada')
+  expect(createTransfer).toHaveBeenCalledWith(expect.objectContaining({ fromWalletId: 'bank', amount: 40 }))
 })
