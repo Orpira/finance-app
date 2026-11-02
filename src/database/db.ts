@@ -1290,6 +1290,15 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
     if (expenseUsageMode === 'professional' && referencedWalletId !== undefined) {
       throw new Error('WALLET_NOT_ALLOWED_FOR_PROFESSIONAL')
     }
+    if (expense.isPhysicallyPaid !== undefined && typeof expense.isPhysicallyPaid !== 'boolean') {
+      throw new Error('PHYSICAL_PAYMENT_INVALID')
+    }
+    if (
+      expense.isPhysicallyPaid === true &&
+      (expenseUsageMode !== 'basic' || expense.type === 'ajuste')
+    ) {
+      throw new Error('PHYSICAL_PAYMENT_NOT_ALLOWED_FOR_EXPENSE')
+    }
     return {
     ...financialExpense,
     type: expense.type ?? 'gasto',
@@ -1300,6 +1309,10 @@ export async function importDatabaseSnapshot(snapshot: DatabaseSnapshot) {
       : undefined,
     personalCategoryId: expenseUsageMode === 'basic' ? referencedPersonalCategoryId : undefined,
     walletId: expenseUsageMode === 'basic' ? referencedWalletId : undefined,
+    isPhysicallyPaid:
+      expenseUsageMode === 'basic' && expense.type !== 'ajuste'
+        ? expense.isPhysicallyPaid
+        : undefined,
     }
   })
   const normalizedFinancialGoals = (snapshot.financialGoals ?? []).map((goal) => {

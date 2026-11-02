@@ -19,6 +19,9 @@ export interface Expense {
   /** Optional source Wallet for Personal (`basic`) expenses — where the money left from. */
   walletId?: string;
 
+  /** Personal-only marker for expenses paid physically. */
+  isPhysicallyPaid?: boolean;
+
   date: string;
 
   category: string;

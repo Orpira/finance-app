@@ -1,4 +1,5 @@
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
   Pencil,
@@ -12,10 +13,11 @@ import { ActionableEmptyState } from '../../components/ActionableEmptyState'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { SensitiveAmount } from '../../components/SensitiveAmount'
 import { useSensitiveValues } from '../../hooks/useSensitiveValues'
-import { deleteExpense, listExpenses } from '../../services/expenseService'
+import { deleteExpense, listExpenses, updateExpense } from '../../services/expenseService'
 import { listServiceIncomes } from '../../services/incomeService'
 import { getSettings } from '../../services/settingsService'
 import { getActiveEarningPeriod } from '../../services/earningPeriodService'
+import { listWallets, WALLETS_CHANGED_EVENT, getWalletName } from '../../services/walletService'
 import {
   listPersonalExpenseCategories,
   PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT,
@@ -23,6 +25,7 @@ import {
 import type { Expense } from '../../types/expense'
 import type { PersonalExpenseCategory } from '../../types/personalExpenseCategory'
 import type { ServiceIncome } from '../../types/service'
+import type { Wallet } from '../../types/wallet'
 import type { AppSettings, CurrencyCode } from '../../types/settings'
 import { getExpenseCategoryBadgeLabel, getExpenseDisplayName } from '../../utils/activityLabels'
 import { formatCurrency } from '../../utils/currency'
@@ -69,10 +72,11 @@ function filterIncomesByMode(
 }
 
 export function ExpenseListPage() {
-  const { confirm } = useDialog()
+  const { alert, confirm } = useDialog()
   const { hidden } = useSensitiveValues()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [personalCategories, setPersonalCategories] = useState<PersonalExpenseCategory[]>([])
+  const [wallets, setWallets] = useState<Wallet[]>([])
   const [incomes, setIncomes] = useState<ServiceIncome[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [activePeriodId, setActivePeriodId] = useState<number>()
@@ -112,6 +116,10 @@ export function ExpenseListPage() {
         : []
     }
 
+    async function loadWallets(currentSettings: AppSettings) {
+      return isBasicMode(currentSettings) ? listWallets({ archived: 'all' }) : []
+    }
+
     async function loadInitialData() {
       const [currentExpenses, currentIncomes, currentSettings, activePeriod] = await Promise.all([
         listExpenses({ newestFirst: true }),
@@ -119,7 +127,10 @@ export function ExpenseListPage() {
         getSettings(),
         getActiveEarningPeriod(),
       ])
-      const currentPersonalCategories = await loadPersonalCategories(currentSettings)
+      const [currentPersonalCategories, currentWallets] = await Promise.all([
+        loadPersonalCategories(currentSettings),
+        loadWallets(currentSettings),
+      ])
 
       if (!isMounted) {
         return
@@ -134,6 +145,7 @@ export function ExpenseListPage() {
       setSettings(currentSettings)
       setActivePeriodId(activePeriod?.id)
       setPersonalCategories(currentPersonalCategories)
+      setWallets(currentWallets)
       setIsLoading(false)
     }
 
@@ -141,11 +153,12 @@ export function ExpenseListPage() {
 
     async function handleSettingsChanged(event: Event) {
       const nextSettings = (event as CustomEvent<AppSettings>).detail
-      const [currentExpenses, currentIncomes, activePeriod, currentPersonalCategories] = await Promise.all([
+      const [currentExpenses, currentIncomes, activePeriod, currentPersonalCategories, currentWallets] = await Promise.all([
         listExpenses({ newestFirst: true }),
         listServiceIncomes({ newestFirst: true }),
         getActiveEarningPeriod(),
         loadPersonalCategories(nextSettings),
+        loadWallets(nextSettings),
       ])
 
       if (!isMounted) {
@@ -158,6 +171,7 @@ export function ExpenseListPage() {
       setExpenses(filterExpensesByMode(currentExpenses, nextSettings, nextActivePeriodId))
       setIncomes(filterIncomesByMode(currentIncomes, nextSettings, nextActivePeriodId))
       setPersonalCategories(currentPersonalCategories)
+      setWallets(currentWallets)
       setExpensePage(1)
     }
 
@@ -169,13 +183,23 @@ export function ExpenseListPage() {
       }
     }
 
+    async function handleWalletsChanged() {
+      const currentSettings = await getSettings()
+      const currentWallets = await loadWallets(currentSettings)
+      if (isMounted) {
+        setWallets(currentWallets)
+      }
+    }
+
     window.addEventListener('finance-app:settings-changed', handleSettingsChanged)
     window.addEventListener(PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT, handlePersonalExpenseCategoriesChanged)
+    window.addEventListener(WALLETS_CHANGED_EVENT, handleWalletsChanged)
 
     return () => {
       isMounted = false
       window.removeEventListener('finance-app:settings-changed', handleSettingsChanged)
       window.removeEventListener(PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT, handlePersonalExpenseCategoriesChanged)
+      window.removeEventListener(WALLETS_CHANGED_EVENT, handleWalletsChanged)
     }
   }, [])
 
@@ -197,6 +221,27 @@ export function ExpenseListPage() {
 
     await deleteExpense(expense.id)
     await reloadExpenses()
+  }
+
+  async function handleTogglePhysicalPayment(expense: Expense) {
+    if (!expense.id) return
+
+    try {
+      const updatedExpense = await updateExpense(expense.id, {
+        isPhysicallyPaid: !expense.isPhysicallyPaid,
+      })
+      setExpenses((currentExpenses) =>
+        currentExpenses.map((currentExpense) =>
+          currentExpense.id === updatedExpense.id ? updatedExpense : currentExpense,
+        ),
+      )
+    } catch (error) {
+      await alert({
+        type: 'error',
+        title: 'No se pudo actualizar el pago',
+        message: error instanceof Error ? error.message : 'No se pudo guardar el estado del pago.',
+      })
+    }
   }
 
   if (isLoading) {
@@ -295,6 +340,14 @@ export function ExpenseListPage() {
                           {expense.category}
                         </p>
                       )}
+                      {settings && isBasicMode(settings) && expense.type === 'gasto' && (
+                        <p className="mt-1 text-sm text-slate-500">
+                          Fuente:{' '}
+                          <span className={expense.isPhysicallyPaid ? 'line-through' : undefined}>
+                            {getWalletName(expense, wallets) ?? 'Sin fuente asignada'}
+                          </span>
+                        </p>
+                      )}
                       {expense.notes && (
                         <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
                           {expense.notes}
@@ -346,6 +399,22 @@ export function ExpenseListPage() {
                   </div>
 
                   <div className="flex flex-wrap justify-start gap-2">
+                    {settings && isBasicMode(settings) && expense.type === 'gasto' && (
+                      <button
+                        aria-pressed={expense.isPhysicallyPaid === true}
+                        className={[
+                          'inline-flex h-10 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition',
+                          expense.isPhysicallyPaid
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                            : 'border-slate-200 text-slate-700 hover:bg-slate-50',
+                        ].join(' ')}
+                        onClick={() => handleTogglePhysicalPayment(expense)}
+                        type="button"
+                      >
+                        {expense.isPhysicallyPaid && <Check className="size-4" aria-hidden="true" />}
+                        {expense.isPhysicallyPaid ? 'Pago realizado físicamente' : 'Marcar pago físico'}
+                      </button>
+                    )}
                     {isClosedSeason ? (
                       <span className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-600 dark:text-slate-200!">
                         Solo consulta

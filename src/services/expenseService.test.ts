@@ -159,6 +159,21 @@ describe('createExpense', () => {
     expect(persisted.category).toBe('Otros')
     expect(persisted.usageMode).toBe('basic')
   })
+
+  it('solo permite crear el estado de pago físico en gastos personales', async () => {
+    getSettingsMock.mockResolvedValue(basicSettings())
+    await createExpense(baseExpenseInput({ isPhysicallyPaid: true }))
+    expect(expensesTable.add).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isPhysicallyPaid: true, usageMode: 'basic' }),
+    )
+
+    getSettingsMock.mockResolvedValue(professionalSettings())
+    getActiveEarningPeriodMock.mockResolvedValue({ id: 7, startDate: '2026-01-01' })
+    await createExpense(baseExpenseInput({ isPhysicallyPaid: true }))
+    expect(expensesTable.add).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isPhysicallyPaid: undefined, usageMode: 'professional' }),
+    )
+  })
 })
 
 describe('updateExpense', () => {
@@ -230,6 +245,31 @@ describe('updateExpense', () => {
 
     expect(expensesTable.put).toHaveBeenCalledWith(
       expect.objectContaining({ personalName: undefined }),
+    )
+  })
+
+  it('guarda el estado de pago físico solo en gastos personales', async () => {
+    getSettingsMock.mockResolvedValue(basicSettings())
+    expensesTable.get.mockResolvedValue(existingExpense())
+
+    await updateExpense(5, { isPhysicallyPaid: true })
+
+    expect(expensesTable.put).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 5, isPhysicallyPaid: true }),
+    )
+  })
+
+  it('rechaza marcar ajustes o egresos Profesionales como pagados físicamente', async () => {
+    getSettingsMock.mockResolvedValue(basicSettings())
+    expensesTable.get.mockResolvedValue(existingExpense({ type: 'ajuste' }))
+    await expect(updateExpense(5, { isPhysicallyPaid: true })).rejects.toThrow(
+      'PHYSICAL_PAYMENT_ONLY_FOR_EXPENSE',
+    )
+
+    getSettingsMock.mockResolvedValue(professionalSettings())
+    expensesTable.get.mockResolvedValue(existingExpense({ usageMode: 'professional' }))
+    await expect(updateExpense(5, { isPhysicallyPaid: true })).rejects.toThrow(
+      'PHYSICAL_PAYMENT_NOT_ALLOWED_FOR_PROFESSIONAL',
     )
   })
 })

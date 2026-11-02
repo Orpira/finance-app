@@ -134,6 +134,9 @@ export async function createExpense(input: CreateExpenseInput) {
       : undefined,
     personalCategoryId: activeUsageMode === 'basic' ? normalizedPersonalCategoryId : undefined,
     walletId: activeUsageMode === 'basic' ? normalizedWalletId : undefined,
+    isPhysicallyPaid: activeUsageMode === 'basic' && input.type === 'gasto'
+      ? input.isPhysicallyPaid
+      : undefined,
     createdAt,
     earningPeriodId: period?.id,
     seasonPeriodId: period?.id,
@@ -218,6 +221,14 @@ export async function updateExpense(id: number, updates: UpdateExpenseInput) {
   ) {
     throw new Error('Este egreso pertenece a otro modo de uso.')
   }
+  if (Object.hasOwn(updates, 'isPhysicallyPaid')) {
+    if (resolveActiveUsageMode(settings) !== 'basic') {
+      throw new Error('PHYSICAL_PAYMENT_NOT_ALLOWED_FOR_PROFESSIONAL')
+    }
+    if (currentExpense.type !== 'gasto') {
+      throw new Error('PHYSICAL_PAYMENT_ONLY_FOR_EXPENSE')
+    }
+  }
   assertReportStatusUpdateIsAllowed(currentExpense, resolveActiveUsageMode(settings), updates)
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentExpense)
@@ -254,10 +265,18 @@ export async function updateExpense(id: number, updates: UpdateExpenseInput) {
         safeUpdates.walletId = normalizedWalletId
       }
     }
+    const updatedType = safeUpdates.type ?? latestExpense.type
+    const isPhysicallyPaid = Object.hasOwn(safeUpdates, 'isPhysicallyPaid')
+      ? safeUpdates.isPhysicallyPaid
+      : latestExpense.isPhysicallyPaid
     const updatedExpense: Expense = withoutReportFields({
       ...latestExpense,
       ...safeUpdates,
       usageMode: latestExpense.usageMode ?? resolveActiveUsageMode(settings),
+      isPhysicallyPaid:
+        resolveActiveUsageMode(settings) === 'basic' && updatedType === 'gasto'
+          ? isPhysicallyPaid
+          : undefined,
     })
     const [incomes, expenses] = await Promise.all([
       db.services.toArray(),

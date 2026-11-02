@@ -145,6 +145,7 @@ describe('backupDataToSnapshot', () => {
       createdAt: '2026-09-05T10:00:00.000Z',
       usageMode: 'basic' as const,
       personalName: 'Compra supermercado',
+      isPhysicallyPaid: true,
     }
     const baseBackup = {
       version: '2' as const,
@@ -157,6 +158,8 @@ describe('backupDataToSnapshot', () => {
 
     expect(backupDataToSnapshot({ ...baseBackup, expenses: [namedExpense] }).expenses[0]?.personalName)
       .toBe('Compra supermercado')
+    expect(backupDataToSnapshot({ ...baseBackup, expenses: [namedExpense] }).expenses[0]?.isPhysicallyPaid)
+      .toBe(true)
     expect(backupDataToSnapshot({ ...baseBackup, expenses: [historicalExpense] }).expenses[0])
       .not.toHaveProperty('personalName')
   })
