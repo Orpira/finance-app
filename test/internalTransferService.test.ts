@@ -267,3 +267,26 @@ describe('updateInternalTransfer', () => {
     expect(await updateInternalTransfer(original.id, { ...original, note: 'Nota' }, original.updatedAt)).toMatchObject({ note: 'Nota' })
   })
 })
+
+
+describe('transferir el saldo completo con precisión de céntimos', () => {
+  it('acepta 2,63 aunque la resta interna produzca 2,629999999999999', async () => {
+    incomes.push({ walletId: 'wal-1', eurValue: 20, currency: 'EUR' })
+    expenses.push({ walletId: 'wal-1', eurValue: 17.37, currency: 'EUR' })
+    const transfer = await createInternalTransfer({ fromWalletId: 'wal-1', toWalletId: 'wal-2', amount: 2.63, date: '2026-11-02' })
+    expect(transfer.amount).toBe(2.63)
+    expect(transfers).toHaveLength(1)
+  })
+  it('rechaza un céntimo de más sin persistir la transferencia', async () => {
+    incomes.push({ walletId: 'wal-1', eurValue: 20, currency: 'EUR' })
+    expenses.push({ walletId: 'wal-1', eurValue: 17.37, currency: 'EUR' })
+    await expect(createInternalTransfer({ fromWalletId: 'wal-1', toWalletId: 'wal-2', amount: 2.64, date: '2026-11-02' })).rejects.toThrow('saldo negativo')
+    expect(transfers).toHaveLength(0)
+  })
+  it('rechaza importes que redondean a cero y guarda importes a dos decimales', async () => {
+    incomes.push({ walletId: 'wal-1', eurValue: 20, currency: 'EUR' })
+    await expect(createInternalTransfer({ fromWalletId: 'wal-1', toWalletId: 'wal-2', amount: 0.001, date: '2026-11-02' })).rejects.toThrow('mayor que cero')
+    const transfer = await createInternalTransfer({ fromWalletId: 'wal-1', toWalletId: 'wal-2', amount: 2.629999999999999, date: '2026-11-02' })
+    expect(transfer.amount).toBe(2.63)
+  })
+})

@@ -4,13 +4,13 @@ import { useNavigate, useParams } from 'react-router-dom'
 
 import { PageHeader } from '../../components/layout/PageHeader'
 import { useDialog } from '../../components/dialogs/useDialog'
-import { createInternalTransfer, getInternalTransferById, updateInternalTransfer } from '../../services/internalTransferService'
+import { createInternalTransfer, getInternalTransferById, updateInternalTransfer, INTERNAL_TRANSFERS_CHANGED_EVENT } from '../../services/internalTransferService'
 import { getSettings } from '../../services/settingsService'
 import { listWalletsWithBalances, WALLETS_CHANGED_EVENT } from '../../services/walletService'
 import type { WalletWithBalance } from '../../services/walletService'
 import type { InternalTransfer } from '../../types/internalTransfer'
 import type { CurrencyCode } from '../../types/settings'
-import { formatCurrency, getLocalDateKey } from '../../utils/currency'
+import { formatCurrency, getLocalDateKey, roundMoney } from '../../utils/currency'
 
 export function TransferFormPage() {
   const navigate = useNavigate()
@@ -73,12 +73,19 @@ export function TransferFormPage() {
       }
     }
     window.addEventListener(WALLETS_CHANGED_EVENT, refreshWalletBalances)
+    window.addEventListener(INTERNAL_TRANSFERS_CHANGED_EVENT, refreshWalletBalances)
     return () => {
       cancelled = true
       window.removeEventListener(WALLETS_CHANGED_EVENT, refreshWalletBalances)
+      window.removeEventListener(INTERNAL_TRANSFERS_CHANGED_EVENT, refreshWalletBalances)
     }
   }, [currency, editingTransfer])
 
+  const sourceWallet = wallets.find((wallet) => wallet.id === fromWalletId)
+  // When editing, restore the original transfer's effect before proposing its replacement.
+  const availableBalance = roundMoney((sourceWallet?.balance ?? 0)
+    + (editingTransfer?.fromWalletId === fromWalletId ? editingTransfer.amount : 0)
+    - (editingTransfer?.toWalletId === fromWalletId ? editingTransfer.amount : 0))
   const parsedAmount = Number(amount.replace(',', '.'))
   const canSubmit =
     fromWalletId !== '' &&
@@ -213,6 +220,15 @@ export function TransferFormPage() {
             placeholder="0,00"
             value={amount}
           />
+          <button
+            className="inline-flex min-h-11 items-center justify-center rounded-md border border-emerald-700 px-3 text-sm font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!sourceWallet || availableBalance <= 0 || isSubmitting}
+            onClick={() => setAmount(availableBalance.toFixed(2))}
+            type="button"
+          >
+            Trasladar todo
+          </button>
+          {sourceWallet && <p className="text-sm text-slate-500">Disponible para trasladar: {formatCurrency(availableBalance, currency)}</p>}
         </div>
 
         <div className="flex flex-col gap-1.5">

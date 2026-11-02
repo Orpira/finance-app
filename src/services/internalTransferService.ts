@@ -65,7 +65,8 @@ export async function createInternalTransfer(input: CreateInternalTransferInput)
   if (input.fromWalletId === input.toWalletId) {
     throw new Error('La wallet de origen y destino no pueden ser la misma.')
   }
-  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+  const amount = roundMoney(input.amount)
+  if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('El importe de la transferencia debe ser mayor que cero.')
   }
   if (!input.date) {
@@ -94,7 +95,7 @@ export async function createInternalTransfer(input: CreateInternalTransferInput)
       expenses,
       transfers,
     )
-    if (input.amount > sourceBalance) {
+    if (amount > roundMoney(sourceBalance)) {
       throw new Error('La transferencia dejaría la wallet de origen con saldo negativo.')
     }
 
@@ -102,7 +103,7 @@ export async function createInternalTransfer(input: CreateInternalTransferInput)
       id: `itx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       fromWalletId: input.fromWalletId,
       toWalletId: input.toWalletId,
-      amount: input.amount,
+      amount,
       currency: settings.defaultCurrency,
       date: input.date,
       note: input.note?.trim() || undefined,
