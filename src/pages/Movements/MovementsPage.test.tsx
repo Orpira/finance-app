@@ -3,10 +3,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 
-const { getSettings } = vi.hoisted(() => ({ getSettings: vi.fn() }))
+const { getSettings, listExpenses } = vi.hoisted(() => ({
+  getSettings: vi.fn(),
+  listExpenses: vi.fn(),
+}))
 vi.mock('../../services/settingsService', () => ({ getSettings }))
 vi.mock('../../services/incomeService', () => ({ listServiceIncomes: async () => [] }))
-vi.mock('../../services/expenseService', () => ({ listExpenses: async () => [] }))
+vi.mock('../../services/expenseService', () => ({ listExpenses }))
 vi.mock('../../services/personalExpenseCategoryService', () => ({
   listPersonalExpenseCategories: async () => [], PERSONAL_EXPENSE_CATEGORIES_CHANGED_EVENT: 'categories',
 }))
@@ -22,7 +25,11 @@ vi.mock('../Income/IncomeListPage', () => ({ default: () => <div>Lista de ingres
 vi.mock('../Expenses/ExpenseListPage', () => ({ default: () => <div>Lista de egresos</div> }))
 import { MovementsPage } from './MovementsPage'
 
-beforeEach(() => { sessionStorage.clear(); getSettings.mockReset() })
+beforeEach(() => {
+  sessionStorage.clear()
+  getSettings.mockReset()
+  listExpenses.mockResolvedValue([])
+})
 afterEach(cleanup)
 
 it('ofrece transferencias en Personal y abre su historial con filtros compatibles', async () => {
@@ -50,4 +57,27 @@ it('ofrece transferencias en el contexto Personal del modo Híbrido', async () =
   getSettings.mockResolvedValue({ usageMode: 'hybrid', activeContext: 'basic' })
   render(<MemoryRouter><MovementsPage /></MemoryRouter>)
   expect(await screen.findByRole('tab', { name: 'Transferencias' })).toBeTruthy()
+})
+
+it('tacha el egreso pagado físicamente en la pestaña Todos', async () => {
+  getSettings.mockResolvedValue({ usageMode: 'basic' })
+  listExpenses.mockResolvedValue([{
+    id: 8,
+    type: 'gasto',
+    usageMode: 'basic',
+    personalName: 'Compra de comida',
+    date: '2026-10-25',
+    category: 'Alimentación',
+    amount: 25,
+    currency: 'EUR',
+    eurValue: 25,
+    copValue: 100_000,
+    isPhysicallyPaid: true,
+  }])
+
+  render(<MemoryRouter><MovementsPage /></MemoryRouter>)
+
+  const expenseLabel = await screen.findByText('Compra de comida')
+  expect(expenseLabel.classList.contains('line-through')).toBe(true)
+  expect(await screen.findByText(/Pagado físicamente/)).toBeTruthy()
 })

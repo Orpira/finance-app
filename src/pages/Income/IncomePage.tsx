@@ -432,7 +432,7 @@ export function IncomePage() {
 
   const isBasicUser = isBasicMode(settings ?? undefined)
   // Keep the assigned wallet selectable when archived.
-  const walletSelectOptions = useMemo(() => positiveWalletOptions(walletOptions), [walletOptions])
+  const walletSelectOptions = walletOptions
   const retainedWalletId = editingIncome?.walletId
   const retainedWallet = walletOptions.find((wallet) => wallet.id === retainedWalletId) ?? assignedArchivedWallet
   const retainCurrentWallet = Boolean(retainedWalletId && !walletSelectOptions.some((wallet) => wallet.id === retainedWalletId))
@@ -460,7 +460,7 @@ export function IncomePage() {
       await createWallet({ name })
       const currentSettings = await getSettings()
       setWalletOptions(await listWalletsWithBalances(currentSettings.defaultCurrency, { archived: 'active' }))
-      await alert({ type: 'info', title: 'Wallet creada', message: 'Aparecerá en el selector cuando tenga saldo mayor que 0.' })
+      await alert({ type: 'info', title: 'Wallet creada', message: 'Ya está disponible para asignarla a un ingreso.' })
       setSaveError('')
     } catch (error) {
       await alert({
@@ -994,7 +994,7 @@ export function IncomePage() {
                 ))}
               </select>
               {retainCurrentWallet && <p className="text-xs text-slate-500">Wallet del movimiento: {retainedWallet?.name ?? 'Asignación guardada'}. Se conserva si no eliges otra.</p>}
-              {walletSelectOptions.length === 0 && <p className="text-xs text-slate-500">No hay wallets con saldo mayor que 0.</p>}
+              {walletSelectOptions.length === 0 && <p className="text-xs text-slate-500">No hay wallets activas disponibles.</p>}
               <span className="text-xs text-slate-500">Opcional. Indica dónde quedó este dinero.</span>
             </div>
           </div>

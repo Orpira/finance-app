@@ -105,6 +105,7 @@ export function ExpensesPage() {
   const [relatedIncomeId, setRelatedIncomeId] = useState('')
   const [notes, setNotes] = useState('')
   const [personalName, setPersonalName] = useState('')
+  const [isPhysicallyPaid, setIsPhysicallyPaid] = useState(false)
   const [personalCategoryId, setPersonalCategoryId] = useState('')
   const [personalCategoryOptions, setPersonalCategoryOptions] = useState<PersonalExpenseCategory[]>([])
   const [assignedArchivedCategory, setAssignedArchivedCategory] = useState<PersonalExpenseCategory | null>(null)
@@ -268,6 +269,7 @@ export function ExpensesPage() {
       )
       setNotes(currentExpense.notes ?? '')
       setPersonalName(currentExpense.personalName ?? '')
+      setIsPhysicallyPaid(currentExpense.isPhysicallyPaid === true)
       setPersonalCategoryId(currentExpense.personalCategoryId ?? '')
       if (isBasicMode(currentSettings) && currentExpense.personalCategoryId) {
         const assignedCategory = await getPersonalExpenseCategoryById(currentExpense.personalCategoryId)
@@ -554,6 +556,7 @@ export function ExpensesPage() {
         country: expenseCountry ?? settings.country,
         city: isBasicUser ? undefined : expenseCity ?? settings.city,
         ...(isBasicUser ? { personalName } : {}),
+        ...(isBasicUser ? { isPhysicallyPaid } : {}),
         ...(isBasicUser ? { personalCategoryId: personalCategoryId || undefined } : {}),
         ...(isBasicUser ? { walletId: walletId || undefined } : {}),
       }
@@ -673,6 +676,25 @@ export function ExpensesPage() {
               <span>Opcional. Utiliza un nombre que te permita reconocer este egreso.</span>
               <span aria-label={`${personalName.length} de ${MAX_PERSONAL_EXPENSE_NAME_LENGTH} caracteres`}>
                 {personalName.length}/{MAX_PERSONAL_EXPENSE_NAME_LENGTH}
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 rounded-md border border-slate-200 p-3">
+            <input
+              checked={isPhysicallyPaid}
+              className="mt-1 size-4 accent-emerald-700"
+              onChange={(event) => {
+                setIsPhysicallyPaid(event.target.checked)
+                setValidationError('')
+              }}
+              type="checkbox"
+            />
+            <span className="flex flex-col gap-1">
+              <span className="text-sm font-medium text-slate-700">
+                Pago realizado físicamente
+              </span>
+              <span className="text-xs text-slate-500">
+                Márcalo si ya pagaste este egreso en efectivo o directamente.
               </span>
             </span>
           </label>

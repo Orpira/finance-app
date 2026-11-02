@@ -30,6 +30,8 @@ export interface UnifiedMovement {
   personalCategoryLabel?: string
   /** Wallet badge: destination for incomes, source for expenses, "A → B" for transfers. */
   walletLabel?: string
+  /** Personal expenses marked as paid physically are struck through in the unified list. */
+  isPhysicallyPaid?: boolean
   reported?: boolean
   searchText: string
 }
@@ -84,6 +86,10 @@ export function toUnifiedMovements(
       category: expense.category,
       personalCategoryLabel: getExpenseCategoryBadgeLabel(expense, personalExpenseCategories),
       walletLabel: getWalletName(expense, wallets),
+      isPhysicallyPaid:
+        resolveRecordUsageMode(expense) === 'basic' &&
+        expense.type === 'gasto' &&
+        expense.isPhysicallyPaid === true,
       searchText: [label, expense.notes].filter(Boolean).join(' '),
     }
   })

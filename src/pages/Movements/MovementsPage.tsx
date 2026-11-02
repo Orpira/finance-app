@@ -304,13 +304,17 @@ function AllMovementsTab({ onCreateMovement, transfersOnly = false }: { readonly
                     )}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate font-semibold text-slate-950 dark:text-white">
+                    <span className={[
+                      'block truncate font-semibold text-slate-950 dark:text-white',
+                      movement.isPhysicallyPaid ? 'line-through' : '',
+                    ].join(' ')}>
                       {movement.label}
                     </span>
                     <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
                       {formatDate(movement.date)}
                       {movement.walletLabel ? ` · ${movement.walletLabel}` : ''}
                       {movement.personalCategoryLabel ? ` · ${movement.personalCategoryLabel}` : ''}
+                      {movement.isPhysicallyPaid ? ' · Pagado físicamente' : ''}
                       {shouldShowMovementReportBadge(showUnreportedIncome, movement.reportBadge)
                         ? ` · ${movement.reportBadge?.label}`
                         : ''}
@@ -320,6 +324,7 @@ function AllMovementsTab({ onCreateMovement, transfersOnly = false }: { readonly
                 <span
                   className={[
                     'shrink-0 text-sm font-semibold',
+                    movement.isPhysicallyPaid ? 'line-through' : '',
                     movement.kind === 'income'
                       ? 'text-emerald-700 dark:text-emerald-300'
                       : movement.kind === 'expense'
