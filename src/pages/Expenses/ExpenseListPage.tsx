@@ -219,8 +219,16 @@ export function ExpenseListPage() {
       return
     }
 
-    await deleteExpense(expense.id)
-    await reloadExpenses()
+    try {
+      await deleteExpense(expense.id)
+      await reloadExpenses()
+    } catch (error: unknown) {
+      await alert({
+        type: 'error',
+        title: 'No se pudo eliminar el egreso',
+        message: error instanceof Error ? error.message : 'No se pudo eliminar el egreso.',
+      })
+    }
   }
 
   async function handleTogglePhysicalPayment(expense: Expense) {

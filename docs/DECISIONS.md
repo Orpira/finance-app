@@ -121,3 +121,11 @@ Format used: one ADR per section with Context, Decision, Status and Consequences
 - Solicitud explícita: ingresos y egresos personales solo ofrecen wallets con saldo mayor que cero. Se usa el saldo acumulado canónico en moneda principal; se excluyen archivadas y saldos cero, negativos o no finitos. El valor predeterminado también respeta el filtro.
 - Edición: una asignación histórica que ya no cumple el filtro puede conservarse mediante una opción separada, sin ofrecer esa wallet como destino de una nueva asignación. No se reasignan movimientos automáticamente.
 - Crear una wallet desde el formulario ya no la selecciona automáticamente: nace sin saldo y queda fuera del selector hasta tener saldo positivo. No cambia el registro ni el cálculo de saldos.
+
+## ADR-038: Validación de fondos en wallets personales
+
+- Estado: aceptada (2026-11-03).
+- Decisión: validar dentro de la misma transacción el efecto de ingresos, egresos,
+  transferencias y adicionales; impedir déficits nuevos o aumentados y permitir
+  su corrección parcial. No alterar históricos automáticamente.
+- Documento: [ADR-038-WALLET-PAYMENT-CONSISTENCY.md](adr/ADR-038-WALLET-PAYMENT-CONSISTENCY.md).

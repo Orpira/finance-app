@@ -1,11 +1,8 @@
+import { assertWalletMutationAllowed } from './walletPaymentValidation'
 import { db } from '../database/db'
 import type { InternalTransfer } from '../types/internalTransfer'
 import { getSettings } from './settingsService'
 import { resolveActiveUsageMode } from '../utils/usageMode'
-import { getStoredExpenseValue, getStoredIncomeValue } from '../utils/financeStats'
-import type { Expense } from '../types/expense'
-import type { ServiceIncome } from '../types/service'
-import type { CurrencyCode } from '../types/settings'
 import { roundMoney } from '../utils/currency'
 import { currencies } from '../utils/countries'
 
@@ -26,29 +23,6 @@ export type CreateInternalTransferInput = {
 
 export type InternalTransferListOptions = {
   walletId?: string
-}
-
-function calculateWalletBalance(
-  walletId: string,
-  currency: CurrencyCode,
-  incomes: readonly ServiceIncome[],
-  expenses: readonly Expense[],
-  transfers: readonly InternalTransfer[],
-) {
-  const incomeTotal = incomes
-    .filter((income) => income.walletId === walletId)
-    .reduce((total, income) => total + getStoredIncomeValue(income, currency), 0)
-  const expenseTotal = expenses
-    .filter((expense) => expense.walletId === walletId)
-    .reduce((total, expense) => total + getStoredExpenseValue(expense, currency), 0)
-  const transfersIn = transfers
-    .filter((transfer) => transfer.toWalletId === walletId && transfer.currency === currency)
-    .reduce((total, transfer) => total + transfer.amount, 0)
-  const transfersOut = transfers
-    .filter((transfer) => transfer.fromWalletId === walletId && transfer.currency === currency)
-    .reduce((total, transfer) => total + transfer.amount, 0)
-
-  return incomeTotal - expenseTotal + transfersIn - transfersOut
 }
 
 /**
@@ -75,12 +49,9 @@ export async function createInternalTransfer(input: CreateInternalTransferInput)
 
   const now = new Date().toISOString()
   const transfer = await db.transaction('rw', [db.wallets, db.internalTransfers, db.services, db.expenses], async () => {
-    const [fromWallet, toWallet, incomes, expenses, transfers] = await Promise.all([
+    const [fromWallet, toWallet] = await Promise.all([
       db.wallets.get(input.fromWalletId),
       db.wallets.get(input.toWalletId),
-      db.services.toArray(),
-      db.expenses.toArray(),
-      db.internalTransfers.toArray(),
     ])
     if (!fromWallet || fromWallet.usageMode !== 'basic' || fromWallet.isArchived) {
       throw new Error('La wallet de origen no es válida.')
@@ -88,17 +59,6 @@ export async function createInternalTransfer(input: CreateInternalTransferInput)
     if (!toWallet || toWallet.usageMode !== 'basic' || toWallet.isArchived) {
       throw new Error('La wallet de destino no es válida.')
     }
-    const sourceBalance = calculateWalletBalance(
-      input.fromWalletId,
-      settings.defaultCurrency,
-      incomes,
-      expenses,
-      transfers,
-    )
-    if (amount > roundMoney(sourceBalance)) {
-      throw new Error('La transferencia dejaría la wallet de origen con saldo negativo.')
-    }
-
     const newTransfer: InternalTransfer = {
       id: `itx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       fromWalletId: input.fromWalletId,
@@ -112,6 +72,7 @@ export async function createInternalTransfer(input: CreateInternalTransferInput)
       updatedAt: now,
     }
 
+    await assertWalletMutationAllowed({ kind: 'transfer', after: newTransfer }, settings.defaultCurrency)
     await db.internalTransfers.put(newTransfer)
     return newTransfer
   })
@@ -210,9 +171,16 @@ export async function getLatestWalletTransfer(
 }
 
 export async function deleteInternalTransfer(id: string) {
-  const result = await db.transaction('rw', [db.internalTransfers], async () => {
+  const settings = await getSettings()
+  if (resolveActiveUsageMode(settings) !== 'basic') {
+    throw new Error('Las transferencias entre wallets solo están disponibles en el modo Personal.')
+  }
+  const result = await db.transaction('rw', [db.internalTransfers, db.services, db.expenses, db.wallets], async () => {
     const transfer = await db.internalTransfers.get(id)
-    if (!transfer) throw new Error('La transferencia no existe.')
+    if (!transfer || transfer.usageMode !== 'basic') throw new Error('La transferencia no existe.')
+    const currency = currencies.find((item) => item.value === transfer.currency)?.value
+    if (!currency) throw new Error('La moneda de la transferencia no es válida.')
+    await assertWalletMutationAllowed({ kind: 'transfer', before: transfer }, currency)
     await db.internalTransfers.delete(id)
     return true
   })
@@ -250,9 +218,8 @@ export async function updateInternalTransfer(
     if (original.updatedAt !== expectedUpdatedAt) {
       throw new Error('La transferencia cambió. Vuelve a abrirla antes de modificarla.')
     }
-    const [fromWallet, toWallet, incomes, expenses, transfers] = await Promise.all([
+    const [fromWallet, toWallet] = await Promise.all([
       db.wallets.get(input.fromWalletId), db.wallets.get(input.toWalletId),
-      db.services.toArray(), db.expenses.toArray(), db.internalTransfers.toArray(),
     ])
     if (!fromWallet || fromWallet.usageMode !== 'basic' ||
         (fromWallet.isArchived && fromWallet.id !== original.fromWalletId)) {
@@ -268,16 +235,7 @@ export async function updateInternalTransfer(
       amount: roundMoney(input.amount), date: input.date, note: input.note?.trim() || undefined,
       updatedAt: new Date(Math.max(Date.now(), Date.parse(original.updatedAt) + 1)).toISOString(),
     }
-    const proposed = [...transfers.filter((transfer) => transfer.id !== id), next]
-    const affectedIds = new Set([original.fromWalletId, original.toWalletId, next.fromWalletId, next.toWalletId])
-    for (const walletId of affectedIds) {
-      const before = roundMoney(calculateWalletBalance(walletId, transferCurrency, incomes, expenses, transfers))
-      const after = roundMoney(calculateWalletBalance(walletId, transferCurrency, incomes, expenses, proposed))
-      // Existing legacy deficits can be corrected or kept, never made worse.
-      if (after < Math.min(0, before)) {
-        throw new Error('La modificación dejaría una wallet con saldo negativo o aumentaría su déficit.')
-      }
-    }
+    await assertWalletMutationAllowed({ kind: 'transfer', before: original, after: next }, transferCurrency)
     await db.internalTransfers.put(next)
     return next
   })

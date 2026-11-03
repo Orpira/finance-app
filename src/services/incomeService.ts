@@ -1,3 +1,4 @@
+import { assertWalletMutationAllowed } from './walletPaymentValidation'
 import { db } from '../database/db'
 import type { DateRangeListOptions } from '../types/dataAccess'
 import type { ServiceIncome } from '../types/service'
@@ -148,7 +149,7 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
   }))
   const incomeId = await db.transaction(
     'rw',
-    [db.services, db.automationOutbox, db.earningPeriods, db.wallets],
+    [db.services, db.automationOutbox, db.earningPeriods, db.wallets, db.expenses, db.internalTransfers],
     async () => {
       const earningPeriod =
         requiresSeason(settings) ? await getActiveEarningPeriod() : undefined
@@ -185,6 +186,9 @@ export async function createServiceIncome(input: CreateServiceIncomeInput) {
       const income: ServiceIncome = {
         ...incomeBase,
         ...buildInitialServiceTimerState(incomeBase, createdAt),
+      }
+      if (activeUsageMode === 'basic') {
+        await assertWalletMutationAllowed({ kind: 'income', after: income }, settings.defaultCurrency)
       }
       const nextIncomeId = await db.services.add(income)
       await enqueueAutomationEvent(
@@ -264,7 +268,7 @@ export async function updateServiceIncome(
   }
   assertReportStatusUpdateIsAllowed(currentIncome, resolveActiveUsageMode(settings), updates)
   assertReportedRecordUpdateIsAllowed(currentIncome, updates)
-  return db.transaction('rw', [db.services, db.expenses, db.earningPeriods, db.wallets, db.personalIncomeCategories], async () => {
+  return db.transaction('rw', [db.services, db.expenses, db.earningPeriods, db.wallets, db.personalIncomeCategories, db.internalTransfers], async () => {
     const [latestIncome, incomes, expenses] = await Promise.all([
       db.services.get(id),
       db.services.toArray(),
@@ -369,6 +373,9 @@ export async function updateServiceIncome(
       income.id === id ? updatedIncome : income,
     )
     assertAllExpenseAdjustmentsAreValid(updatedIncomes, expenses)
+    if (resolveActiveUsageMode(settings) === 'basic') {
+      await assertWalletMutationAllowed({ kind: 'income', before: latestIncome, after: updatedIncome }, settings.defaultCurrency)
+    }
     await db.services.put(updatedIncome)
     return updatedIncome
   })
@@ -387,8 +394,12 @@ export async function deleteServiceIncome(id: number) {
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentIncome)
   }
-  return db.transaction('rw', [db.services, db.expenses, db.incomeAdditionals], async () => {
-    assertRecordIsNotReported(await db.services.get(id))
+  return db.transaction('rw', [db.services, db.expenses, db.incomeAdditionals, db.wallets, db.internalTransfers], async () => {
+    const latestIncome = await db.services.get(id)
+    if (!latestIncome || !recordBelongsToUsageMode(latestIncome, resolveActiveUsageMode(settings))) {
+      throw new Error('El ingreso ya no existe o pertenece a otro modo de uso.')
+    }
+    assertRecordIsNotReported(latestIncome)
     const linkedAdjustment = await db.expenses
       .where('relatedIncomeId')
       .equals(id)
@@ -401,6 +412,9 @@ export async function deleteServiceIncome(id: number) {
     }
     // Los Adicionales no son un movimiento financiero independiente (PB-IS-0007,
     // 16): se borran en cascada con el ingreso, a diferencia de los ajustes.
+    if (resolveActiveUsageMode(settings) === 'basic') {
+      await assertWalletMutationAllowed({ kind: 'income', before: latestIncome }, settings.defaultCurrency)
+    }
     await db.incomeAdditionals.where('incomeId').equals(id).delete()
     return db.services.delete(id)
   })
