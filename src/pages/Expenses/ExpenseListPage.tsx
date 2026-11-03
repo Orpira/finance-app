@@ -420,7 +420,7 @@ export function ExpenseListPage() {
                         type="button"
                       >
                         {expense.isPhysicallyPaid && <Check className="size-4" aria-hidden="true" />}
-                        {expense.isPhysicallyPaid ? 'Pago realizado físicamente' : 'Marcar pago físico'}
+                        {expense.isPhysicallyPaid ? 'Pagado' : 'Marcar pago físico'}
                       </button>
                     )}
                     {isClosedSeason ? (
