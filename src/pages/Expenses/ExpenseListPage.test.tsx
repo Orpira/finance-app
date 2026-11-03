@@ -88,10 +88,10 @@ it('permite marcar/desmarcar el pago físico y tacha su fuente en Personal', asy
   fireEvent.click(markButton)
   await waitFor(() => expect(source.classList.contains('line-through')).toBe(true))
   expect(updateExpenseMock).toHaveBeenLastCalledWith(8, { isPhysicallyPaid: true })
-  expect(screen.getByRole('button', { name: 'Pago realizado físicamente' }).getAttribute('aria-pressed'))
+  expect(screen.getByRole('button', { name: 'Pagado' }).getAttribute('aria-pressed'))
     .toBe('true')
 
-  fireEvent.click(screen.getByRole('button', { name: 'Pago realizado físicamente' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Pagado' }))
   await waitFor(() => expect(source.classList.contains('line-through')).toBe(false))
   expect(updateExpenseMock).toHaveBeenLastCalledWith(8, { isPhysicallyPaid: false })
 })

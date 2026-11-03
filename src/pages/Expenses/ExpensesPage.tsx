@@ -691,7 +691,7 @@ export function ExpensesPage() {
             />
             <span className="flex flex-col gap-1">
               <span className="text-sm font-medium text-slate-700">
-                Pago realizado físicamente
+                Pagado
               </span>
               <span className="text-xs text-slate-500">
                 Márcalo si ya pagaste este egreso en efectivo o directamente.
