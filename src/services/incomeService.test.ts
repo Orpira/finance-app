@@ -42,6 +42,7 @@ vi.mock('../database/db', () => ({
     incomeAdditionals: incomeAdditionalsTable,
     personalIncomeCategories: personalIncomeCategoriesTable,
     wallets: walletsTable,
+    internalTransfers: {},
     transaction: (...args: unknown[]) =>
       transactionMock(...(args as [unknown, unknown, () => unknown])),
   },
@@ -358,6 +359,8 @@ describe('createServiceIncome', () => {
         servicesTable,
         expect.anything(),
         expect.anything(),
+        expect.anything(),
+        expensesTable,
         expect.anything(),
       ])
       return callback()

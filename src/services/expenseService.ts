@@ -1,3 +1,4 @@
+import { assertWalletMutationAllowed } from './walletPaymentValidation'
 import { db } from '../database/db'
 import type { DateRangeListOptions } from '../types/dataAccess'
 import type { Expense } from '../types/expense'
@@ -148,6 +149,7 @@ export async function createExpense(input: CreateExpenseInput) {
     db.automationOutbox,
     db.personalExpenseCategories,
     db.wallets,
+    db.internalTransfers,
   ], async () => {
     await assertPersonalExpenseCategoryAssignment(
       expense.personalCategoryId,
@@ -159,6 +161,9 @@ export async function createExpense(input: CreateExpenseInput) {
       db.expenses.toArray(),
     ])
     assertExpenseAdjustmentIsValid(expense, incomes, expenses)
+    if (activeUsageMode === 'basic') {
+      await assertWalletMutationAllowed({ kind: 'expense', after: expense }, settings.defaultCurrency)
+    }
     const nextExpenseId = await db.expenses.add(expense)
     await enqueueAutomationEvent(
       createAutomationOutboxRecord('expense.created', {
@@ -233,7 +238,7 @@ export async function updateExpense(id: number, updates: UpdateExpenseInput) {
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentExpense)
   }
-  return db.transaction('rw', [db.expenses, db.services, db.personalExpenseCategories, db.wallets], async () => {
+  return db.transaction('rw', [db.expenses, db.services, db.personalExpenseCategories, db.wallets, db.internalTransfers], async () => {
     const latestExpense = await db.expenses.get(id)
     if (!latestExpense) throw new Error('El egreso que intentas modificar no existe.')
     assertReportStatusUpdateIsAllowed(latestExpense, resolveActiveUsageMode(settings), updates)
@@ -283,6 +288,9 @@ export async function updateExpense(id: number, updates: UpdateExpenseInput) {
       db.expenses.toArray(),
     ])
     assertExpenseAdjustmentIsValid(updatedExpense, incomes, expenses, id)
+    if (resolveActiveUsageMode(settings) === 'basic') {
+      await assertWalletMutationAllowed({ kind: 'expense', before: latestExpense, after: updatedExpense }, settings.defaultCurrency)
+    }
     await db.expenses.put(updatedExpense)
     return updatedExpense
   })
@@ -321,7 +329,14 @@ export async function deleteExpense(id: number) {
   if (requiresSeason(settings)) {
     await assertRecordIsMutable(currentExpense)
   }
-  return db.transaction('rw', db.expenses, async () => {
+  return db.transaction('rw', [db.expenses, db.services, db.wallets, db.internalTransfers], async () => {
+    const latestExpense = await db.expenses.get(id)
+    if (!latestExpense || !recordBelongsToUsageMode(latestExpense, resolveActiveUsageMode(settings))) {
+      throw new Error('El egreso ya no existe o pertenece a otro modo de uso.')
+    }
+    if (resolveActiveUsageMode(settings) === 'basic') {
+      await assertWalletMutationAllowed({ kind: 'expense', before: latestExpense }, settings.defaultCurrency)
+    }
     return db.expenses.delete(id)
   })
 }

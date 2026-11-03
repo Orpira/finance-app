@@ -48,6 +48,15 @@ export function IncomeAdditionalsSection({
     }
   }
 
+  async function handleDelete(id: number | string) {
+    setError('')
+    try {
+      await onDelete(id)
+    } catch (deleteError: unknown) {
+      setError(deleteError instanceof Error ? deleteError.message : 'No se pudo eliminar el adicional.')
+    }
+  }
+
   const ToggleIcon = isOpen ? ChevronUp : ChevronDown
 
   return (
@@ -87,7 +96,7 @@ export function IncomeAdditionalsSection({
                   <button
                     aria-label="Eliminar adicional"
                     className="text-slate-400 transition hover:text-red-600"
-                    onClick={() => onDelete(additional.id)}
+                    onClick={() => void handleDelete(additional.id)}
                     type="button"
                   >
                     <Trash2 className="size-4" aria-hidden="true" />
@@ -97,6 +106,7 @@ export function IncomeAdditionalsSection({
             </ul>
           )}
 
+          {error && <p className="text-sm font-medium text-red-600" role="alert">{error}</p>}
           {isFormOpen ? (
             <div className="flex flex-col gap-3 rounded-md border border-slate-200 p-3 dark:border-slate-700">
               <label className="flex flex-col gap-2">
@@ -125,9 +135,6 @@ export function IncomeAdditionalsSection({
                   value={description}
                 />
               </label>
-              {error && (
-                <p className="text-sm font-medium text-red-600">{error}</p>
-              )}
               <div className="flex items-center gap-2">
                 <button
                   className="inline-flex h-10 items-center justify-center rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
