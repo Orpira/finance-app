@@ -8,11 +8,15 @@ export interface LicenseDeviceAuthorizationResult {
   deviceAuthorization: 'existing' | 'registered'
   activeDevices: number
   maxDevices: number
+  validForMs?: number
 }
+
+export class DeviceAccessDeniedError extends Error {}
 
 export async function authorizeSignedLicenseDevice(
   activationCode: string,
   identity: DeviceIdentity,
+  renewAccess = false,
 ): Promise<LicenseDeviceAuthorizationResult> {
   const controller = new AbortController()
   const timeoutId = globalThis.setTimeout(
@@ -26,6 +30,7 @@ export async function authorizeSignedLicenseDevice(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         activationCode,
+        ...(renewAccess ? { renewAccess: true } : {}),
         userCode: identity.userCode,
         deviceCode: identity.deviceCode,
         deviceName: identity.deviceName,
@@ -39,6 +44,11 @@ export async function authorizeSignedLicenseDevice(
     const body = await response.json() as Record<string, unknown>
 
     if (!response.ok) {
+      if (response.status === 403 && [
+        'license-revoked', 'device-revoked', 'device-access-expired',
+      ].includes(String(body.code))) {
+        throw new DeviceAccessDeniedError('El servidor retiró el permiso de uso.')
+      }
       throw new Error(
         typeof body.error === 'string' && body.error.trim()
           ? body.error.trim()

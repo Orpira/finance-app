@@ -1,0 +1,2 @@
+ALTER TABLE license_devices
+ADD COLUMN IF NOT EXISTS access_ends_at TIMESTAMPTZ;
