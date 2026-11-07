@@ -1,4 +1,5 @@
-import Dexie, { type Table } from 'dexie'
+import Dexie, { type DBCore, type Table } from 'dexie'
+import { assertDeviceMayWrite } from '../services/deviceAccessService'
 
 import type { Appointment } from '../types/appointment'
 import type { CutoffReport } from '../types/cutoffReport'
@@ -1115,6 +1116,30 @@ export class FinanceDB extends Dexie {
 }
 
 export const db = new FinanceDB()
+
+const financialTables = new Set([
+  'services', 'expenses', 'appointments', 'earningPeriods', 'cutoffReports',
+  'incomeAdditionals', 'financialGoals', 'wallets', 'internalTransfers',
+])
+
+db.use({
+  stack: 'dbcore',
+  name: 'device-access',
+  create: (core: DBCore): DBCore => ({
+    ...core,
+    table(name) {
+      const table = core.table(name)
+      if (!financialTables.has(name)) return table
+      return {
+        ...table,
+        mutate(request) {
+          assertDeviceMayWrite()
+          return table.mutate(request)
+        },
+      }
+    },
+  }),
+})
 
 export async function initializeDatabase() {
   const settings = await db.settings.get(DEFAULT_SETTINGS_ID)

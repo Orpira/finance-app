@@ -27,6 +27,7 @@ export class LicenseRegistryError extends Error {
       | 'database-unavailable'
       | 'license-revoked'
       | 'device-revoked'
+      | 'device-access-expired'
       | 'device-limit-reached',
   ) {
     super(message)
@@ -103,11 +104,15 @@ export const AUTHORIZE_DEVICE_FUNCTION_SQL = `
       RETURN;
     END IF;
 
-    SELECT status
+    SELECT CASE
+        WHEN status = 'active' AND access_ends_at <= NOW() THEN 'expired'
+        ELSE status
+      END
       INTO current_device_status
     FROM license_devices
     WHERE license_key = p_license_key
-      AND device_code = p_device_code;
+      AND device_code = p_device_code
+    FOR UPDATE;
 
     IF FOUND THEN
       UPDATE license_devices SET
@@ -296,6 +301,11 @@ async function ensureSchema() {
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   `
 
+  await sql`
+    ALTER TABLE license_devices
+    ADD COLUMN IF NOT EXISTS access_ends_at TIMESTAMPTZ
+  `
+
   await sql.query(BACKFILL_DEVICE_USER_CODES_FROM_LICENSES_SQL)
   await sql.query(BACKFILL_FROM_COMMUNICATION_CHANNELS_SQL)
   await sql.query(BACKFILL_LICENSE_USER_CODES_FROM_DEVICES_SQL)
@@ -315,7 +325,7 @@ function ensureLicenseRegistrySchema() {
 
 interface AuthorizationRow {
   license_status: 'active' | 'revoked'
-  device_status: 'active' | 'revoked' | null
+  device_status: 'active' | 'revoked' | 'expired' | null
   device_authorization: 'existing' | 'registered' | null
   active_devices: number
   max_devices: number
@@ -360,6 +370,12 @@ export async function authorizeLicenseDevice(
       'device-revoked',
     )
   }
+  if (result.device_status === 'expired') {
+    throw new LicenseRegistryError(
+      'El plazo de uso de este dispositivo ha vencido.',
+      'device-access-expired',
+    )
+  }
   if (!result.device_authorization) {
     throw new LicenseRegistryError(
       'Límite de dispositivos alcanzado',
@@ -373,4 +389,33 @@ export async function authorizeLicenseDevice(
     activeDevices: result.active_devices,
     maxDevices: result.max_devices,
   }
+}
+
+const OFFLINE_ACCESS_SECONDS = 7 * 24 * 60 * 60
+
+export async function getDeviceAccessPermit(licenseKey: string, deviceCode: string) {
+  const sql = neon(getDatabaseUrl())
+  const [permit] = await sql`
+    SELECT
+      FLOOR(EXTRACT(EPOCH FROM (
+        LEAST(
+          NOW() + ${OFFLINE_ACCESS_SECONDS}::integer * INTERVAL '1 second',
+          device.access_ends_at,
+          license.expires_at
+        ) - NOW()
+      )) * 1000)::integer AS "validForMs"
+    FROM license_devices AS device
+    JOIN licenses AS license ON license.license_key = device.license_key
+    WHERE device.license_key = ${licenseKey}
+      AND device.device_code = ${deviceCode}
+      AND device.status = 'active'
+      AND license.status = 'active'
+  `
+  if (!permit || permit.validForMs <= 0) {
+    throw new LicenseRegistryError(
+      'El dispositivo ya no tiene autorización de uso.',
+      'device-access-expired',
+    )
+  }
+  return { validForMs: permit.validForMs as number }
 }

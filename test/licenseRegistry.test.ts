@@ -170,6 +170,23 @@ describe('License registry - authorization flow', () => {
     ).rejects.toMatchObject({ code: 'device-revoked' })
   })
 
+  it('rechaza el vencimiento administrativo aunque la licencia sea vitalicia', async () => {
+    const sql = (await import('@neondatabase/serverless')).neon() as NeonSqlMock
+    sql._nextResponse = [
+      { license_status: 'active', device_status: 'expired', device_authorization: null, active_devices: 1, max_devices: 3 },
+    ]
+
+    await expect(authorizeLicenseDevice({
+      licenseKey: 'k1',
+      userCode: 'u1',
+      deviceCode: 'PB-DEVICE-X',
+      platform: 'android',
+      licenseType: 'lifetime',
+      expiresAt: null,
+      devicePolicy: 'multi',
+    })).rejects.toMatchObject({ code: 'device-access-expired' })
+  })
+
   it('Caso 7: Licencia revocada debe responder "La licencia está revocada."', async () => {
     const sql = (await import('@neondatabase/serverless')).neon() as NeonSqlMock
     sql._nextResponse = [

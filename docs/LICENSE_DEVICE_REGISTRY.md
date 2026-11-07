@@ -140,3 +140,60 @@ el trial también por **email** además del `deviceCode` (ver "Próximo
 incremento" en TRIAL_FLOW.md), o migrar el trial al sistema nativo de
 prueba de las tiendas (Google Play Billing / StoreKit vía RevenueCat), que
 gestiona esto a nivel de cuenta de la tienda.
+
+## Renovar, limitar y revocar el uso en Android
+
+Las APK con esta función renuevan el permiso de las licencias firmadas V2
+(distintas del trial) al abrir, volver al primer plano, recuperar conexión y
+cada minuto mientras están en uso. Tras la primera comprobación online, pueden
+trabajar offline durante un máximo de siete días desde la última renovación
+exitosa. El permiso vence antes si la licencia firmada o el plazo del equipo
+vencen antes. Una caída de red no amplía el permiso. La app deja de permitir
+escrituras financieras si vence el permiso o si recibe una denegación explícita.
+El respaldo local permanece disponible, protegido por el PIN si está configurado.
+
+Con `DATABASE_URL` configurada en el entorno administrativo y la migración
+008 aplicada, el operador puede usar estos comandos:
+
+```bash
+node scripts/manage-device-access.mjs list CODIGO_DEL_EQUIPO
+node scripts/manage-device-access.mjs set-days CODIGO_DEL_EQUIPO HUELLA_SHA256 7
+node scripts/manage-device-access.mjs revoke CODIGO_DEL_EQUIPO HUELLA_SHA256
+node scripts/manage-device-access.mjs restore CODIGO_DEL_EQUIPO HUELLA_SHA256
+```
+
+`set-days` establece un plazo contado desde la operación. Repetirlo permite
+renovarlo. `restore` reactiva el registro del equipo y quita su plazo adicional.
+
+También se puede administrar en el SQL Editor de la rama de Neon que usa el backend. Identificar
+primero el par exacto y comprobar que la operación devuelve una sola fila:
+
+```sql
+SELECT license_key, device_code, platform, status, access_ends_at, last_seen_at
+FROM license_devices
+WHERE license_key = 'HUELLA_SHA256' AND device_code = 'CODIGO_DEL_EQUIPO';
+```
+
+Dar siete días desde este momento:
+
+```sql
+UPDATE license_devices
+SET access_ends_at = NOW() + INTERVAL '168 hours', updated_at = NOW()
+WHERE license_key = 'HUELLA_SHA256' AND device_code = 'CODIGO_DEL_EQUIPO'
+  AND status = 'active'
+RETURNING device_code, status, access_ends_at;
+```
+
+Para ampliar el plazo, fija una nueva fecha en la misma columna. Para restaurar
+el acceso sin un límite adicional del equipo, fija `access_ends_at = NULL` y
+`status = 'active'` en esa fila. La licencia firmada debe seguir vigente y la
+licencia global debe estar activa. Para revocar de inmediato en el servidor,
+usa la revocación por equipo descrita arriba.
+
+Un equipo desconectado no recibe cambios remotos hasta volver a conectar.
+Mientras tanto, un permiso ya emitido puede seguir vigente hasta su propia
+fecha límite. La APK 1.0.7 (8) y otras compilaciones sin la renovación de
+permisos conservan su validación local anterior. La revocación es por registro
+de licencia y dispositivo, no por número de serie del teléfono. Un equipo
+revocado debe actualizar a una compilación con esta función para que la
+revocación afecte al registro local de movimientos.
