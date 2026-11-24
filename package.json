@@ -31,7 +31,7 @@
     "@capacitor/ios": "8.5.0",
     "@capacitor/local-notifications": "^8.2.0",
     "@capacitor/preferences": "^8.0.1",
-    "@capacitor/share": "^8.0.1",
+    "@capacitor/share": "^8.0.3",
     "@neondatabase/serverless": "^1.1.0",
     "@tailwindcss/vite": "^4.3.0",
     "dexie": "^4.4.3",
